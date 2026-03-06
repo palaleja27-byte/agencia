@@ -75,6 +75,7 @@
 
     .tab-content.active {
       display: block;
+      width: 100%;
     }
 
     /* ══ LOGIN SCREEN ══ */
@@ -1050,13 +1051,19 @@
       #tab-plantrabajo {
         padding: 0;
         overflow: hidden;
-      }
-
-      #tab-plantrabajo iframe {
-        height: 80vh;
-        border-radius: 8px;
+        position: relative;
         width: 100%;
+        box-sizing: border-box;
+      }
+      #tab-plantrabajo iframe {
         display: block;
+        width: 100%;
+        min-width: 100%;
+        height: calc(100vh - 130px);
+        min-height: 600px;
+        border: none;
+        border-radius: 0;
+        box-sizing: border-box;
       }
 
       /* ── TAB 3: ASISTENCIA ── */
@@ -2812,6 +2819,11 @@
       <div class="op-ranking-sub" id="op-rank-sub"></div>
     </div>
     <div class="op-section">
+      <div class="op-section-title">⚡ Rendimiento en turno activo</div>
+      <div id="op-competitive-bar" style="padding:4px 0;"></div>
+    </div>
+
+    <div class="op-section">
       <div class="op-section-title">🗂️ Tus perfiles asignados</div>
       <div id="op-profiles-list"></div>
     </div>
@@ -3550,6 +3562,19 @@
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content')[tabIndex].classList.add('active');
       document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
+      // Force iframe to full width when Plan de Trabajo tab is opened
+      if (tabIndex === 2) {
+        const iframe = document.querySelector('#tab-plantrabajo iframe');
+        if (iframe) {
+          // Force reflow so browser recalculates width after display:none→block
+          iframe.style.width = '1px';
+          requestAnimationFrame(() => {
+            iframe.style.width = '100%';
+            const tab = document.getElementById('tab-plantrabajo');
+            if (tab) iframe.style.height = (window.innerHeight - 130) + 'px';
+          });
+        }
+      }
       if (tabIndex === 0) renderRanking();
       if (tabIndex === 1) renderOperators(document.getElementById('groupFilter').value);
       if (tabIndex === 3) {
@@ -3914,6 +3939,15 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       document.getElementById('ai-body').innerHTML = html;
     }
 
+    // Keep Plan de Trabajo iframe always full size
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
+    });
+
     document.addEventListener('click', e => {
       if (e.target === document.getElementById('modal-ai')) cerrarAnalisisIA();
     });
@@ -4041,6 +4075,15 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       alert(`✅ ${monthLabel} aplicado correctamente — ${applied} operadores actualizados.`);
     }
 
+    // Keep Plan de Trabajo iframe always full size
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
+    });
+
     document.addEventListener('click', e => {
       if (e.target === document.getElementById('modal-mes')) cerrarModalMes();
     });
@@ -4097,6 +4140,15 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     function agregarConsejo() {
       const arr = loadConsejos(); arr.push('✏️ Nuevo consejo...'); saveConsejos(arr); renderConsejos();
     }
+    // Keep Plan de Trabajo iframe always full size
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
+    });
+
     document.addEventListener('click', e => {
       if (e.target === document.getElementById('modal-consejos')) cerrarConsejos();
       if (e.target === document.getElementById('modal-det-op')) cerrarDetalle();
@@ -4701,8 +4753,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     //     for all using (true) with check (true);
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL    = 'PEGA_TU_URL_AQUI';       // ej: https://xyzxyz.supabase.co
-    const SUPABASE_ANON   = 'PEGA_TU_ANON_KEY_AQUI';  // clave anon pública
+    const SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
+    const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
 
     // Claves que nunca salen de este PC (sesión, timers)
     const _SB_EXCLUDE = new Set([
@@ -4759,12 +4811,23 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
                 'rr_perfil_metrics','rr_alertas_sistema','rr_metas_operacion',
                 'rr_prime_logs_entrada','rr_prime_consejos_2026'
               ];
+              const ptKeys = ['rr_prime_v15_mañana','rr_prime_v15_tarde','rr_prime_v15_noche'];
               if (critical.includes(row.key) && typeof loadData === 'function') {
                 loadData();
                 if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
                   renderOpDashboard(currentOpName);
                 } else if (typeof renderRanking === 'function') {
                   renderRanking();
+                }
+              }
+              // PT realtime: re-render Plan de Trabajo cuando otro PC cambia el turno
+              if (ptKeys.includes(row.key) && typeof PT !== 'undefined') {
+                const shift = row.key.replace('rr_prime_v15_','');
+                PT.baseDatos[shift] = JSON.parse(row.value || '[]');
+                if (PT.shiftActual === shift) PT.renderAll();
+                // También actualizar barra competitiva en op-dashboard
+                if (currentRole === 'operador' && typeof renderCompetitiveBar === 'function') {
+                  renderCompetitiveBar();
                 }
               }
             }
@@ -4821,6 +4884,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     // Arrancar al cargar la página
     window.addEventListener('load', _initSupabase);
+    window.addEventListener('load', () => setTimeout(_migratePinsToHash, 2000));
+    window.addEventListener('load', () => setTimeout(_migratePinsToHash, 2000)); // migrate legacy PINs silently
 
     const ALERTAS_KEY = 'rr_alertas_sistema';
     let _alertaDest = 'todos';
@@ -6141,8 +6206,27 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
 
 
+    // Keep Plan de Trabajo iframe always full size
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
+    });
+
     document.addEventListener('click', e => {
       if (e.target === document.getElementById('modal-corte')) cerrarModalCorte();
+    });
+
+    // Keep Plan de Trabajo iframe always full size on resize
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      const tab = document.getElementById('tab-plantrabajo');
+      if (iframe && tab && tab.classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
     });
 
 
@@ -6186,6 +6270,15 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       if (typeof renderOperators === 'function') renderOperators('');
       alert(`✅ Operador "${name}" agregado correctamente.`);
     }
+
+    // Keep Plan de Trabajo iframe always full size
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
+    });
 
     document.addEventListener('click', e => {
       if (e.target === document.getElementById('modal-add-op')) document.getElementById('modal-add-op').classList.remove('open');
@@ -6488,20 +6581,72 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     let currentRole = null;   // 'monitor' | 'admin' | 'operador'
     let currentOpName = null;   // name when role = operador
 
-    // Bug 5: Obfuscated encoding for PINs
-    function safePinEncode(pin) {
+    // ── PIN Security: SHA-256 hashing (one-way, seguro) ──────────────
+    async function safePinHash(pin) {
+      if (!pin) return '';
+      const msgBuffer = new TextEncoder().encode('RRAGENCIA_' + pin + '_SALT26');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray  = Array.from(new Uint8Array(hashBuffer));
+      return 'sha256:' + hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+
+    // Encode legacy (solo para migración)
+    function _legacyEncode(pin) {
       if (!pin) return '';
       return btoa("RR" + pin.split('').reverse().join('') + "26");
     }
-    function safePinDecode(enc) {
+    function _legacyDecode(enc) {
       if (!enc) return null;
       try {
         const d = atob(enc);
-        if (d.startsWith("RR") && d.endsWith("26")) {
+        if (d.startsWith("RR") && d.endsWith("26"))
           return d.substring(2, d.length - 2).split('').reverse().join('');
+        return atob(enc);
+      } catch(e) { return null; }
+    }
+
+    // safePinEncode: guarda hash SHA-256 (async)
+    async function safePinEncode(pin) { return safePinHash(pin); }
+
+    // safePinDecode: sólo para lectura legacy — retorna null si ya es hash
+    function safePinDecode(enc) {
+      if (!enc) return null;
+      if (enc.startsWith('sha256:')) return null; // no se puede revertir — usar comparación
+      return _legacyDecode(enc);
+    }
+
+    // Compara pin ingresado vs valor almacenado (soporta SHA-256 y legacy)
+    async function verifyPin(entered, stored) {
+      if (!stored) return false;
+      if (stored.startsWith('sha256:')) {
+        const h = await safePinHash(entered);
+        return h === stored;
+      }
+      // Legacy: comparación directa
+      return _legacyDecode(stored) === entered;
+    }
+
+    // Migra PINs legacy a SHA-256 en background (silencioso)
+    async function _migratePinsToHash() {
+      const pins = loginGetPins();
+      let changed = false;
+      for (const key of ['monitor','admin']) {
+        if (pins[key] && !pins[key].startsWith('sha256:')) {
+          const plain = _legacyDecode(pins[key]);
+          if (plain) { pins[key] = await safePinHash(plain); changed = true; }
         }
-        return atob(enc); // Fallback for legacy simple Base64
-      } catch (e) { return null; }
+      }
+      if (changed) loginSavePinsToStorage(pins);
+
+      const opPins = loginGetOpPins();
+      let opChanged = false;
+      for (const k of Object.keys(opPins)) {
+        if (opPins[k] && !opPins[k].startsWith('sha256:')) {
+          const plain = _legacyDecode(opPins[k]);
+          if (plain) { opPins[k] = await safePinHash(plain); opChanged = true; }
+        }
+      }
+      if (opChanged) loginSaveOpPins(opPins);
     }
 
     function loginGetPins() {
@@ -6582,20 +6727,19 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       }
     }
 
-    function loginVerify() {
+    async function loginVerify() {
       const pins = loginGetPins();
-      let expected = '';
+      let storedHash = '';
 
-      if (loginRole === 'admin') expected = safePinDecode(pins.admin);
-      else if (loginRole === 'monitor') expected = safePinDecode(pins.monitor);
+      if (loginRole === 'admin') storedHash = pins.admin;
+      else if (loginRole === 'monitor') storedHash = pins.monitor;
       else if (loginRole === 'operador') {
         const opPins = loginGetOpPins();
-        // Match by name (case-insensitive)
         const matchKey = Object.keys(opPins).find(k =>
           k.toUpperCase() === currentOpName?.toUpperCase()
         );
-        expected = matchKey ? safePinDecode(opPins[matchKey]) : null;
-        if (expected === null) {
+        storedHash = matchKey ? opPins[matchKey] : null;
+        if (storedHash === null || storedHash === undefined) {
           loginBuffer = '';
           loginUpdateDots(true);
           document.getElementById('login-error').textContent = '❌ Operador no encontrado o sin PIN asignado';
@@ -6604,7 +6748,9 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         }
       }
 
-      if (loginBuffer === expected) {
+      const match = await verifyPin(loginBuffer, storedHash);
+
+      if (match) {
         // ── Verificar bloqueo de turno para operadores ──
         if (loginRole === 'operador' && currentOpName) {
           const blockKey = 'rr_turno_block_' + currentOpName.replace(/\s+/g, '_').toLowerCase();
@@ -6628,11 +6774,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
               }, 4000);
               return;
             }
-            // Si ya pasó el bloqueo, limpiar
-            if (block && Date.now() >= block.bloqueadoHasta) {
-              localStorage.removeItem(blockKey);
-            }
-          } catch (e) { }
+            if (block && Date.now() >= block.bloqueadoHasta) localStorage.removeItem(blockKey);
+          } catch(e) {}
         }
         loginSuccess(loginRole, currentOpName);
       } else {
@@ -6798,6 +6941,49 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       }
     }
 
+    // ── Barra competitiva de turno para operadores ──────────────────
+    function renderCompetitiveBar() {
+      const el = document.getElementById('op-competitive-bar');
+      if (!el) return;
+
+      // Detectar turno activo por hora
+      const h = new Date().getHours();
+      let turnoActivo = h >= 6 && h < 14 ? 'mañana' : h >= 14 && h < 22 ? 'tarde' : 'noche';
+      const turnoLabel = { 'mañana': '☀️ Mañana', 'tarde': '🌆 Tarde', 'noche': '🌙 Noche' };
+
+      const turnoData = JSON.parse(localStorage.getItem('rr_prime_v15_' + turnoActivo) || '[]');
+      if (!turnoData.length) {
+        el.innerHTML = `<div style="color:#475569;font-size:.82rem;text-align:center;padding:10px;">Sin operadores en turno ${turnoLabel[turnoActivo]} actualmente.</div>`;
+        return;
+      }
+
+      const maxPts = Math.max(...turnoData.map(o => o.puntos || 0), 1);
+      const myName = currentOpName?.toUpperCase();
+
+      el.innerHTML = `
+        <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">
+          Turno activo: ${turnoLabel[turnoActivo]}
+        </div>
+        ${turnoData.sort((a,b) => (b.puntos||0)-(a.puntos||0)).map((op, i) => {
+          const isMe = op.name.toUpperCase() === myName;
+          const pct  = Math.round(((op.puntos||0) / maxPts) * 100);
+          const metaPct = op.meta > 0 ? Math.min(Math.round(((op.puntos||0)/op.meta)*100),100) : 0;
+          const medals = ['🥇','🥈','🥉'];
+          return `
+            <div style="margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:.82rem;font-weight:${isMe?'800':'500'};color:${isMe?'var(--accent)':'var(--text)'};">
+                  ${medals[i]||'·'} ${op.name}${isMe?' (tú)':''}
+                </span>
+                <span style="font-size:.78rem;color:var(--gold);font-weight:700;">${op.puntos||0} pts · ${metaPct}% meta</span>
+              </div>
+              <div style="background:rgba(255,255,255,0.08);border-radius:8px;height:10px;overflow:hidden;">
+                <div style="height:100%;width:${pct}%;background:${isMe?'linear-gradient(90deg,var(--accent),#6366f1)':'rgba(255,255,255,0.2)'};border-radius:8px;transition:.5s;"></div>
+              </div>
+            </div>`;
+        }).join('')}`;
+    }
+
     function renderOpDashboard(name) {
       const op = operatorsData.find(o => o.name.toUpperCase() === name?.toUpperCase());
       if (!op) {
@@ -6837,6 +7023,13 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       const medals = ['', '🥇', '🥈', '🥉'];
       document.getElementById('op-rank-pos').textContent = (medals[pos] || '') + ' #' + pos;
       document.getElementById('op-rank-sub').textContent = `de ${base.length} operadores · ${currLabel}`;
+
+      // Barra competitiva
+      const compSection = document.getElementById('op-competitive-bar');
+      if (compSection) renderCompetitiveBar();
+
+      // Barra competitiva
+      renderCompetitiveBar();
 
       // Profiles
       const profiles = op.profiles || [];
@@ -6934,30 +7127,31 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       document.getElementById('modal-pin-change').classList.add('open');
     }
 
-    function loginSaveOpPin(idx, name) {
+    async function loginSaveOpPin(idx, name) {
       const inp = document.getElementById(`oppin-${idx}`);
       const val = inp?.value.trim();
       if (!val || val.length !== 4 || isNaN(val)) return alert('El PIN debe ser de 4 dígitos numéricos.');
       const opPins = loginGetOpPins();
-      opPins[name] = safePinEncode(val);
+      opPins[name] = await safePinHash(val);
       loginSaveOpPins(opPins);
       inp.style.borderColor = '#34d399';
       inp.value = '';
       setTimeout(() => { if (inp) inp.style.borderColor = ''; }, 1500);
     }
 
-    function loginSavePins() {
+    async function loginSavePins() {
       const pins = loginGetPins();
       const oldMon = document.getElementById('pin-old-monitor').value.trim();
       const newMon = document.getElementById('pin-new-monitor').value.trim();
       const newAdm = document.getElementById('pin-new-admin').value.trim();
-      if (oldMon && safePinDecode(pins.monitor) !== oldMon) return alert('❌ PIN actual del Monitor incorrecto.');
+      // Verificar PIN actual del monitor antes de cambiar
+      if (oldMon && !(await verifyPin(oldMon, pins.monitor))) return alert('❌ PIN actual del Monitor incorrecto.');
       if (newMon && (newMon.length < 4 || isNaN(newMon))) return alert('PIN Monitor debe ser 4 dígitos.');
       if (newAdm && (newAdm.length < 4 || isNaN(newAdm))) return alert('PIN Admin debe ser 4 dígitos.');
-      if (newMon) pins.monitor = safePinEncode(newMon);
-      if (newAdm) pins.admin = safePinEncode(newAdm);
+      if (newMon) pins.monitor = await safePinHash(newMon);
+      if (newAdm) pins.admin   = await safePinHash(newAdm);
       loginSavePinsToStorage(pins);
-      alert('✅ PINs actualizados correctamente.');
+      alert('✅ PINs actualizados con cifrado SHA-256.');
     }
 
     // Check existing session on load — sessionStorage es por pestaña/PC, nunca compartido
@@ -7007,227 +7201,313 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
   </script>
 
 
-  <!-- TAB 2: PLAN DE TRABAJO -->
   <div id="tab-plantrabajo" class="tab-content">
-    <iframe srcdoc="<!DOCTYPE html>
-<html lang=&quot;es&quot;>
-<head>
-    <meta charset=&quot;UTF-8&quot;>
-    <meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;>
-    <title>Agencia RR PRIME - Command Center Elite v15.0</title>
-    <link href=&quot;https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&amp;display=swap&quot; rel=&quot;stylesheet&quot;>
-    <script src=&quot;https://cdn.jsdelivr.net/npm/chart.js&quot;></script>
     <style>
-        :root {
-            --primary: #6366f1; --secondary: #a855f7; --bg: #020617;
-            --card-bg: rgba(15, 23, 42, 0.98); --text: #f8fafc; --accent: #22d3ee;
-            --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --gold: #fcd34d;
-        }
 
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: var(--bg); color: var(--text);
-            margin: 0; padding: 20px; min-height: 100vh;
-        }
+  /* ── PT Base reset — override outer page element styles ── */
+  #tab-plantrabajo h1 { text-align:left; font-size:1.8rem; color:var(--text); margin:0; font-weight:700; }
+  #tab-plantrabajo h2 { font-size:1.1rem; color:var(--accent); margin:0 0 10px; }
+  #tab-plantrabajo h3 { color:var(--text); margin:0 0 10px; }
+  #tab-plantrabajo h4 { margin:0; font-size:.75rem; text-transform:uppercase; color:var(--accent); }
+  #tab-plantrabajo input { width:auto; padding:10px; background:rgba(0,0,0,0.4); border:1px solid #333; color:white; border-radius:8px; font-family:inherit; box-sizing:border-box; }
+  #tab-plantrabajo input[type="text"] { flex:1; }
+  #tab-plantrabajo button { width:auto; font-size:.85rem; padding:10px 18px; }
+  #tab-plantrabajo select { width:auto; font-size:.85rem; padding:8px 10px; }
+  #tab-plantrabajo .chart-container { width:100%; height:150px; margin-top:20px; background:rgba(0,0,0,0.2); border-radius:10px; padding:10px; box-sizing:border-box; }
 
-        #star-container { position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%); }
-
-        .dashboard { max-width: 1400px; margin: 0 auto; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 25px; box-shadow: 0 0 60px rgba(99,102,241,0.2); }
-
-        .header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 20px; margin-bottom: 30px; }
-        .supervisor-panel { background: rgba(99, 102, 241, 0.1); padding: 15px; border-radius: 15px; border: 1px solid var(--primary); text-align: right; }
-        
-        .tabs { display: flex; gap: 10px; margin-bottom: 25px; overflow-x: auto; padding-bottom: 5px; }
-        .tab-btn { padding: 12px 25px; border: none; background: rgba(255,255,255,0.05); color: white; cursor: pointer; border-radius: 12px; font-weight: 500; transition: 0.3s; white-space: nowrap; }
-        .tab-btn.active { background: var(--primary); box-shadow: 0 0 15px var(--primary); }
-
-        .op-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 20px; margin-bottom: 25px; position: relative; }
-        
-        .alert-box { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; font-weight: 500; font-size: 0.9rem; border-left: 5px solid; }
-        .alert-success { background: rgba(16, 185, 129, 0.15); color: var(--success); border-color: var(--success); }
-        .alert-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); border-color: var(--warning); }
-        .alert-info { background: rgba(34, 211, 238, 0.15); color: var(--accent); border-color: var(--accent); }
-
-        .task-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
-        .task-col { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; font-size: 0.85rem; }
-
-        @media(max-width:768px){
-          body { padding: 8px; overflow-x: hidden; }
-          .dashboard { padding: 12px; border-radius: 14px; margin: 0; }
-          .header-flex { flex-direction: column; align-items: flex-start; gap: 10px; }
-          .supervisor-panel { width: 100%; box-sizing: border-box; text-align: left; padding: 10px; }
-          .tabs { gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; width: 100%; }
-          .tabs::-webkit-scrollbar { height: 3px; }
-          .tab-btn { padding: 8px 12px; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
-          .task-grid { grid-template-columns: 1fr; gap: 10px; }
-          .op-card { padding: 12px; }
-          h1 { font-size: 1rem !important; }
-          h2, h3 { font-size: 0.9rem !important; }
-          input, select, button { max-width: 100%; box-sizing: border-box; }
-          .input-group { flex-direction: column; gap: 8px; }
-          .input-group input, .input-group button { width: 100%; }
-          table { font-size: 0.75rem; }
-          td, th { padding: 6px 8px !important; }
-        }
-        .task-col h4 { margin: 0 0 10px 0; font-size: 0.75rem; text-transform: uppercase; color: var(--accent); }
-        .task-item { cursor: pointer; padding: 5px; border-radius: 5px; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
-        .task-item:hover { background: rgba(255,255,255,0.05); }
-        .t-done { color: var(--success); }
-        .t-pending { color: var(--danger); opacity: 0.8; }
-
-        .progress-container { background: rgba(255,255,255,0.1); border-radius: 10px; height: 12px; margin: 15px 0; overflow: hidden; }
-        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--secondary), var(--accent)); transition: width 0.6s ease; width: 0%; }
-
-        input { background: rgba(0,0,0,0.4); border: 1px solid #333; color: white; padding: 10px; border-radius: 8px; font-family: 'Roboto', sans-serif; }
-        .btn-delete { background: var(--danger); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 20px; font-weight: bold; transition: 0.3s; }
-
-        .ice-generator-box { background: rgba(0,0,0,0.3); border: 1px solid var(--primary); padding: 25px; border-radius: 20px; text-align: center; }
-        .ice-btn-group { display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
-        .ice-btn { padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; }
-        .ice-btn.real { background: #3b82f6; color: white; }
-        .ice-btn.hot { background: #ef4444; color: white; }
-        .ice-btn.deep { background: #8b5cf6; color: white; }
-        .ice-display { min-height: 100px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-style: italic; color: var(--accent); border: 2px dashed rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; margin-top: 10px; }
-
-        .manual-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
-        .manual-section { background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(99, 102, 241, 0.3); padding: 20px; border-radius: 15px; }
-        .manual-section h3 { border-bottom: 1px solid var(--primary); padding-bottom: 10px; margin-top: 0; color: var(--accent); font-size: 1rem; text-transform: uppercase; }
-        .manual-section ul { padding-left: 20px; font-size: 0.85rem; line-height: 1.5; }
-        .manual-section li { margin-bottom: 8px; }
-        .rule-important { color: var(--gold); font-weight: bold; }
-        .rule-danger { color: #ff8a8a; font-weight: bold; }
-
-        /* ESTILO PARA LA GRÁFICA */
+#tab-plantrabajo {
+        padding: 0;
+        width: 100%;
+        box-sizing: border-box;
+      }
+#tab-plantrabajo .pt-dashboard {
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+      }
+#tab-plantrabajo #star-container { position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%); }
+#tab-plantrabajo .pt-dashboard { max-width: 1400px; margin: 0 auto; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 25px; box-shadow: 0 0 60px rgba(99,102,241,0.2); }
+#tab-plantrabajo .header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 20px; margin-bottom: 30px; }
+#tab-plantrabajo .supervisor-panel { background: rgba(99, 102, 241, 0.1); padding: 15px; border-radius: 15px; border: 1px solid var(--primary); text-align: right; }
+#tab-plantrabajo .pt-tabs { display: flex; gap: 10px; margin-bottom: 25px; overflow-x: auto; padding-bottom: 5px; }
+#tab-plantrabajo .pt-tab-btn { padding: 12px 25px; border: none; background: rgba(255,255,255,0.05); color: white; cursor: pointer; border-radius: 12px; font-weight: 500; transition: 0.3s; white-space: nowrap; }
+#tab-plantrabajo .pt-tab-btn.active { background: var(--primary); box-shadow: 0 0 15px var(--primary); }
+#tab-plantrabajo .op-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 20px; margin-bottom: 25px; position: relative; }
+#tab-plantrabajo .alert-box { padding: 10px 15px; border-radius: 10px; margin-bottom: 15px; font-weight: 500; font-size: 0.9rem; border-left: 5px solid; }
+#tab-plantrabajo .alert-success { background: rgba(16, 185, 129, 0.15); color: var(--success); border-color: var(--success); }
+#tab-plantrabajo .alert-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); border-color: var(--warning); }
+#tab-plantrabajo .alert-info { background: rgba(34, 211, 238, 0.15); color: var(--accent); border-color: var(--accent); }
+#tab-plantrabajo .task-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+#tab-plantrabajo .task-col { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; font-size: 0.85rem; }
+@media(max-width:768px){
+#tab-plantrabajo .pt-dashboard { padding: 12px; border-radius: 14px; margin: 0; }
+#tab-plantrabajo .header-flex { flex-direction: column; align-items: flex-start; gap: 10px; }
+#tab-plantrabajo .supervisor-panel { width: 100%; box-sizing: border-box; text-align: left; padding: 10px; }
+#tab-plantrabajo .pt-tabs { gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 4px; width: 100%; }
+#tab-plantrabajo .tabs::-webkit-scrollbar { height: 3px; }
+#tab-plantrabajo .pt-tab-btn { padding: 8px 12px; font-size: 0.75rem; white-space: nowrap; flex-shrink: 0; }
+#tab-plantrabajo .task-grid { grid-template-columns: 1fr; gap: 10px; }
+#tab-plantrabajo .op-card { padding: 12px; }
+#tab-plantrabajo h1 { font-size: 1rem !important; }
+#tab-plantrabajo h2, #tab-plantrabajo h3 { font-size: 0.9rem !important; }
+#tab-plantrabajo input, #tab-plantrabajo select, #tab-plantrabajo button { max-width: 100%; box-sizing: border-box; }
+#tab-plantrabajo .input-group { flex-direction: column; gap: 8px; }
+#tab-plantrabajo .input-group input, #tab-plantrabajo .input-group button { width: 100%; }
+#tab-plantrabajo table { font-size: 0.75rem; }
+#tab-plantrabajo td, #tab-plantrabajo th { padding: 6px 8px !important; }
+}
+#tab-plantrabajo .task-col h4 { margin: 0 0 10px 0; font-size: 0.75rem; text-transform: uppercase; color: var(--accent); }
+#tab-plantrabajo .task-item { cursor: pointer; padding: 5px; border-radius: 5px; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
+#tab-plantrabajo .task-item:hover { background: rgba(255,255,255,0.05); }
+#tab-plantrabajo .t-done { color: var(--success); }
+#tab-plantrabajo .t-pending { color: var(--danger); opacity: 0.8; }
+#tab-plantrabajo .progress-container { background: rgba(255,255,255,0.1); border-radius: 10px; height: 12px; margin: 15px 0; overflow: hidden; }
+#tab-plantrabajo .progress-bar { height: 100%; background: linear-gradient(90deg, var(--secondary), var(--accent)); transition: width 0.6s ease; width: 0%; }
+#tab-plantrabajo input { background: rgba(0,0,0,0.4); border: 1px solid #333; color: white; padding: 10px; border-radius: 8px; font-family: 'Roboto', sans-serif; }
+#tab-plantrabajo .btn-delete { background: var(--danger); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 20px; font-weight: bold; transition: 0.3s; }
+#tab-plantrabajo .ice-generator-box { background: rgba(0,0,0,0.3); border: 1px solid var(--primary); padding: 25px; border-radius: 20px; text-align: center; }
+#tab-plantrabajo .ice-btn-group { display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
+#tab-plantrabajo .ice-btn { padding: 15px 30px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; }
+#tab-plantrabajo .ice-btn.real { background: #3b82f6; color: white; }
+#tab-plantrabajo .ice-btn.hot { background: #ef4444; color: white; }
+#tab-plantrabajo .ice-btn.deep { background: #8b5cf6; color: white; }
+#tab-plantrabajo .ice-display { min-height: 100px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-style: italic; color: var(--accent); border: 2px dashed rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; margin-top: 10px; }
+#tab-plantrabajo .manual-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
+#tab-plantrabajo .manual-section { background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(99, 102, 241, 0.3); padding: 20px; border-radius: 15px; }
+#tab-plantrabajo .manual-section h3 { border-bottom: 1px solid var(--primary); padding-bottom: 10px; margin-top: 0; color: var(--accent); font-size: 1rem; text-transform: uppercase; }
+#tab-plantrabajo .manual-section ul { padding-left: 20px; font-size: 0.85rem; line-height: 1.5; }
+#tab-plantrabajo .manual-section li { margin-bottom: 8px; }
+#tab-plantrabajo .rule-important { color: var(--gold); font-weight: bold; }
+#tab-plantrabajo .rule-danger { color: #ff8a8a; font-weight: bold; }
+#tab-plantrabajo /* ESTILO PARA LA GRÁFICA */
         .chart-container { width: 100%; height: 150px; margin-top: 20px; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 10px; }
-
-        .content { display: none; } .content.active { display: block; }
-
-        /* ── BOTONES BITÁCORA ── */
+#tab-plantrabajo .pt-content { display: none; }
+#tab-plantrabajo .pt-content.active { display: block; }
+#tab-plantrabajo /* ── BOTONES BITÁCORA ── */
         .task-col-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .task-col-header h4 { margin: 0; font-size: 0.75rem; text-transform: uppercase; color: var(--accent); }
-        .btn-bitacora {
+#tab-plantrabajo .task-col-header h4 { margin: 0; font-size: 0.75rem; text-transform: uppercase; color: var(--accent); }
+#tab-plantrabajo .btn-bitacora {
             font-size: 0.68rem; font-weight: 600; padding: 3px 9px;
             border: none; border-radius: 6px; cursor: pointer;
             transition: 0.2s; white-space: nowrap;
         }
-        .btn-save-tasks  { background: rgba(16,185,129,0.25); color: #10b981; border: 1px solid #10b981; }
-        .btn-save-tasks:hover  { background: #10b981; color: #000; }
-        .btn-view-log    { background: rgba(99,102,241,0.25); color: #a5b4fc; border: 1px solid #6366f1; }
-        .btn-view-log:hover    { background: #6366f1; color: #fff; }
-
-        /* ── MODAL BITÁCORA ── */
+#tab-plantrabajo .btn-save-tasks { background: rgba(16,185,129,0.25); color: #10b981; border: 1px solid #10b981; }
+#tab-plantrabajo .btn-save-tasks:hover { background: #10b981; color: #000; }
+#tab-plantrabajo .btn-view-log { background: rgba(99,102,241,0.25); color: #a5b4fc; border: 1px solid #6366f1; }
+#tab-plantrabajo .btn-view-log:hover { background: #6366f1; color: #fff; }
+#tab-plantrabajo /* ── MODAL BITÁCORA ── */
         .modal-overlay {
             display: none; position: fixed; inset: 0; z-index: 999;
             background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
             align-items: center; justify-content: center;
         }
-        .modal-overlay.open { display: flex; }
-        .modal-box {
+#tab-plantrabajo .modal-overlay.open { display: flex; }
+#tab-plantrabajo .modal-box {
             background: #0f172a; border: 1px solid #6366f1;
             border-radius: 20px; padding: 28px; width: 92%; max-width: 560px;
             max-height: 80vh; overflow-y: auto;
             box-shadow: 0 0 40px rgba(99,102,241,0.35);
         }
-        .modal-box h3 { margin: 0 0 18px; color: var(--accent); font-size: 1rem; letter-spacing: 1px; }
-        .log-entry {
+#tab-plantrabajo .modal-box h3 { margin: 0 0 18px; color: var(--accent); font-size: 1rem; letter-spacing: 1px; }
+#tab-plantrabajo .log-entry {
             background: rgba(255,255,255,0.04); border-left: 3px solid #6366f1;
             border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 0.82rem;
         }
-        .log-entry .log-date { color: #a5b4fc; font-size: 0.72rem; margin-bottom: 5px; font-weight: 600; }
-        .log-entry .log-task { color: #10b981; margin: 2px 0; }
-        .log-entry .log-pts  { color: var(--gold); font-size: 0.75rem; margin-top: 4px; }
-        .log-empty { color: #475569; text-align: center; padding: 30px 0; font-size: 0.9rem; }
-        .modal-close {
+#tab-plantrabajo .log-entry .log-date { color: #a5b4fc; font-size: 0.72rem; margin-bottom: 5px; font-weight: 600; }
+#tab-plantrabajo .log-entry .log-task { color: #10b981; margin: 2px 0; }
+#tab-plantrabajo .log-entry .log-pts { color: var(--gold); font-size: 0.75rem; margin-top: 4px; }
+#tab-plantrabajo .log-empty { color: #475569; text-align: center; padding: 30px 0; font-size: 0.9rem; }
+#tab-plantrabajo .modal-close {
             display: block; margin: 18px auto 0; padding: 9px 28px;
             background: var(--danger); color: white; border: none;
             border-radius: 10px; cursor: pointer; font-weight: bold;
         }
-        .log-clear {
+#tab-plantrabajo .log-clear {
             display: block; margin: 10px auto 0; padding: 7px 22px;
             background: rgba(239,68,68,0.15); color: #ef4444;
             border: 1px solid #ef4444; border-radius: 10px;
             cursor: pointer; font-size: 0.8rem;
         }
-    </style>
-</head>
-<body>
 
-<div id=&quot;star-container&quot;></div>
+  /* ══ PT BUTTONS — override outer page ══ */
+  #tab-plantrabajo .pt-tab-btn {
+    padding: 12px 25px;
+    border: none;
+    background: rgba(255,255,255,0.05);
+    color: white;
+    cursor: pointer;
+    border-radius: 12px;
+    font-weight: 500;
+    font-size: .85rem;
+    transition: 0.3s;
+    white-space: nowrap;
+    width: auto;
+    display: inline-block;
+  }
+  #tab-plantrabajo .pt-tab-btn:hover {
+    background: rgba(99,102,241,0.3);
+    box-shadow: 0 0 10px rgba(99,102,241,0.4);
+  }
+  #tab-plantrabajo .pt-tab-btn.active {
+    background: #6366f1;
+    box-shadow: 0 0 15px #6366f1;
+    color: white;
+  }
+  #tab-plantrabajo .pt-tab-btn[style*="success"],
+  #tab-plantrabajo button[style*="success"] {
+    background: #10b981 !important;
+  }
 
-<div class=&quot;dashboard&quot;>
-    <div class=&quot;header-flex&quot;>
+  /* ══ PT TASK COLORS ══ */
+  #tab-plantrabajo .task-item.t-done {
+    color: #10b981 !important;
+    font-weight: 500;
+  }
+  #tab-plantrabajo .task-item.t-pending {
+    color: #ef4444 !important;
+    opacity: 1 !important;
+  }
+  #tab-plantrabajo .task-item.t-done::before  { content: ''; }
+  #tab-plantrabajo .task-item.t-pending::before { content: ''; }
+
+  /* ══ PT BTN DELETE (cerrar jornada) ══ */
+  #tab-plantrabajo .btn-delete {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 20px;
+    font-weight: bold;
+    transition: 0.3s;
+  }
+  #tab-plantrabajo .btn-delete:hover { background: #dc2626; }
+
+  /* ══ PT ICE BUTTONS ══ */
+  #tab-plantrabajo .ice-btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+    text-transform: uppercase;
+    width: auto;
+  }
+  #tab-plantrabajo .ice-btn.real  { background: #3b82f6; color: white; }
+  #tab-plantrabajo .ice-btn.hot   { background: #ef4444; color: white; }
+  #tab-plantrabajo .ice-btn.deep  { background: #8b5cf6; color: white; }
+  #tab-plantrabajo .ice-btn:hover { opacity: .85; transform: translateY(-2px); }
+
+  /* ══ PT BITACORA BUTTONS ══ */
+  #tab-plantrabajo .btn-bitacora {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+    white-space: nowrap;
+    width: auto;
+  }
+  #tab-plantrabajo .btn-save-tasks {
+    background: rgba(16,185,129,0.25);
+    color: #10b981;
+    border: 1px solid #10b981;
+  }
+  #tab-plantrabajo .btn-save-tasks:hover { background: #10b981; color: #000; }
+  #tab-plantrabajo .btn-view-log {
+    background: rgba(99,102,241,0.25);
+    color: #a5b4fc;
+    border: 1px solid #6366f1;
+  }
+  #tab-plantrabajo .btn-view-log:hover { background: #6366f1; color: #fff; }
+</style>
+
+    <div class="pt-wrap" style="width:100%;padding:15px;box-sizing:border-box;">
+      
+
+
+
+<div class="pt-dashboard">
+    <div class="header-flex">
         <div>
-            <h1 style=&quot;margin:0; letter-spacing: 5px;&quot;>RR PRIME <span style=&quot;font-weight:300; font-size:0.5em;&quot;>v15.0</span></h1>
-            <p style=&quot;margin:0; color:var(--accent); font-size: 0.9rem;&quot;>Elite Operations Control Center</p>
+            <h1 style="margin:0; letter-spacing: 5px;">RR PRIME <span style="font-weight:300; font-size:0.5em;">v15.0</span></h1>
+            <p style="margin:0; color:var(--accent); font-size: 0.9rem;">Elite Operations Control Center</p>
         </div>
-        <div class=&quot;supervisor-panel&quot; id=&quot;supervisor-ui&quot;>
-            <h4 style=&quot;margin:0; font-size:0.7rem; color: var(--accent); letter-spacing: 1px;&quot;>GANANCIA LÍDER (10% DEL TURNO)</h4>
-            <div style=&quot;font-size: 1.4rem; font-weight: 700;&quot;>
-                <span id=&quot;sup-pts&quot;>0</span> Pts | <span id=&quot;sup-cop&quot; style=&quot;color:var(--gold);&quot;>$0</span> COP
+        <div class="supervisor-panel" id="supervisor-ui">
+            <h4 style="margin:0; font-size:0.7rem; color: var(--accent); letter-spacing: 1px;">GANANCIA LÍDER (10% DEL TURNO)</h4>
+            <div style="font-size: 1.4rem; font-weight: 700;">
+                <span id="pt-sup-pts">0</span> Pts | <span id="pt-sup-cop" style="color:var(--gold);">$0</span> COP
             </div>
         </div>
     </div>
 
-    <div style=&quot;display:flex; justify-content:center; gap:10px; margin-bottom:30px;&quot;>
-        <button class=&quot;tab-btn&quot; id=&quot;btn-shift-mañana&quot; onclick=&quot;setShift('mañana')&quot;>☀️ MAÑANA (06-14)</button>
-        <button class=&quot;tab-btn&quot; id=&quot;btn-shift-tarde&quot; onclick=&quot;setShift('tarde')&quot;>🌆 TARDE (14-22)</button>
-        <button class=&quot;tab-btn&quot; id=&quot;btn-shift-noche&quot; onclick=&quot;setShift('noche')&quot;>🌙 NOCHE (22-06)</button>
+    <div style="display:flex; justify-content:center; gap:10px; margin-bottom:30px;">
+        <button class="pt-tab-btn" id="pt-btn-shift-mañana" onclick="PT.setShift('mañana')">☀️ MAÑANA (06-14)</button>
+        <button class="pt-tab-btn" id="pt-btn-shift-tarde" onclick="PT.setShift('tarde')">🌆 TARDE (14-22)</button>
+        <button class="pt-tab-btn" id="pt-btn-shift-noche" onclick="PT.setShift('noche')">🌙 NOCHE (22-06)</button>
     </div>
 
-    <div class=&quot;tabs&quot;>
-        <button class=&quot;tab-btn active&quot; id=&quot;tab-ops-btn&quot; onclick=&quot;showTab('ops')&quot;>👥 OPERADORES</button>
-        <button class=&quot;tab-btn&quot; id=&quot;tab-ice-btn&quot; onclick=&quot;showTab('ice')&quot;>🔥 GENERADOR ICEBREAKERS</button>
-        <button class=&quot;tab-btn&quot; id=&quot;tab-manual-btn&quot; onclick=&quot;showTab('manual')&quot;>📚 MANUAL OPERATIVO</button>
+    <div class="pt-tabs">
+        <button class="pt-tab-btn active" id="pt-tab-ops-btn" onclick="PT.showTab('ops')">👥 OPERADORES</button>
+        <button class="pt-tab-btn" id="pt-tab-ice-btn" onclick="PT.showTab('ice')">🔥 GENERADOR ICEBREAKERS</button>
+        <button class="pt-tab-btn" id="pt-tab-manual-btn" onclick="PT.showTab('manual')">📚 MANUAL OPERATIVO</button>
     </div>
 
-    <div id=&quot;tab-ops&quot; class=&quot;content active&quot;>
-        <div class=&quot;input-group&quot; style=&quot;display:flex; gap:10px; margin-bottom:20px;&quot;>
-            <input type=&quot;text&quot; id=&quot;new-op-name&quot; placeholder=&quot;Nombre completo del operador...&quot; style=&quot;flex:1;&quot;>
-            <button onclick=&quot;addOperator()&quot; class=&quot;tab-btn&quot; style=&quot;background:var(--success);white-space:nowrap;&quot;>+ REGISTRAR EN TURNO</button>
+    <div id="pt-tab-ops" class="pt-content active">
+        <div class="input-group" style="display:flex; gap:10px; margin-bottom:20px;">
+            <input type="text" id="pt-new-op-name" placeholder="Nombre completo del operador..." style="flex:1;">
+            <button onclick="PT.addOperator()" class="pt-tab-btn" style="background:var(--success);white-space:nowrap;">+ REGISTRAR EN TURNO</button>
         </div>
-        <div id=&quot;ops-list&quot;></div>
-        <button class=&quot;btn-delete&quot; onclick=&quot;clearCurrentShiftData()&quot;>🗑️ CERRAR JORNADA Y BORRAR COOKIES (TURNO SELECCIONADO)</button>
+        <div id="pt-ops-list"></div>
+        <button class="btn-delete" onclick="PT.clearCurrentShiftData()">🗑️ CERRAR JORNADA Y BORRAR COOKIES (TURNO SELECCIONADO)</button>
     </div>
 
-    <div id=&quot;tab-ice&quot; class=&quot;content&quot;>
-        <div class=&quot;ice-generator-box&quot;>
-            <h2 style=&quot;margin-top:0;&quot;>Generador de Aperturas TalkyTimes</h2>
-            <div class=&quot;ice-btn-group&quot;>
-                <button class=&quot;ice-btn real&quot; onclick=&quot;generateIce('real')&quot;>❤️ Conexión Real</button>
-                <button class=&quot;ice-btn hot&quot; onclick=&quot;generateIce('hot')&quot;>🌶️ Seducción / Hot</button>
-                <button class=&quot;ice-btn deep&quot; onclick=&quot;generateIce('deep')&quot;>🧠 Mentalidad / Deep</button>
+    <div id="pt-tab-ice" class="pt-content">
+        <div class="ice-generator-box">
+            <h2 style="margin-top:0;">Generador de Aperturas TalkyTimes</h2>
+            <div class="ice-btn-group">
+                <button class="ice-btn real" onclick="PT.generateIce('real')">❤️ Conexión Real</button>
+                <button class="ice-btn hot" onclick="PT.generateIce('hot')">🌶️ Seducción / Hot</button>
+                <button class="ice-btn deep" onclick="PT.generateIce('deep')">🧠 Mentalidad / Deep</button>
             </div>
-            <div id=&quot;ice-output&quot; class=&quot;ice-display&quot;>Selecciona una temática...</div>
+            <div id="pt-ice-output" class="ice-display">Selecciona una temática...</div>
         </div>
     </div>
 
-    <div id=&quot;tab-manual&quot; class=&quot;content&quot;>
-        <div class=&quot;manual-container&quot;>
-            <div class=&quot;manual-section&quot;><h3>1. Misión y Objetivos</h3><ul><li><span class=&quot;rule-important&quot;>Misión:</span> Máxima productividad y calidad optimizando interacciones con usuarios reales.</li></ul></div>
-            <div class=&quot;manual-section&quot;><h3>2. Estructura y Roles</h3><ul><li><strong>Líderes:</strong> Supervisión y feedback. <strong>Operadores:</strong> Ejecución y reportes.</li></ul></div>
-            <div class=&quot;manual-section&quot;><h3>3. Protocolo de Ejecución</h3><ul><li><span class=&quot;rule-important&quot;>Tráfico VIP:</span> Páginas 1-10 cada hora. 5 converses nuevas mín.</li></ul></div>
-            <div class=&quot;manual-section&quot;><h3>4. Código de Conducta</h3><ul><li><span class=&quot;rule-danger&quot;>IA PROHIBIDA:</span> No Chat GPT. No copiar/pegar sin adaptar.</li></ul></div>
-            <div class=&quot;manual-section&quot;><h3>5. Sistema de Bonos</h3><ul><li><span class=&quot;rule-important&quot;>Bonos:</span> Por cumplimiento de promedio diario y constancia.</li></ul></div>
-            <div class=&quot;manual-section&quot;><h3>6. Disciplina Operativa</h3><ul><li>Puntualidad y veracidad en los datos de los reportes.</li></ul></div>
+    <div id="pt-tab-manual" class="pt-content">
+        <div class="manual-container">
+            <div class="manual-section"><h3>1. Misión y Objetivos</h3><ul><li><span class="rule-important">Misión:</span> Máxima productividad y calidad optimizando interacciones con usuarios reales.</li></ul></div>
+            <div class="manual-section"><h3>2. Estructura y Roles</h3><ul><li><strong>Líderes:</strong> Supervisión y feedback. <strong>Operadores:</strong> Ejecución y reportes.</li></ul></div>
+            <div class="manual-section"><h3>3. Protocolo de Ejecución</h3><ul><li><span class="rule-important">Tráfico VIP:</span> Páginas 1-10 cada hora. 5 converses nuevas mín.</li></ul></div>
+            <div class="manual-section"><h3>4. Código de Conducta</h3><ul><li><span class="rule-danger">IA PROHIBIDA:</span> No Chat GPT. No copiar/pegar sin adaptar.</li></ul></div>
+            <div class="manual-section"><h3>5. Sistema de Bonos</h3><ul><li><span class="rule-important">Bonos:</span> Por cumplimiento de promedio diario y constancia.</li></ul></div>
+            <div class="manual-section"><h3>6. Disciplina Operativa</h3><ul><li>Puntualidad y veracidad en los datos de los reportes.</li></ul></div>
         </div>
     </div>
 </div>
 
 <!-- ── MODAL BITÁCORA ── -->
-<div class=&quot;modal-overlay&quot; id=&quot;modal-bitacora&quot;>
-    <div class=&quot;modal-box&quot;>
-        <h3>📋 BITÁCORA — <span id=&quot;modal-op-name&quot;></span></h3>
-        <div id=&quot;modal-log-body&quot;></div>
-        <button class=&quot;log-clear&quot; onclick=&quot;clearBitacora()&quot;>🗑️ Limpiar historial</button>
-        <button class=&quot;modal-close&quot; onclick=&quot;cerrarModal()&quot;>✕ Cerrar</button>
+<div class="modal-overlay" id="pt-modal-bitacora">
+    <div class="modal-box">
+        <h3>📋 BITÁCORA — <span id="pt-modal-op-name"></span></h3>
+        <div id="pt-modal-log-body"></div>
+        <button class="log-clear" onclick="PT.clearBitacora()">🗑️ Limpiar historial</button>
+        <button class="modal-close" onclick="PT.cerrarModal()">✕ Cerrar</button>
     </div>
 </div>
 
 <script>
-    const VALOR_PUNTO_COP = 1200;      
-    const COMISION_SUPERVISOR = 0.10;  
-    
-    const TAREAS_MASTER = [
+    // ══ PLAN DE TRABAJO — PT Namespace (evita colisiones globales) ══
+    const PT = {};
+
+    PT.VALOR_PUNTO_COP    = 1200;
+    PT.COMISION_SUPERVISOR = 0.10;
+
+    PT.TAREAS_MASTER = [
         "Tráfico VIP páginas 1-10 (Cada hora)",
         "3-5 Conversaciones nuevas iniciadas",
         "1 Cliente nuevo fijado (Pin)",
@@ -7236,254 +7516,244 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         "Limpieza de bandeja de entrada"
     ];
 
-    const ICEBREAKERS_BANK = {
+    PT.ICEBREAKERS_BANK = {
         real: ["¿Crees que en estos sitios se puede encontrar una conexión real?", "¿Qué te hace sonreír un lunes?", "Busco charla honesta, ¿eres tú?", "Tu perfil se siente auténtico, ¿qué buscas aquí?", "¿Qué meta no le cuentas a nadie?"],
-        hot: ["La mente seduce más que la piel, ¿qué tan peligroso eres?", "Secretos en voz baja... ¿sabes guardarlos?", "A esta hora mi mente vuela, ¿me distraes?", "Me gusta la gente que sabe lo que quiere.", "¿Cuál es tu mayor tempación?"],
+        hot:  ["La mente seduce más que la piel, ¿qué tan peligroso eres?", "Secretos en voz baja... ¿sabes guardarlos?", "A esta hora mi mente vuela, ¿me distraes?", "Me gusta la gente que sabe lo que quiere.", "¿Cuál es tu mayor tentación?"],
         deep: ["¿Cuál es el mayor reto que has superado?", "¿Qué valoras de una charla honesta?", "¿Sigues las reglas o creas las tuyas?", "Si cambiaras algo de hoy, ¿qué sería?", "Me gusta la mentalidad fuerte, ¿qué te apasiona?"]
     };
 
-    let shiftActual = 'mañana';
-    let baseDatos = { mañana: [], tarde: [], noche: [] };
-    let charts = {}; // Para guardar las instancias de las gráficas
+    PT.shiftActual = 'mañana';
+    PT.baseDatos   = { 'mañana': [], tarde: [], noche: [] };
+    PT.charts      = {};
+    PT.modalOpIdx  = null;
 
-    function setShift(shift) {
-        shiftActual = shift;
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        const btn = document.getElementById('btn-shift-' + shift);
-        if(btn) btn.classList.add('active');
-        loadData();
-    }
+    PT.setShift = function(shift) {
+        PT.shiftActual = shift;
+        document.querySelectorAll('#tab-plantrabajo .pt-tab-btn').forEach(b => b.classList.remove('active'));
+        const btn = document.getElementById('pt-btn-shift-' + shift);
+        if (btn) btn.classList.add('active');
+        PT.loadData();
+    };
 
-    function addOperator() {
-        const inputNombre = document.getElementById('new-op-name');
-        if (!inputNombre.value) return;
-        baseDatos[shiftActual].push({
-            name: inputNombre.value,
+    PT.addOperator = function() {
+        const input = document.getElementById('pt-new-op-name');
+        if (!input || !input.value.trim()) return;
+        PT.baseDatos[PT.shiftActual].push({
+            name: input.value.trim(),
             puntos: 0,
             meta: 100,
             inicioTurno: new Date().getTime(),
-            tareasEstado: Array(TAREAS_MASTER.length).fill(false),
-            historialSemanal: [0, 0, 0, 0, 0, 0, 0] // Puntos de los últimos 7 días
+            tareasEstado: Array(PT.TAREAS_MASTER.length).fill(false),
+            historialSemanal: [0,0,0,0,0,0,0]
         });
-        inputNombre.value = "";
-        saveData(); renderAll();
-    }
+        input.value = '';
+        PT.saveData();
+        PT.renderAll();
+    };
 
-    function renderAll() {
-        const contenedor = document.getElementById('ops-list');
-        contenedor.innerHTML = "";
-        let sumaPuntosTurno = 0;
+    PT.renderAll = function() {
+        const contenedor = document.getElementById('pt-ops-list');
+        if (!contenedor) return;
+        contenedor.innerHTML = '';
+        let sumaPuntos = 0;
 
-        baseDatos[shiftActual].forEach((op, idx) => {
-            sumaPuntosTurno += op.puntos;
-            const pct = Math.min((op.puntos / op.meta) * 100, 100);
-            const alerta = obtenerAlerta(op);
-
+        PT.baseDatos[PT.shiftActual].forEach((op, idx) => {
+            sumaPuntos += op.puntos;
+            const pct   = Math.min((op.puntos / op.meta) * 100, 100);
+            const alerta = PT.obtenerAlerta(op);
             const tarjeta = document.createElement('div');
             tarjeta.className = 'op-card';
             tarjeta.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h2 style="margin:0; color:var(--accent);">${op.name}</h2>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <h2 style="margin:0;color:var(--accent);">${op.name}</h2>
                     <div style="text-align:right;">
-                        <input type="number" value="${op.puntos}" onchange="updateVal(${idx}, 'puntos', this.value)" style="width:70px; font-weight:bold;"> / 
-                        <input type="number" value="${op.meta}" onchange="updateVal(${idx}, 'meta', this.value)" style="width:70px;">
+                        <input type="number" value="${op.puntos}" onchange="PT.updateVal(${idx},'puntos',this.value)" style="width:70px;font-weight:bold;"> /
+                        <input type="number" value="${op.meta}"   onchange="PT.updateVal(${idx},'meta',this.value)"   style="width:70px;">
                     </div>
                 </div>
                 <div class="alert-box ${alerta.class}">${alerta.msg}</div>
-                <div style="color:var(--gold); font-weight:bold;">$${(op.puntos * VALOR_PUNTO_COP).toLocaleString('es-CO')} COP</div>
+                <div style="color:var(--gold);font-weight:bold;">$${(op.puntos * PT.VALOR_PUNTO_COP).toLocaleString('es-CO')} COP</div>
                 <div class="progress-container"><div class="progress-bar" style="width:${pct}%"></div></div>
-                
                 <div class="task-grid">
                     <div class="task-col">
                         <div class="task-col-header">
                             <h4>✅ HECHAS</h4>
                             <div style="display:flex;gap:5px;">
-                                <button class="btn-bitacora btn-save-tasks" onclick="guardarBitacora(${idx})">💾 Guardar</button>
-                                <button class="btn-bitacora btn-view-log"   onclick="verBitacora(${idx})">📋 Bitácora</button>
+                                <button class="btn-bitacora btn-save-tasks" onclick="PT.guardarBitacora(${idx})">💾 Guardar</button>
+                                <button class="btn-bitacora btn-view-log"   onclick="PT.verBitacora(${idx})">📋 Bitácora</button>
                             </div>
                         </div>
-                        ${TAREAS_MASTER.map((t, ti) => op.tareasEstado[ti] ? `<div class="task-item t-done" onclick="toggleTask(${idx}, ${ti})">✔ ${t}</div>` : '').join('')}
+                        ${PT.TAREAS_MASTER.map((t,ti) => op.tareasEstado[ti] ? `<div class="task-item t-done" onclick="PT.toggleTask(${idx},${ti})">✔ ${t}</div>` : '').join('')}
                     </div>
                     <div class="task-col">
                         <div class="task-col-header"><h4>⏳ PENDIENTES</h4></div>
-                        ${TAREAS_MASTER.map((t, ti) => !op.tareasEstado[ti] ? `<div class="task-item t-pending" onclick="toggleTask(${idx}, ${ti})">○ ${t}</div>` : '').join('')}
+                        ${PT.TAREAS_MASTER.map((t,ti) => !op.tareasEstado[ti] ? `<div class="task-item t-pending" onclick="PT.toggleTask(${idx},${ti})">○ ${t}</div>` : '').join('')}
                     </div>
                 </div>
-
-                <div class="chart-container">
-                    <canvas id="chart-${idx}"></canvas>
-                </div>
-
-                <div style="text-align:right; margin-top:10px;"><button onclick="delOp(${idx})" style="background:none; border:none; color:var(--danger); cursor:pointer;">Eliminar</button></div>
-            `;
+                <div class="chart-container"><canvas id="pt-chart-${idx}"></canvas></div>
+                <div style="text-align:right;margin-top:10px;">
+                    <button onclick="PT.delOp(${idx})" style="background:none;border:none;color:var(--danger);cursor:pointer;">Eliminar</button>
+                </div>`;
             contenedor.appendChild(tarjeta);
-            
-            // Inicializar gráfica después de insertar en el DOM
-            setTimeout(() => initChart(idx, op), 10);
+            setTimeout(() => PT.initChart(idx, op), 10);
         });
 
-        const ptsLider = sumaPuntosTurno * COMISION_SUPERVISOR;
-        document.getElementById('sup-pts').innerText = ptsLider.toFixed(1);
-        document.getElementById('sup-cop').innerText = "$" + Math.round(ptsLider * VALOR_PUNTO_COP).toLocaleString('es-CO');
-    }
+        const ptsLider = sumaPuntos * PT.COMISION_SUPERVISOR;
+        const elPts = document.getElementById('pt-sup-pts');
+        const elCop = document.getElementById('pt-sup-cop');
+        if (elPts) elPts.innerText = ptsLider.toFixed(1);
+        if (elCop) elCop.innerText = '$' + Math.round(ptsLider * PT.VALOR_PUNTO_COP).toLocaleString('es-CO');
+    };
 
-    function initChart(idx, op) {
-        const ctx = document.getElementById(`chart-${idx}`).getContext('2d');
-        
-        // Si ya existía una gráfica en este slot, la destruimos para crear la nueva
-        if (charts[idx]) charts[idx].destroy();
-
-        charts[idx] = new Chart(ctx, {
+    PT.initChart = function(idx, op) {
+        const canvas = document.getElementById('pt-chart-' + idx);
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (PT.charts[idx]) PT.charts[idx].destroy();
+        if (typeof Chart === 'undefined') return;
+        PT.charts[idx] = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'],
-                datasets: [{
-                    label: 'Puntos',
-                    data: op.historialSemanal,
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 3
-                }]
+                labels: ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'],
+                datasets: [{ label: 'Puntos', data: op.historialSemanal,
+                    borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.2)',
+                    borderWidth: 2, fill: true, tension: 0.4, pointRadius: 3 }]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
+                responsive: true, maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { size: 10 } } },
-                    x: { grid: { display: false }, ticks: { color: '#888', font: { size: 10 } } }
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', fontSize: 10 } },
+                    x: { grid: { display: false }, ticks: { color: '#888', fontSize: 10 } }
                 }
             }
         });
-    }
+    };
 
-    function updateVal(idx, key, val) {
+    PT.updateVal = function(idx, key, val) {
         let valor = parseInt(val) || 0;
-        baseDatos[shiftActual][idx][key] = valor;
-        
-        // Al actualizar puntos, actualizamos el último día de la gráfica (hoy)
-        if(key === 'puntos') {
-            const hoyIndex = (new Date().getDay() + 6) % 7; // Ajuste para que Lunes sea 0
-            baseDatos[shiftActual][idx].historialSemanal[hoyIndex] = valor;
+        PT.baseDatos[PT.shiftActual][idx][key] = valor;
+        if (key === 'puntos') {
+            const hoy = (new Date().getDay() + 6) % 7;
+            PT.baseDatos[PT.shiftActual][idx].historialSemanal[hoy] = valor;
         }
-        
-        saveData(); renderAll();
-    }
+        PT.saveData();
+        PT.renderAll();
+    };
 
-    /* RESTO DE FUNCIONES IGUALES */
-    function obtenerAlerta(op) {
-        const ahora = new Date().getTime();
-        const horas = (ahora - op.inicioTurno) / (1000 * 60 * 60);
-        if (op.puntos >= op.meta && op.meta > 0) return { msg: `🏆 ¡Meta cumplida!`, class: 'alert-success' };
-        return { msg: `Turno activo. ¡Vamos por esos puntos! 🚀`, class: 'alert-info' };
-    }
-    function toggleTask(oIdx, tIdx) { baseDatos[shiftActual][oIdx].tareasEstado[tIdx] = !baseDatos[shiftActual][oIdx].tareasEstado[tIdx]; saveData(); renderAll(); }
-    function delOp(idx) { if(confirm("¿Eliminar?")) { baseDatos[shiftActual].splice(idx, 1); saveData(); renderAll(); } }
-    function saveData() { localStorage.setItem('rr_prime_v15_' + shiftActual, JSON.stringify(baseDatos[shiftActual])); }
-    function loadData() { baseDatos[shiftActual] = JSON.parse(localStorage.getItem('rr_prime_v15_' + shiftActual)) || []; renderAll(); }
-    function clearCurrentShiftData() { if(confirm("¿Cerrar jornada?")) { localStorage.removeItem('rr_prime_v15_' + shiftActual); loadData(); } }
-    function showTab(id) {
-        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('tab-' + id).classList.add('active');
-        document.getElementById('tab-' + id + '-btn').classList.add('active');
-    }
-    function generateIce(cat) { 
-        const list = ICEBREAKERS_BANK[cat];
-        document.getElementById('ice-output').innerText = `"${list[Math.floor(Math.random() * list.length)]}"`;
-    }
+    PT.obtenerAlerta = function(op) {
+        if (op.puntos >= op.meta && op.meta > 0) return { msg: '🏆 ¡Meta cumplida!', class: 'alert-success' };
+        return { msg: 'Turno activo. ¡Vamos por esos puntos! 🚀', class: 'alert-info' };
+    };
 
-    // Estrellas de fondo
-    const starCont = document.getElementById('star-container');
-    for(let i=0; i<70; i++) {
-        const s = document.createElement('div'); s.style.position = 'absolute'; s.style.background = 'white';
-        s.style.width = s.style.height = Math.random()*2+'px'; s.style.top = Math.random()*100+'%';
-        s.style.left = Math.random()*100+'%'; s.style.opacity = Math.random()*0.4; starCont.appendChild(s);
-    }
-    window.onload = () => setShift('mañana');
+    PT.toggleTask = function(oIdx, tIdx) {
+        PT.baseDatos[PT.shiftActual][oIdx].tareasEstado[tIdx] = !PT.baseDatos[PT.shiftActual][oIdx].tareasEstado[tIdx];
+        PT.saveData(); PT.renderAll();
+    };
 
-    // ── BITÁCORA ──────────────────────────────────────────────
-    let modalOpIdx = null;
+    PT.delOp = function(idx) {
+        if (confirm('¿Eliminar?')) { PT.baseDatos[PT.shiftActual].splice(idx, 1); PT.saveData(); PT.renderAll(); }
+    };
 
-    function _logKey(opName) {
+    PT.saveData = function() {
+        localStorage.setItem('rr_prime_v15_' + PT.shiftActual, JSON.stringify(PT.baseDatos[PT.shiftActual]));
+    };
+
+    PT.loadData = function() {
+        PT.baseDatos[PT.shiftActual] = JSON.parse(localStorage.getItem('rr_prime_v15_' + PT.shiftActual)) || [];
+        PT.renderAll();
+    };
+
+    PT.clearCurrentShiftData = function() {
+        if (confirm('¿Cerrar jornada?')) { localStorage.removeItem('rr_prime_v15_' + PT.shiftActual); PT.loadData(); }
+    };
+
+    PT.showTab = function(id) {
+        document.querySelectorAll('#tab-plantrabajo .pt-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('#tab-plantrabajo .pt-tab-btn').forEach(b => b.classList.remove('active'));
+        const tab = document.getElementById('pt-tab-' + id);
+        const btn = document.getElementById('pt-tab-' + id + '-btn');
+        if (tab) tab.classList.add('active');
+        if (btn) btn.classList.add('active');
+    };
+
+    PT.generateIce = function(cat) {
+        const list = PT.ICEBREAKERS_BANK[cat];
+        const el = document.getElementById('pt-ice-output');
+        if (el) el.innerText = '"' + list[Math.floor(Math.random() * list.length)] + '"';
+    };
+
+    // ── Bitácora ──
+    PT._logKey = function(opName) {
         return 'rr_prime_log_' + opName.replace(/\s+/g,'_').toLowerCase();
-    }
+    };
 
-    function guardarBitacora(idx) {
-        const op = baseDatos[shiftActual][idx];
-        const hechas = TAREAS_MASTER.filter((_, ti) => op.tareasEstado[ti]);
-        if (hechas.length === 0) {
-            alert('No hay tareas marcadas como hechas para guardar.');
-            return;
-        }
-        const key = _logKey(op.name);
+    PT.guardarBitacora = function(idx) {
+        const op = PT.baseDatos[PT.shiftActual][idx];
+        const hechas = PT.TAREAS_MASTER.filter((_, ti) => op.tareasEstado[ti]);
+        if (hechas.length === 0) { alert('No hay tareas marcadas.'); return; }
+        const key = PT._logKey(op.name);
         const historial = JSON.parse(localStorage.getItem(key) || '[]');
         const ahora = new Date();
         historial.unshift({
-            fecha: ahora.toLocaleDateString('es-CO', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }),
-            hora:  ahora.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' }),
-            turno: shiftActual,
+            fecha:  ahora.toLocaleDateString('es-CO', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }),
+            hora:   ahora.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' }),
+            turno:  PT.shiftActual,
             puntos: op.puntos,
             tareas: hechas
         });
         localStorage.setItem(key, JSON.stringify(historial));
-        // Pequeña confirmación visual en el botón
-        const btns = document.querySelectorAll('.btn-save-tasks');
-        if (btns[idx]) {
-            const orig = btns[idx].textContent;
-            btns[idx].textContent = '✅ Guardado';
-            setTimeout(() => { btns[idx].textContent = orig; }, 1500);
+        const btns = document.querySelectorAll('#pt-ops-list .btn-save-tasks');
+        if (btns[idx]) { const orig = btns[idx].textContent; btns[idx].textContent = '✅ Guardado'; setTimeout(() => { btns[idx].textContent = orig; }, 1500); }
+    };
+
+    PT.verBitacora = function(idx) {
+        const op = PT.baseDatos[PT.shiftActual][idx];
+        PT.modalOpIdx = idx;
+        const historial = JSON.parse(localStorage.getItem(PT._logKey(op.name)) || '[]');
+        const nameEl = document.getElementById('pt-modal-op-name');
+        const body   = document.getElementById('pt-modal-log-body');
+        if (nameEl) nameEl.textContent = op.name;
+        if (body) {
+            body.innerHTML = historial.length === 0
+                ? '<div class="log-empty">Sin registros aún.</div>'
+                : historial.map(e => `
+                    <div class="log-entry">
+                        <div class="log-date">📅 ${e.fecha} · ${e.hora} · Turno ${e.turno.toUpperCase()}</div>
+                        ${e.tareas.map(t => `<div class="log-task">✔ ${t}</div>`).join('')}
+                        <div class="log-pts">Puntos al guardar: ${e.puntos}</div>
+                    </div>`).join('');
         }
-    }
+        const modal = document.getElementById('pt-modal-bitacora');
+        if (modal) modal.classList.add('open');
+    };
 
-    function verBitacora(idx) {
-        const op = baseDatos[shiftActual][idx];
-        modalOpIdx = idx;
-        const key = _logKey(op.name);
-        const historial = JSON.parse(localStorage.getItem(key) || '[]');
+    PT.cerrarModal = function() {
+        const modal = document.getElementById('pt-modal-bitacora');
+        if (modal) modal.classList.remove('open');
+        PT.modalOpIdx = null;
+    };
 
-        document.getElementById('modal-op-name').textContent = op.name;
-        const body = document.getElementById('modal-log-body');
-
-        if (historial.length === 0) {
-            body.innerHTML = '<div class="log-empty">Sin registros aún.<br>Marca tareas y pulsa 💾 Guardar.</div>';
-        } else {
-            body.innerHTML = historial.map((e, i) => `
-                <div class="log-entry">
-                    <div class="log-date">📅 ${e.fecha} · ${e.hora} · Turno ${e.turno.toUpperCase()}</div>
-                    ${e.tareas.map(t => `<div class="log-task">✔ ${t}</div>`).join('')}
-                    <div class="log-pts">Puntos al guardar: ${e.puntos}</div>
-                </div>
-            `).join('');
+    PT.clearBitacora = function() {
+        if (PT.modalOpIdx === null) return;
+        const op = PT.baseDatos[PT.shiftActual][PT.modalOpIdx];
+        if (confirm('¿Borrar historial de ' + op.name + '?')) {
+            localStorage.removeItem(PT._logKey(op.name));
+            PT.verBitacora(PT.modalOpIdx);
         }
-        document.getElementById('modal-bitacora').classList.add('open');
-    }
+    };
 
-    function cerrarModal() {
-        document.getElementById('modal-bitacora').classList.remove('open');
-        modalOpIdx = null;
-    }
-
-    function clearBitacora() {
-        if (modalOpIdx === null) return;
-        const op = baseDatos[shiftActual][modalOpIdx];
-        if (confirm(`¿Borrar todo el historial de ${op.name}?`)) {
-            localStorage.removeItem(_logKey(op.name));
-            verBitacora(modalOpIdx); // refresca el modal vacío
-        }
-    }
-
-    // Cerrar modal al hacer click fuera
-    document.getElementById('modal-bitacora').addEventListener('click', function(e) {
-        if (e.target === this) cerrarModal();
-    });
+    // ── Init on tab activation ──
+    (function ptInit() {
+        const modal = document.getElementById('pt-modal-bitacora');
+        if (modal) modal.addEventListener('click', function(e) { if (e.target === this) PT.cerrarModal(); });
+        PT.setShift('mañana');
+    })();
 </script>
-</body>
-</html>" style="width:100%; height:90vh; border:none; border-radius:12px; display:block;" loading="lazy"
-      title="Plan de Trabajo"></iframe>
+
+    </div>
+
+    
   </div>
 
   <!-- TAB 3: ASISTENCIA -->
@@ -8337,6 +8607,15 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     }
 
     // Hook into tab 3 handled in main switchTab
+
+    // Keep Plan de Trabajo iframe always full size
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+        iframe.style.width = '100%';
+      }
+    });
 
     document.addEventListener('click', e => {
       if (e.target === document.getElementById('modal-historial')) asiCerrarHistorial();

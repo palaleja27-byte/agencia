@@ -3329,25 +3329,9 @@
     <div class="modal-pin-box" style="max-width:620px;width:95%;max-height:90vh;overflow-y:auto;">
       <h3>📸 Registrar Corte de Puntos</h3>
 
-      <!-- Format tabs -->
-      <div style="display:flex;gap:6px;margin-bottom:14px;">
-        <button id="corte-tab-simple" onclick="setCorteTab('simple')"
-          style="flex:1;padding:8px;background:rgba(251,191,36,.2);color:#fbbf24;border:1px solid rgba(251,191,36,.4);border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;">
-          📊 Corte Simple
-        </button>
-        <button id="corte-tab-perfiles" onclick="setCorteTab('perfiles')"
-          style="flex:1;padding:8px;background:rgba(255,255,255,.04);color:#64748b;border:1px solid var(--border);border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;">
-          🎯 Corte por Perfiles
-        </button>
-      </div>
-
-      <p id="corte-desc-simple" style="font-size:.75rem;color:#64748b;margin:-4px 0 12px;">
-        Sube Excel con columnas <strong>Nombre</strong> y <strong>Puntos</strong>. Acumula puntos totales por operador.
-      </p>
-      <p id="corte-desc-perfiles" style="display:none;font-size:.75rem;color:#64748b;margin:-4px 0 12px;">
-        Sube el archivo <strong>CALCULO_PRIME</strong> directamente. El sistema detecta automáticamente todos los cortes
-        completados (con <em>En curso</em> lleno), ignora los pendientes y calcula los puntos por perfil: <strong>En
-          curso − Comienza</strong> 📈
+      <p style="font-size:.75rem;color:#64748b;margin:-4px 0 14px;">
+        Sube el archivo <strong>CALCULO_PRIME</strong> o un Excel con columnas <strong>Nombre</strong> y <strong>Puntos</strong>.
+        El sistema detecta el formato automáticamente y actualiza puntos, rankings y perfiles en un solo paso. 🚀
       </p>
 
       <!-- Dropzone -->
@@ -4717,8 +4701,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     //     for all using (true) with check (true);
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
-    const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
+    const SUPABASE_URL    = 'PEGA_TU_URL_AQUI';       // ej: https://xyzxyz.supabase.co
+    const SUPABASE_ANON   = 'PEGA_TU_ANON_KEY_AQUI';  // clave anon pública
 
     // Claves que nunca salen de este PC (sesión, timers)
     const _SB_EXCLUDE = new Set([
@@ -5583,11 +5567,10 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     function abrirModalCorte() {
       corteFileData = null;
-      corteMode = 'simple';
-      setCorteTab('simple');
       document.getElementById('corte-file-input').value = '';
       document.getElementById('corte-preview').style.display = 'none';
       document.getElementById('corte-preview').innerHTML = '';
+      document.getElementById('corte-filename').textContent = 'Sin archivo';
       document.getElementById('btn-corte-ok').disabled = true;
       document.getElementById('modal-corte').classList.add('open');
     }
@@ -5604,32 +5587,6 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       if (file) procesarCorteFile(file);
     }
 
-    // ── CORTE TAB MODE ──
-    let corteMode = 'simple'; // 'simple' | 'perfiles'
-
-    function setCorteTab(mode) {
-      corteMode = mode;
-      corteFileData = null;
-      document.getElementById('corte-filename').textContent = 'Sin archivo';
-      document.getElementById('corte-preview').style.display = 'none';
-      document.getElementById('corte-preview').innerHTML = '';
-      document.getElementById('btn-corte-ok').disabled = true;
-      document.getElementById('corte-file-input').value = '';
-
-      const isPerfiles = mode === 'perfiles';
-      document.getElementById('corte-desc-simple').style.display = isPerfiles ? 'none' : 'block';
-      document.getElementById('corte-desc-perfiles').style.display = isPerfiles ? 'block' : 'none';
-
-      const tabS = document.getElementById('corte-tab-simple');
-      const tabP = document.getElementById('corte-tab-perfiles');
-      tabS.style.background = isPerfiles ? 'rgba(255,255,255,.04)' : 'rgba(251,191,36,.2)';
-      tabS.style.color = isPerfiles ? '#64748b' : '#fbbf24';
-      tabS.style.borderColor = isPerfiles ? 'var(--border)' : 'rgba(251,191,36,.4)';
-      tabP.style.background = isPerfiles ? 'rgba(251,191,36,.2)' : 'rgba(255,255,255,.04)';
-      tabP.style.color = isPerfiles ? '#fbbf24' : '#64748b';
-      tabP.style.borderColor = isPerfiles ? 'rgba(251,191,36,.4)' : 'var(--border)';
-    }
-
     function handleCorteFile(event) {
       const file = event.target.files[0];
       if (file) procesarCorteFile(file);
@@ -5641,13 +5598,25 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       reader.onload = (e) => {
         try {
           const wb = XLSX.read(e.target.result, { type: 'array' });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-          const headers = rows[0] ? rows[0].map(h => String(h).toLowerCase().trim()) : [];
 
-          if (corteMode === 'perfiles') {
-            procesarCortePerfiles(rows, headers, file.name);
+          // ── Auto-detect: CALCULO_PRIME has multiple sheets with time headers ──
+          const isCalculo = wb.SheetNames.length > 1 ||
+            (() => {
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+              return rows.slice(0, 5).some(r =>
+                r.some(v => typeof v === 'string' && /^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(v.trim()))
+              );
+            })();
+
+          if (isCalculo) {
+            // Process ALL sheets as CALCULO_PRIME — unified mode
+            procesarCorteUnificado(wb, file.name);
           } else {
+            // Simple Nombre/Puntos Excel
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            const headers = rows[0] ? rows[0].map(h => String(h).toLowerCase().trim()) : [];
             procesarCorteSimple(rows, headers, file.name);
           }
         } catch (err) {
@@ -5656,6 +5625,115 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         }
       };
       reader.readAsArrayBuffer(file);
+    }
+
+    // ── UNIFIED CALCULO_PRIME PARSER ─────────────────────────────────────────
+    // Reads ALL sheets, extracts per-profile points, matches to operators,
+    // updates both total points AND profile metrics in one pass.
+    function procesarCorteUnificado(wb, fname) {
+      const isHora = v => typeof v === 'string' && /^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(v.trim());
+      const isNum  = v => v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v));
+
+      const byPerfil = {}; // idPerfil → latest entry
+
+      wb.SheetNames.forEach(sheetName => {
+        const ws   = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        for (let r = 0; r < rows.length; r++) {
+          const row = rows[r];
+          const horaPositions = [];
+          for (let c = 0; c < row.length; c++) {
+            if (row[c] !== '' && isHora(String(row[c]))) {
+              horaPositions.push({ col: c, hora: String(row[c]).trim() });
+            }
+          }
+          if (!horaPositions.length) continue;
+
+          horaPositions.forEach(({ col: baseCol, hora }) => {
+            for (let dr = r + 1; dr < rows.length; dr++) {
+              const drow    = rows[dr];
+              const idVal   = drow[baseCol];
+              const agVal   = drow[baseCol + 1];
+              const comVal  = drow[baseCol + 2];
+              const enCurso = drow[baseCol + 3];
+
+              if (isHora(String(idVal || ''))) break;
+              if (!agVal || agVal === 'Agencia' || agVal === 'TOTAL') continue;
+
+              const idNum = parseFloat(String(idVal || ''));
+              if (isNaN(idNum) || !agVal) continue;
+              if (!isNum(enCurso)) continue;
+
+              const enCursoVal  = parseFloat(enCurso);
+              const comienzaVal = isNum(comVal) ? parseFloat(comVal) : 0;
+              const puntos      = parseFloat((enCursoVal - comienzaVal).toFixed(2));
+              if (puntos <= 0) continue;
+
+              const id = String(Math.round(idNum));
+              // Keep the entry with the highest enCurso (most recent/complete)
+              if (!byPerfil[id] || enCursoVal > byPerfil[id].enCurso) {
+                byPerfil[id] = {
+                  idPerfil: id,
+                  modelo:   String(agVal).trim().toUpperCase(),
+                  comienza: comienzaVal,
+                  enCurso:  enCursoVal,
+                  puntos,
+                  horaCorte: hora,
+                  fecha:     new Date().toISOString().split('T')[0]
+                };
+              }
+            }
+          });
+        }
+      });
+
+      // ── Match profiles to operators ──
+      const byOp  = {};
+      let ok = 0, miss = 0;
+
+      Object.values(byPerfil).forEach(d => {
+        let opMatch = null;
+        for (const op of operatorsData) {
+          if (op.profiles && op.profiles.some(p => String(p.id).trim() === d.idPerfil)) {
+            opMatch = op; break;
+          }
+        }
+        if (!opMatch) opMatch = matchOperator(d.modelo);
+
+        if (opMatch) {
+          d.rawName = opMatch.name;
+          if (!byOp[opMatch.name]) byOp[opMatch.name] = [];
+          byOp[opMatch.name].push(d);
+          ok++;
+        } else {
+          miss++;
+          d.rawName = null;
+        }
+      });
+
+      // Store as corteFileData with unified mode flag
+      corteFileData = Object.values(byPerfil).map(d => ({ ...d, mode: 'unificado' }));
+
+      // Build preview
+      const lines = [];
+      Object.entries(byOp).forEach(([opName, perfiles]) => {
+        const total   = perfiles.reduce((s, p) => s + p.puntos, 0);
+        const pfLines = perfiles.map(p =>
+          `<div style="padding-left:14px;color:#94a3b8;font-size:.7rem;">
+            → ID ${p.idPerfil} (${p.modelo}) · ${p.comienza}→${p.enCurso}
+            <strong style="color:#5eead4;margin-left:4px;">+${p.puntos} pts</strong>
+            <span style="color:#475569;margin-left:4px;">@ ${p.horaCorte}</span>
+          </div>`
+        ).join('');
+        lines.push(`<div style="color:#34d399;margin-top:8px;font-weight:700;">✔ ${opName} — Total: ${total.toFixed(2)} pts</div>${pfLines}`);
+      });
+
+      Object.values(byPerfil).filter(d => !d.rawName).forEach(d => {
+        lines.push(`<div style="color:#f87171;margin-top:4px;font-size:.72rem;">✗ ID ${d.idPerfil} (${d.modelo}) — sin operador asignado</div>`);
+      });
+
+      showCortePreview(ok, miss, lines, fname, Object.keys(byPerfil).length);
     }
 
     function procesarCorteSimple(rows, headers, fname) {
@@ -6025,16 +6103,18 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     function confirmarCorte() {
       if (!corteFileData) return;
-      const now = new Date();
+      const now  = new Date();
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       let aplicados = 0;
 
-      if (corteMode === 'perfiles') {
-        // Register profile metrics
+      const mode = corteFileData[0]?.mode;
+
+      if (mode === 'unificado' || mode === 'perfiles') {
+        // Update profile metrics + operator totals in one pass
         registrarCortePerfiles(corteFileData);
-        // Also register total per operator for existing corte system
         const byOp = {};
         corteFileData.forEach(d => {
+          if (!d.rawName) return;
           if (!byOp[d.rawName]) byOp[d.rawName] = 0;
           byOp[d.rawName] += d.puntos;
         });
@@ -6042,17 +6122,21 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
           const match = matchOperator(rawName);
           if (match && total > 0) { registrarCorte(match.name, total); aplicados++; }
         });
+        cerrarModalCorte();
+        renderRanking();
+        if (typeof renderOperators === 'function') renderOperators(document.getElementById('groupFilter')?.value || '');
+        const label = mode === 'unificado' ? '📊 Puntos y perfiles actualizados en un solo paso.' : '📊 Métricas por perfil guardadas.';
+        alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.\n${label}`);
       } else {
         corteFileData.forEach(d => {
           const match = matchOperator(d.rawName);
           if (match && d.puntos > 0) { registrarCorte(match.name, d.puntos); aplicados++; }
         });
+        cerrarModalCorte();
+        renderRanking();
+        if (typeof renderOperators === 'function') renderOperators(document.getElementById('groupFilter')?.value || '');
+        alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.`);
       }
-
-      cerrarModalCorte();
-      renderRanking();
-      if (typeof renderOperators === 'function') renderOperators(document.getElementById('groupFilter')?.value || '');
-      alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.${corteMode === 'perfiles' ? '\n📊 Métricas por perfil guardadas.' : ''}`);
     }
 
 

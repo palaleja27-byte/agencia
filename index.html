@@ -3505,22 +3505,18 @@
           // Merge: for each source operator, apply saved editable fields
           // but always keep source fields for personal info (doc, phone, email, etc.)
           const editableFields = ['group', 'profiles', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-          operatorsData = OPERATORS_SOURCE.map(srcOp => {
-            const savedOp = savedArr.find(s => s.name === srcOp.name);
-            if (savedOp) {
-              const merged = { ...srcOp }; // start with fresh source (has all personal info)
+          // Iterar savedArr (no OPERATORS_SOURCE) para respetar eliminaciones:
+          // si un operador fue borrado de savedArr, no vuelve aunque este en OPERATORS_SOURCE
+          operatorsData = savedArr.map(savedOp => {
+            const srcOp = OPERATORS_SOURCE.find(s => s.name === savedOp.name);
+            if (srcOp) {
+              const merged = { ...srcOp }; // datos personales frescos del source
               editableFields.forEach(f => {
                 if (savedOp[f] !== undefined) merged[f] = savedOp[f];
               });
               return merged;
             }
-            return { ...srcOp };
-          });
-          // Also keep any operators added manually (in saved but not in source)
-          savedArr.forEach(savedOp => {
-            if (!OPERATORS_SOURCE.find(s => s.name === savedOp.name)) {
-              operatorsData.push(savedOp);
-            }
+            return { ...savedOp }; // operador agregado manualmente (no esta en source)
           });
         } catch (e) { operatorsData = OPERATORS_SOURCE.map(o => ({ ...o })); }
       }
@@ -4183,6 +4179,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     // ==================== DETALLE OPERADOR ====================
     let detOpIndex = null;
+    let detOpName  = null;   // nombre del operador abierto (identificador seguro)
     let detEditando = false;
     const DET_CONSEJOS_PREFIX = 'rr_det_consejos_';
 
@@ -4195,6 +4192,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     function abrirDetalle(globalIndex) {
       detOpIndex = globalIndex;
+      detOpName  = operatorsData[globalIndex]?.name || null;
       detEditando = false;
       const op = operatorsData[globalIndex];
       const { prev, curr } = getActivePair();
@@ -4753,8 +4751,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     //     for all using (true) with check (true);
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
-    const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
+    const SUPABASE_URL    = 'PEGA_TU_URL_AQUI';       // ej: https://xyzxyz.supabase.co
+    const SUPABASE_ANON   = 'PEGA_TU_ANON_KEY_AQUI';  // clave anon pública
 
     // Claves que nunca salen de este PC (sesión, timers)
     const _SB_EXCLUDE = new Set([
@@ -4764,6 +4762,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     // ── Inicialización ──────────────────────────────────────────────
     let _sb        = null;   // cliente Supabase
     let _sbOnline  = false;  // estado de conexión
+    const _localSaveTs = {};  // timestamp último guardado local por clave (evita race condition)
 
     function _initSupabase() {
       if (!SUPABASE_URL.startsWith('https://')) return; // credenciales no configuradas
@@ -4804,6 +4803,9 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
             if (eventType === 'DELETE') {
               _origRemoveItem(oldRow.key);
             } else if (row?.key && !_SB_EXCLUDE.has(row.key)) {
+              // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
+              const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
+              if (msSinceLocalSave < 3000) return; // ignorar — guardado local reciente
               _origSetItem(row.key, row.value);
               // Recargar datos en memoria si es una clave de negocio crítica
               const critical = [
@@ -4847,6 +4849,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     localStorage.setItem = function(key, value) {
       _origSetItem(key, value);
+      _localSaveTs[key] = Date.now(); // marcar guardado local para evitar race condition
       if (_sb && !_SB_EXCLUDE.has(key)) {
         _sb.from('kv_store')
           .upsert({ key, value }, { onConflict: 'key' })
@@ -5417,6 +5420,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     function cerrarDetalle() {
       document.getElementById('modal-det-op').classList.remove('open');
       detOpIndex = null;
+      detOpName  = null;
     }
 
     // ── Save group from detail modal ──
@@ -5429,10 +5433,17 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     // ── Delete operator ──
     function detEliminarOperador() {
-      if (detOpIndex === null) return;
-      const op = operatorsData[detOpIndex];
+      if (!detOpName) return;
+      // Buscar por nombre en el momento exacto de eliminar (seguro ante sync realtime)
+      const idx = operatorsData.findIndex(o => o.name === detOpName);
+      if (idx === -1) {
+        alert('❌ Operador no encontrado. Puede haber sido eliminado desde otra PC.');
+        cerrarDetalle();
+        return;
+      }
+      const op = operatorsData[idx];
       if (!confirm(`¿Eliminar permanentemente a "${op.name}"?\nEsta acción no se puede deshacer.`)) return;
-      operatorsData.splice(detOpIndex, 1);
+      operatorsData.splice(idx, 1);
       saveData();
       cerrarDetalle();
       renderRanking();

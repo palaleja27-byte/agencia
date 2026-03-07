@@ -4782,10 +4782,17 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         const { data, error } = await _sb.from('kv_store').select('key, value');
         if (error) throw error;
         data.forEach(({ key, value }) => {
-          if (!_SB_EXCLUDE.has(key)) _origSetItem(key, value);
+          if (_SB_EXCLUDE.has(key)) return;
+          // No sobreescribir si guardamos localmente hace menos de 5s (delete reciente)
+          const msSince = Date.now() - (_localSaveTs[key] || 0);
+          if (msSince < 5000) return;
+          _origSetItem(key, value);
         });
         _sbOnline = true;
         _toastSync('🟢 Conectado a Supabase');
+        // Recargar operatorsData desde localStorage (que acaba de recibir datos de Supabase)
+        if (typeof loadData === 'function') loadData();
+        if (typeof renderRanking === 'function') renderRanking();
       } catch(e) {
         _sbOnline = false;
         _toastSync('🔴 Sin conexión a Supabase', true);
@@ -5432,19 +5439,37 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     }
 
     // ── Delete operator ──
-    function detEliminarOperador() {
+    async function detEliminarOperador() {
       if (!detOpName) return;
-      // Buscar por nombre en el momento exacto de eliminar (seguro ante sync realtime)
       const idx = operatorsData.findIndex(o => o.name === detOpName);
       if (idx === -1) {
-        alert('❌ Operador no encontrado. Puede haber sido eliminado desde otra PC.');
+        alert('❌ Operador no encontrado.');
         cerrarDetalle();
         return;
       }
       const op = operatorsData[idx];
       if (!confirm(`¿Eliminar permanentemente a "${op.name}"?\nEsta acción no se puede deshacer.`)) return;
+
+      // Eliminar del array y guardar
       operatorsData.splice(idx, 1);
-      saveData();
+      const newValue = JSON.stringify(operatorsData);
+
+      // 1. Guardar en localStorage inmediatamente
+      _origSetItem('primeOperatorsData2026', newValue);
+      _localSaveTs['primeOperatorsData2026'] = Date.now();
+
+      // 2. Guardar en Supabase y ESPERAR confirmación antes de continuar
+      if (_sb) {
+        try {
+          const { error } = await _sb.from('kv_store')
+            .upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' });
+          if (error) console.warn('[Supabase] delete op:', error.message);
+          else _toastSync('✅ Operador eliminado y sincronizado');
+        } catch(e) {
+          console.warn('[Supabase] delete op error:', e.message);
+        }
+      }
+
       cerrarDetalle();
       renderRanking();
       if (typeof renderOperators === 'function') renderOperators('');

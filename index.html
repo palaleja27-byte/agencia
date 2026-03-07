@@ -5614,25 +5614,28 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     // Registrar corte desde ranking (monitor/admin)
     function registrarCorte(opName, puntos, fechaOverride) {
-      const now   = new Date();
-      const fecha = fechaOverride || now.toISOString().split('T')[0];
-      const hora  = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      const now    = new Date();
+      const fecha  = fechaOverride || now.toISOString().split('T')[0];
+      const hora   = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      const nuevoPts = parseFloat(puntos) || 0;
       const cortes = getCortesOp(opName);
-
-      // Buscar si ya existe entrada para este día
       const existIdx = cortes.findIndex(c => c.fecha === fecha);
-      if (existIdx >= 0 && !fechaOverride) {
-        // Día actual: acumular cortes en tiempo real (múltiples cortes del mismo día se suman)
-        cortes[existIdx].puntos += parseFloat(puntos) || 0;
-        cortes[existIdx].hora    = hora;
-        cortes[existIdx].ts      = now.getTime();
-      } else if (existIdx >= 0 && fechaOverride) {
-        // Día pasado con override: solo actualizar si viene del Excel (no sobreescribir manual)
-        // No hacer nada — el día pasado ya tiene sus puntos, no los cambiamos
-        return;
+
+      if (existIdx >= 0) {
+        if (fechaOverride) {
+          // Día pasado del Excel: no tocar si ya existe
+          return;
+        }
+        // Día actual: el Excel muestra puntos ACUMULADOS desde inicio del día
+        // → siempre reemplazar con el valor más alto (corte más reciente)
+        if (nuevoPts > cortes[existIdx].puntos) {
+          cortes[existIdx].puntos = nuevoPts;
+          cortes[existIdx].hora   = hora;
+          cortes[existIdx].ts     = now.getTime();
+        }
       } else {
         // Día nuevo: insertar
-        cortes.push({ fecha, hora, puntos: parseFloat(puntos) || 0, ts: now.getTime() });
+        cortes.push({ fecha, hora, puntos: nuevoPts, ts: now.getTime() });
       }
 
       saveCortesOp(opName, cortes);
@@ -7952,7 +7955,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     // ══ PLAN DE TRABAJO — PT Namespace (evita colisiones globales) ══
     const PT = {};
 
-    PT.VALOR_PUNTO_COP    = 1200;
+    PT.VALOR_PUNTO_COP    = 1400;
     PT.COMISION_SUPERVISOR = 0.10;
 
     PT.TAREAS_MASTER = [

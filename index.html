@@ -4113,31 +4113,73 @@ Los 5 que más cayeron o tienen bajo rendimiento. Menciona cuánto bajaron en pt
 
 Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombianos. Sin adornos innecesarios.`;
 
-      try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const _aibody = document.getElementById('ai-body');
+      const _reqBody = JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      // Helper — intenta una URL y devuelve {ok, data}
+      async function _aiCall(url, extraHeaders = {}) {
+        const res = await fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'dangerously-allow-browser': 'true'
-          },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 1024,
-            messages: [{ role: 'user', content: prompt }]
-          })
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey,
+                     'anthropic-version': '2023-06-01', ...extraHeaders },
+          body: _reqBody
         });
-
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error?.message || 'Error en la API');
+        return { ok: res.ok, status: res.status, data };
+      }
 
-        const text = data.content?.map(b => b.text || '').join('') || '';
+      try {
+        let result;
+
+        // 1️⃣ Intentar proxy Vercel /api/analyze
+        try {
+          const r = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+            body: _reqBody
+          });
+          if (r.ok) {
+            const d = await r.json();
+            result = { ok: true, data: d };
+          }
+        } catch(_) { /* proxy no disponible */ }
+
+        // 2️⃣ Fallback directo con header de acceso browser
+        if (!result) {
+          result = await _aiCall('https://api.anthropic.com/v1/messages', {
+            'anthropic-dangerous-direct-browser-access': 'true'
+          });
+        }
+
+        if (!result.ok) {
+          const msg = result.data?.error?.message || 'Error ' + result.status;
+          throw new Error(msg);
+        }
+
+        const text = result.data.content?.map(b => b.text || '').join('') || '';
         renderAnalisisIA(text, prevLabel, currLabel);
+
       } catch (err) {
-        document.getElementById('ai-body').innerHTML = `
+        _aibody.innerHTML = `
       <div class="ai-error">❌ No se pudo conectar con el análisis IA.<br><small>${err.message}</small></div>
-      <button class="btn-ai-retry" onclick="ejecutarAnalisisIA()">🔄 Reintentar</button>`;
+      <div style="margin-top:12px;font-size:.8rem;color:#64748b;line-height:1.6;">
+        Verifica que la API key sea correcta y tenga créditos disponibles.<br>
+        <a href="https://console.anthropic.com" target="_blank" style="color:#6366f1;">Abrir consola Anthropic →</a>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button onclick="localStorage.removeItem('rr_anthropic_api_key');ejecutarAnalisisIA();"
+          style="padding:7px 14px;background:rgba(255,255,255,.07);color:#f87171;border:1px solid #f87171;border-radius:8px;cursor:pointer;font-size:.8rem;">
+          🗑 Cambiar API key
+        </button>
+        <button onclick="ejecutarAnalisisIA()"
+          style="padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.8rem;">
+          🔄 Reintentar
+        </button>
+      </div>`;
       }
     }
 

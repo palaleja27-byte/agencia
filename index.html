@@ -5769,8 +5769,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       const now = new Date();
       const hoy = now.toISOString().split('T')[0];
 
-      const totals = {}; // key -> total pts
-
+      const totals = {};
       cortes.forEach(c => {
         let key;
         if (periodo === 'dia') key = c.fecha;
@@ -5779,27 +5778,48 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         totals[key] = (totals[key] || 0) + (c.puntos || 0);
       });
 
-      // Current and previous period keys
-      let currKey, prevKey;
+      let current = 0, previous = 0, currKey, prevKey;
+
       if (periodo === 'dia') {
-        const ayer = new Date(now); ayer.setDate(ayer.getDate() - 1);
+        // Hoy vs promedio de los últimos 7 días con actividad (excluye hoy)
         currKey = hoy;
-        prevKey = ayer.toISOString().split('T')[0];
+        current = totals[hoy] || 0;
+
+        // Últimos 7 días excluyendo hoy
+        const diasPasados = [];
+        for (let d = 1; d <= 7; d++) {
+          const fd = new Date(now);
+          fd.setDate(fd.getDate() - d);
+          const fk = fd.toISOString().split('T')[0];
+          if (totals[fk] > 0) diasPasados.push(totals[fk]);
+        }
+        // Promedio de días con actividad — si no hay datos, usar el día más reciente
+        if (diasPasados.length > 0) {
+          previous = diasPasados.reduce((s, v) => s + v, 0) / diasPasados.length;
+          prevKey = 'prom7d';
+        } else {
+          // Sin historial: comparar con ayer
+          const ayer = new Date(now); ayer.setDate(ayer.getDate() - 1);
+          prevKey = ayer.toISOString().split('T')[0];
+          previous = totals[prevKey] || 0;
+        }
+
       } else if (periodo === 'semana') {
         const semPasada = new Date(now); semPasada.setDate(semPasada.getDate() - 7);
         currKey = getWeekKey(hoy);
         prevKey = getWeekKey(semPasada.toISOString().split('T')[0]);
+        current  = totals[currKey] || 0;
+        previous = totals[prevKey] || 0;
+
       } else {
         const mesPasado = new Date(now); mesPasado.setMonth(mesPasado.getMonth() - 1);
         currKey = getMonthKey(hoy);
         prevKey = getMonthKey(mesPasado.toISOString().split('T')[0]);
+        current  = totals[currKey] || 0;
+        previous = totals[prevKey] || 0;
       }
 
-      return {
-        current: totals[currKey] || 0,
-        previous: totals[prevKey] || 0,
-        currKey, prevKey, totals
-      };
+      return { current, previous, currKey, prevKey, totals };
     }
 
     function setAlertaTab(periodo) {
@@ -5813,7 +5833,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       if (!wrap) return;
 
       const ops = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
-      const periodoLabel = { dia: 'Hoy vs Ayer', semana: 'Esta semana vs anterior', mes: 'Este mes vs anterior' }[alertasPeriodo];
+      const periodoLabel = { dia: 'Hoy vs Prom. 7 días', semana: 'Esta semana vs anterior', mes: 'Este mes vs anterior' }[alertasPeriodo];
 
       // Build alert data for each operator
       const alertData = ops.map(op => {

@@ -2851,8 +2851,9 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab(0)">🏆 Ranking Principal</button>
     <button class="tab-btn" onclick="switchTab(1)">📋 Reporte Operadores</button>
-    <button class="tab-btn" onclick="switchTab(2)">📅 Plan de Trabajo</button>
-    <button class="tab-btn" onclick="switchTab(3)">✅ Asistencia</button>
+    <button class="tab-btn" onclick="switchTab(2)">🎭 Ranking Perfiles</button>
+    <button class="tab-btn" onclick="switchTab(3)">📅 Plan de Trabajo</button>
+    <button class="tab-btn" onclick="switchTab(4)">✅ Asistencia</button>
   </div>
 
   <!-- TAB 0: RANKING PRINCIPAL -->
@@ -3504,23 +3505,19 @@
           const savedArr = JSON.parse(saved);
           // Merge: for each source operator, apply saved editable fields
           // but always keep source fields for personal info (doc, phone, email, etc.)
-          const editableFields = ['group', 'profiles', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-          operatorsData = OPERATORS_SOURCE.map(srcOp => {
-            const savedOp = savedArr.find(s => s.name === srcOp.name);
-            if (savedOp) {
-              const merged = { ...srcOp }; // start with fresh source (has all personal info)
+          const editableFields = ['group', 'profiles', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+          // Iterar savedArr (no OPERATORS_SOURCE) para respetar eliminaciones:
+          // si un operador fue borrado de savedArr, no vuelve aunque este en OPERATORS_SOURCE
+          operatorsData = savedArr.map(savedOp => {
+            const srcOp = OPERATORS_SOURCE.find(s => s.name === savedOp.name);
+            if (srcOp) {
+              const merged = { ...srcOp }; // datos personales frescos del source
               editableFields.forEach(f => {
                 if (savedOp[f] !== undefined) merged[f] = savedOp[f];
               });
               return merged;
             }
-            return { ...srcOp };
-          });
-          // Also keep any operators added manually (in saved but not in source)
-          savedArr.forEach(savedOp => {
-            if (!OPERATORS_SOURCE.find(s => s.name === savedOp.name)) {
-              operatorsData.push(savedOp);
-            }
+            return { ...savedOp }; // operador agregado manualmente (no esta en source)
           });
         } catch (e) { operatorsData = OPERATORS_SOURCE.map(o => ({ ...o })); }
       }
@@ -3562,11 +3559,13 @@
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content')[tabIndex].classList.add('active');
       document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
-      // Force iframe to full width when Plan de Trabajo tab is opened
-      if (tabIndex === 2) {
+      if (tabIndex === 0) renderRanking();
+      if (tabIndex === 1) renderOperators(document.getElementById('groupFilter').value);
+      if (tabIndex === 2) renderPerfilesRanking();
+      if (tabIndex === 3) {
+        // Plan de Trabajo — force iframe reflow if needed
         const iframe = document.querySelector('#tab-plantrabajo iframe');
         if (iframe) {
-          // Force reflow so browser recalculates width after display:none→block
           iframe.style.width = '1px';
           requestAnimationFrame(() => {
             iframe.style.width = '100%';
@@ -3575,9 +3574,7 @@
           });
         }
       }
-      if (tabIndex === 0) renderRanking();
-      if (tabIndex === 1) renderOperators(document.getElementById('groupFilter').value);
-      if (tabIndex === 3) {
+      if (tabIndex === 4) {
         setTimeout(() => {
           if (typeof asiInitDate === 'function') asiInitDate();
           if (typeof asiLoadDraft === 'function') asiLoadDraft();
@@ -3774,6 +3771,193 @@
       const _metasBody = document.getElementById('metas-panel-body');
       if (_metasBody && _metasBody.style.display === 'block') renderMetasPanel();
     }
+
+    // ══════════════════════════════════════════════════════
+    // RANKING DE PERFILES
+    // ══════════════════════════════════════════════════════
+    function renderPerfilesRanking() {
+      const search  = (document.getElementById('pf-search')?.value || '').toLowerCase().trim();
+      const filterOp = document.getElementById('pf-filter-op')?.value || '';
+      const sortBy   = document.getElementById('pf-filter-sort')?.value || 'perfiles';
+      const { curr } = getActivePair();
+      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
+
+      // ── Build flat profile list from all operators ──
+      const allProfiles = [];
+      operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').forEach(op => {
+        const profiles = op.profiles || [];
+        const perfilMetrics = getPerfilMetrics();
+        const hoy   = new Date().toISOString().slice(0, 10);
+        const hace7 = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+        const mesActual = hoy.slice(0, 7); // YYYY-MM
+
+        profiles.forEach(p => {
+          const key  = op.name + '::' + String(p.id).trim();
+          const meta = perfilMetrics[key];
+          const hist = meta?.historial || [];
+
+          // Puntos del día de hoy
+          const entryHoy  = hist.find(h => h.fecha === hoy);
+          const ptsDia    = entryHoy ? (entryHoy.puntos || 0) : 0;
+
+          // Puntos de los últimos 7 días
+          const ptsSem    = hist.filter(h => h.fecha >= hace7)
+                               .reduce((s, h) => s + (h.puntos || 0), 0);
+
+          // Puntos del mes actual (suma de entradas del mes)
+          const ptsMes    = hist.filter(h => h.fecha && h.fecha.slice(0,7) === mesActual)
+                               .reduce((s, h) => s + (h.puntos || 0), 0);
+
+          // Promedio diario del mes (excluyendo días sin actividad)
+          const diasConAct = hist.filter(h => h.fecha && h.fecha.slice(0,7) === mesActual && h.puntos > 0);
+          const promDia    = diasConAct.length ? (ptsMes / diasConAct.length) : 0;
+
+          // Total histórico de dias registrados
+          const diasTotal  = hist.length;
+
+          allProfiles.push({
+            id:       String(p.id).trim(),
+            model:    p.model || meta?.modelo || '—',
+            operator: op.name,
+            group:    op.group,
+            tipo:     p.tipo || meta?.tipo || 'activo',
+            cubreA:   p.cubreA || null,
+            ptsDia,
+            ptsSem,
+            ptsMes,
+            promDia,
+            diasTotal,
+            historial: hist.slice(0, 30), // últimos 30 días para sparkline
+            totalPerfilesOp: profiles.length
+          });
+        });
+      });
+
+      // ── Populate operator filter ──
+      const opSel = document.getElementById('pf-filter-op');
+      if (opSel && opSel.options.length <= 1) {
+        const ops = [...new Set(allProfiles.map(p => p.operator))].sort();
+        ops.forEach(op => {
+          const opt = document.createElement('option');
+          opt.value = op; opt.textContent = op;
+          opSel.appendChild(opt);
+        });
+      }
+
+      // ── Filter ──
+      let filtered = allProfiles.filter(p => {
+        const matchSearch = !search ||
+          p.id.toLowerCase().includes(search) ||
+          p.model.toLowerCase().includes(search) ||
+          p.operator.toLowerCase().includes(search);
+        const matchOp = !filterOp || p.operator === filterOp;
+        return matchSearch && matchOp;
+      });
+
+      // ── Sort ──
+      if (sortBy === 'puntos')   filtered.sort((a, b) => b.ptsMes - a.ptsMes);
+      else if (sortBy === 'alfa') filtered.sort((a, b) => a.model.localeCompare(b.model));
+      else filtered.sort((a, b) => b.totalPerfilesOp - a.totalPerfilesOp || b.ptsMes - a.ptsMes);
+
+      // ── Stats row ──
+      const statsEl = document.getElementById('pf-stats-row');
+      if (statsEl) {
+        const totalPts = filtered.reduce((s, p) => s + p.ptsMes, 0);
+        statsEl.innerHTML = `
+          <div class="rk-stat"><div class="rk-stat-val">${allProfiles.length}</div><div class="rk-stat-lbl">Total perfiles</div></div>
+          <div class="rk-stat"><div class="rk-stat-val">${filtered.length}</div><div class="rk-stat-lbl">Mostrando</div></div>
+          <div class="rk-stat"><div class="rk-stat-val">${[...new Set(allProfiles.map(p=>p.operator))].length}</div><div class="rk-stat-lbl">Operadores</div></div>
+          <div class="rk-stat"><div class="rk-stat-val">${totalPts.toFixed(1)}</div><div class="rk-stat-lbl">Pts ${currLabel}</div></div>
+        `;
+      }
+
+      // ── Render cards ──
+      const listEl = document.getElementById('pf-list');
+      if (!listEl) return;
+
+      if (!filtered.length) {
+        listEl.innerHTML = '<div style="text-align:center;color:#475569;padding:40px;">Sin perfiles que coincidan.</div>';
+        return;
+      }
+
+      // Group by operator for header rows
+      const byOp = {};
+      filtered.forEach(p => {
+        if (!byOp[p.operator]) byOp[p.operator] = [];
+        byOp[p.operator].push(p);
+      });
+
+      // Sort operators by their profile count desc
+      const opsSorted = Object.keys(byOp).sort((a, b) => byOp[b].length - byOp[a].length);
+
+      let html = '';
+      opsSorted.forEach((opName, opIdx) => {
+        const profiles = byOp[opName];
+        const op = operatorsData.find(o => o.name === opName);
+        const ptsMes = op ? (op[curr] || 0) : 0;
+        const medals = ['🥇','🥈','🥉'];
+
+        html += `
+          <div style="margin-bottom:20px;">
+            <!-- Operator header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;
+              background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);
+              border-radius:14px 14px 0 0;padding:12px 16px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:1.1rem;">${medals[opIdx] || '#' + (opIdx+1)}</span>
+                <div>
+                  <div style="font-weight:700;font-size:.9rem;color:var(--accent);">${opName}</div>
+                  <div style="font-size:.7rem;color:#64748b;">Grupo ${op?.group || '—'} · ${profiles.length} perfil${profiles.length !== 1 ? 'es' : ''}</div>
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <div style="font-size:.9rem;font-weight:700;color:var(--gold);">${ptsMes.toFixed(1)} pts</div>
+                <div style="font-size:.68rem;color:#64748b;">${currLabel}</div>
+              </div>
+            </div>
+
+            <!-- Profile rows -->
+            <div style="border:1px solid rgba(99,102,241,0.15);border-top:none;border-radius:0 0 14px 14px;overflow:hidden;">
+              <div style="display:grid;grid-template-columns:90px 1fr 70px 70px 75px 75px;
+                background:rgba(255,255,255,0.03);padding:6px 12px;
+                font-size:.65rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;font-weight:600;">
+                <span>ID</span><span>Modelo</span>
+                <span style="text-align:right;">Hoy</span>
+                <span style="text-align:right;">7 días</span>
+                <span style="text-align:right;">Mes</span>
+                <span style="text-align:right;">Prom/día</span>
+              </div>
+              \${profiles.map((p, pi) => {
+                const bg0 = 'transparent';
+                const bg1 = 'rgba(255,255,255,0.02)';
+                const bgRow = pi % 2 === 0 ? bg0 : bg1;
+                // Semáforo: rojo si promDia < 20, amarillo < 40, verde >= 40
+                const semColor = p.promDia >= 40 ? '#34d399' : p.promDia >= 20 ? '#fbbf24' : '#f87171';
+                return \`<div style="display:grid;grid-template-columns:90px 1fr 70px 70px 75px 75px;
+                  padding:9px 12px;border-top:1px solid rgba(255,255,255,0.04);
+                  background:\${bgRow};transition:.15s;"
+                  onmouseover="this.style.background='rgba(99,102,241,0.08)'"
+                  onmouseout="this.style.background='\${bgRow}'">
+                  <span style="font-size:.72rem;color:#94a3b8;font-family:monospace;">\${p.id}</span>
+                  <span style="font-size:.82rem;font-weight:600;color:var(--text);">
+                    \${p.tipo === 'cobertura' ? '🔴 ' : '🟢 '}\${p.model}
+                    \${p.cubreA ? \`<span style="font-size:.65rem;color:#f87171;"> (cubre: \${p.cubreA})</span>\` : ''}
+                    \${p.diasTotal > 0 ? \`<span style="font-size:.62rem;color:#475569;margin-left:4px;">\${p.diasTotal}d</span>\` : ''}
+                  </span>
+                  <span style="font-size:.78rem;text-align:right;color:\${p.ptsDia > 0 ? '#34d399' : '#475569'};">\${p.ptsDia.toFixed(1)}</span>
+                  <span style="font-size:.78rem;text-align:right;color:\${p.ptsSem > 0 ? '#a5b4fc' : '#475569'};">\${p.ptsSem.toFixed(1)}</span>
+                  <span style="font-size:.78rem;text-align:right;color:var(--gold);font-weight:600;">\${p.ptsMes.toFixed(1)}</span>
+                  <span style="font-size:.78rem;text-align:right;font-weight:700;color:\${semColor};">\${p.promDia.toFixed(1)}</span>
+                </div>\`;
+              }).join('')}
+            </div>
+          </div>`;
+      });
+
+      listEl.innerHTML = html;
+    }
+
+
 
 
     function sortRanking(col) {
@@ -4183,6 +4367,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     // ==================== DETALLE OPERADOR ====================
     let detOpIndex = null;
+    let detOpName  = null;   // nombre del operador abierto (identificador seguro)
     let detEditando = false;
     const DET_CONSEJOS_PREFIX = 'rr_det_consejos_';
 
@@ -4195,6 +4380,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     function abrirDetalle(globalIndex) {
       detOpIndex = globalIndex;
+      detOpName  = operatorsData[globalIndex]?.name || null;
       detEditando = false;
       const op = operatorsData[globalIndex];
       const { prev, curr } = getActivePair();
@@ -4753,8 +4939,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     //     for all using (true) with check (true);
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
-    const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
+    const SUPABASE_URL    = 'PEGA_TU_URL_AQUI';       // ej: https://xyzxyz.supabase.co
+    const SUPABASE_ANON   = 'PEGA_TU_ANON_KEY_AQUI';  // clave anon pública
 
     // Claves que nunca salen de este PC (sesión, timers)
     const _SB_EXCLUDE = new Set([
@@ -4764,6 +4950,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     // ── Inicialización ──────────────────────────────────────────────
     let _sb        = null;   // cliente Supabase
     let _sbOnline  = false;  // estado de conexión
+    const _localSaveTs = {};  // timestamp último guardado local por clave (evita race condition)
 
     function _initSupabase() {
       if (!SUPABASE_URL.startsWith('https://')) return; // credenciales no configuradas
@@ -4783,10 +4970,17 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         const { data, error } = await _sb.from('kv_store').select('key, value');
         if (error) throw error;
         data.forEach(({ key, value }) => {
-          if (!_SB_EXCLUDE.has(key)) _origSetItem(key, value);
+          if (_SB_EXCLUDE.has(key)) return;
+          // No sobreescribir si guardamos localmente hace menos de 5s (delete reciente)
+          const msSince = Date.now() - (_localSaveTs[key] || 0);
+          if (msSince < 5000) return;
+          _origSetItem(key, value);
         });
         _sbOnline = true;
         _toastSync('🟢 Conectado a Supabase');
+        // Recargar operatorsData desde localStorage (que acaba de recibir datos de Supabase)
+        if (typeof loadData === 'function') loadData();
+        if (typeof renderRanking === 'function') renderRanking();
       } catch(e) {
         _sbOnline = false;
         _toastSync('🔴 Sin conexión a Supabase', true);
@@ -4804,6 +4998,9 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
             if (eventType === 'DELETE') {
               _origRemoveItem(oldRow.key);
             } else if (row?.key && !_SB_EXCLUDE.has(row.key)) {
+              // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
+              const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
+              if (msSinceLocalSave < 3000) return; // ignorar — guardado local reciente
               _origSetItem(row.key, row.value);
               // Recargar datos en memoria si es una clave de negocio crítica
               const critical = [
@@ -4847,6 +5044,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
     localStorage.setItem = function(key, value) {
       _origSetItem(key, value);
+      _localSaveTs[key] = Date.now(); // marcar guardado local para evitar race condition
       if (_sb && !_SB_EXCLUDE.has(key)) {
         _sb.from('kv_store')
           .upsert({ key, value }, { onConflict: 'key' })
@@ -5355,12 +5553,28 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     }
 
     // Registrar corte desde ranking (monitor/admin)
-    function registrarCorte(opName, puntos) {
-      const now = new Date();
-      const fecha = now.toISOString().split('T')[0];
-      const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    function registrarCorte(opName, puntos, fechaOverride) {
+      const now   = new Date();
+      const fecha = fechaOverride || now.toISOString().split('T')[0];
+      const hora  = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       const cortes = getCortesOp(opName);
-      cortes.push({ fecha, hora, puntos: parseFloat(puntos) || 0, ts: now.getTime() });
+
+      // Buscar si ya existe entrada para este día
+      const existIdx = cortes.findIndex(c => c.fecha === fecha);
+      if (existIdx >= 0 && !fechaOverride) {
+        // Día actual: acumular cortes en tiempo real (múltiples cortes del mismo día se suman)
+        cortes[existIdx].puntos += parseFloat(puntos) || 0;
+        cortes[existIdx].hora    = hora;
+        cortes[existIdx].ts      = now.getTime();
+      } else if (existIdx >= 0 && fechaOverride) {
+        // Día pasado con override: solo actualizar si viene del Excel (no sobreescribir manual)
+        // No hacer nada — el día pasado ya tiene sus puntos, no los cambiamos
+        return;
+      } else {
+        // Día nuevo: insertar
+        cortes.push({ fecha, hora, puntos: parseFloat(puntos) || 0, ts: now.getTime() });
+      }
+
       saveCortesOp(opName, cortes);
     }
 
@@ -5417,6 +5631,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     function cerrarDetalle() {
       document.getElementById('modal-det-op').classList.remove('open');
       detOpIndex = null;
+      detOpName  = null;
     }
 
     // ── Save group from detail modal ──
@@ -5428,12 +5643,37 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
     }
 
     // ── Delete operator ──
-    function detEliminarOperador() {
-      if (detOpIndex === null) return;
-      const op = operatorsData[detOpIndex];
+    async function detEliminarOperador() {
+      if (!detOpName) return;
+      const idx = operatorsData.findIndex(o => o.name === detOpName);
+      if (idx === -1) {
+        alert('❌ Operador no encontrado.');
+        cerrarDetalle();
+        return;
+      }
+      const op = operatorsData[idx];
       if (!confirm(`¿Eliminar permanentemente a "${op.name}"?\nEsta acción no se puede deshacer.`)) return;
-      operatorsData.splice(detOpIndex, 1);
-      saveData();
+
+      // Eliminar del array y guardar
+      operatorsData.splice(idx, 1);
+      const newValue = JSON.stringify(operatorsData);
+
+      // 1. Guardar en localStorage inmediatamente
+      _origSetItem('primeOperatorsData2026', newValue);
+      _localSaveTs['primeOperatorsData2026'] = Date.now();
+
+      // 2. Guardar en Supabase y ESPERAR confirmación antes de continuar
+      if (_sb) {
+        try {
+          const { error } = await _sb.from('kv_store')
+            .upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' });
+          if (error) console.warn('[Supabase] delete op:', error.message);
+          else _toastSync('✅ Operador eliminado y sincronizado');
+        } catch(e) {
+          console.warn('[Supabase] delete op error:', e.message);
+        }
+      }
+
       cerrarDetalle();
       renderRanking();
       if (typeof renderOperators === 'function') renderOperators('');
@@ -5518,16 +5758,18 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       // Build alert data for each operator
       const alertData = ops.map(op => {
         const { current, previous } = agregarCortesPorPeriodo(op.name, alertasPeriodo);
-        let pct = 0, tipo = 'zero';
+        let pct = 0, tipo = 'zero', pctLabel = '—';
         if (previous > 0 && current > 0) {
           pct = Math.round(((current - previous) / previous) * 100);
+          pctLabel = (pct > 0 ? '+' : '') + pct + '%';
           tipo = pct <= -20 ? 'down' : pct < 0 ? 'warn' : 'up';
         } else if (current > 0 && previous === 0) {
-          tipo = 'up'; pct = 100;
+          // Sin dato anterior — no es +100%, es simplemente "sin comparación"
+          tipo = 'up'; pct = null; pctLabel = 'Nuevo';
         } else if (current === 0 && previous > 0) {
-          tipo = 'down'; pct = -100;
+          tipo = 'down'; pct = -100; pctLabel = '—';
         }
-        return { op, current, previous, pct, tipo };
+        return { op, current, previous, pct, pctLabel, tipo };
       }).filter(d => d.tipo !== 'zero' || d.current > 0);
 
       if (!alertData.length) {
@@ -5567,7 +5809,7 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
           $${Math.round(d.current * 1400).toLocaleString('es-CO')} COP
         </div>
       </div>
-      <div class="alerta-pts ${d.tipo}">${d.pct > 0 ? '+' : ''}${d.pct === -100 ? '—' : d.pct + '%'}</div>
+      <div class="alerta-pts ${d.tipo}">${d.pctLabel}</div>
     </div>`).join('');
 
       wrap.innerHTML = `
@@ -5699,7 +5941,19 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
       const isHora = v => typeof v === 'string' && /^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(v.trim());
       const isNum  = v => v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v));
 
-      const byPerfil = {}; // idPerfil → latest entry
+      const byPerfil = {}; // idPerfil → { fecha → entry }  (una entrada POR DIA)
+
+      // Extraer fecha real del nombre de hoja: "1 MAR", "15 MAR", "2 FEB" etc.
+      const MONTH_ES = { ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,OCT:10,NOV:11,DIC:12 };
+      function sheetToDate(name) {
+        const m = name.trim().toUpperCase().match(/^(\d{1,2})\s+([A-Z]{3})/);
+        if (!m) return new Date().toISOString().split('T')[0];
+        const day = parseInt(m[1]);
+        const mon = MONTH_ES[m[2]];
+        if (!mon) return new Date().toISOString().split('T')[0];
+        const yr  = new Date().getFullYear();
+        return `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      }
 
       wb.SheetNames.forEach(sheetName => {
         const ws   = wb.Sheets[sheetName];
@@ -5735,17 +5989,20 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
               const puntos      = parseFloat((enCursoVal - comienzaVal).toFixed(2));
               if (puntos <= 0) continue;
 
-              const id = String(Math.round(idNum));
-              // Keep the entry with the highest enCurso (most recent/complete)
-              if (!byPerfil[id] || enCursoVal > byPerfil[id].enCurso) {
-                byPerfil[id] = {
-                  idPerfil: id,
-                  modelo:   String(agVal).trim().toUpperCase(),
-                  comienza: comienzaVal,
-                  enCurso:  enCursoVal,
+              const id    = String(Math.round(idNum));
+              const fecha = sheetToDate(sheetName);
+
+              if (!byPerfil[id]) byPerfil[id] = {};
+              // Para el mismo perfil en el mismo día: conservar el enCurso más alto (corte más reciente del día)
+              if (!byPerfil[id][fecha] || enCursoVal > byPerfil[id][fecha].enCurso) {
+                byPerfil[id][fecha] = {
+                  idPerfil:  id,
+                  modelo:    String(agVal).trim().toUpperCase(),
+                  comienza:  comienzaVal,
+                  enCurso:   enCursoVal,
                   puntos,
                   horaCorte: hora,
-                  fecha:     new Date().toISOString().split('T')[0]
+                  fecha
                 };
               }
             }
@@ -5753,11 +6010,17 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         }
       });
 
+      // ── Flatten byPerfil {id:{fecha:entry}} → array of all daily entries ──
+      const allEntries = [];
+      Object.values(byPerfil).forEach(byFecha => {
+        Object.values(byFecha).forEach(entry => allEntries.push(entry));
+      });
+
       // ── Match profiles to operators ──
-      const byOp  = {};
+      const byOp = {};
       let ok = 0, miss = 0;
 
-      Object.values(byPerfil).forEach(d => {
+      allEntries.forEach(d => {
         let opMatch = null;
         for (const op of operatorsData) {
           if (op.profiles && op.profiles.some(p => String(p.id).trim() === d.idPerfil)) {
@@ -5777,8 +6040,8 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
         }
       });
 
-      // Store as corteFileData with unified mode flag
-      corteFileData = Object.values(byPerfil).map(d => ({ ...d, mode: 'unificado' }));
+      // Store as corteFileData — one entry per profile per day
+      corteFileData = allEntries.map(d => ({ ...d, mode: 'unificado' }));
 
       // Build preview
       const lines = [];
@@ -6147,20 +6410,44 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
 
     function registrarCortePerfiles(entries) {
-      const metrics = getPerfilMetrics();
-      const fecha = new Date().toISOString().split('T')[0];
+      const metrics  = getPerfilMetrics();
+      const hoy      = new Date().toISOString().split('T')[0];
 
       entries.forEach(d => {
-        const op = matchOperator(d.rawName);
-        if (!op || d.puntos <= 0) return;
-        const key = op.name + '::' + d.idPerfil;
-        if (!metrics[key]) metrics[key] = { opName: op.name, idPerfil: d.idPerfil, modelo: d.modelo, tipo: d.tipo, historial: [] };
+        if (!d.rawName || d.puntos <= 0) return;
+        // Use operator name directly (rawName is already matched)
+        const opName = d.rawName;
+        const key    = opName + '::' + d.idPerfil;
+        const fecha  = d.fecha || hoy;
+
+        if (!metrics[key]) {
+          metrics[key] = { opName, idPerfil: d.idPerfil, modelo: d.modelo || '', tipo: d.tipo || 'activo', historial: [] };
+        }
         if (d.modelo) metrics[key].modelo = d.modelo;
-        if (d.tipo) metrics[key].tipo = d.tipo;
-        const existing = metrics[key].historial.findIndex(h => h.fecha === (d.fecha || fecha));
-        if (existing >= 0) metrics[key].historial[existing].puntos += d.puntos;
-        else metrics[key].historial.unshift({ fecha: d.fecha || fecha, puntos: d.puntos });
-        if (metrics[key].historial.length > 60) metrics[key].historial.splice(60);
+        if (d.tipo)   metrics[key].tipo   = d.tipo;
+
+        const existing = metrics[key].historial.findIndex(h => h.fecha === fecha);
+        if (existing >= 0) {
+          // Mismo día: solo actualizar si el nuevo enCurso es mayor (corte más reciente del día)
+          if ((d.enCurso || 0) > (metrics[key].historial[existing].enCurso || 0)) {
+            metrics[key].historial[existing].puntos   = d.puntos;
+            metrics[key].historial[existing].enCurso  = d.enCurso || 0;
+            metrics[key].historial[existing].comienza = d.comienza || 0;
+          }
+          // Si enCurso no viene, acumular (cortes manuales del día)
+          else if (!d.enCurso) {
+            metrics[key].historial[existing].puntos += d.puntos;
+          }
+        } else {
+          // Día nuevo: insertar al frente, respetar histórico
+          metrics[key].historial.unshift({
+            fecha,
+            puntos:   d.puntos,
+            enCurso:  d.enCurso  || 0,
+            comienza: d.comienza || 0
+          });
+          if (metrics[key].historial.length > 90) metrics[key].historial.splice(90);
+        }
       });
 
       savePerfilMetrics(metrics);
@@ -6183,9 +6470,33 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
           if (!byOp[d.rawName]) byOp[d.rawName] = 0;
           byOp[d.rawName] += d.puntos;
         });
-        Object.entries(byOp).forEach(([rawName, total]) => {
-          const match = matchOperator(rawName);
-          if (match && total > 0) { registrarCorte(match.name, total); aplicados++; }
+        // Agrupar por operador Y por fecha para registrar día a día correctamente
+        const byOpFecha = {};
+        corteFileData.forEach(d => {
+          if (!d.rawName) return;
+          const key = d.rawName + '||' + (d.fecha || new Date().toISOString().split('T')[0]);
+          if (!byOpFecha[key]) byOpFecha[key] = { name: d.rawName, fecha: d.fecha, total: 0 };
+          byOpFecha[key].total += d.puntos;
+        });
+
+        const hoy = new Date().toISOString().split('T')[0];
+        Object.values(byOpFecha).forEach(({ name, fecha, total }) => {
+          if (total <= 0) return;
+          const esPasado = fecha && fecha < hoy;
+          if (esPasado) {
+            // Día pasado del Excel: solo guardar si no existe ya
+            const existing = getCortesOp(name).find(c => c.fecha === fecha);
+            if (!existing) {
+              const cortes = getCortesOp(name);
+              cortes.push({ fecha, hora: '00:00', puntos: total, ts: new Date(fecha).getTime(), fromExcel: true });
+              saveCortesOp(name, cortes);
+            }
+            // Si ya existe, no tocar — respetamos el histórico
+          } else {
+            // Día de hoy: acumular en tiempo real
+            registrarCorte(name, total);
+          }
+          aplicados++;
         });
         cerrarModalCorte();
         renderRanking();
@@ -7200,6 +7511,30 @@ Sé directo, usa los nombres reales, menciona cifras exactas en pesos colombiano
 
   </script>
 
+
+  <!-- TAB 2: RANKING PERFILES -->
+  <div id="tab-perfiles" class="tab-content">
+    <div class="rk-topbar" style="margin-bottom:16px;">
+      <div class="rk-search-wrap">
+        <span class="rk-search-icon">🔍</span>
+        <input class="rk-search" id="pf-search" placeholder="Buscar perfil o modelo..." oninput="renderPerfilesRanking()">
+      </div>
+      <select id="pf-filter-op" class="rk-filter-select" onchange="renderPerfilesRanking()" style="margin-left:8px;">
+        <option value="">Todos los operadores</option>
+      </select>
+      <select id="pf-filter-sort" class="rk-filter-select" onchange="renderPerfilesRanking()" style="margin-left:8px;">
+        <option value="perfiles">Por cantidad de perfiles</option>
+        <option value="puntos">Por puntos del mes</option>
+        <option value="alfa">Alfabético</option>
+      </select>
+    </div>
+
+    <!-- Stats row -->
+    <div id="pf-stats-row" class="rk-stats-row" style="margin-bottom:20px;"></div>
+
+    <!-- Table -->
+    <div id="pf-list"></div>
+  </div>
 
   <div id="tab-plantrabajo" class="tab-content">
     <style>

@@ -6729,19 +6729,24 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const now  = new Date();
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       let aplicados = 0;
+      let actualizados = 0; // cortes del mismo día con valor mayor
+      let sinCambio    = 0; // cortes del mismo día pero sin mejora (ya tenía más pts)
 
       const mode = corteFileData[0]?.mode;
 
       if (mode === 'unificado' || mode === 'perfiles') {
-        // 1. Guardar métricas por perfil (historial por día)
+        // 1. Guardar métricas por perfil (historial por día) — dedup interno por enCurso
         registrarCortePerfiles(corteFileData);
 
         // 2. Agrupar por operador + fecha para historial de cortes
+        //    Usar MAX de enCurso acumulado (no sumar — los puntos YA vienen calculados
+        //    como enCurso-comienza por perfil, y el total correcto es la suma de esos deltas)
         const byOpFecha = {};
         corteFileData.forEach(d => {
           if (!d.rawName) return;
-          const key = d.rawName + '||' + (d.fecha || new Date().toISOString().split('T')[0]);
-          if (!byOpFecha[key]) byOpFecha[key] = { name: d.rawName, fecha: d.fecha, total: 0 };
+          const fechaKey = d.fecha || new Date().toISOString().split('T')[0];
+          const key = d.rawName + '||' + fechaKey;
+          if (!byOpFecha[key]) byOpFecha[key] = { name: d.rawName, fecha: fechaKey, total: 0 };
           byOpFecha[key].total += d.puntos;
         });
 
@@ -6750,20 +6755,35 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (total <= 0) return;
           const esPasado = fecha && fecha < hoy;
           if (esPasado) {
+            // Día pasado del Excel histórico: insertar solo si no existe
             const existing = getCortesOp(name).find(c => c.fecha === fecha);
             if (!existing) {
               const cortes = getCortesOp(name);
               cortes.push({ fecha, hora: '00:00', puntos: total, ts: new Date(fecha).getTime(), fromExcel: true });
               saveCortesOp(name, cortes);
+              aplicados++;
+            } else {
+              sinCambio++;
             }
           } else {
+            // Día actual: registrarCorte ya maneja "reemplazar si mayor"
+            const cortesActuales = getCortesOp(name);
+            const existIdx = cortesActuales.findIndex(c => c.fecha === fecha);
+            if (existIdx >= 0) {
+              if (total > cortesActuales[existIdx].puntos) {
+                actualizados++;
+              } else {
+                sinCambio++;
+              }
+            } else {
+              aplicados++;
+            }
             registrarCorte(name, total);
           }
-          aplicados++;
         });
 
-        // 3. CRÍTICO: Actualizar op[curr] en operatorsData para que el ranking refleje el corte
-        //    Suma todos los cortes del mes activo por operador desde rr_prime_cortes
+        // 3. Recalcular op[curr] desde la fuente única de verdad (rr_prime_cortes)
+        //    Esto evita cualquier inflación: siempre es la SUMA de los mejores cortes del mes
         const { curr } = getActivePair();
         const mesActual = hoy.slice(0, 7);
         operatorsData.forEach(op => {
@@ -6780,8 +6800,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         renderRanking();
         if (typeof renderOperators === 'function') renderOperators(document.getElementById('groupFilter')?.value || '');
         if (typeof renderAlertas === 'function') renderAlertas();
-        const label = mode === 'unificado' ? '📊 Puntos y perfiles actualizados en un solo paso.' : '📊 Métricas por perfil guardadas.';
-        alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.\n${label}`);
+
+        // Mensaje informativo que distingue nuevos vs actualizados vs sin cambio
+        const totalAfectados = aplicados + actualizados;
+        let resumen = `✅ Corte procesado a las ${hora}.\n\n`;
+        if (aplicados > 0)    resumen += `🆕 ${aplicados} operador(es) con corte nuevo hoy.\n`;
+        if (actualizados > 0) resumen += `🔄 ${actualizados} operador(es) actualizados (puntos subieron).\n`;
+        if (sinCambio > 0)    resumen += `⏭️ ${sinCambio} operador(es) sin cambio (ya tenían igual o más pts).\n`;
+        if (totalAfectados === 0 && sinCambio > 0) resumen += `\nℹ️ Todos los operadores ya tenían este corte o uno mayor. No se modificó nada.`;
+        const label = mode === 'unificado' ? '\n📊 Puntos y perfiles actualizados en un solo paso.' : '\n📊 Métricas por perfil guardadas.';
+        alert(resumen + label);
       } else {
         corteFileData.forEach(d => {
           const match = matchOperator(d.rawName);

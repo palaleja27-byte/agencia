@@ -3706,6 +3706,15 @@
     const OPERATORS_SOURCE = operatorsData.map(o => ({ ...o }));
 
 
+    // ── Fecha local del PC (no UTC) — evita bug de timezone UTC-5 ──
+    function localDateStr(d) {
+      const dt = d || new Date();
+      const y  = dt.getFullYear();
+      const m  = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
     function loadData() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -3835,7 +3844,7 @@
       });
 
       // Calcular pts del día para cada op (solo en modo día o siempre para sort)
-      const _hoy = new Date().toISOString().split('T')[0];
+      const _hoy = localDateStr();
       const _ptsHoyMap = {};
       const _horaMap = {};
       rkDataFiltered.forEach(op => {
@@ -4027,8 +4036,8 @@
       const sortBy   = document.getElementById('pf-filter-sort')?.value || 'perfiles';
       const { curr } = getActivePair();
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
-      const hoy       = new Date().toISOString().slice(0, 10);
-      const hace7     = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+      const hoy       = localDateStr();
+      const hace7     = localDateStr(new Date(Date.now() - 7 * 864e5));
       const mesActual = hoy.slice(0, 7);
       const perfilMetrics = getPerfilMetrics();
 
@@ -4054,7 +4063,7 @@
           // Últimos 7 días para mini-barra
           var spark = [];
           for (var d=6; d>=0; d--) {
-            var fd = new Date(Date.now() - d*864e5).toISOString().slice(0,10);
+            var fd = localDateStr(new Date(Date.now() - d*864e5));
             var e  = hist.find(function(h){ return h.fecha === fd; });
             spark.push(e ? (e.puntos||0) : 0);
           }
@@ -4315,7 +4324,7 @@
       const ahora       = new Date();
       const horaActual  = ahora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       const fechaActual = ahora.toLocaleDateString('es-CO', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-      const hoy         = ahora.toISOString().split('T')[0];
+      const hoy         = localDateStr(ahora);
       const mesActual   = hoy.slice(0, 7);
       const mesPrevStr  = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1).toISOString().slice(0, 7);
 
@@ -4540,7 +4549,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             // Numbered list lines
             const numMatch = t.match(/^(\d+\.\s+)(.+)/);
             if (numMatch) {
-              return '<div class="ai-line ai-numbered"><span class="ai-num">' + numMatch[1] + '</span><span>' + highlightText(numMatch[2]) + '</span></div>';
+              const cleanLine = numMatch[2].replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            return '<div class="ai-line ai-numbered"><span class="ai-num">' + numMatch[1] + '</span><span>' + highlightText(numMatch[2]) + '</span></div>';
             }
             // Dash/bullet lines
             if (t.startsWith('- ') || t.startsWith('• ')) {
@@ -4554,6 +4564,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       function highlightText(t) {
         return t
+          .replace(/\*\*(.*?)\*\*/g, (_, inner) => '<strong>' + inner + '</strong>')
           .replace(/\$[\d,.]+\s*COP/g, m => '<span class="ai-cop">' + m + '</span>')
           .replace(/(\d+\.?\d*\s*pts?)/gi, m => '<span class="ai-pts">' + m + '</span>')
           .replace(/(\+\d+\.?\d*%)/g, m => '<span class="ai-up">' + m + '</span>')
@@ -4992,7 +5003,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       saveLogsEntrada(logs);
 
       // Guardar meta del día para el operador
-      const metaKey = 'rr_meta_' + currentOpName.replace(/\s+/g, '_').toLowerCase() + '_' + now.toISOString().split('T')[0];
+      const metaKey = 'rr_meta_' + currentOpName.replace(/\s+/g, '_').toLowerCase() + '_' + localDateStr(now);
       localStorage.setItem(metaKey, meta);
 
       // ── Auto-logout al terminar el turno ──
@@ -5869,9 +5880,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function getPuntosPeriodo(opName, periodo) {
       const cortes = getCortesOp(opName);
       const now = new Date();
-      const hoy = now.toISOString().split('T')[0];
-      const semAgo = new Date(now - 7 * 24 * 3600 * 1000).toISOString().split('T')[0];
-      const mesStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const hoy = localDateStr(now);
+      const semAgo = localDateStr(new Date(now - 7 * 24 * 3600 * 1000));
+      const mesStart = localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
       let filtered;
       if (periodo === 'dia') filtered = cortes.filter(c => c.fecha === hoy);
       else if (periodo === 'sem') filtered = cortes.filter(c => c.fecha >= semAgo);
@@ -5983,7 +5994,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     // Obtener meta del día actual para un operador
     function getMetaHoy(opName) {
-      const fecha = new Date().toISOString().split('T')[0];
+      const fecha = localDateStr();
       const key = 'rr_meta_' + opName.replace(/\s+/g, '_').toLowerCase() + '_' + fecha;
       return parseInt(localStorage.getItem(key) || '0');
     }
@@ -5991,7 +6002,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // Obtener puntos acumulados hoy (suma de cortes)
     function getPuntosHoy(opName) {
       const cortes = getCortesOp(opName);
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = localDateStr();
       const deHoy = cortes.filter(c => c.fecha === hoy);
       return deHoy.reduce((s, c) => s + (c.puntos || 0), 0);
     }
@@ -6015,7 +6026,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       ];
       const frase = frases.find(f => pct >= f.min && pct < f.max)?.txt || '';
 
-      const cortes = getCortesOp(opName).filter(c => c.fecha === new Date().toISOString().split('T')[0]);
+      const cortes = getCortesOp(opName).filter(c => c.fecha === localDateStr());
 
       el.innerHTML = `
     <div style="background:rgba(255,255,255,.04);border-radius:14px;padding:18px;margin-bottom:10px;">
@@ -6053,7 +6064,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // Registrar corte desde ranking (monitor/admin)
     function registrarCorte(opName, puntos, fechaOverride) {
       const now    = new Date();
-      const fecha  = fechaOverride || now.toISOString().split('T')[0];
+      const fecha  = fechaOverride || localDateStr(now);
       const hora   = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       const nuevoPts = parseFloat(puntos) || 0;
       const cortes = getCortesOp(opName);
@@ -6064,13 +6075,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           // Día pasado del Excel: no tocar si ya existe
           return;
         }
-        // Día actual: el Excel muestra puntos ACUMULADOS desde inicio del día
-        // → siempre reemplazar con el valor más alto (corte más reciente)
-        if (nuevoPts > cortes[existIdx].puntos) {
+        // Día actual: actualizar SIEMPRE hora y ts (refleja el corte más reciente)
+        // Solo no bajar los puntos si el nuevo valor es menor (protección anti-regresión)
+        if (nuevoPts >= cortes[existIdx].puntos) {
           cortes[existIdx].puntos = nuevoPts;
-          cortes[existIdx].hora   = hora;
-          cortes[existIdx].ts     = now.getTime();
         }
+        // La hora SIEMPRE se actualiza — muestra cuándo fue el último corte importado
+        cortes[existIdx].hora = hora;
+        cortes[existIdx].ts   = now.getTime();
       } else {
         // Día nuevo: insertar
         cortes.push({ fecha, hora, puntos: nuevoPts, ts: now.getTime() });
@@ -6223,7 +6235,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function agregarCortesPorPeriodo(opName, periodo) {
       const cortes = getCortesOp(opName);
       const now = new Date();
-      const hoy = now.toISOString().split('T')[0];
+      const hoy = localDateStr(now);
 
       const totals = {};
       cortes.forEach(c => {
@@ -6246,7 +6258,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         for (let d = 1; d <= 7; d++) {
           const fd = new Date(now);
           fd.setDate(fd.getDate() - d);
-          const fk = fd.toISOString().split('T')[0];
+          const fk = localDateStr(fd);
           if (totals[fk] > 0) diasPasados.push(totals[fk]);
         }
         // Promedio de días con actividad — si no hay datos, usar el día más reciente
@@ -6256,21 +6268,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         } else {
           // Sin historial: comparar con ayer
           const ayer = new Date(now); ayer.setDate(ayer.getDate() - 1);
-          prevKey = ayer.toISOString().split('T')[0];
+          prevKey = localDateStr(ayer);
           previous = totals[prevKey] || 0;
         }
 
       } else if (periodo === 'semana') {
         const semPasada = new Date(now); semPasada.setDate(semPasada.getDate() - 7);
         currKey = getWeekKey(hoy);
-        prevKey = getWeekKey(semPasada.toISOString().split('T')[0]);
+        prevKey = getWeekKey(localDateStr(semPasada));
         current  = totals[currKey] || 0;
         previous = totals[prevKey] || 0;
 
       } else {
         const mesPasado = new Date(now); mesPasado.setMonth(mesPasado.getMonth() - 1);
         currKey = getMonthKey(hoy);
-        prevKey = getMonthKey(mesPasado.toISOString().split('T')[0]);
+        prevKey = getMonthKey(localDateStr(mesPasado));
         current  = totals[currKey] || 0;
         previous = totals[prevKey] || 0;
       }
@@ -6378,7 +6390,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'agenciaRR_datos_' + new Date().toISOString().split('T')[0] + '.json';
+      a.download = 'agenciaRR_datos_' + localDateStr() + '.json';
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -6483,10 +6495,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const MONTH_ES = { ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,OCT:10,NOV:11,DIC:12 };
       function sheetToDate(name) {
         const m = name.trim().toUpperCase().match(/^(\d{1,2})\s+([A-Z]{3})/);
-        if (!m) return new Date().toISOString().split('T')[0];
+        if (!m) return localDateStr();
         const day = parseInt(m[1]);
         const mon = MONTH_ES[m[2]];
-        if (!mon) return new Date().toISOString().split('T')[0];
+        if (!mon) return localDateStr();
         const yr  = new Date().getFullYear();
         return `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       }
@@ -6721,7 +6733,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         }
       });
 
-      const fecha = new Date().toISOString().split('T')[0];
+      const fecha = localDateStr();
       corteFileData = Object.values(byPerfil).map(e => ({
         mode: 'perfiles',
         idPerfil: e.idPerfil,
@@ -6854,9 +6866,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       // Date range filter
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const weekAgo = new Date(now - 7 * 24 * 3600 * 1000).toISOString().split('T')[0];
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const today = localDateStr(now);
+      const weekAgo = localDateStr(new Date(now - 7 * 24 * 3600 * 1000));
+      const monthStart = localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
 
       const filterHist = (hist) => {
         if (activeFiltro === 'diario') return hist.filter(h => h.fecha === today);
@@ -6947,7 +6959,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function registrarCortePerfiles(entries) {
       const metrics  = getPerfilMetrics();
-      const hoy      = new Date().toISOString().split('T')[0];
+      const hoy      = localDateStr();
 
       entries.forEach(d => {
         if (!d.rawName || d.puntos <= 0) return;
@@ -7005,12 +7017,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const byOpFecha = {};
         corteFileData.forEach(d => {
           if (!d.rawName) return;
-          const key = d.rawName + '||' + (d.fecha || new Date().toISOString().split('T')[0]);
+          const key = d.rawName + '||' + (d.fecha || localDateStr());
           if (!byOpFecha[key]) byOpFecha[key] = { name: d.rawName, fecha: d.fecha, total: 0 };
           byOpFecha[key].total += d.puntos;
         });
 
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = localDateStr();
         Object.values(byOpFecha).forEach(({ name, fecha, total }) => {
           if (total <= 0) return;
           const esPasado = fecha && fecha < hoy;
@@ -7054,7 +7066,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         });
         // Sync op[curr] from cortes for non-unificado mode too
         const { curr: _currElse } = getActivePair();
-        const _hoyElse = new Date().toISOString().split('T')[0];
+        const _hoyElse = localDateStr();
         const _mesElse = _hoyElse.slice(0, 7);
         operatorsData.forEach(op => {
           const ptsMes = getCortesOp(op.name)
@@ -7128,7 +7140,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         contrato: '',
         turno: document.getElementById('addop-turno')?.value || '',
         cargo: 'Operador', area: 'Operativa',
-        fecha_ingreso: new Date().toISOString().split('T')[0],
+        fecha_ingreso: localDateStr(),
         mensual: '', cuenta: ''
       };
 
@@ -7700,7 +7712,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const sugerido = horas * 50; // ~50 pts por hora como sugerencia
 
       // Verificar si ya registró meta hoy
-      const fecha = new Date().toISOString().split('T')[0];
+      const fecha = localDateStr();
       const metaKey = 'rr_meta_' + opName.replace(/\s+/g, '_').toLowerCase() + '_' + fecha;
       const yaRegistrada = localStorage.getItem(metaKey);
 
@@ -9314,7 +9326,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function asiInitDate() {
       const inp = document.getElementById('asi-date');
       if (inp && !inp.value) {
-        inp.value = new Date().toISOString().split('T')[0];
+        inp.value = localDateStr();
         inp.addEventListener('change', () => { asiLoadDraft(); asiRender(); });
       }
     }
@@ -9472,8 +9484,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     function abrirExportarAsistencia() {
-      const hoy = new Date().toISOString().split('T')[0];
-      const hace7 = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0];
+      const hoy = localDateStr();
+      const hace7 = localDateStr(new Date(Date.now() - 6 * 86400000));
       document.getElementById('asi-exp-desde').value = hace7;
       document.getElementById('asi-exp-hasta').value = hoy;
       document.getElementById('modal-asi-export').style.display = 'flex';

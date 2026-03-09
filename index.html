@@ -982,14 +982,20 @@
         margin-bottom: 16px;
       }
 
+      /* En mobile el grid colapsa a 1 col, no se oculta */
       #rk-table-desktop {
-        display: none !important;
+        display: block;
       }
-
-      #rk-cards-mobile {
-        display: block !important;
-        padding: 0 0 20px;
+      .rk-cards-grid {
+        grid-template-columns: 1fr !important;
+        padding: 10px !important;
+        gap: 8px !important;
       }
+      .rk-sort-bar {
+        padding: 10px 12px 8px !important;
+        gap: 5px !important;
+      }
+      .rk-sort-btn { font-size: .6rem !important; padding: 3px 7px !important; }
 
       /* ── TAB 1: REPORTE OPERADORES ── */
       #tab-report {
@@ -2109,6 +2115,211 @@
       color: #475569;
       font-size: 15px;
     }
+    /* ── RK CARDS GRID (reemplaza tabla) ── */
+    .rk-sort-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 16px 10px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .rk-sort-lbl {
+      font-size: .65rem;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 4px;
+    }
+    .rk-sort-btn {
+      padding: 4px 10px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 8px;
+      color: #64748b;
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      cursor: pointer;
+      transition: .2s;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .rk-sort-btn:hover { color: var(--accent); border-color: rgba(94,234,212,.3); }
+    .rk-sort-btn.sort-asc::after { content: " ↑"; color: var(--accent); }
+    .rk-sort-btn.sort-desc::after { content: " ↓"; color: var(--accent); }
+    .rk-sort-btn.sort-asc,
+    .rk-sort-btn.sort-desc { color: var(--accent); border-color: rgba(94,234,212,.35); background: rgba(94,234,212,.08); }
+    /* ── RK VIEW MODE TOGGLE ── */
+    .rk-view-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 16px 0;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .rk-view-btn {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      color: #64748b;
+      font-size: .72rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: .2s;
+      letter-spacing: .3px;
+    }
+    .rk-view-btn.active-mes {
+      background: rgba(99,102,241,.2);
+      border-color: rgba(99,102,241,.5);
+      color: #818cf8;
+    }
+    .rk-view-btn.active-dia {
+      background: rgba(52,211,153,.15);
+      border-color: rgba(52,211,153,.45);
+      color: #34d399;
+    }
+    /* Card día sin corte */
+    .rk-op-card.no-corte {
+      background: rgba(248,113,113,.05);
+      border-color: rgba(248,113,113,.2);
+    }
+    /* Pts del día badge */
+    .rk-card-dia-pts {
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: -.5px;
+      white-space: nowrap;
+    }
+    .rk-card-dia-pts.has-pts  { color: #34d399; }
+    .rk-card-dia-pts.no-pts   { color: #f87171; }
+    .rk-card-dia-hora {
+      font-size: .6rem;
+      color: #475569;
+      margin-top: 1px;
+      text-align: right;
+    }
+
+
+    .rk-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+      gap: 10px;
+      padding: 14px 16px 20px;
+    }
+
+    /* Card base — misma lógica que alerta-card */
+    .rk-op-card {
+      border-radius: 14px;
+      padding: 14px 16px;
+      border: 1px solid;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: transform .2s, box-shadow .2s;
+      cursor: default;
+    }
+    .rk-op-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(0,0,0,.3);
+    }
+    .rk-op-card.up   { background: rgba(52,211,153,.06);  border-color: rgba(52,211,153,.28); }
+    .rk-op-card.warn { background: rgba(251,191,36,.06);  border-color: rgba(251,191,36,.28); }
+    .rk-op-card.down { background: rgba(248,113,113,.07); border-color: rgba(248,113,113,.28); }
+    .rk-op-card.zero { background: rgba(100,116,139,.06); border-color: rgba(100,116,139,.2);  }
+
+    /* Card header row */
+    .rk-card-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .rk-card-avatar-wrap {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+    }
+    .rk-card-info { flex: 1; min-width: 0; }
+    .rk-card-name {
+      font-size: .8rem;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rk-card-sub {
+      font-size: .65rem;
+      color: #64748b;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .rk-card-badge {
+      padding: 2px 7px;
+      background: rgba(94,234,212,.1);
+      color: var(--accent);
+      border-radius: 5px;
+      font-size: .6rem;
+      font-weight: 700;
+    }
+    .rk-card-growth {
+      flex-shrink: 0;
+      font-size: 1rem;
+      font-weight: 900;
+      letter-spacing: -.5px;
+    }
+    .rk-card-growth.up   { color: #34d399; }
+    .rk-card-growth.warn { color: #fbbf24; }
+    .rk-card-growth.down { color: #f87171; }
+    .rk-card-growth.zero { color: #64748b; }
+
+    /* Points row */
+    .rk-card-pts-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: .72rem;
+    }
+    .rk-card-pts-prev { color: #475569; white-space: nowrap; }
+    .rk-card-pts-curr {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+    }
+    .rk-card-pts-val { font-weight: 700; color: var(--text); white-space: nowrap; }
+
+    /* Footer row */
+    .rk-card-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .rk-card-cop {
+      font-size: .8rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* Empty state */
+    .rk-cards-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #475569;
+      font-size: 15px;
+    }
+
 
     /* ── MODAL CONSEJOS ── */
     .modal-ov {
@@ -2608,12 +2819,6 @@
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
         <span id="role-badge-inline"></span>
-        <button onclick="exportarDatos()"
-          style="padding:7px 12px;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;">📤
-          Exportar</button>
-        <button onclick="document.getElementById('import-file-input').click()"
-          style="padding:7px 12px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;">📥
-          Importar</button>
         <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importarDatos(event)">
         <button id="btn-alertas-monitor" onclick="abrirModalAlertas()"
           style="display:none;position:relative;padding:7px 12px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:10px;font-size:.75rem;font-weight:700;cursor:pointer;white-space:nowrap;">
@@ -2654,14 +2859,7 @@
       </div>
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;width:100%;">
         <span id="role-badge-inline-mob"></span>
-        <button onclick="exportarDatos()"
-          style="padding:8px 14px;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;">📤
-          Exportar</button>
-        <button onclick="document.getElementById('import-file-input-mob').click()"
-          style="padding:8px 14px;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3);border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;">📥
-          Importar</button>
-        <input type="file" id="import-file-input-mob" accept=".json" style="display:none"
-          onchange="importarDatos(event)">
+        <input type="file" id="import-file-input-mob" accept=".json" style="display:none" onchange="importarDatos(event)">
         <button id="btn-change-pin-mob" onclick="loginAbrirCambioPin()"
           style="display:none;padding:8px 14px;background:rgba(168,85,247,.15);color:#a78bfa;border:1px solid rgba(168,85,247,.3);border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;">🔑
           PINs</button>
@@ -2819,6 +3017,8 @@
       <div id="op-dash-avatar-wrap"></div>
       <div class="op-dash-name" id="op-dash-name"></div>
       <div class="op-dash-group" id="op-dash-group"></div>
+      <div id="op-dash-last-update"
+        style="font-size:.6rem;color:#334155;margin-top:4px;letter-spacing:.3px;"></div>
       <div class="op-dash-metrics" id="op-dash-metrics"></div>
     </div>
     <div class="op-section">
@@ -2904,7 +3104,6 @@
         </select>
       </div>
       <div class="rk-actions-wrap">
-        <button class="btn-excel-upload" onclick="abrirModalMes()">📊 Actualizar Mes</button>
         <button class="btn-corte-rk" onclick="abrirModalCorte()">📸 Registrar Corte</button>
         <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
@@ -3052,24 +3251,24 @@
     <!-- Tabla -->
     <!-- Tabla (desktop) / Cards (mobile) -->
     <div class="rk-table-wrap" id="rk-table-desktop">
-      <table class="ranking-table">
-        <thead>
-          <tr id="rankingHead">
-            <th onclick="sortRanking(0)" id="rth-0">Pos</th>
-            <th onclick="sortRanking(1)" id="rth-1" style="text-align:left; padding-left:16px;">Operador</th>
-            <th onclick="sortRanking(2)" id="rth-2">Grupo</th>
-            <th onclick="sortRanking(3)" id="rth-3">Mes Ant. (pts)</th>
-            <th onclick="sortRanking(4)" id="rth-4">Mes Act. (pts)</th>
-            <th onclick="sortRanking(5)" id="rth-5">Crecimiento</th>
-            <th onclick="sortRanking(6)" id="rth-6">Ganancia COP</th>
-            <th>Acción</th>
-          </tr>
-        </thead>
-        <tbody id="rankingBody"></tbody>
-      </table>
+      <div class="rk-view-toggle">
+        <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')">📅 Mes</button>
+        <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy</button>
+      </div>
+      <div class="rk-sort-bar">
+        <span class="rk-sort-lbl">Ordenar:</span>
+        <button class="rk-sort-btn" onclick="sortRanking(0)" id="rth-0">Pos</button>
+        <button class="rk-sort-btn" onclick="sortRanking(1)" id="rth-1">Operador</button>
+        <button class="rk-sort-btn" onclick="sortRanking(2)" id="rth-2">Grupo</button>
+        <button class="rk-sort-btn" onclick="sortRanking(3)" id="rth-3">Mes Ant.</button>
+        <button class="rk-sort-btn" onclick="sortRanking(4)" id="rth-4">Mes Act.</button>
+        <button class="rk-sort-btn" onclick="sortRanking(5)" id="rth-5">Crecimiento</button>
+        <button class="rk-sort-btn" onclick="sortRanking(6)" id="rth-6">Ganancia</button>
+      </div>
+      <div id="rankingBody" class="rk-cards-grid"></div>
     </div>
-    <!-- Mobile cards -->
-    <div id="rk-cards-mobile" style="display:none; padding:0 12px 24px;"></div>
+    <!-- Mobile cards unified with desktop -->
+    <div id="rk-cards-mobile" style="display:none;"></div>
   </div>
 
   <!-- MODAL ALERTAS OPERADORES -->
@@ -3506,24 +3705,6 @@
     // Source data frozen at load time for merging
     const OPERATORS_SOURCE = operatorsData.map(o => ({ ...o }));
 
-    // ── Datos personales reales desde Excel RR ──────────────────
-    const PERSONAL_DATA = {"ANAZARED RODRIGUEZ CAMPOS": {"doc_type": "PPT", "doc": "1246397", "dob": "1989-01-05", "phone": "3012446861", "email": "anaboris2202@gmailcom", "address": "Carrera 93d # 6- 37 torre 16 apto 101 Tintal", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-04-12", "mensual": "Puntaje", "cuenta": "21300003966 b/bia"}, "ANDREINA DE LOS ANGELES YSSA MORENO": {"doc_type": "C.I-V", "doc": "27651412", "dob": "1999-05-30", "phone": "3044244169", "email": "yssandreina03@gmail.com", "address": "Calle 56h # sur 95b - 4 Br: bosa santa fe", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-11-19", "mensual": "Puntaje", "cuenta": "N/A"}, "BORIS JUVENAL PATIÑO ESCORIHUELA": {"doc_type": "CC", "doc": "1016119452", "dob": "1990-03-16", "phone": "3118372376", "email": "borispatino1@gmail.com", "address": "Carrera 93d # 6 - 37 Br el tintal 2 etapa 4", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-10-14", "mensual": "Puntaje", "cuenta": "3118372376 Nequi"}, "BRIGITH DE LOS ANGELES FERNANDEZ MORA": {"doc_type": "PPT", "doc": "6045040", "dob": "1998-09-08", "phone": "3132410038", "email": "brigithfff@gmailcom", "address": "Carrera 98 # 2 - 32 tierra buena Tintal", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-02-06", "mensual": "Puntaje", "cuenta": "3132410038 nequi"}, "CATHERINE NAOMI FIGUEREDO HERNANDEZ": {"doc_type": "PPT", "doc": "30160955", "dob": "2003-04-09", "phone": "3005033756", "email": "catherinehernandez173@gmail.com", "address": "Calle 58 # 98a 33 Br: Bosa Santa Fe", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-10-17", "mensual": "Puntaje", "cuenta": "N/A"}, "EDUIN JOSE ESPAÑA DIAZ": {"doc_type": "C.I-V", "doc": "27599966", "dob": "2004-01-16", "phone": "3508682551", "email": "eduinjose35@gmail.com", "address": "Carrera 94c # 58 - 13 Br bosa el anehelo", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-07-11", "mensual": "Puntaje", "cuenta": "N/A"}, "ESPERANZA JIMENEZ SEVILLA": {"doc_type": "CC", "doc": "1047479991", "dob": "1995-02-21", "phone": "3003047950", "email": "espejime1995@gmailcom", "address": "Carrera 80i # 71 sur 16 Bosa los naranjos", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-05-08", "mensual": "Puntaje", "cuenta": "3003047950 Daviplata"}, "FREDERYCK JOSE GALICIA CAMARIPANO": {"doc_type": "C.I-V", "doc": "30325656", "dob": "2003-11-18", "phone": "3017940255", "email": "fredegalicia23@icloud.com", "address": "Carrera 88h # 49d sur 37 Br: Bosa Brasil", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-12-18", "mensual": "Puntaje", "cuenta": "N/A"}, "GABRIEL LUISDEVIT GONZALEZ ARCIA": {"doc_type": "Passport", "doc": "195002496", "dob": "2000-02-26", "phone": "3013326600", "email": "gabrielgonzarc@gmailcom", "address": "Calle 6a # 79b - 20 Br piu12 Keneddy", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-08-14", "mensual": "Puntaje", "cuenta": "N/A"}, "JESUS ALBERTO AVILA BELISARIO": {"doc_type": "CC", "doc": "1127629651", "dob": "1997-04-28", "phone": "3115137412", "email": "jesusavilab1@gmail.com", "address": "Carrera 9 este # 36 - 75 Conjunto Magnolios Terreros soacha", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-10-02", "mensual": "Puntaje", "cuenta": "0550456800277489 Davi"}, "JESUS DAVID PAJARO PIÑERES": {"doc_type": "CC", "doc": "1082855919", "dob": "1998-12-28", "phone": "3143908992", "email": "jpajaropiñeres@gmail.com", "address": "Calle 94 # 60 - 88 Br: Unidos", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-12-06", "mensual": "Puntaje", "cuenta": "3143908992 Nequi"}, "JHORIANNYS ESTHER MOSQUERA ROJANO": {"doc_type": "PPT", "doc": "6.333.284", "dob": "1997-05-07", "phone": "3013926699", "email": "mosquerajhoriannys@gmail.com", "address": "Carrera 78j Bis # 33 - 65f", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-06-25", "mensual": "Puntaje", "cuenta": "3239756166 Nequi"}, "JOSUE DAVID HENRIQUEZ REGALADO": {"doc_type": "PPT", "doc": "1208152", "dob": "1999-10-06", "phone": "3224105978", "email": "josuehenriquezda@icloud.com", "address": "Calle 56i # 89 - 52 Br las cabañas bosa", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-10-07", "mensual": "Puntaje", "cuenta": "3224105978 nequi"}, "JUAN CAMILO RINCON PIRAVAGUEN": {"doc_type": "CC", "doc": "1031125921", "dob": "2004-11-20", "phone": "3045932343", "email": "camilo06piravaguen@gmail.com", "address": "Calle 57a sur #  87b - 40 Br: bosa escocia", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-12-12", "mensual": "Puntaje", "cuenta": "3045932343 Nequi"}, "JUAN CARLOS MORENO GUERRA": {"doc_type": "PPT", "doc": "5931573", "dob": "2007-05-27", "phone": "3224617954", "email": "junasitomoreno@gmail.com", "address": "Calle 56h # 95a - 27 Br: Bosa santafe", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-11-28", "mensual": "Puntaje", "cuenta": "62236821 Nu"}, "KEVIN SEBASTIAN BARON AVILA": {"doc_type": "CC", "doc": "1031803660", "dob": "2005-02-28", "phone": "3156762614", "email": "kevinbarones09@gmail.com", "address": "Carrera 98 # 65 - 09 sur Bosa el recreo", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-05-27", "mensual": "Puntaje", "cuenta": "3156762614 nequi"}, "KRYSTAL GABRIELA CASTRO MONTILLA": {"doc_type": "PPT", "doc": "4.993.871", "dob": "2004-09-26", "phone": "3042046565", "email": "kmontilla2662@gmail.com", "address": "carrera 82g bis # 59 - 62 sur Br: Bosa La paz", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-09-16", "mensual": "Puntaje", "cuenta": "PTE"}, "MARIA FERNANDA MANCERA SILVA": {"doc_type": "CC", "doc": "1012336202", "dob": "2005-10-09", "phone": "3233579441", "email": "mariamancera1021@gmail.com", "address": "Cra 77j # 68 - 67 sur San Pablo II Sector", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-12-17", "mensual": "Puntaje", "cuenta": "10056079799 B/bia"}, "MARYULIS YUSMARIS ARIAS ARIAS": {"doc_type": "C.I-V", "doc": "15109082", "dob": "1982-01-31", "phone": "3018365290", "email": "maryulis2003@gmail.com", "address": "Carrera 77j # 65j sur 79 Br: bosa san pablo", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-09-25", "mensual": "Puntaje", "cuenta": "N/A"}, "OSCAR JOSE GOMEZ GUERRA": {"doc_type": "C.I-V", "doc": "26552789", "dob": "1999-04-21", "phone": "3046785018", "email": "og0342442@gmailcom", "address": "Calle 56h Sur #  95 - 15 Piso 2 Br: bosa santa fe", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-04-03", "mensual": "Puntaje", "cuenta": "N/A"}, "SKERLY NAILEX VALERO BRICEÑO": {"doc_type": "C.I-V", "doc": "25510624", "dob": "1995-07-14", "phone": "3102695459", "email": "skerlyvalero423@gmailcom", "address": "Cra 93a # 54d sur 24 Brr: bosa porvenir", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-10-14", "mensual": "Puntaje", "cuenta": "N/A"}, "WILLIANNYS DEL VALLE GUZMAN ANGULO": {"doc_type": "PPT", "doc": "7033324", "dob": "2001-08-22", "phone": "04248037510*", "email": "wiliannysguzman62@gmail.com", "address": "Calle 56h # sur 95b - 4 Br: bosa santa fe", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-11-20", "mensual": "Puntaje", "cuenta": "24123020415 Bcsc"}, "YHONGERVIS JESUS AVILA JIMENEZ": {"doc_type": "PPT", "doc": "6389467", "dob": "2002-11-06", "phone": "3243832647", "email": "avilayhongervis8@gmail.com", "address": "Calle 56h sur # 95a -04 Br: bosa santa fe", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-10-16", "mensual": "Puntaje", "cuenta": "PTE"}, "ARLIS ELAINER MOLINA TOVAR": {"doc_type": "PPT", "doc": "6571779", "dob": "2004-08-26", "phone": "3125617816", "email": "elainermolina2004@gmailcom", "address": "Carrera 95 # 56F SUR - 45 Bosa santa fe el Anhelo", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-07-05", "mensual": "Puntaje", "cuenta": "10094596390 b/bia"}, "ARNALDO JOSE GUERRERO HERNANDEZ": {"doc_type": "CC", "doc": "1034314220", "dob": "1995-11-24", "phone": "3208321778", "email": "mhuiza562@gmail.com", "address": "Carrera 95a # 36b - 50 Br: Bosa Santafe", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-06-26", "mensual": "Puntaje", "cuenta": "21998952520 b/bia"}, "CARLOS JAVIER CARILLO GAONA": {"doc_type": "C.I-V", "doc": "26149376", "dob": "1997-09-09", "phone": "3158976702", "email": "crlsjavierxd123@gmailcom", "address": "Calle 56 h # 98a - 46 Bosa santa fe", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2023-03-18", "mensual": "Puntaje", "cuenta": "N/A"}, "DAVID ALBERTO GARCIA RODRIGUEZ": {"doc_type": "CC", "doc": "1012391355", "dob": "1992-06-11", "phone": "3167928985", "email": "davidgarcialive@gmailcom", "address": "Cra 88a # 59c - 81 sur Bosa la libertad", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2023-03-25", "mensual": "Puntaje", "cuenta": "24123032177 bcsc"}, "JHON WIELDER RODRIGUEZ GARCIA": {"doc_type": "C.I-V", "doc": "30308189", "dob": "1999-08-02", "phone": "3027451116", "email": "jhongarciarodriguez77@gmailcom", "address": "Carrera 91b # 49d sur 52 - 03 los centauros bosa", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-12-01", "mensual": "Puntaje", "cuenta": "N/A"}, "MARIANNY SOFIA PEROZO PEREZ": {"doc_type": "PPT", "doc": "1094111", "dob": "2001-09-27", "phone": "3219472224", "email": "sofiamariannyperozoperez@gmailcom", "address": "Calle 47 # 20 - 19 Juan pablo soacha", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2024-04-03", "mensual": "Puntaje", "cuenta": "PTE"}, "MAYLING SOFIA PEREZ VARGAS": {"doc_type": "PPT", "doc": "4319168", "dob": "1976-05-14", "phone": "3107574155", "email": "maylingperez00@gmailcom", "address": "Carrera 3 # 30 - 130 Mirador de san ignacio Br: san mateo", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2023-07-01", "mensual": "Puntaje", "cuenta": "PTE"}, "OMAR JOSE GOMEZ GUERRA": {"doc_type": "C.I-V", "doc": "25911131", "dob": "1997-10-09", "phone": "3003655416", "email": "ojgg3011@gmailcom", "address": "Cra 94b # 57a - 22 sur Br santa fe", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2023-03-13", "mensual": "Puntaje", "cuenta": "N/A"}, "ROINIER JOSE LUNAR NOROÑO": {"doc_type": "C.I-V", "doc": "29819911", "dob": "2003-05-25", "phone": "3002942192", "email": "rainerlunar8@gmail.com", "address": "Calle 56h Sur # 95b - 02 Br bosa el anehelo", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-07-03", "mensual": "Puntaje", "cuenta": "N/A"}, "YENDER JOSE BENITEZ TEJADA": {"doc_type": "PPT", "doc": "4869553", "dob": "1998-08-06", "phone": "3118398069", "email": "tejadayender@gmailcom", "address": "Calle 56h # 95a - 10 Br: el anhelo bosa", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-01-20", "mensual": "Puntaje", "cuenta": "825231005242960 ualá"}, "KRISTIAN GABRIEL CASTRO MONTILLA": {"doc_type": "PPT", "doc": "4.975.097", "dob": "2006-07-29", "phone": "3244870143", "email": "kristiancastro919@gmail.com", "address": "carrera 82g bis # 59 - 62 sur Br: Bosa La paz", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-09-16", "mensual": "Puntaje", "cuenta": "3017050073 Nequi"}, "ADALBERTO JUNIOR RENDILES HERNANDEZ": {"doc_type": "PPT", "doc": "1286413", "dob": "1998-11-08", "phone": "3115932479", "email": "adalberto08rendiles@gmailcom", "address": "Calle 56H Carrera 95A 21 Br: el anhelo bosa", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Completo", "cargo": "Auditor", "area": "Administrativa", "fecha_ingreso": "2020-07-01", "mensual": "2450000", "cuenta": "3115932479 nequi"}, "CESAR ALEJANDRO RICO RAMIREZ": {"doc_type": "PPT", "doc": "6666153", "dob": "1996-04-29", "phone": "3114615778", "email": "2cesaralejandro9@gmailcom", "address": "Calle 58 # 95 - 04 Br el anhelo bosa", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2021-09-13", "mensual": "Puntaje", "cuenta": "22963493693 b/bia"}, "EDUARDO JUNIOR BARROS BRITO": {"doc_type": "CC", "doc": "1006569497", "dob": "2000-07-07", "phone": "3002797716", "email": "ejuniorbarros@uniguajira,edu,co", "address": "Cra 93a # 54d sur 24 Brr: bosa porvenir", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2023-02-19", "mensual": "1850000", "cuenta": "24123025890 bcsc"}, "ELISABETH RODRÍGUEZ GARZON": {"doc_type": "CC", "doc": "39658864", "dob": "1970-10-20", "phone": "3106975908", "email": "elizabethrodriguez70@hotmailcom", "address": "AV 68 # 5 17 Porto Americas Kennedy", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Fijo", "turno": "Completo", "cargo": "Gerente general", "area": "Administrativa", "fecha_ingreso": "2013-04-26", "mensual": "5376500", "cuenta": "24104088946 bcsc"}, "JHEFFERSON JESUS CORZO ARTEAGA": {"doc_type": "PPT", "doc": "696323", "dob": "1989-04-25", "phone": "3102806020", "email": "jheffersoncorzoarteaga2@gmailcom", "address": "Cra 17a # 2 - 10 hogares soacha la oportunidad 2", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Completo", "cargo": "Supervisor", "area": "Administrativa", "fecha_ingreso": "2022-08-01", "mensual": "2450000", "cuenta": "10077436443 b/bia"}, "JOSE GABRIEL ARIAS DIAZ": {"doc_type": "PPT", "doc": "2241170", "dob": "2000-10-13", "phone": "3214070987", "email": "ariasjose132000@gmail.com", "address": "Calle 58 sur # 98a - 33 Bosa santa fe", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Completo", "cargo": "Supervisor", "area": "Administrativa", "fecha_ingreso": "2024-01-01", "mensual": "2450000", "cuenta": "3214070987 Nequi"}, "JUAN CARLOS RODRIGUEZ RODRÍGUEZ": {"doc_type": "CC", "doc": "79729856", "dob": "1976-12-19", "phone": "3144066504", "email": "juankroro1976@gmailcom", "address": "AV 68 # 5 17 Porto Americas Kennedy", "sex": "M", "empresa": "INMOBILIARIA", "contrato": "Fijo", "turno": "Completo", "cargo": "Administrativo", "area": "Administrativa", "fecha_ingreso": "2020-02-01", "mensual": "", "cuenta": "24107657086 bcsc"}, "LUIS ENRIQUE ESPINOZA ROMERO": {"doc_type": "PPT", "doc": "4882235", "dob": "1989-10-26", "phone": "3026478540", "email": "luisespinoza1917@gmailcom", "address": "Carrera 78H # 66 - 10 Sur Bosa san pablo", "sex": "M", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Completo", "cargo": "Supervisor", "area": "Administrativa", "fecha_ingreso": "2021-01-11", "mensual": "2450000", "cuenta": "84177997Nu"}, "MARIA JOSE GUETE ORTEGA": {"doc_type": "CC", "doc": "1050039116", "dob": "1995-04-07", "phone": "3002192720", "email": "antoyesi0107@gmailcom", "address": "Calle 13 # 30 - 163 Conjunto Alcaparro ciudad verde", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Completo", "cargo": "Supervisor", "area": "Administrativa", "fecha_ingreso": "2023-07-15", "mensual": "2123500", "cuenta": "04900019047 b/bia"}, "MARIELIZA NICOLE MORENO GUERRA": {"doc_type": "PPT", "doc": "5123545", "dob": "2003-08-27", "phone": "3143880849", "email": "morenomarieliza@gmailcom", "address": "Carrera 95A #56H-21 Sur Bosa Santa Fe", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2021-02-01", "mensual": "Puntaje", "cuenta": "3143880849 Nequi"}, "MARIELYS LUISA FERRER ROMERO": {"doc_type": "PPT", "doc": "5159330", "dob": "1980-05-08", "phone": "3223682195", "email": "gothmarielysferrer@gmailcom", "address": "Carrera 81H 75 Sur Bosa San Jose", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2021-10-14", "mensual": "Puntaje", "cuenta": "16133607 Nu"}, "MAYRA ALEJANDRA PALOMINO CAPERA": {"doc_type": "CC", "doc": "1012432033", "dob": "1996-05-07", "phone": "3103814334", "email": "alejarodriguez1614@hotmailcom", "address": "Transversal 24B # 17 - 67 Conj Lunaria To 4 Apto 601 Ciudad Verde", "sex": "F", "empresa": "ROMERO SAS", "contrato": "Fijo", "turno": "Completo", "cargo": "Auxiliar de Gerencia", "area": "Administrativa", "fecha_ingreso": "2022-09-16", "mensual": "2500000", "cuenta": "24106707926 bcsc"}, "SAIDA LICETH TOVAR TEJADA": {"doc_type": "PPT", "doc": "5050296", "dob": "1981-04-21", "phone": "3007215427", "email": "tovarlicet78@gmailcom", "address": "Carrera 94 #56H 58B Sur Bosa El Anhelo", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2021-05-14", "mensual": "Puntaje", "cuenta": "10094597388 b/bia"}, "SHERLY DAYANNA MARIN BETANCOURT": {"doc_type": "CC", "doc": "1026276767", "dob": "1991-08-05", "phone": "3117063059", "email": "betancourthdayis@gmailcom", "address": "Carrera 10 B #6A - 52 Sur Valles De Santa Ana, Soacha", "sex": "F", "empresa": "DML SAS", "contrato": "Obra labor", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2020-02-16", "mensual": "Puntaje", "cuenta": "24137979097 bcsc"}, "WILL ORLANDO RAMIREZ GUERRA": {"doc_type": "CI-V", "doc": "26395589", "dob": "1998-05-13", "phone": "3134033880", "email": "willramirez982@gmailcom", "address": "Calle 94b # 57a 22 sur Br el anhelo bosa", "sex": "M", "empresa": "ROMERO SAS", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2021-12-08", "mensual": "Puntaje", "cuenta": "N/A"}, "RAMON JOSE CORTEZ PEREZ": {"doc_type": "PPT", "doc": "6361314", "dob": "2000-09-27", "phone": "3001081682", "email": "rjhoseperez.oficoal@gmail.com", "address": "Calle 58 # 98a 33 Br: Bosa Santa Fe", "sex": "M", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-10-17", "mensual": "1750905", "cuenta": "N/A"}, "HAROLD STEBEN CASAS TORRES": {"doc_type": "CC", "doc": "1033705835", "dob": "", "phone": "", "email": "", "address": "", "sex": "M", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-08-23", "mensual": "2000000", "cuenta": "N/A"}, "SANTIAGO ZIPA ACUÑA": {"doc_type": "CC", "doc": "1000729744", "dob": "", "phone": "", "email": "", "address": "", "sex": "M", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-05-16", "mensual": "2000000", "cuenta": "N/A"}, "ALESSANDRO DAVID CEDEÓ SANCHEZ": {"doc_type": "C.I-V", "doc": "27562547", "dob": "", "phone": "", "email": "", "address": "", "sex": "M", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-09-30", "mensual": "2000000", "cuenta": "N/A"}, "MONICA GABRIELA MORALES BOZO": {"doc_type": "PPT", "doc": "5328386", "dob": "", "phone": "", "email": "", "address": "", "sex": "F", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-09-01", "mensual": "1750905", "cuenta": "N/A"}, "JEAN KLIVER OCANDO MENDOZA": {"doc_type": "CC", "doc": "1148962429", "dob": "", "phone": "", "email": "", "address": "", "sex": "M", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2025-06-23", "mensual": "1750905", "cuenta": "N/A"}, "LINA FERNANDO VENTERO QUIROGA": {"doc_type": "CC", "doc": "1012316202", "dob": "", "phone": "", "email": "", "address": "", "sex": "F", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Mañana", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2026-02-06", "mensual": "2000000", "cuenta": "N/A"}, "GUILLERMO ANDRES MARQUEZ  HERNANDEZ": {"doc_type": "PPT", "doc": "7.108.408", "dob": "", "phone": "", "email": "", "address": "", "sex": "M", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Tarde", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2026-02-19", "mensual": "1750905", "cuenta": "N/A"}, "LUISA FERNANDA PEREZ AMAYA": {"doc_type": "CC", "doc": "1012333286", "dob": "", "phone": "", "email": "", "address": "", "sex": "F", "empresa": "CAMILO", "contrato": "Prestacion de servicios", "turno": "Noche", "cargo": "Operador", "area": "Operativa", "fecha_ingreso": "2026-02-16", "mensual": "2000000", "cuenta": "N/A"}};
-
-    // Aplica datos personales del Excel a un operador si existe match por nombre
-    function _applyPersonalData(op) {
-      const key = (op.name || '').trim().toUpperCase();
-      const pd = PERSONAL_DATA[key];
-      if (!pd) {
-        // Intento fuzzy: buscar por palabras clave del nombre
-        const words = key.split(' ').filter(w => w.length > 3);
-        const found = Object.keys(PERSONAL_DATA).find(k =>
-          words.every(w => k.includes(w))
-        );
-        if (found) Object.assign(op, PERSONAL_DATA[found]);
-        return;
-      }
-      Object.assign(op, pd);
-    }
 
     function loadData() {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -3549,7 +3730,6 @@
         } catch (e) { operatorsData = OPERATORS_SOURCE.map(o => ({ ...o })); }
       }
       // Enriquecer con datos personales del Excel
-      operatorsData.forEach(op => _applyPersonalData(op));
       recalcGrowth();
     }
 
@@ -3616,6 +3796,19 @@
     let rkSortCol = 4; // default: Feb pts
     let rkSortDir = -1; // -1 desc, 1 asc
     let rkDataFiltered = [];
+    let rkViewMode = 'mes'; // 'mes' | 'dia'
+
+    function setRkView(mode) {
+      rkViewMode = mode;
+      const btnMes = document.getElementById('rk-btn-mes');
+      const btnDia = document.getElementById('rk-btn-dia');
+      if (btnMes) { btnMes.className = 'rk-view-btn' + (mode === 'mes' ? ' active-mes' : ''); }
+      if (btnDia) { btnDia.className = 'rk-view-btn' + (mode === 'dia' ? ' active-dia' : ''); }
+      // Ajustar sort default: día → por pts hoy, mes → por pts mes actual
+      if (mode === 'dia') { rkSortCol = 7; rkSortDir = -1; }
+      else                { rkSortCol = 4; rkSortDir = -1; }
+      renderRanking();
+    }
 
     function renderRanking() {
       const { prev, curr } = getActivePair();
@@ -3641,7 +3834,19 @@
         return matchSearch && matchGrp && matchTurno && matchPlataforma;
       });
 
-      // Sort using dynamic month keys
+      // Calcular pts del día para cada op (solo en modo día o siempre para sort)
+      const _hoy = new Date().toISOString().split('T')[0];
+      const _ptsHoyMap = {};
+      const _horaMap = {};
+      rkDataFiltered.forEach(op => {
+        const cortes = getCortesOp(op.name);
+        const hoyCortes = cortes.filter(c => c.fecha === _hoy);
+        _ptsHoyMap[op.name] = hoyCortes.reduce((s, c) => s + (c.puntos || 0), 0);
+        const last = hoyCortes[hoyCortes.length - 1];
+        _horaMap[op.name] = last ? (last.hora || null) : null;
+      });
+
+      // Sort using dynamic month keys + col 7 = pts hoy
       rkDataFiltered.sort((a, b) => {
         let va, vb;
         switch (rkSortCol) {
@@ -3652,6 +3857,7 @@
           case 4: va = a[curr] || 0; vb = b[curr] || 0; break;
           case 5: va = a.growth; vb = b.growth; break;
           case 6: va = a[curr] || 0; vb = b[curr] || 0; break;
+          case 7: va = _ptsHoyMap[a.name] || 0; vb = _ptsHoyMap[b.name] || 0; break;
           default: va = a[curr] || 0; vb = b[curr] || 0;
         }
         return rkSortDir * (vb - va);
@@ -3686,66 +3892,116 @@
     </div>
   `;
 
-      // Tabla
+      // Cards grid
       const tbody = document.getElementById('rankingBody');
       if (rkDataFiltered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="rk-empty">😕 Sin resultados para este filtro</td></tr>`;
+        tbody.innerHTML = `<div class="rk-cards-empty">😕 Sin resultados para este filtro</div>`;
         return;
       }
+
+      // Máx pts hoy para barra relativa
+      const maxHoy = Math.max(...Object.values(_ptsHoyMap), 1);
 
       tbody.innerHTML = rkDataFiltered.map((op, i) => {
         const globalIndex = operatorsData.indexOf(op);
         const pos = i + 1;
         const pPrev = op[prev] != null ? op[prev] : 0;
         const pCurr = op[curr] != null ? op[curr] : 0;
+        const pHoy  = _ptsHoyMap[op.name] || 0;
+        const hora  = _horaMap[op.name];
 
-        // Avatar or medal
+        // Avatar o medalla
         const savedAvatar = getAvatar(op.name);
-        let posCell;
-        const safeName = op.name.replace(/'/g, "\\'");
+        const safeName = op.name.replace(/'/g, "\'");
+        let avatarHTML;
         if (savedAvatar) {
-          posCell = `<div class="pos-cell" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
-        <img src="${savedAvatar}" class="pos-avatar" title="Cambiar foto">
-        <span class="pos-upload-hint">cambiar</span>
-      </div>`;
+          avatarHTML = `<img src="${savedAvatar}" class="pos-avatar" title="Cambiar foto"><span class="pos-upload-hint">cambiar</span>`;
         } else {
-          let medalHTML;
-          if (pos === 1) medalHTML = `<span class="pos-medal medal-1">🥇</span>`;
-          else if (pos === 2) medalHTML = `<span class="pos-medal medal-2">🥈</span>`;
-          else if (pos === 3) medalHTML = `<span class="pos-medal medal-3">🥉</span>`;
-          else medalHTML = `<span class="pos-medal medal-n">${pos}</span>`;
-          posCell = `<div class="pos-cell" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
-        <div class="pos-avatar-placeholder" title="Subir foto">${medalHTML}</div>
-        <span class="pos-upload-hint">+ foto</span>
-      </div>`;
+          let medal;
+          if (pos === 1)      medal = `<span class="pos-medal medal-1">🥇</span>`;
+          else if (pos === 2) medal = `<span class="pos-medal medal-2">🥈</span>`;
+          else if (pos === 3) medal = `<span class="pos-medal medal-3">🥉</span>`;
+          else                medal = `<span class="pos-medal medal-n">${pos}</span>`;
+          avatarHTML = `<div class="pos-avatar-placeholder" title="Subir foto">${medal}</div><span class="pos-upload-hint">+ foto</span>`;
         }
 
-        const barPct = maxCurr > 0 ? Math.round((pCurr / maxCurr) * 100) : 0;
-        const growthClass = op.growth > 0 ? 'pill-up' : op.growth < 0 ? 'pill-down' : 'pill-zero';
-        const growthSign = op.growth > 0 ? '+' : '';
+        // ── MODO MES ──
+        if (rkViewMode === 'mes') {
+          const cardClass = op.growth <= -20 ? 'down' : op.growth < 0 ? 'warn' : op.growth > 0 ? 'up' : 'zero';
+          const growthCls = op.growth > 0 ? 'up' : op.growth < 0 ? (op.growth <= -20 ? 'down' : 'warn') : 'zero';
+          const growthSign = op.growth > 0 ? '+' : '';
+          const barPct = maxCurr > 0 ? Math.round((pCurr / maxCurr) * 100) : 0;
+          const cop = Math.round(pCurr * 1400).toLocaleString('es-CO');
+          return `<div class="rk-op-card ${cardClass}">
+            <div class="rk-card-head">
+              <div class="rk-card-avatar-wrap" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
+                ${avatarHTML}
+              </div>
+              <input type="file" accept="image/*" class="pos-input-hidden" id="av-input-${globalIndex}"
+                onchange="handleAvatarUpload(event,'${safeName}')">
+              <div class="rk-card-info">
+                <div class="rk-card-name">${op.name}</div>
+                <div class="rk-card-sub">
+                  <span class="rk-card-badge">Grupo ${op.group}</span>
+                  ${op.plataforma ? `<span style="color:#475569;">· ${op.plataforma}</span>` : ''}
+                  ${op.turno ? `<span style="color:#334155;">· ${op.turno}</span>` : ''}
+                </div>
+              </div>
+              <div class="rk-card-growth ${growthCls}">${growthSign}${op.growth.toFixed(1)}%</div>
+            </div>
+            <div class="rk-card-pts-row">
+              <div class="rk-card-pts-prev">Ant: <strong>${pPrev.toFixed(2)}</strong> pts</div>
+              <div class="rk-card-pts-curr">
+                <span class="rk-card-pts-val">Act: ${pCurr.toFixed(2)} pts</span>
+                <div class="pts-bar-bg" style="flex:1;max-width:80px;"><div class="pts-bar-fill" style="width:${barPct}%"></div></div>
+              </div>
+            </div>
+            <div class="rk-card-foot">
+              <div class="rk-card-cop">$${cop} COP</div>
+              <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
+            </div>
+          </div>`;
+        }
 
-        return `<tr>
-      <td>
-        ${posCell}
-        <input type="file" accept="image/*" class="pos-input-hidden" id="av-input-${globalIndex}"
-          onchange="handleAvatarUpload(event,'${safeName}')">
-      </td>
-      <td class="op-name-cell">
-        <div class="name-txt">${op.name}</div>
-        <span class="grp-tag">Grupo ${op.group}</span>
-      </td>
-      <td>${op.group}</td>
-      <td>${pPrev.toFixed(2)}</td>
-      <td>
-        <div class="pts-bar-wrap">
-          <span>${pCurr.toFixed(2)}</span>
-          <div class="pts-bar-bg"><div class="pts-bar-fill" style="width:${barPct}%"></div></div>
-        </div>
-      </td>
-      <td><span class="growth-pill ${growthClass}">${growthSign}${op.growth.toFixed(1)}%</span></td>
-      <td class="cop-cell">$${Math.round(pCurr * 1400).toLocaleString('es-CO')}</td>
-      <td><button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button></td>
-    </tr>`;
+        // ── MODO DÍA ──
+        const hasCorte  = pHoy > 0;
+        const cardClass = hasCorte ? 'up' : 'no-corte';
+        const ptsCls    = hasCorte ? 'has-pts' : 'no-pts';
+        const barPctDia = Math.round((pHoy / maxHoy) * 100);
+        const copHoy    = Math.round(pHoy * 1400).toLocaleString('es-CO');
+        return `<div class="rk-op-card ${cardClass}">
+          <div class="rk-card-head">
+            <div class="rk-card-avatar-wrap" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
+              ${avatarHTML}
+            </div>
+            <input type="file" accept="image/*" class="pos-input-hidden" id="av-input-${globalIndex}"
+              onchange="handleAvatarUpload(event,'${safeName}')">
+            <div class="rk-card-info">
+              <div class="rk-card-name">${op.name}</div>
+              <div class="rk-card-sub">
+                <span class="rk-card-badge">Grupo ${op.group}</span>
+                ${op.plataforma ? `<span style="color:#475569;">· ${op.plataforma}</span>` : ''}
+                ${op.turno ? `<span style="color:#334155;">· ${op.turno}</span>` : ''}
+              </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div class="rk-card-dia-pts ${ptsCls}">${hasCorte ? pHoy.toFixed(1) + ' pts' : '💤 Sin corte'}</div>
+              <div class="rk-card-dia-hora">${hora ? '⏱ último: ' + hora : '—'}</div>
+            </div>
+          </div>
+          <div class="rk-card-pts-row">
+            <div class="rk-card-pts-prev" style="white-space:nowrap;">
+              ${hasCorte ? `<span style="color:#34d399;font-weight:700;">$${copHoy} COP</span>` : '<span style="color:#475569;">$0 COP hoy</span>'}
+            </div>
+            <div class="rk-card-pts-curr">
+              <div class="pts-bar-bg" style="flex:1;max-width:100px;"><div class="pts-bar-fill" style="width:${barPctDia}%;background:${hasCorte ? 'linear-gradient(90deg,#34d399,#5eead4)' : 'rgba(248,113,113,.3)'}"></div></div>
+            </div>
+          </div>
+          <div class="rk-card-foot">
+            <div style="font-size:.65rem;color:#475569;">Mes act: ${pCurr.toFixed(1)} pts</div>
+            <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
+          </div>
+        </div>`;
       }).join('');
 
       // Update sort arrows
@@ -3753,46 +4009,7 @@
       const activeHeader = document.getElementById(`rth-${rkSortCol}`);
       if (activeHeader) activeHeader.classList.add(rkSortDir === -1 ? 'sort-desc' : 'sort-asc');
 
-      // Render mobile cards
-      const mobWrap = document.getElementById('rk-cards-mobile');
-      if (mobWrap) {
-        if (rkDataFiltered.length === 0) {
-          mobWrap.innerHTML = '<div style="color:#475569;text-align:center;padding:24px;">😕 Sin resultados</div>';
-        } else {
-          const medals = ['', '🥇', '🥈', '🥉'];
-          mobWrap.innerHTML = rkDataFiltered.map((op, i) => {
-            const pos = i + 1;
-            const globalIndex = operatorsData.indexOf(op);
-            const pCurr = op[curr] || 0;
-            const pPrev = op[prev] || 0;
-            const growthSign = op.growth > 0 ? '+' : '';
-            const growthColor = op.growth > 0 ? '#34d399' : '#f87171';
-            const av = getAvatar(op.name);
-            const avatarHTML = av
-              ? `<img src="${av}" class="rk-mob-avatar">`
-              : `<div class="rk-mob-avatar-ph">${medals[pos] || pos}</div>`;
-            const cop = Math.round(pCurr * 1400).toLocaleString('es-CO');
-            return `<div class="rk-mob-card">
-          <div class="rk-mob-pos">${medals[pos] || '#' + pos}</div>
-          ${avatarHTML}
-          <div class="rk-mob-info">
-            <div class="rk-mob-name">${op.name}</div>
-            <div class="rk-mob-sub">Grupo ${op.group || '—'} · ${op.plataforma || ''} · ${op.turno || ''}</div>
-            <div class="rk-mob-growth" style="color:${growthColor};">${growthSign}${op.growth.toFixed(1)}% vs mes ant.</div>
-          </div>
-          <div class="rk-mob-pts">
-            <div class="rk-mob-pts-val">${pCurr.toFixed(1)}</div>
-            <div class="rk-mob-pts-cop">$${cop}</div>
-            <button onclick="abrirDetalle(${globalIndex})"
-              style="margin-top:6px;padding:4px 10px;background:rgba(94,234,212,.12);color:var(--accent);
-                     border:1px solid rgba(94,234,212,.25);border-radius:7px;font-size:.65rem;cursor:pointer;">
-              Ver
-            </button>
-          </div>
-        </div>`;
-          }).join('');
-        }
-      }
+      // Mobile: el grid ya es responsive con auto-fill 330px, nada extra
 
       // Render performance alerts
       renderAlertas();
@@ -4297,12 +4514,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         '[PLAN DE ACCIÓN INMEDIATO]':{ icon: '🎯', color: '#22d3ee', bg: 'rgba(34,211,238,.06)',  border: 'rgba(34,211,238,.2)',   badge: 'ACCIÓN' },
       };
 
-      // Normalize section headers that may come with extra words (e.g. [TOP 5 MES MARZO])
+      // Normaliza headers — tolerante a variaciones:
+      // [TOP 5 MES MARZO], **[RESUMEN COLOQUIAL]**, ## [TOP 5 HOY], etc.
       function matchSection(line) {
-        const t = line.trim();
+        // Limpiar markdown y asteriscos
+        const t = line.trim().replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
         for (const key of Object.keys(sectionMap)) {
-          // exact match or starts-with for month-suffixed headers
-          if (t === key || t.startsWith(key.replace(']',''))) return key;
+          const bare = key.replace(/[\[\]]/g, '').toUpperCase();
+          const tUp  = t.toUpperCase();
+          // match exacto con brackets, o sin brackets, o empieza por la clave sin ']'
+          if (t === key || tUp === bare ||
+              t.startsWith(key.replace(']','')) ||
+              tUp.startsWith(bare)) return key;
         }
         return null;
       }
@@ -4370,10 +4593,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // Timestamp footer
       const now = new Date();
       const stamp = now.toLocaleString('es-CO', { weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+
+      // Si no se parseó ninguna sección, mostrar texto raw con formato limpio
+      if (!html || html === '<div class="ai-footer">Análisis generado · ' + stamp + '</div>') {
+        const rawLines = text.split('\n').map(l => {
+          const t = l.trim();
+          if (!t) return '';
+          if (/^#{1,3}\s/.test(t) || (/^\[/.test(t) && /\]$/.test(t)))
+            return '<div class="ai-line" style="font-weight:800;color:#a78bfa;margin-top:12px;font-size:.9rem;">' + t.replace(/^#+\s*/,'') + '</div>';
+          if (t.startsWith('- ') || t.startsWith('• '))
+            return '<div class="ai-line ai-bullet"><span class="ai-dot">▸</span><span>' + highlightText(t.slice(2)) + '</span></div>';
+          if (/^\d+\./.test(t))
+            return '<div class="ai-line ai-numbered"><span class="ai-num">' + t.match(/^(\d+\.)/)[1] + ' </span><span>' + highlightText(t.replace(/^\d+\.\s*/,'')) + '</span></div>';
+          return '<div class="ai-line">' + highlightText(t) + '</div>';
+        }).filter(Boolean).join('');
+        html = '<div class="ai-sec" style="background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.2);">'
+             + '<div class="ai-sec-head"><span class="ai-sec-icon">🤖</span>'
+             + '<span class="ai-sec-title" style="color:#a78bfa">Análisis de la Operación</span></div>'
+             + '<div class="ai-sec-body">' + rawLines + '</div></div>';
+      }
+
       html += '<div class="ai-footer">Análisis generado · ' + stamp + '</div>';
-
-      if (!html) html = '<div class="ai-sec"><div class="ai-sec-body"><div class="ai-line">' + text + '</div></div></div>';
-
       document.getElementById('ai-body').innerHTML = html;
     }
 
@@ -4768,6 +5008,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     let _autoLogoutTimer = null;
     let _autoLogoutWarning = null;
     let _autoLogoutInterval = null;
+    let _opDashInterval = null;   // refresh en tiempo real para operador
 
     function iniciarAutoLogout(horas, loginTime) {
       clearAutoLogoutTimers();
@@ -4864,9 +5105,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       clearTimeout(_autoLogoutTimer);
       clearTimeout(_autoLogoutWarning);
       clearInterval(_autoLogoutInterval);
+      clearInterval(_opDashInterval);   // limpiar refresh de operador
       _autoLogoutTimer = null;
       _autoLogoutWarning = null;
       _autoLogoutInterval = null;
+      _opDashInterval = null;
     }
 
     // ── ACCESS CONTROL PANEL ──
@@ -7549,8 +7792,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // Start polling for operator, stop for monitor/admin
       if (role === 'operador') {
         iniciarPollingAlertas();
+        // ── Auto-refresh del dashboard cada 45s ──────────────
+        // Supabase realtime ya dispara loadData+renderOpDashboard al instante
+        // cuando llega un corte. Este intervalo cubre el caso de red inestable
+        // o cuando Supabase no notifica (edge case con 20 PCs simultáneas).
+        clearInterval(_opDashInterval);
+        _opDashInterval = setInterval(() => {
+          if (currentRole !== 'operador' || !currentOpName) {
+            clearInterval(_opDashInterval);
+            return;
+          }
+          // Solo refrescar si el dashboard está visible
+          const dash = document.getElementById('op-dashboard');
+          if (!dash || !dash.classList.contains('visible')) return;
+          // Leer datos frescos desde localStorage (ya sincronizado por Supabase realtime)
+          loadData();
+          renderOpDashboard(currentOpName);
+        }, 45000); // 45s — equilibrio entre refresco y carga
       } else {
         detenerPollingAlertas();
+        clearInterval(_opDashInterval);
+        _opDashInterval = null;
       }
 
       // Show/hide dashboard vs operator view
@@ -7649,6 +7911,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       document.getElementById('op-dash-name').textContent = op.name;
       document.getElementById('op-dash-group').textContent = `Grupo ${op.group}`;
 
+      // ── Timestamp de última actualización ──
+      const _tsEl = document.getElementById('op-dash-last-update');
+      if (_tsEl) {
+        const _now = new Date();
+        _tsEl.textContent = '🔄 Actualizado: ' + _now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+
       const _ptsDia = getPuntosHoy(op.name);
       const _hoyLabel = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
       // Promedio diario del mes
@@ -7724,8 +7993,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function loginLogout() {
       if (!confirm('¿Cerrar sesión?')) return;
-      clearAutoLogoutTimers();
+      clearAutoLogoutTimers(); // también limpia _opDashInterval internamente
       detenerPollingAlertas();
+      clearInterval(_opDashInterval);
+      _opDashInterval = null;
       const alertasBtnL = document.getElementById('btn-alertas-monitor');
       if (alertasBtnL) alertasBtnL.style.display = 'none';
       currentRole = null;

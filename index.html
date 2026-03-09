@@ -3496,7 +3496,7 @@
     function getActivePair() {
       const meta = getMonthsMeta();
       const months = meta.activeMonths;
-      if (months.length < 2) return { prev: months[0] || 'ene', curr: months[0] || 'feb' };
+      if (months.length < 2) return { prev: months[0] || 'ene', curr: months[0] || 'ene' }; // mismo mes — growth = 0 es correcto
       return { prev: months[months.length - 2], curr: months[months.length - 1] };
     }
 
@@ -5172,8 +5172,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     //     for all using (true) with check (true);
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL    = 'PEGA_TU_URL_AQUI';       // ej: https://xyzxyz.supabase.co
-    const SUPABASE_ANON   = 'PEGA_TU_ANON_KEY_AQUI';  // clave anon pública
+    const SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
+    const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
 
     // Claves que nunca salen de este PC (sesión, timers)
     const _SB_EXCLUDE = new Set([
@@ -5809,6 +5809,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       } else {
         // Día nuevo: insertar
         cortes.push({ fecha, hora, puntos: nuevoPts, ts: now.getTime() });
+        // Limitar historial a 90 días más recientes
+        if (cortes.length > 90) cortes.sort((a,b) => b.ts - a.ts).splice(90);
       }
 
       saveCortesOp(opName, cortes);
@@ -5910,9 +5912,22 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         }
       }
 
+      // Limpiar cortes del operador eliminado
+      const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+      delete allCortes[detOpName];
+      _origSetItem(CORTE_KEY, JSON.stringify(allCortes));
+
+      // Limpiar perfiles del operador eliminado
+      const allPerfiles = getPerfilMetrics();
+      Object.keys(allPerfiles).forEach(k => {
+        if (k.startsWith(detOpName + '::')) delete allPerfiles[k];
+      });
+      _origSetItem(PERFIL_KEY, JSON.stringify(allPerfiles));
+
       cerrarDetalle();
       renderRanking();
       if (typeof renderOperators === 'function') renderOperators('');
+      if (typeof renderPerfilesRanking === 'function') renderPerfilesRanking();
     }
 
     // ══════════════════════════════════════════
@@ -6714,19 +6729,24 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const now  = new Date();
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       let aplicados = 0;
+      let actualizados = 0; // cortes del mismo día con valor mayor
+      let sinCambio    = 0; // cortes del mismo día pero sin mejora (ya tenía más pts)
 
       const mode = corteFileData[0]?.mode;
 
       if (mode === 'unificado' || mode === 'perfiles') {
-        // 1. Guardar métricas por perfil (historial por día)
+        // 1. Guardar métricas por perfil (historial por día) — dedup interno por enCurso
         registrarCortePerfiles(corteFileData);
 
         // 2. Agrupar por operador + fecha para historial de cortes
+        //    Usar MAX de enCurso acumulado (no sumar — los puntos YA vienen calculados
+        //    como enCurso-comienza por perfil, y el total correcto es la suma de esos deltas)
         const byOpFecha = {};
         corteFileData.forEach(d => {
           if (!d.rawName) return;
-          const key = d.rawName + '||' + (d.fecha || new Date().toISOString().split('T')[0]);
-          if (!byOpFecha[key]) byOpFecha[key] = { name: d.rawName, fecha: d.fecha, total: 0 };
+          const fechaKey = d.fecha || new Date().toISOString().split('T')[0];
+          const key = d.rawName + '||' + fechaKey;
+          if (!byOpFecha[key]) byOpFecha[key] = { name: d.rawName, fecha: fechaKey, total: 0 };
           byOpFecha[key].total += d.puntos;
         });
 
@@ -6735,20 +6755,35 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (total <= 0) return;
           const esPasado = fecha && fecha < hoy;
           if (esPasado) {
+            // Día pasado del Excel histórico: insertar solo si no existe
             const existing = getCortesOp(name).find(c => c.fecha === fecha);
             if (!existing) {
               const cortes = getCortesOp(name);
               cortes.push({ fecha, hora: '00:00', puntos: total, ts: new Date(fecha).getTime(), fromExcel: true });
               saveCortesOp(name, cortes);
+              aplicados++;
+            } else {
+              sinCambio++;
             }
           } else {
+            // Día actual: registrarCorte ya maneja "reemplazar si mayor"
+            const cortesActuales = getCortesOp(name);
+            const existIdx = cortesActuales.findIndex(c => c.fecha === fecha);
+            if (existIdx >= 0) {
+              if (total > cortesActuales[existIdx].puntos) {
+                actualizados++;
+              } else {
+                sinCambio++;
+              }
+            } else {
+              aplicados++;
+            }
             registrarCorte(name, total);
           }
-          aplicados++;
         });
 
-        // 3. CRÍTICO: Actualizar op[curr] en operatorsData para que el ranking refleje el corte
-        //    Suma todos los cortes del mes activo por operador desde rr_prime_cortes
+        // 3. Recalcular op[curr] desde la fuente única de verdad (rr_prime_cortes)
+        //    Esto evita cualquier inflación: siempre es la SUMA de los mejores cortes del mes
         const { curr } = getActivePair();
         const mesActual = hoy.slice(0, 7);
         operatorsData.forEach(op => {
@@ -6765,8 +6800,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         renderRanking();
         if (typeof renderOperators === 'function') renderOperators(document.getElementById('groupFilter')?.value || '');
         if (typeof renderAlertas === 'function') renderAlertas();
-        const label = mode === 'unificado' ? '📊 Puntos y perfiles actualizados en un solo paso.' : '📊 Métricas por perfil guardadas.';
-        alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.\n${label}`);
+
+        // Mensaje informativo que distingue nuevos vs actualizados vs sin cambio
+        const totalAfectados = aplicados + actualizados;
+        let resumen = `✅ Corte procesado a las ${hora}.\n\n`;
+        if (aplicados > 0)    resumen += `🆕 ${aplicados} operador(es) con corte nuevo hoy.\n`;
+        if (actualizados > 0) resumen += `🔄 ${actualizados} operador(es) actualizados (puntos subieron).\n`;
+        if (sinCambio > 0)    resumen += `⏭️ ${sinCambio} operador(es) sin cambio (ya tenían igual o más pts).\n`;
+        if (totalAfectados === 0 && sinCambio > 0) resumen += `\nℹ️ Todos los operadores ya tenían este corte o uno mayor. No se modificó nada.`;
+        const label = mode === 'unificado' ? '\n📊 Puntos y perfiles actualizados en un solo paso.' : '\n📊 Métricas por perfil guardadas.';
+        alert(resumen + label);
       } else {
         corteFileData.forEach(d => {
           const match = matchOperator(d.rawName);
@@ -6788,6 +6831,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         renderRanking();
         if (typeof renderOperators === 'function') renderOperators(document.getElementById('groupFilter')?.value || '');
         if (typeof renderAlertas === 'function') renderAlertas();
+        if (typeof renderPerfilesRanking === 'function') renderPerfilesRanking();
         alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.`);
       }
     }
@@ -7317,6 +7361,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     async function loginVerify() {
+      // Si los pines de operadores están vacíos, intentar sincronizar con Supabase primero
+      if (loginRole === 'operador' && Object.keys(loginGetOpPins()).length === 0 && _sb) {
+        document.getElementById('login-error').textContent = '🔄 Sincronizando...';
+        await _sbSyncOnLoad();
+        document.getElementById('login-error').textContent = '';
+      }
+
       const pins = loginGetPins();
       let storedHash = '';
 
@@ -7331,8 +7382,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (storedHash === null || storedHash === undefined) {
           loginBuffer = '';
           loginUpdateDots(true);
-          document.getElementById('login-error').textContent = '❌ Operador no encontrado o sin PIN asignado';
-          setTimeout(() => { loginUpdateDots(); document.getElementById('login-error').textContent = ''; }, 1200);
+          document.getElementById('login-error').textContent = '❌ Operador sin PIN asignado. Pide al admin que lo configure.';
+          setTimeout(() => { loginUpdateDots(); document.getElementById('login-error').textContent = ''; }, 2500);
           return;
         }
       }
@@ -7607,11 +7658,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       const _ptsDia = getPuntosHoy(op.name);
       const _hoyLabel = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+      // Promedio diario del mes
+      const _mesStr = new Date().toISOString().slice(0,7);
+      const _corteMes = getCortesOp(op.name).filter(c => c.fecha && c.fecha.slice(0,7) === _mesStr);
+      const _diasAct = new Set(_corteMes.map(c => c.fecha)).size;
+      const _promDia = _diasAct > 0 ? (pCurr / _diasAct).toFixed(1) : '—';
       document.getElementById('op-dash-metrics').innerHTML = `
     <div class="op-dash-metric"><div class="val">${pPrev.toFixed(1)}</div><div class="lbl">${prevLabel}</div></div>
     <div class="op-dash-metric"><div class="val">${pCurr.toFixed(1)}</div><div class="lbl">${currLabel}</div></div>
     <div class="op-dash-metric"><div class="val" style="color:${growthColor}">${growthSign}${op.growth.toFixed(1)}%</div><div class="lbl">Crecimiento</div></div>
-    <div class="op-dash-metric" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;grid-column:span 3;">
+    <div class="op-dash-metric"><div class="val" style="color:#a78bfa;">${_promDia}</div><div class="lbl">Prom/día</div></div>
+    <div class="op-dash-metric" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;grid-column:span 4;">
       <div class="val" style="font-size:1.3rem;color:#34d399;">${_ptsDia.toFixed(1)} pts</div>
       <div class="lbl">⚡ Hoy ${_hoyLabel}</div>
     </div>`;

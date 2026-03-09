@@ -5503,7 +5503,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               const critical = [
                 'primeOperatorsData2026','rr_prime_cortes','rr_prime_asistencia',
                 'rr_perfil_metrics','rr_alertas_sistema','rr_metas_operacion',
-                'rr_prime_logs_entrada','rr_prime_consejos_2026'
+                'rr_prime_logs_entrada','rr_prime_consejos_2026',
+                'rr_prime_op_pins'  // ← FIX: PINs de operadores se propagan al instante
               ];
               const ptKeys = ['rr_prime_v15_mañana','rr_prime_v15_tarde','rr_prime_v15_noche'];
               if (critical.includes(row.key) && typeof loadData === 'function') {
@@ -7570,6 +7571,25 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function loginOpNameChange() {
       currentOpName = document.getElementById('login-op-name-input').value.trim().toUpperCase();
+      // Sincronizar op_pins desde Supabase en background cada vez que se elige un operador
+      // Esto cubre el caso: admin asigna PIN después de que el operador abrió la app
+      if (_sb && currentOpName.length > 3) {
+        _sb.from('kv_store').select('value').eq('key', 'rr_prime_op_pins').single()
+          .then(({ data, error }) => {
+            if (!error && data?.value) {
+              const msSince = Date.now() - (_localSaveTs['rr_prime_op_pins'] || 0);
+              if (msSince > 3000) { // no sobreescribir si guardamos hace menos de 3s
+                localStorage.setItem.__original
+                  ? localStorage.setItem.__original('rr_prime_op_pins', data.value)
+                  : (function(){ const orig = localStorage.setItem.bind(localStorage);
+                      // usar _origSetItem que ya existe globalmente
+                      if (typeof _origSetItem === 'function') _origSetItem('rr_prime_op_pins', data.value);
+                      else orig('rr_prime_op_pins', data.value);
+                    })();
+              }
+            }
+          }).catch(() => {});
+      }
     }
 
     function loginPinKey(digit) {
@@ -7597,11 +7617,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     async function loginVerify() {
-      // Si los pines de operadores están vacíos, intentar sincronizar con Supabase primero
-      if (loginRole === 'operador' && Object.keys(loginGetOpPins()).length === 0 && _sb) {
-        document.getElementById('login-error').textContent = '🔄 Sincronizando...';
-        await _sbSyncOnLoad();
-        document.getElementById('login-error').textContent = '';
+      // Sincronizar op_pins desde Supabase SIEMPRE antes de verificar
+      // Cubre: admin asignó PIN después de que el operador abrió la app
+      if (loginRole === 'operador' && _sb) {
+        try {
+          const { data, error } = await _sb.from('kv_store')
+            .select('value').eq('key', 'rr_prime_op_pins').single();
+          if (!error && data?.value) {
+            _origSetItem('rr_prime_op_pins', data.value);
+          }
+        } catch(e) { /* sin conexión — usa cache local */ }
       }
 
       const pins = loginGetPins();

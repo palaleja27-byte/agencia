@@ -2875,6 +2875,29 @@
 <body>
 
   <!-- ══ LOGIN SCREEN ══ -->
+  <!-- Pantalla de carga inicial mientras Supabase sincroniza -->
+  <div id="rr-boot-screen" style="
+    position:fixed;inset:0;background:#0a0f1e;z-index:999999;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+    font-family:inherit;transition:opacity .5s;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;background:linear-gradient(135deg,#5eead4,#a78bfa);
+                  border-radius:12px;display:flex;align-items:center;justify-content:center;
+                  font-size:1.4rem;">🏠</div>
+      <div>
+        <div style="font-size:1.2rem;font-weight:800;color:#fff;letter-spacing:1px;">AGENCIA RR</div>
+        <div style="font-size:.65rem;color:#475569;letter-spacing:2px;text-transform:uppercase;">Analytics</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <div id="rr-boot-bar-wrap" style="width:220px;height:4px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;">
+        <div id="rr-boot-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#5eead4,#a78bfa);
+             border-radius:99px;transition:width .4s ease;"></div>
+      </div>
+      <div id="rr-boot-msg" style="font-size:.72rem;color:#475569;letter-spacing:.5px;">Conectando con Supabase...</div>
+    </div>
+  </div>
+
   <div id="login-screen">
     <div class="login-box">
       <div class="login-logo">🏢</div>
@@ -3700,40 +3723,6 @@
         Sube el archivo <strong>CALCULO_PRIME</strong> o un Excel con columnas <strong>Nombre</strong> y <strong>Puntos</strong>.
         El sistema detecta el formato automáticamente y actualiza puntos, rankings y perfiles en un solo paso. 🚀
       </p>
-
-      <!-- Selector de jornada -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;
-                  background:rgba(255,255,255,.04);border-radius:10px;border:1px solid rgba(255,255,255,.08);">
-        <span style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;">Filtrar jornada:</span>
-        <div style="display:flex;gap:6px;flex:1;flex-wrap:wrap;">
-          <button id="corte-jornada-auto" onclick="setCorteJornada('auto')"
-            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.15);color:#5eead4;">
-            🔄 Auto
-          </button>
-          <button id="corte-jornada-Mañana" onclick="setCorteJornada('Mañana')"
-            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
-            ☀️ Mañana
-          </button>
-          <button id="corte-jornada-Tarde" onclick="setCorteJornada('Tarde')"
-            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
-            🌆 Tarde
-          </button>
-          <button id="corte-jornada-Noche" onclick="setCorteJornada('Noche')"
-            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
-            🌙 Noche
-          </button>
-          <button id="corte-jornada-Todos" onclick="setCorteJornada('Todos')"
-            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
-            👥 Todos
-          </button>
-        </div>
-        <span id="corte-jornada-badge" style="font-size:.68rem;color:#fbbf24;white-space:nowrap;"></span>
-      </div>
 
       <!-- Dropzone -->
       <div id="corte-dropzone" onclick="document.getElementById('corte-file-input').click()"
@@ -5688,28 +5677,79 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       }
     }
 
-    // ── Carga inicial: servidor → localStorage ───────────────────────
+    // ══════════════════════════════════════════════════════════
+    // CARGA INICIAL — Supabase es la fuente principal
+    // 1. Pide TODOS los datos a Supabase
+    // 2. Escribe en localStorage (caché local)
+    // 3. Recarga memoria (loadData)
+    // 4. Oculta boot screen y arranca la app
+    // Si Supabase falla → usa localStorage como fallback
+    // ══════════════════════════════════════════════════════════
+    function _bootProgress(pct, msg) {
+      const bar = document.getElementById('rr-boot-bar');
+      const txt = document.getElementById('rr-boot-msg');
+      if (bar) bar.style.width = pct + '%';
+      if (txt) txt.textContent = msg;
+    }
+
+    function _bootDone() {
+      const boot = document.getElementById('rr-boot-screen');
+      if (!boot) return;
+      boot.style.opacity = '0';
+      setTimeout(() => { boot.style.display = 'none'; }, 500);
+    }
+
     async function _sbSyncOnLoad() {
-      if (!_sb) return;
+      _bootProgress(20, 'Conectando con Supabase...');
+      if (!_sb) { _bootDone(); return; }
+
       try {
+        _bootProgress(40, 'Descargando datos...');
         const { data, error } = await _sb.from('kv_store').select('key, value');
         if (error) throw error;
+
+        _bootProgress(70, 'Cargando operadores y cortes...');
+        // Supabase gana siempre — sobreescribe localStorage completo
         data.forEach(({ key, value }) => {
           if (_SB_EXCLUDE.has(key)) return;
-          // No sobreescribir si guardamos localmente hace menos de 5s (delete reciente)
-          const msSince = Date.now() - (_localSaveTs[key] || 0);
-          if (msSince < 5000) return;
-          _origSetItem(key, value);
+          _origSetItem(key, value); // escribe directo sin pasar por el override
         });
+
         _sbOnline = true;
-        _toastSync('🟢 Conectado a Supabase');
-        // Recargar operatorsData desde localStorage (que acaba de recibir datos de Supabase)
+        _bootProgress(90, 'Listo ✓');
+
+        // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();
+        _autoFixActivePair(); // ← corregir mes si está desactualizado
         if (typeof renderRanking === 'function') renderRanking();
+        _toastSync('🟢 Datos sincronizados');
+
       } catch(e) {
         _sbOnline = false;
-        _toastSync('🔴 Sin conexión a Supabase', true);
+        _bootProgress(100, '⚠️ Sin internet — usando datos locales');
         console.warn('[Supabase] sync load:', e.message);
+        if (typeof loadData === 'function') loadData();
+        if (typeof renderRanking === 'function') renderRanking();
+        _toastSync('🔴 Sin conexión — datos locales', true);
+      } finally {
+        setTimeout(_bootDone, 400);
+      }
+    }
+
+    // ── Auto-corregir par de meses activos según fecha real ──────────
+    function _autoFixActivePair() {
+      const now = new Date();
+      const mIdx = now.getMonth(); // 0=ene ... 11=dic
+      const MONTH_KEYS_LOCAL = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const curr = MONTH_KEYS_LOCAL[mIdx];
+      const prev = MONTH_KEYS_LOCAL[mIdx > 0 ? mIdx - 1 : 0];
+      const meta = typeof getMonthsMeta === 'function' ? getMonthsMeta() : { activeMonths: [] };
+      const active = meta.activeMonths || [];
+      // Solo actualizar si el mes actual no está ya configurado
+      if (active[active.length - 1] !== curr) {
+        const newPair = [prev, curr];
+        if (typeof saveMonthsMeta === 'function') saveMonthsMeta({ ...meta, activeMonths: newPair });
+        console.info('[RR] Meses actualizados automáticamente:', newPair);
       }
     }
 
@@ -5774,14 +5814,38 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     const _origRemoveItem = localStorage.removeItem.bind(localStorage);
 
     localStorage.setItem = function(key, value) {
+      // 1. Caché local inmediato (UI no espera)
       _origSetItem(key, value);
-      _localSaveTs[key] = Date.now(); // marcar guardado local para evitar race condition
+      _localSaveTs[key] = Date.now();
+      // 2. Supabase como fuente principal (write-through async)
       if (_sb && !_SB_EXCLUDE.has(key)) {
         _sb.from('kv_store')
           .upsert({ key, value }, { onConflict: 'key' })
-          .then(({ error }) => { if (error) console.warn('[Supabase] set:', error.message); });
+          .then(({ error }) => {
+            if (error) {
+              // Si falla Supabase, marcar como pendiente para retry
+              console.warn('[Supabase] set error:', error.message);
+              _sbPendingWrites.add(key);
+            } else {
+              _sbPendingWrites.delete(key);
+            }
+          });
       }
     };
+
+    // Cola de escrituras pendientes para reintentar si Supabase falla
+    const _sbPendingWrites = new Set();
+    async function _sbRetryPending() {
+      if (!_sb || _sbPendingWrites.size === 0) return;
+      for (const key of [..._sbPendingWrites]) {
+        const value = localStorage.getItem(key);
+        if (!value) { _sbPendingWrites.delete(key); continue; }
+        const { error } = await _sb.from('kv_store').upsert({ key, value }, { onConflict: 'key' });
+        if (!error) _sbPendingWrites.delete(key);
+      }
+    }
+    // Reintentar escrituras pendientes cada 30s
+    setInterval(_sbRetryPending, 30000);
 
     localStorage.removeItem = function(key) {
       _origRemoveItem(key);
@@ -8470,6 +8534,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       sessionStorage.setItem(SESSION_KEY, sessionData);   // ← sessionStorage, no localStorage
       localStorage.removeItem(SESSION_KEY);               // limpiar cualquier sesión vieja en localStorage
       document.getElementById('login-screen').classList.add('hidden');
+      _autoFixActivePair(); // asegurar mes correcto en cada login
       document.getElementById('app-header-bar').style.display = 'block';
 
       let badge = '';
@@ -8806,7 +8871,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (age < 8 * 60 * 60 * 1000) {
             if (role === 'operador') {
               const opName = decoded.slice(1, -1).join(':');
+              // Esperar a que Supabase termine de cargar antes de mostrar dashboard
               loadData();
+              _autoFixActivePair();
               loginSuccess('operador', opName);
               // Restore auto-logout timer using sessionStorage
               try {
@@ -9908,6 +9975,24 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           <button class="asi-shift-btn" id="asibtn-noche" onclick="asiSetShift('noche')">🌙 Noche</button>
         </div>
       </div>
+      <!-- Filtro de turno de operadores en asistencia -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:.68rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;">Ver turno:</span>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button id="asi-turno-Todos" onclick="asiSetTurnoFilter('Todos')"
+            style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.15);color:#5eead4;">👥 Todos</button>
+          <button id="asi-turno-Mañana" onclick="asiSetTurnoFilter('Mañana')"
+            style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">☀️ Mañana</button>
+          <button id="asi-turno-Tarde" onclick="asiSetTurnoFilter('Tarde')"
+            style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">🌆 Tarde</button>
+          <button id="asi-turno-Noche" onclick="asiSetTurnoFilter('Noche')"
+            style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">🌙 Noche</button>
+        </div>
+      </div>
       <div class="asi-action-btns">
         <button class="btn-asi-save" onclick="asiGuardar()">💾 Guardar Asistencia</button>
         <button class="btn-asi-historial" onclick="asiVerHistorial()">📋 Ver Asistencia</button>
@@ -9993,6 +10078,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     const ASI_KEY = 'rr_prime_asistencia';
     const ASI_MON_KEY = 'rr_prime_monitores';
     let asiShift = 'manana';
+    let _asiTurnoFilter = 'Todos'; // filtro de turno para grid de operadores
+
+    function asiSetTurnoFilter(turno) {
+      _asiTurnoFilter = turno;
+      // Actualizar estilos botones
+      ['Todos','Mañana','Tarde','Noche'].forEach(t => {
+        const btn = document.getElementById('asi-turno-' + t);
+        if (!btn) return;
+        const active = t === turno;
+        btn.style.borderColor = active ? 'rgba(94,234,212,.4)' : 'rgba(255,255,255,.1)';
+        btn.style.background  = active ? 'rgba(94,234,212,.15)' : 'rgba(255,255,255,.04)';
+        btn.style.color       = active ? '#5eead4' : '#64748b';
+      });
+      asiRender();
+    }
     let asiEstados = {};
 
     function loadMonitores() {
@@ -10149,8 +10249,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     function asiRender() {
-      const ops = (typeof operatorsData !== 'undefined')
+      const _allOps = (typeof operatorsData !== 'undefined')
         ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : [];
+
+      // Filtro de turno: si no es 'Todos', filtrar por turno del operador.
+      // Si el operador no tiene turno definido, se muestra siempre (para no ocultarlo accidentalmente).
+      const ops = _asiTurnoFilter === 'Todos'
+        ? _allOps
+        : _allOps.filter(o => {
+            const t = (o.turno || '').trim();
+            if (!t) return true; // sin turno asignado → siempre visible
+            return t === _asiTurnoFilter;
+          });
       const mons = loadMonitores();
 
       const plataformas = ['Prime', 'AmoLatina', 'Camilo'];

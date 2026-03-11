@@ -5725,7 +5725,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             } else if (row?.key && !_SB_EXCLUDE.has(row.key)) {
               // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
               const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
-              if (msSinceLocalSave < 3000) return; // ignorar — guardado local reciente
+              // rr_prime_cortes NUNCA se ignora — es la fuente de puntos del operador
+              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes') return;
               _origSetItem(row.key, row.value);
               // Recargar datos en memoria si es una clave de negocio crítica
               const critical = [
@@ -5739,6 +5740,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                 loadData();
                 if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
                   renderOpDashboard(currentOpName);
+                  // Si fue un corte, forzar también sección de puntos explícitamente
+                  if (row.key === 'rr_prime_cortes' && typeof renderCorteSection === 'function') {
+                    renderCorteSection(currentOpName);
+                  }
                 } else if (typeof renderRanking === 'function') {
                   renderRanking();
                 }
@@ -6222,17 +6227,19 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const prom = cortes.reduce((s, c) => s + c.puntos, 0) / cortes.length;
         return Math.round(prom);
       }
-      // Último fallback: turno_horas × 50
+      // Último fallback: turno_horas × 50, mínimo 200
       const op = operatorsData.find(o => o.name === opName);
-      return (op?.turno_horas || 6) * 50;
+      return Math.max(200, (op?.turno_horas || 6) * 50);
     }
 
-    // Obtener puntos acumulados hoy (suma de cortes)
+    // Obtener puntos acumulados hoy (suma de cortes) — siempre lee fresco del storage
     function getPuntosHoy(opName) {
-      const cortes = getCortesOp(opName);
+      const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+      const cortes = all[opName] || [];
       const hoy = localDateStr();
-      const deHoy = cortes.filter(c => c.fecha === hoy);
-      return deHoy.reduce((s, c) => s + (c.puntos || 0), 0);
+      return cortes
+        .filter(c => c.fecha === hoy)
+        .reduce((s, c) => s + (c.puntos || 0), 0);
     }
 
     // Renderizar sección corte diario en dashboard operador
@@ -6669,71 +6676,100 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // Badge
       const badge = document.getElementById('corte-jornada-badge');
       const jornadaLabel = getJornadaActiva();
-      if (badge) badge.textContent = jornadaLabel ? `Mostrando: ${jornadaLabel}` : 'Sin filtro de jornada';
+      const jIcon = jornadaLabel === 'Mañana' ? '☀️' : jornadaLabel === 'Tarde' ? '🌆' : jornadaLabel === 'Noche' ? '🌙' : '';
+      if (badge) badge.textContent = jornadaLabel
+        ? `${jIcon} Filtrando: ${jornadaLabel}`
+        : '👥 Sin filtro';
       // Re-parsear si ya hay datos cargados
       if (corteFileData) _refilterCorteByJornada();
     }
 
-    function _refilterCorteByJornada() {
-      // Re-renderizar preview filtrando por jornada activa
-      const jornada = getJornadaActiva();
-      const filtered = jornada
-        ? corteFileData.filter(d => {
-            if (!d.rawName) return false;
-            const op = operatorsData.find(o => o.name === d.rawName);
-            return op && (op.turno || '').toLowerCase() === jornada.toLowerCase();
-          })
-        : corteFileData.filter(d => d.rawName);
+    // Convierte "8:00 AM", "10:00 PM", "14:00" etc. → hora en formato 0-23
+    function _horaCorteToInt(horaStr) {
+      if (!horaStr) return -1;
+      const s = String(horaStr).trim().toUpperCase();
+      // Formato "H:MM AM/PM"
+      const ampm = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/);
+      if (ampm) {
+        let h = parseInt(ampm[1]);
+        const m = parseInt(ampm[2]);
+        if (ampm[3] === 'PM' && h !== 12) h += 12;
+        if (ampm[3] === 'AM' && h === 12) h = 0;
+        return h;
+      }
+      // Formato "HH:MM" 24h
+      const hh = s.match(/^(\d{1,2}):(\d{2})$/);
+      if (hh) return parseInt(hh[1]);
+      return -1;
+    }
 
+    // Devuelve la jornada de un horaCorte string
+    function _jornadaDeHora(horaStr) {
+      const h = _horaCorteToInt(horaStr);
+      if (h < 0) return null;
+      if (h >= 6  && h < 14) return 'Mañana';
+      if (h >= 14 && h < 22) return 'Tarde';
+      return 'Noche';
+    }
+
+    function _refilterCorteByJornada() {
+      const jornada = getJornadaActiva(); // null = Todos
+
+      // FILTRAR FILA POR FILA por horaCorte — cada registro tiene su propia hora
+      const filtered = corteFileData.filter(d => {
+        if (!d.rawName) return false;
+        if (!jornada) return true; // Todos
+        return _jornadaDeHora(d.horaCorte) === jornada;
+      });
+
+      // Agrupar por operador para el preview
       const byOp = {};
       filtered.forEach(d => {
         if (!byOp[d.rawName]) byOp[d.rawName] = [];
         byOp[d.rawName].push(d);
       });
 
+      // Contar operadores excluidos (tienen cortes pero en otra jornada)
+      const totalOps = new Set(corteFileData.filter(d => d.rawName).map(d => d.rawName)).size;
+      const excluidos = totalOps - Object.keys(byOp).length;
+
       const lines = [];
       Object.entries(byOp).forEach(([opName, perfiles]) => {
         const total = perfiles.reduce((s, p) => s + p.puntos, 0);
+        const jIcon = jornada === 'Mañana' ? '☀️' : jornada === 'Tarde' ? '🌆' : jornada === 'Noche' ? '🌙' : '👥';
         const pfLines = perfiles.map(p =>
           `<div style="padding-left:14px;color:#94a3b8;font-size:.7rem;">
             → ID ${p.idPerfil || ''} (${p.modelo || ''}) · ${p.comienza || 0}→${p.enCurso || 0}
             <strong style="color:#5eead4;margin-left:4px;">+${p.puntos} pts</strong>
             <span style="color:#475569;margin-left:4px;">@ ${p.horaCorte || ''}</span>
           </div>`).join('');
-        lines.push(`<div style="color:#34d399;margin-top:8px;font-weight:700;">✔ ${opName} — Total: ${total.toFixed(2)} pts</div>${pfLines}`);
+        lines.push(`<div style="color:#34d399;margin-top:8px;font-weight:700;">✔ ${jIcon} ${opName} — Total: ${total.toFixed(2)} pts</div>${pfLines}`);
       });
 
-      // Sin asignar
-      const sinJornada = corteFileData.filter(d => {
-        if (!d.rawName || !jornada) return false;
-        const op = operatorsData.find(o => o.name === d.rawName);
-        return op && (op.turno || '').toLowerCase() !== jornada.toLowerCase();
-      });
-      const otraJornada = [...new Set(sinJornada.map(d => d.rawName))];
-      if (otraJornada.length) {
-        lines.push(`<div style="color:#475569;margin-top:8px;font-size:.68rem;">⚠️ ${otraJornada.length} operador(es) de otras jornadas excluidos</div>`);
+      if (excluidos > 0 && jornada) {
+        lines.push(`<div style="color:#475569;margin-top:8px;font-size:.68rem;">⚠️ ${excluidos} operador(es) de otras jornadas excluidos</div>`);
       }
 
       const prev = document.getElementById('corte-preview');
       if (prev) {
         prev.style.display = 'block';
-        prev.innerHTML = `<div style="font-weight:700;margin-bottom:8px;color:#fbbf24;">${Object.keys(byOp).length} operadores · jornada ${jornada || 'Todos'}</div>` + lines.join('');
+        const jornadaLabel = jornada ? `${jornada === 'Mañana' ? '☀️' : jornada === 'Tarde' ? '🌆' : '🌙'} ${jornada}` : '👥 Todos';
+        prev.innerHTML = `<div style="font-weight:700;margin-bottom:8px;color:#fbbf24;">${Object.keys(byOp).length} operadores · ${jornadaLabel}</div>` + lines.join('');
       }
       document.getElementById('btn-corte-ok').disabled = Object.keys(byOp).length === 0;
     }
 
     function abrirModalCorte() {
       corteFileData = null;
-      // Auto-detectar jornada al abrir
       _corteJornada = 'auto';
-      const jornadaDetectada = detectarTurno();
-      setTimeout(() => setCorteJornada('auto'), 50); // esperar a que el DOM esté listo
       document.getElementById('corte-file-input').value = '';
       document.getElementById('corte-preview').style.display = 'none';
       document.getElementById('corte-preview').innerHTML = '';
       document.getElementById('corte-filename').textContent = 'Sin archivo';
       document.getElementById('btn-corte-ok').disabled = true;
       document.getElementById('modal-corte').classList.add('open');
+      // Activar botón auto DESPUÉS de que el modal es visible
+      requestAnimationFrame(() => requestAnimationFrame(() => setCorteJornada('auto')));
     }
 
     function cerrarModalCorte() {
@@ -7303,14 +7339,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       let aplicados = 0;
 
-      // ── Filtrar por jornada activa antes de aplicar ──
+      // ── Filtrar por jornada activa FILA POR FILA por horaCorte del Excel ──
       const _jornada = getJornadaActiva(); // null = Todos
       const dataToApply = _jornada
-        ? corteFileData.filter(d => {
-            if (!d.rawName) return false;
-            const op = operatorsData.find(o => o.name === d.rawName);
-            return op && (op.turno || '').toLowerCase() === _jornada.toLowerCase();
-          })
+        ? corteFileData.filter(d => d.rawName && _jornadaDeHora(d.horaCorte) === _jornada)
         : corteFileData;
 
       const mode = dataToApply[0]?.mode || corteFileData[0]?.mode;
@@ -8381,8 +8413,41 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       });
     }
 
+    function registrarAutoAsistencia(opName) {
+      // Solo registra si ASI está disponible y el operador no está ya marcado
+      if (typeof ASI_KEY === 'undefined') return;
+      const fecha   = localDateStr();
+      const horaObj = new Date();
+      const hora    = horaObj.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      // Turno: convertir detectarTurno() a key de draft (manana/tarde/noche)
+      const turnoDetectado = typeof detectarTurno === 'function' ? detectarTurno() : 'Mañana';
+      const shiftKey = turnoDetectado === 'Mañana' ? 'manana' : turnoDetectado === 'Tarde' ? 'tarde' : 'noche';
+      const draftKey = ASI_KEY + '_draft_' + fecha + '_' + shiftKey;
+
+      // Leer draft existente del turno/día correcto
+      const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+      const k = opName + '||operador';
+
+      // Solo marcar si NO está ya marcado manualmente (monitor tiene prioridad)
+      if (!draft[k] || !draft[k].estado) {
+        draft[k] = {
+          estado: 'P',
+          nota: '',
+          horaIngreso: hora,
+          autoMarcado: true
+        };
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      } else if (draft[k].estado === 'P' && !draft[k].horaIngreso) {
+        // Ya marcado presente pero sin hora → agregar hora
+        draft[k].horaIngreso = hora;
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+      }
+    }
+
     function finalizarLoginOperador(opName) {
       const op = operatorsData.find(o => o.name.toUpperCase() === opName?.toUpperCase());
+      // ── AUTO-ASISTENCIA: marcar presente con hora de ingreso ──
+      registrarAutoAsistencia(opName);
       renderOpDashboard(opName);
       // Iniciar auto-logout basado en turno
       if (op) {
@@ -8453,7 +8518,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           // Leer datos frescos desde localStorage (ya sincronizado por Supabase realtime)
           loadData();
           renderOpDashboard(currentOpName);
-        }, 45000); // 45s — equilibrio entre refresco y carga
+        }, 15000); // 15s — fallback si realtime falla
       } else {
         detenerPollingAlertas();
         clearInterval(_opDashInterval);
@@ -10024,6 +10089,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const noteVis = (est === 'A' || est === 'T') ? 'visible' : '';
       const sn = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
+      // Hora de ingreso automática
+      let horaIngresoHTML = '';
+      if (role === 'operador' && cur.horaIngreso) {
+        const autoTag = cur.autoMarcado ? ' <span style="font-size:.55rem;color:#475569;">(auto)</span>' : '';
+        horaIngresoHTML = `<div style="font-size:.62rem;color:#34d399;margin-top:2px;">🕐 Ingresó: ${cur.horaIngreso}${autoTag}</div>`;
+      }
+
       // Horas de turno: solo operadores
       let horasHTML = '';
       if (role === 'operador') {
@@ -10061,6 +10133,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     <div class="asi-info">
       <div class="asi-name" title="${name}">${name}</div>
       <div class="asi-role">${groupTag}</div>
+      ${horaIngresoHTML}
       ${horasHTML}
       <div class="asi-nota-wrap ${noteVis}">
         <textarea class="asi-nota" rows="1" placeholder="Nota..."

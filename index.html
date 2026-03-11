@@ -6179,7 +6179,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function getMetaHoy(opName) {
       const fecha = localDateStr();
       const key = 'rr_meta_' + opName.replace(/\s+/g, '_').toLowerCase() + '_' + fecha;
-      return parseInt(localStorage.getItem(key) || '0');
+      const stored = parseInt(localStorage.getItem(key) || '0');
+      if (stored > 0) return stored;
+      // Fallback automático: promedio de los últimos 7 días con corte
+      const hace7 = localDateStr(new Date(Date.now() - 7 * 86400000));
+      const cortes = getCortesOp(opName).filter(c => c.fecha >= hace7 && c.fecha < fecha && c.puntos > 0);
+      if (cortes.length > 0) {
+        const prom = cortes.reduce((s, c) => s + c.puntos, 0) / cortes.length;
+        return Math.round(prom);
+      }
+      // Último fallback: turno_horas × 50
+      const op = operatorsData.find(o => o.name === opName);
+      return (op?.turno_horas || 6) * 50;
     }
 
     // Obtener puntos acumulados hoy (suma de cortes)
@@ -7631,12 +7642,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function saveGrupos(arr) { localStorage.setItem(GRUPOS_KEY, JSON.stringify(arr)); }
 
     function buildGroupSelect() {
-      const sel = document.getElementById('groupFilter');
-      if (!sel) return;
-      const current = sel.value;
       const grupos = getGrupos();
-      sel.innerHTML = '<option value="">Todos los grupos</option>'
-        + grupos.map(g => `<option value="${g}"${g === current ? ' selected' : ''}>Grupo ${g}</option>`).join('');
+      // Reporte Operadores
+      const sel = document.getElementById('groupFilter');
+      if (sel) {
+        const curr = sel.value;
+        sel.innerHTML = '<option value="">Todos los grupos</option>'
+          + grupos.map(g => `<option value="${g}"${g === curr ? ' selected' : ''}>Grupo ${g}</option>`).join('');
+      }
+      // Ranking Principal
+      const rk = document.getElementById('rankingGroupFilter');
+      if (rk) {
+        const curr = rk.value;
+        rk.innerHTML = '<option value="">Todos los grupos</option>'
+          + grupos.map(g => `<option value="${g}"${g === curr ? ' selected' : ''}>Grupo ${g}</option>`).join('');
+      }
     }
 
     function abrirGrupoManager() {
@@ -8452,17 +8472,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <div class="lbl">⚡ Hoy ${_hoyLabel}</div>
     </div>`;
 
-      // Ranking position
+      // Ranking position — usa puntos reales del mes (cortes reales, no op[curr] hardcoded)
+      const _mesRank = localDateStr().slice(0, 7);
       const base = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
-      base.sort((a, b) => (b[curr] || 0) - (a[curr] || 0));
+      base.sort((a, b) => {
+        const ptA = getCortesOp(a.name).filter(c => c.fecha?.slice(0,7) === _mesRank).reduce((s,c) => s+(c.puntos||0), 0) || a[curr] || 0;
+        const ptB = getCortesOp(b.name).filter(c => c.fecha?.slice(0,7) === _mesRank).reduce((s,c) => s+(c.puntos||0), 0) || b[curr] || 0;
+        return ptB - ptA;
+      });
       const pos = base.findIndex(o => o.name === op.name) + 1;
       const medals = ['', '🥇', '🥈', '🥉'];
       document.getElementById('op-rank-pos').textContent = (medals[pos] || '') + ' #' + pos;
       document.getElementById('op-rank-sub').textContent = `de ${base.length} operadores · ${currLabel}`;
-
-      // Barra competitiva
-      const compSection = document.getElementById('op-competitive-bar');
-      if (compSection) renderCompetitiveBar();
 
       // Barra competitiva
       renderCompetitiveBar();
@@ -9383,12 +9404,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         background: var(--panel);
         border: 1px solid var(--border);
         border-radius: 16px;
-        padding: 16px 18px;
+        padding: 14px 16px;
         display: flex;
-        align-items: center;
-        gap: 14px;
+        align-items: flex-start;
+        gap: 12px;
         transition: .25s;
       }
+      .asi-info { flex: 1; min-width: 0; }
 
       .asi-card:hover {
         border-color: rgba(94, 234, 212, .3);
@@ -9833,7 +9855,41 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       localStorage.setItem(key, JSON.stringify(asiEstados));
     }
 
-    function asiSetEstado(name, role, estado) {
+    // ── Horas de turno desde asistencia ──────────────────────────
+    const ASI_HORAS_KEY = 'rr_asi_horas_dia'; // { opName: { fecha, horas, cambioTurno } }
+
+    function asiGetHoras(name) {
+      const all = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
+      return all[name] || null;
+    }
+
+    function asiSetHoras(name, horas) {
+      const all = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
+      const fecha = localDateStr();
+      const esCambio = horas === 'cambio';
+      const horasNum = esCambio ? null : parseInt(horas);
+
+      // Actualizar operatorsData en memoria + persistir
+      const op = operatorsData.find(o => o.name === name);
+      if (op && !esCambio) {
+        op.turno_horas = horasNum;
+        saveData();
+      }
+      if (op && esCambio) {
+        // Registrar cambio de turno: rotar Mañana→Tarde→Noche→Mañana
+        const turnos = ['Mañana', 'Tarde', 'Noche'];
+        const idx = turnos.indexOf(op.turno || 'Mañana');
+        op.turno = turnos[(idx + 1) % 3];
+        saveData();
+      }
+
+      all[name] = { fecha, horas: esCambio ? 'cambio' : horasNum, cambioTurno: esCambio };
+      localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(all));
+      asiRender(); // re-render para mostrar cambio visual
+    }
+    // ──────────────────────────────────────────────────────────────
+
+        function asiSetEstado(name, role, estado) {
       const k = asiKey(name, role);
       if (!asiEstados[k]) asiEstados[k] = { estado: '', nota: '' };
       asiEstados[k].estado = asiEstados[k].estado === estado ? '' : estado;
@@ -9855,11 +9911,45 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const avatarHTML = av ? `<div class="asi-avatar"><img src="${av}"></div>` : `<div class="asi-avatar">👤</div>`;
       const noteVis = (est === 'A' || est === 'T') ? 'visible' : '';
       const sn = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+      // Horas de turno: solo operadores
+      let horasHTML = '';
+      if (role === 'operador') {
+        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === name) : null;
+        const horasReg = asiGetHoras(name);
+        const horasActual = horasReg?.horas || op?.turno_horas || 8;
+        const esCambio = horasReg?.cambioTurno;
+        const turnoActual = op?.turno || '—';
+        const turnoIcon = turnoActual === 'Mañana' ? '☀️' : turnoActual === 'Tarde' ? '🌆' : turnoActual === 'Noche' ? '🌙' : '🔄';
+        horasHTML = `
+        <div style="display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap;">
+          <span style="font-size:.6rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;">${turnoIcon} ${turnoActual}</span>
+          <div style="display:flex;gap:3px;margin-left:auto;">
+            <button onclick="asiSetHoras('${sn}','8')"
+              style="padding:2px 7px;font-size:.62rem;font-weight:700;border-radius:5px;cursor:pointer;transition:.15s;
+                border:1px solid ${horasActual==8&&!esCambio?'#34d399':'rgba(255,255,255,.1)'};
+                background:${horasActual==8&&!esCambio?'rgba(52,211,153,.15)':'rgba(255,255,255,.04)'};
+                color:${horasActual==8&&!esCambio?'#34d399':'#64748b'};">8h</button>
+            <button onclick="asiSetHoras('${sn}','12')"
+              style="padding:2px 7px;font-size:.62rem;font-weight:700;border-radius:5px;cursor:pointer;transition:.15s;
+                border:1px solid ${horasActual==12&&!esCambio?'#60a5fa':'rgba(255,255,255,.1)'};
+                background:${horasActual==12&&!esCambio?'rgba(96,165,250,.15)':'rgba(255,255,255,.04)'};
+                color:${horasActual==12&&!esCambio?'#60a5fa':'#64748b'};">12h</button>
+            <button onclick="asiSetHoras('${sn}','cambio')"
+              style="padding:2px 7px;font-size:.62rem;font-weight:700;border-radius:5px;cursor:pointer;transition:.15s;
+                border:1px solid ${esCambio?'#fbbf24':'rgba(255,255,255,.1)'};
+                background:${esCambio?'rgba(251,191,36,.15)':'rgba(255,255,255,.04)'};
+                color:${esCambio?'#fbbf24':'#64748b'};">🔄 Cambio</button>
+          </div>
+        </div>`;
+      }
+
       return `<div class="asi-card${est ? ' estado-' + est : ''}" >
     ${avatarHTML}
     <div class="asi-info">
       <div class="asi-name" title="${name}">${name}</div>
       <div class="asi-role">${groupTag}</div>
+      ${horasHTML}
       <div class="asi-nota-wrap ${noteVis}">
         <textarea class="asi-nota" rows="1" placeholder="Nota..."
           onchange="asiSetNota('${sn}','${role}',this.value)">${cur.nota || ''}</textarea>

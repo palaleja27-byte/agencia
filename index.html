@@ -3696,10 +3696,44 @@
     <div class="modal-pin-box" style="max-width:620px;width:95%;max-height:90vh;overflow-y:auto;">
       <h3>📸 Registrar Corte de Puntos</h3>
 
-      <p style="font-size:.75rem;color:#64748b;margin:-4px 0 14px;">
+      <p style="font-size:.75rem;color:#64748b;margin:-4px 0 10px;">
         Sube el archivo <strong>CALCULO_PRIME</strong> o un Excel con columnas <strong>Nombre</strong> y <strong>Puntos</strong>.
         El sistema detecta el formato automáticamente y actualiza puntos, rankings y perfiles en un solo paso. 🚀
       </p>
+
+      <!-- Selector de jornada -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;
+                  background:rgba(255,255,255,.04);border-radius:10px;border:1px solid rgba(255,255,255,.08);">
+        <span style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;">Filtrar jornada:</span>
+        <div style="display:flex;gap:6px;flex:1;flex-wrap:wrap;">
+          <button id="corte-jornada-auto" onclick="setCorteJornada('auto')"
+            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.15);color:#5eead4;">
+            🔄 Auto
+          </button>
+          <button id="corte-jornada-Mañana" onclick="setCorteJornada('Mañana')"
+            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
+            ☀️ Mañana
+          </button>
+          <button id="corte-jornada-Tarde" onclick="setCorteJornada('Tarde')"
+            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
+            🌆 Tarde
+          </button>
+          <button id="corte-jornada-Noche" onclick="setCorteJornada('Noche')"
+            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
+            🌙 Noche
+          </button>
+          <button id="corte-jornada-Todos" onclick="setCorteJornada('Todos')"
+            style="padding:4px 12px;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">
+            👥 Todos
+          </button>
+        </div>
+        <span id="corte-jornada-badge" style="font-size:.68rem;color:#fbbf24;white-space:nowrap;"></span>
+      </div>
 
       <!-- Dropzone -->
       <div id="corte-dropzone" onclick="document.getElementById('corte-file-input').click()"
@@ -6613,9 +6647,87 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
 
     let corteFileData = null;
+    let _corteJornada = 'auto'; // 'auto' | 'Mañana' | 'Tarde' | 'Noche' | 'Todos'
+
+    function getJornadaActiva() {
+      if (_corteJornada === 'auto') return detectarTurno();
+      if (_corteJornada === 'Todos') return null; // null = sin filtro
+      return _corteJornada;
+    }
+
+    function setCorteJornada(j) {
+      _corteJornada = j;
+      // Actualizar estilos de botones
+      ['auto','Mañana','Tarde','Noche','Todos'].forEach(id => {
+        const btn = document.getElementById('corte-jornada-' + id);
+        if (!btn) return;
+        const isActive = id === j;
+        btn.style.borderColor  = isActive ? 'rgba(251,191,36,.5)' : 'rgba(255,255,255,.1)';
+        btn.style.background   = isActive ? 'rgba(251,191,36,.18)' : 'rgba(255,255,255,.04)';
+        btn.style.color        = isActive ? '#fbbf24' : '#64748b';
+      });
+      // Badge
+      const badge = document.getElementById('corte-jornada-badge');
+      const jornadaLabel = getJornadaActiva();
+      if (badge) badge.textContent = jornadaLabel ? `Mostrando: ${jornadaLabel}` : 'Sin filtro de jornada';
+      // Re-parsear si ya hay datos cargados
+      if (corteFileData) _refilterCorteByJornada();
+    }
+
+    function _refilterCorteByJornada() {
+      // Re-renderizar preview filtrando por jornada activa
+      const jornada = getJornadaActiva();
+      const filtered = jornada
+        ? corteFileData.filter(d => {
+            if (!d.rawName) return false;
+            const op = operatorsData.find(o => o.name === d.rawName);
+            return op && (op.turno || '').toLowerCase() === jornada.toLowerCase();
+          })
+        : corteFileData.filter(d => d.rawName);
+
+      const byOp = {};
+      filtered.forEach(d => {
+        if (!byOp[d.rawName]) byOp[d.rawName] = [];
+        byOp[d.rawName].push(d);
+      });
+
+      const lines = [];
+      Object.entries(byOp).forEach(([opName, perfiles]) => {
+        const total = perfiles.reduce((s, p) => s + p.puntos, 0);
+        const pfLines = perfiles.map(p =>
+          `<div style="padding-left:14px;color:#94a3b8;font-size:.7rem;">
+            → ID ${p.idPerfil || ''} (${p.modelo || ''}) · ${p.comienza || 0}→${p.enCurso || 0}
+            <strong style="color:#5eead4;margin-left:4px;">+${p.puntos} pts</strong>
+            <span style="color:#475569;margin-left:4px;">@ ${p.horaCorte || ''}</span>
+          </div>`).join('');
+        lines.push(`<div style="color:#34d399;margin-top:8px;font-weight:700;">✔ ${opName} — Total: ${total.toFixed(2)} pts</div>${pfLines}`);
+      });
+
+      // Sin asignar
+      const sinJornada = corteFileData.filter(d => {
+        if (!d.rawName || !jornada) return false;
+        const op = operatorsData.find(o => o.name === d.rawName);
+        return op && (op.turno || '').toLowerCase() !== jornada.toLowerCase();
+      });
+      const otraJornada = [...new Set(sinJornada.map(d => d.rawName))];
+      if (otraJornada.length) {
+        lines.push(`<div style="color:#475569;margin-top:8px;font-size:.68rem;">⚠️ ${otraJornada.length} operador(es) de otras jornadas excluidos</div>`);
+      }
+
+      const prev = document.getElementById('corte-preview');
+      if (prev) {
+        prev.style.display = 'block';
+        prev.innerHTML = `<div style="font-weight:700;margin-bottom:8px;color:#fbbf24;">${Object.keys(byOp).length} operadores · jornada ${jornada || 'Todos'}</div>` + lines.join('');
+      }
+      document.getElementById('btn-corte-ok').disabled = Object.keys(byOp).length === 0;
+    }
 
     function abrirModalCorte() {
       corteFileData = null;
+      // Auto-detectar jornada al abrir
+      _corteJornada = 'auto';
+      const jornadaDetectada = detectarTurno();
+      setTimeout(() => setCorteJornada('auto'), 50); // esperar a que el DOM esté listo
       document.getElementById('corte-file-input').value = '';
       document.getElementById('corte-preview').style.display = 'none';
       document.getElementById('corte-preview').innerHTML = '';
@@ -6789,25 +6901,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // Store as corteFileData — one entry per profile per day
       corteFileData = allEntries.map(d => ({ ...d, mode: 'unificado' }));
 
-      // Build preview
-      const lines = [];
-      Object.entries(byOp).forEach(([opName, perfiles]) => {
-        const total   = perfiles.reduce((s, p) => s + p.puntos, 0);
-        const pfLines = perfiles.map(p =>
-          `<div style="padding-left:14px;color:#94a3b8;font-size:.7rem;">
-            → ID ${p.idPerfil} (${p.modelo}) · ${p.comienza}→${p.enCurso}
-            <strong style="color:#5eead4;margin-left:4px;">+${p.puntos} pts</strong>
-            <span style="color:#475569;margin-left:4px;">@ ${p.horaCorte}</span>
-          </div>`
-        ).join('');
-        lines.push(`<div style="color:#34d399;margin-top:8px;font-weight:700;">✔ ${opName} — Total: ${total.toFixed(2)} pts</div>${pfLines}`);
-      });
+      // Filename + total raw
+      document.getElementById('corte-filename').textContent = '✅ ' + fname + ` (${Object.keys(byPerfil).length} perfiles)`;
 
-      Object.values(byPerfil).filter(d => !d.rawName).forEach(d => {
-        lines.push(`<div style="color:#f87171;margin-top:4px;font-size:.72rem;">✗ ID ${d.idPerfil} (${d.modelo}) — sin operador asignado</div>`);
-      });
-
-      showCortePreview(ok, miss, lines, fname, Object.keys(byPerfil).length);
+      // Aplicar filtro de jornada al preview (usa _refilterCorteByJornada)
+      _refilterCorteByJornada();
     }
 
     function procesarCorteSimple(rows, headers, fname) {
@@ -7205,18 +7303,25 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       let aplicados = 0;
 
-      const mode = corteFileData[0]?.mode;
+      // ── Filtrar por jornada activa antes de aplicar ──
+      const _jornada = getJornadaActiva(); // null = Todos
+      const dataToApply = _jornada
+        ? corteFileData.filter(d => {
+            if (!d.rawName) return false;
+            const op = operatorsData.find(o => o.name === d.rawName);
+            return op && (op.turno || '').toLowerCase() === _jornada.toLowerCase();
+          })
+        : corteFileData;
+
+      const mode = dataToApply[0]?.mode || corteFileData[0]?.mode;
 
       if (mode === 'unificado' || mode === 'perfiles') {
         // 1. Guardar métricas por perfil (historial por día)
-        registrarCortePerfiles(corteFileData);
+        registrarCortePerfiles(dataToApply);
 
         // 2. Agrupar por operador + fecha para historial de cortes
-        // FIX 3: usar enCurso máximo por perfil por día para evitar doble-conteo
-        // al resubir el mismo Excel. byPerfil[idPerfil][fecha].puntos ya es el valor
-        // correcto (enCurso - comienza del corte más alto del día).
         const byOpFecha = {};
-        corteFileData.forEach(d => {
+        dataToApply.forEach(d => {
           if (!d.rawName) return;
           const fecha = d.fecha || localDateStr();
           const opKey = d.rawName + '||' + fecha;
@@ -7283,7 +7388,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const label = mode === 'unificado' ? '📊 Puntos y perfiles actualizados en un solo paso.' : '📊 Métricas por perfil guardadas.';
         alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.\n${label}`);
       } else {
-        corteFileData.forEach(d => {
+        // Modo simple: también filtrar por jornada
+        const _simpleData = _jornada
+          ? corteFileData.filter(d => {
+              const op = matchOperator(d.rawName);
+              return op && (op.turno || '').toLowerCase() === _jornada.toLowerCase();
+            })
+          : corteFileData;
+        _simpleData.forEach(d => {
           const match = matchOperator(d.rawName);
           if (match && d.puntos > 0) { registrarCorte(match.name, d.puntos); aplicados++; }
         });

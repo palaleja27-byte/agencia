@@ -5729,8 +5729,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
         // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();
-        _autoFixActivePair(); // ← corregir mes si está desactualizado
-        if (typeof renderRanking === 'function') renderRanking();
+        _autoFixActivePair();
+
+        // ── CRÍTICO: refrescar vista del operador con datos reales de Supabase ──
+        // checkSession() corrió ANTES de esta carga — los datos que vio eran del
+        // localStorage vacío. Ahora que Supabase cargó, forzar re-render completo.
+        if (currentRole === 'operador' && currentOpName) {
+          if (typeof renderOpDashboard   === 'function') renderOpDashboard(currentOpName);
+          if (typeof renderCorteSection  === 'function') renderCorteSection(currentOpName);
+        } else {
+          if (typeof renderRanking === 'function') renderRanking();
+        }
         _toastSync('🟢 Datos sincronizados');
 
       } catch(e) {
@@ -5738,7 +5747,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         _bootProgress(100, '⚠️ Sin internet — usando datos locales');
         console.warn('[Supabase] sync load:', e.message);
         if (typeof loadData === 'function') loadData();
-        if (typeof renderRanking === 'function') renderRanking();
+        if (currentRole === 'operador' && currentOpName) {
+          if (typeof renderOpDashboard  === 'function') renderOpDashboard(currentOpName);
+          if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
+        } else {
+          if (typeof renderRanking === 'function') renderRanking();
+        }
         _toastSync('🔴 Sin conexión — datos locales', true);
       } finally {
         setTimeout(_bootDone, 400);
@@ -5782,19 +5796,36 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                 'primeOperatorsData2026','rr_prime_cortes','rr_prime_asistencia',
                 'rr_perfil_metrics','rr_alertas_sistema','rr_metas_operacion',
                 'rr_prime_logs_entrada','rr_prime_consejos_2026',
-                'rr_prime_op_pins'  // ← FIX: PINs de operadores se propagan al instante
+                'rr_prime_op_pins'
               ];
               const ptKeys = ['rr_prime_v15_mañana','rr_prime_v15_tarde','rr_prime_v15_noche'];
+
+              // ── Asistencia draft en tiempo real (auto-login del operador) ──
+              // La clave es dinámica: rr_prime_asistencia_draft_FECHA_TURNO
+              if (row.key.startsWith('rr_prime_asistencia_draft')) {
+                // Monitor/admin: re-renderizar grilla de asistencia con el nuevo presente
+                if ((currentRole === 'monitor' || currentRole === 'admin') &&
+                    typeof asiLoadDraft === 'function' && typeof asiRender === 'function') {
+                  asiLoadDraft();
+                  asiRender();
+                }
+              }
+
               if (critical.includes(row.key) && typeof loadData === 'function') {
                 loadData();
                 if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
                   renderOpDashboard(currentOpName);
-                  // Si fue un corte, forzar también sección de puntos explícitamente
+                  // Corte nuevo → actualizar barra de progreso y puntos al instante
                   if (row.key === 'rr_prime_cortes' && typeof renderCorteSection === 'function') {
                     renderCorteSection(currentOpName);
                   }
                 } else if (typeof renderRanking === 'function') {
                   renderRanking();
+                  // Monitor: también refrescar asistencia si recibe cambio de operadores
+                  if (row.key === 'primeOperatorsData2026' &&
+                      typeof asiLoadDraft === 'function' && typeof asiRender === 'function') {
+                    asiLoadDraft(); asiRender();
+                  }
                 }
               }
               // PT realtime: re-render Plan de Trabajo cuando otro PC cambia el turno
@@ -6305,11 +6336,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       return Math.max(200, (op?.turno_horas || 6) * 50);
     }
 
-    // Obtener puntos acumulados hoy (suma de cortes) — siempre lee fresco del storage
+    // Obtener puntos acumulados hoy — suma todos los turnos del día
+    // Usa _normName para evitar bug de espacios/case en el nombre del operador
     function getPuntosHoy(opName) {
-      const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      const cortes = all[opName] || [];
-      const hoy = localDateStr();
+      const all   = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+      const norm  = _normName(opName);
+      const key   = Object.keys(all).find(k => _normName(k) === norm) || opName;
+      const cortes = all[key] || [];
+      const hoy   = localDateStr();
       return cortes
         .filter(c => c.fecha === hoy)
         .reduce((s, c) => s + (c.puntos || 0), 0);
@@ -6370,32 +6404,37 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     // Registrar corte desde ranking (monitor/admin)
-    function registrarCorte(opName, puntos, fechaOverride) {
-      const now    = new Date();
-      const fecha  = fechaOverride || localDateStr(now);
-      const hora   = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    function registrarCorte(opName, puntos, fechaOverride, jornadaOverride) {
+      const now      = new Date();
+      const fecha    = fechaOverride || localDateStr(now);
+      const hora     = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      const jornada  = jornadaOverride || detectarTurno(); // Mañana / Tarde / Noche
       const nuevoPts = parseFloat(puntos) || 0;
-      const cortes = getCortesOp(opName);
-      const existIdx = cortes.findIndex(c => c.fecha === fecha);
+      const cortes   = getCortesOp(opName);
+
+      // Buscar registro del MISMO turno del MISMO día (no solo la fecha)
+      const existIdx = cortes.findIndex(c => c.fecha === fecha && c.jornada === jornada);
 
       if (existIdx >= 0) {
         if (fechaOverride) {
-          // Día pasado del Excel: no tocar si ya existe
+          // Día pasado del Excel: actualizar si tiene más puntos (corte más reciente del mes)
+          if (nuevoPts > cortes[existIdx].puntos) {
+            cortes[existIdx].puntos = nuevoPts;
+            cortes[existIdx].fromExcel = true;
+          }
+          saveCortesOp(opName, cortes);
           return;
         }
-        // Día actual: actualizar SIEMPRE hora y ts (refleja el corte más reciente)
-        // Solo no bajar los puntos si el nuevo valor es menor (protección anti-regresión)
+        // Mismo turno, misma fecha: actualizar puntos si el nuevo es mayor (cada 2h sube)
         if (nuevoPts >= cortes[existIdx].puntos) {
           cortes[existIdx].puntos = nuevoPts;
         }
-        // La hora SIEMPRE se actualiza — muestra cuándo fue el último corte importado
         cortes[existIdx].hora = hora;
         cortes[existIdx].ts   = now.getTime();
       } else {
-        // Día nuevo: insertar
-        cortes.push({ fecha, hora, puntos: nuevoPts, ts: now.getTime() });
-        // Limitar historial a 90 días más recientes
-        if (cortes.length > 90) cortes.sort((a,b) => b.ts - a.ts).splice(90);
+        // Turno nuevo del día: insertar como registro independiente
+        cortes.push({ fecha, jornada, hora, puntos: nuevoPts, ts: now.getTime() });
+        if (cortes.length > 270) cortes.sort((a,b) => b.ts - a.ts).splice(270); // 90 días × 3 turnos
       }
 
       saveCortesOp(opName, cortes);
@@ -6920,7 +6959,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const isHora = v => typeof v === 'string' && /^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(v.trim());
       const isNum  = v => v !== null && v !== undefined && v !== '' && !isNaN(parseFloat(v));
 
-      const byPerfil = {}; // idPerfil → { fecha → entry }  (una entrada POR DIA)
+      const byPerfil = {}; // idPerfil → { "fecha||jornada" → entry }  (una entrada POR TURNO POR DIA)
 
       // Extraer fecha real del nombre de hoja: "1 MAR", "15 MAR", "2 FEB" etc.
       const MONTH_ES = { ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,OCT:10,NOV:11,DIC:12 };
@@ -6972,25 +7011,29 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               const puntos      = parseFloat((enCursoVal - comienzaVal).toFixed(2));
               if (puntos <= 0) continue;
 
-              const id    = String(Math.round(idNum));
-              const fecha = sheetToDate(sheetName);
+              const id      = String(Math.round(idNum));
+              const fecha   = sheetToDate(sheetName);
+              const jornada = _jornadaDeHora(hora); // Mañana/Tarde/Noche según hora del bloque
+              const gKey    = fecha + '||' + jornada; // clave única por turno por día
 
               if (!byPerfil[id]) byPerfil[id] = {};
-              // Para el mismo perfil en el mismo día:
-              // Conservar comienza MÍNIMO (primer bloque del día) y enCurso MÁXIMO (último bloque)
-              // Así los puntos = enCurso_max - comienza_min = total real del día
-              const exist = byPerfil[id][fecha];
+              // Mismo perfil, mismo turno, mismo día:
+              // comienza = valor al INICIO del turno (mínimo = el que tenía antes del primer corte)
+              // enCurso  = valor en el ÚLTIMO corte del turno (máximo = el más reciente)
+              // puntos   = enCurso_max - comienza → lo que ganó en ese turno
+              const exist   = byPerfil[id][gKey];
               const comMin  = exist ? Math.min(exist.comienza, comienzaVal) : comienzaVal;
               const encMax  = exist ? Math.max(exist.enCurso,  enCursoVal)  : enCursoVal;
-              const ptsDia  = parseFloat((encMax - comMin).toFixed(2));
-              if (ptsDia > 0) {
-                byPerfil[id][fecha] = {
+              const ptsTurno = parseFloat((encMax - comMin).toFixed(2));
+              if (ptsTurno > 0) {
+                byPerfil[id][gKey] = {
                   idPerfil:  id,
                   modelo:    String(agVal).trim().toUpperCase(),
                   comienza:  comMin,
                   enCurso:   encMax,
-                  puntos:    ptsDia,
-                  horaCorte: hora,   // última hora del día
+                  puntos:    ptsTurno,
+                  horaCorte: hora,
+                  jornada,
                   fecha
                 };
               }
@@ -7449,47 +7492,47 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         // 1. Guardar métricas por perfil (historial por día)
         registrarCortePerfiles(dataToApply);
 
-        // 2. Agrupar por operador + fecha para historial de cortes
+        // 2. Agrupar por operador + fecha + JORNADA para historial de cortes
+        // Cada turno es un registro independiente (no sobreescribe otros turnos del mismo día)
         const byOpFecha = {};
         dataToApply.forEach(d => {
           if (!d.rawName) return;
-          const fecha = d.fecha || localDateStr();
-          const opKey = d.rawName + '||' + fecha;
-          const pfKey = opKey + '||' + d.idPerfil; // clave única por perfil+día
-          if (!byOpFecha[opKey]) byOpFecha[opKey] = { name: d.rawName, fecha, total: 0, perfiles: {} };
-          // Para cada perfil del día: guardar el enCurso más alto (no acumular)
+          const fecha    = d.fecha    || localDateStr();
+          const jornada  = d.jornada  || _jornadaDeHora(d.horaCorte) || detectarTurno();
+          const opKey    = d.rawName + '||' + fecha + '||' + jornada; // único por turno+día
+          if (!byOpFecha[opKey]) byOpFecha[opKey] = { name: d.rawName, fecha, jornada, total: 0, perfiles: {} };
+          // Para cada perfil del turno: conservar enCurso más alto (último corte del turno)
           const prev = byOpFecha[opKey].perfiles[d.idPerfil];
           if (!prev || (d.enCurso || 0) > (prev.enCurso || 0)) {
             const puntosAntes = prev ? prev.puntos : 0;
-            byOpFecha[opKey].total -= puntosAntes;        // quitar el valor anterior
-            byOpFecha[opKey].total += d.puntos;           // poner el nuevo
+            byOpFecha[opKey].total -= puntosAntes;
+            byOpFecha[opKey].total += d.puntos;
             byOpFecha[opKey].perfiles[d.idPerfil] = { puntos: d.puntos, enCurso: d.enCurso || 0 };
           }
         });
 
         const hoy = localDateStr();
-        Object.values(byOpFecha).forEach(({ name, fecha, total }) => {
+        Object.values(byOpFecha).forEach(({ name, fecha, jornada, total }) => {
           if (total <= 0) return;
           const esPasado = fecha && fecha < hoy;
           if (esPasado) {
+            // Días pasados: buscar por fecha + jornada para no mezclar turnos
             const cortes   = getCortesOp(name);
-            const existIdx = cortes.findIndex(c => c.fecha === fecha);
+            const existIdx = cortes.findIndex(c => c.fecha === fecha && c.jornada === jornada);
             if (existIdx < 0) {
-              // Día nuevo en histórico: insertar
-              cortes.push({ fecha, hora: '00:00', puntos: total, ts: new Date(fecha + 'T12:00:00').getTime(), fromExcel: true });
+              cortes.push({ fecha, jornada, hora: '00:00', puntos: total, ts: new Date(fecha + 'T12:00:00').getTime(), fromExcel: true });
               saveCortesOp(name, cortes);
-              aplicados++; // FIX 4: solo contar si realmente se escribió
+              aplicados++;
             } else if (total > cortes[existIdx].puntos) {
-              // FIX 2: día pasado con más puntos → actualizar (Excel más reciente gana)
               cortes[existIdx].puntos    = total;
               cortes[existIdx].fromExcel = true;
               saveCortesOp(name, cortes);
-              aplicados++; // FIX 4: contar actualización real
+              aplicados++;
             }
-            // Si total <= existente: ignorar sin contar (datos correctos ya guardados)
           } else {
-            registrarCorte(name, total);
-            aplicados++; // FIX 4: día actual siempre aplica
+            // Día actual: registrarCorte actualiza el turno correcto (cada 2h sube los pts)
+            registrarCorte(name, total, null, jornada);
+            aplicados++;
           }
         });
 
@@ -8527,18 +8570,26 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const k = opName + '||operador';
 
       // Solo marcar si NO está ya marcado manualmente (monitor tiene prioridad)
+      let changed = false;
       if (!draft[k] || !draft[k].estado) {
-        draft[k] = {
-          estado: 'P',
-          nota: '',
-          horaIngreso: hora,
-          autoMarcado: true
-        };
-        localStorage.setItem(draftKey, JSON.stringify(draft));
+        draft[k] = { estado: 'P', nota: '', horaIngreso: hora, autoMarcado: true };
+        changed = true;
       } else if (draft[k].estado === 'P' && !draft[k].horaIngreso) {
-        // Ya marcado presente pero sin hora → agregar hora
         draft[k].horaIngreso = hora;
+        changed = true;
+      }
+      if (changed) {
+        // 1. Guardar en localStorage inmediatamente
         localStorage.setItem(draftKey, JSON.stringify(draft));
+        // 2. Sincronizar a Supabase para que el monitor lo vea en tiempo real
+        if (typeof _sb !== 'undefined' && _sb) {
+          const val = JSON.stringify(draft);
+          _sb.from('kv_store')
+            .upsert({ key: draftKey, value: val }, { onConflict: 'key' })
+            .then(({ error }) => {
+              if (!error) console.info('[AutoAsi] Sincronizado a Supabase:', draftKey);
+            });
+        }
       }
     }
 

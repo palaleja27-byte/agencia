@@ -5171,13 +5171,22 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function getLogsEntrada() { return JSON.parse(localStorage.getItem(LOGS_KEY) || '[]'); }
     function saveLogsEntrada(arr) { localStorage.setItem(LOGS_KEY, JSON.stringify(arr)); }
+    function _normName(n) { return (n || '').trim().toUpperCase().replace(/\s+/g,' '); }
+
     function getCortesOp(name) {
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      return all[name] || [];
+      // Primero buscar exact match, luego normalizado (evita bug de espacios/case)
+      if (all[name]) return all[name];
+      const norm = _normName(name);
+      const key = Object.keys(all).find(k => _normName(k) === norm);
+      return key ? all[key] : [];
     }
     function saveCortesOp(name, arr) {
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      all[name] = arr;
+      // Guardar siempre con el mismo nombre normalizado para consistencia
+      const norm = _normName(name);
+      const existKey = Object.keys(all).find(k => _normName(k) === norm) || name;
+      all[existKey] = arr;
       localStorage.setItem(CORTE_KEY, JSON.stringify(all));
     }
 
@@ -6776,12 +6785,28 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       return 'Noche';
     }
 
+    // Retorna true si el operador está marcado Ausente en asistencia hoy
+    function _opEsAusenteHoy(opName) {
+      if (typeof ASI_KEY === 'undefined') return false;
+      const fecha = localDateStr();
+      // Revisar los 3 turnos del día
+      const shifts = ['manana','tarde','noche'];
+      for (const sh of shifts) {
+        const key   = ASI_KEY + '_draft_' + fecha + '_' + sh;
+        const draft = JSON.parse(localStorage.getItem(key) || '{}');
+        const k     = opName + '||operador';
+        if (draft[k]?.estado === 'A') return true;
+      }
+      return false;
+    }
+
     function _refilterCorteByJornada() {
       const jornada = getJornadaActiva(); // null = Todos
 
-      // FILTRAR FILA POR FILA por horaCorte — cada registro tiene su propia hora
+      // FILTRAR FILA POR FILA por horaCorte + excluir ausentes
       const filtered = corteFileData.filter(d => {
         if (!d.rawName) return false;
+        if (_opEsAusenteHoy(d.rawName)) return false; // ← EXCLUIR AUSENTES
         if (!jornada) return true; // Todos
         return _jornadaDeHora(d.horaCorte) === jornada;
       });
@@ -6951,15 +6976,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               const fecha = sheetToDate(sheetName);
 
               if (!byPerfil[id]) byPerfil[id] = {};
-              // Para el mismo perfil en el mismo día: conservar el enCurso más alto (corte más reciente del día)
-              if (!byPerfil[id][fecha] || enCursoVal > byPerfil[id][fecha].enCurso) {
+              // Para el mismo perfil en el mismo día:
+              // Conservar comienza MÍNIMO (primer bloque del día) y enCurso MÁXIMO (último bloque)
+              // Así los puntos = enCurso_max - comienza_min = total real del día
+              const exist = byPerfil[id][fecha];
+              const comMin  = exist ? Math.min(exist.comienza, comienzaVal) : comienzaVal;
+              const encMax  = exist ? Math.max(exist.enCurso,  enCursoVal)  : enCursoVal;
+              const ptsDia  = parseFloat((encMax - comMin).toFixed(2));
+              if (ptsDia > 0) {
                 byPerfil[id][fecha] = {
                   idPerfil:  id,
                   modelo:    String(agVal).trim().toUpperCase(),
-                  comienza:  comienzaVal,
-                  enCurso:   enCursoVal,
-                  puntos,
-                  horaCorte: hora,
+                  comienza:  comMin,
+                  enCurso:   encMax,
+                  puntos:    ptsDia,
+                  horaCorte: hora,   // última hora del día
                   fecha
                 };
               }
@@ -7403,11 +7434,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       let aplicados = 0;
 
-      // ── Filtrar por jornada activa FILA POR FILA por horaCorte del Excel ──
+      // ── Filtrar por jornada + excluir ausentes ──
       const _jornada = getJornadaActiva(); // null = Todos
-      const dataToApply = _jornada
-        ? corteFileData.filter(d => d.rawName && _jornadaDeHora(d.horaCorte) === _jornada)
-        : corteFileData;
+      const dataToApply = corteFileData.filter(d => {
+        if (!d.rawName) return false;
+        if (_opEsAusenteHoy(d.rawName)) return false; // nunca aplicar corte a ausentes
+        if (!_jornada) return true;
+        return _jornadaDeHora(d.horaCorte) === _jornada;
+      });
 
       const mode = dataToApply[0]?.mode || corteFileData[0]?.mode;
 

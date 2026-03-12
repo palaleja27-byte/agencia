@@ -10330,7 +10330,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         <span class="asi-date-lbl">Fecha</span>
         <input type="date" class="asi-date-inp" id="asi-date">
         <div class="asi-shift-group">
-          <button class="asi-shift-btn active" id="asibtn-manana" onclick="asiSetShift('manana')">☀️ Mañana</button>
+          <button class="asi-shift-btn active" id="asibtn-todos" onclick="asiSetShift('todos')">👥 Todos</button>
+          <button class="asi-shift-btn" id="asibtn-manana" onclick="asiSetShift('manana')">☀️ Mañana</button>
           <button class="asi-shift-btn" id="asibtn-tarde" onclick="asiSetShift('tarde')">🌆 Tarde</button>
           <button class="asi-shift-btn" id="asibtn-noche" onclick="asiSetShift('noche')">🌙 Noche</button>
         </div>
@@ -10437,7 +10438,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // ════════ MÓDULO ASISTENCIA ════════
     const ASI_KEY = 'rr_prime_asistencia';
     const ASI_MON_KEY = 'rr_prime_monitores';
-    let asiShift = 'manana';
+    let asiShift = 'todos'; // por defecto ver todos los turnos
     let _asiTurnoFilter = 'Todos'; // filtro de turno para grid de operadores
 
     function asiSetTurnoFilter(turno) {
@@ -10468,11 +10469,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         inp.value = localDateStr();
         inp.addEventListener('change', () => { asiLoadDraft(); asiRender(); });
       }
+      // Arrancar siempre en modo Todos para ver todos los auto-marcados
+      asiShift = 'todos';
+      ['todos','manana','tarde','noche'].forEach(s => {
+        const b = document.getElementById('asibtn-' + s);
+        if (b) b.classList.toggle('active', s === 'todos');
+      });
     }
 
     function asiSetShift(shift) {
       asiShift = shift;
-      ['manana', 'tarde', 'noche'].forEach(s => {
+      ['todos', 'manana', 'tarde', 'noche'].forEach(s => {
         const b = document.getElementById('asibtn-' + s);
         if (b) b.classList.toggle('active', s === shift);
       });
@@ -10481,15 +10488,42 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function asiLoadDraft() {
       const date = document.getElementById('asi-date')?.value || '';
-      const key = ASI_KEY + '_draft_' + date + '_' + asiShift;
-      const s = localStorage.getItem(key);
-      asiEstados = s ? JSON.parse(s) : {};
+      if (asiShift === 'todos') {
+        // Fusionar los 3 turnos en asiEstados — así el monitor ve TODOS
+        const m = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_manana') || '{}');
+        const t = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_tarde')  || '{}');
+        const n = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_noche')  || '{}');
+        // Merge: noche > tarde > mañana (el más reciente gana si el mismo operador aparece en varios)
+        asiEstados = { ...m, ...t, ...n };
+      } else {
+        const key = ASI_KEY + '_draft_' + date + '_' + asiShift;
+        const s = localStorage.getItem(key);
+        asiEstados = s ? JSON.parse(s) : {};
+      }
     }
 
     function asiSaveDraft() {
       const date = document.getElementById('asi-date')?.value || '';
-      const key = ASI_KEY + '_draft_' + date + '_' + asiShift;
-      localStorage.setItem(key, JSON.stringify(asiEstados));
+      if (asiShift === 'todos') {
+        // En modo todos: separar estados por turno y guardar en cada clave
+        const byShift = { manana: {}, tarde: {}, noche: {} };
+        Object.entries(asiEstados).forEach(([k, v]) => {
+          const opName  = k.split('||')[0];
+          const op      = operatorsData.find(o => _normName(o.name) === _normName(opName));
+          const turno   = (op?.turno || 'Mañana').toLowerCase();
+          const shiftKey = turno === 'mañana' ? 'manana' : turno === 'tarde' ? 'tarde' : 'noche';
+          byShift[shiftKey][k] = v;
+        });
+        ['manana','tarde','noche'].forEach(sh => {
+          const key = ASI_KEY + '_draft_' + date + '_' + sh;
+          // Merge con lo existente para no borrar auto-marcados de otros
+          const existing = JSON.parse(localStorage.getItem(key) || '{}');
+          localStorage.setItem(key, JSON.stringify({ ...existing, ...byShift[sh] }));
+        });
+      } else {
+        const key = ASI_KEY + '_draft_' + date + '_' + asiShift;
+        localStorage.setItem(key, JSON.stringify(asiEstados));
+      }
     }
 
     // ── Horas de turno desde asistencia ──────────────────────────

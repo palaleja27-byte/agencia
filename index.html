@@ -2869,7 +2869,108 @@
       font-size: .8rem;
       font-weight: 600;
     }
-  </style>
+  
+    /* ── OP STATS GRID ── */
+    .op-stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .op-stat-card {
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .op-stat-card.highlight {
+      border-color: rgba(94,234,212,.25);
+      background: rgba(94,234,212,.06);
+    }
+    .op-stat-label {
+      font-size: .6rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+    .op-stat-pts {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #e2e8f0;
+      line-height: 1;
+    }
+    .op-stat-cop {
+      font-size: .72rem;
+      color: #34d399;
+      font-weight: 600;
+    }
+    .op-stat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: .65rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 20px;
+      margin-top: 2px;
+      width: fit-content;
+    }
+    .op-stat-badge.up   { background: rgba(52,211,153,.15); color: #34d399; }
+    .op-stat-badge.down { background: rgba(248,113,113,.15); color: #f87171; }
+    .op-stat-badge.flat { background: rgba(100,116,139,.15); color: #64748b; }
+
+    /* ── MINI BARCHART 7 DÍAS ── */
+    .op-barchart-wrap {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 14px;
+      padding: 14px 16px 10px;
+      margin-bottom: 12px;
+    }
+    .op-barchart-title {
+      font-size: .62rem;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .op-barchart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 60px;
+    }
+    .op-bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+    .op-bar-fill {
+      width: 100%;
+      border-radius: 4px 4px 0 0;
+      min-height: 3px;
+      transition: height .4s;
+    }
+    .op-bar-lbl {
+      font-size: .55rem;
+      color: #475569;
+      text-transform: capitalize;
+    }
+    .op-bar-pts {
+      font-size: .55rem;
+      color: #64748b;
+      margin-top: 2px;
+    }
+</style>
 </head>
 
 <body>
@@ -3178,11 +3279,18 @@
   </div>
 
   <div id="op-dashboard">
-    <!-- CORTE DIARIO (nuevo) -->
+    <!-- CORTE DIARIO -->
     <div class="op-section" id="op-corte-section">
       <div class="op-section-title">⚡ Tu progreso hoy</div>
       <div id="op-corte-content"></div>
     </div>
+
+    <!-- STATS DIARIO / SEMANAL / MENSUAL -->
+    <div class="op-section" id="op-stats-section">
+      <div class="op-section-title">📊 Tu rendimiento completo</div>
+      <div id="op-stats-content"></div>
+    </div>
+
     <div class="op-dash-hero">
       <div id="op-dash-avatar-wrap"></div>
       <div class="op-dash-name" id="op-dash-name"></div>
@@ -5816,8 +5924,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                 if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
                   renderOpDashboard(currentOpName);
                   // Corte nuevo → actualizar barra de progreso y puntos al instante
-                  if (row.key === 'rr_prime_cortes' && typeof renderCorteSection === 'function') {
-                    renderCorteSection(currentOpName);
+                  if (row.key === 'rr_prime_cortes') {
+                    if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
+                    if (typeof renderOpStats      === 'function') renderOpStats(currentOpName);
                   }
                 } else if (typeof renderRanking === 'function') {
                   renderRanking();
@@ -6323,7 +6432,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const fecha = localDateStr();
       const key = 'rr_meta_' + opName.replace(/\s+/g, '_').toLowerCase() + '_' + fecha;
       const stored = parseInt(localStorage.getItem(key) || '0');
-      if (stored > 0) return stored;
+      if (stored >= 50) return stored; // ignorar si es menor a 50 (dato corrupto)
       // Fallback automático: promedio de los últimos 7 días con corte
       const hace7 = localDateStr(new Date(Date.now() - 7 * 86400000));
       const cortes = getCortesOp(opName).filter(c => c.fecha >= hace7 && c.fecha < fecha && c.puntos > 0);
@@ -6347,6 +6456,75 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       return cortes
         .filter(c => c.fecha === hoy)
         .reduce((s, c) => s + (c.puntos || 0), 0);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════
+    // MOTOR DE ESTADÍSTICAS — getStatsOp(name)
+    // Lee rr_prime_cortes y calcula HOY/AYER/SEMANA/MES en pts y COP
+    // ══════════════════════════════════════════════════════════════
+    const VALOR_COP = 1400;
+
+    function getStatsOp(name) {
+      const cortes = getCortesOp(name);
+      const hoy    = localDateStr();
+
+      // Fechas de referencia
+      const ayer      = localDateStr(new Date(Date.now() - 86400000));
+      const hace7     = localDateStr(new Date(Date.now() - 7  * 86400000));
+      const hace14    = localDateStr(new Date(Date.now() - 14 * 86400000));
+      const mesActual = hoy.slice(0, 7);
+      const { prev }  = getActivePair();
+
+      // Función helper: suma puntos en rango de fechas
+      const sumaRango = (desde, hasta) =>
+        cortes
+          .filter(c => c.fecha >= desde && c.fecha <= hasta)
+          .reduce((s, c) => s + (c.puntos || 0), 0);
+
+      // Puntos por período
+      const ptsHoy       = sumaRango(hoy, hoy);
+      const ptsAyer      = sumaRango(ayer, ayer);
+      const ptsSemana    = sumaRango(hace7, hoy);
+      const ptsSemPasada = sumaRango(hace14, ayer);
+      const ptsMes       = cortes
+        .filter(c => c.fecha && c.fecha.slice(0,7) === mesActual)
+        .reduce((s,c) => s+(c.puntos||0), 0);
+
+      // Mes anterior desde op data (no hay cortes históricos antes del sistema)
+      const op = operatorsData.find(o => _normName(o.name) === _normName(name));
+      const ptsMesAnt = op ? (op[prev] || 0) : 0;
+
+      // Promedio diario del mes (solo días con corte)
+      const diasConCorte = new Set(
+        cortes.filter(c => c.fecha && c.fecha.slice(0,7) === mesActual && c.puntos > 0).map(c => c.fecha)
+      ).size;
+      const promDia = diasConCorte > 0 ? ptsMes / diasConCorte : 0;
+
+      // Crecimiento %
+      const crec = (nuevo, viejo) =>
+        viejo > 0 ? ((nuevo - viejo) / viejo * 100) : (nuevo > 0 ? 100 : 0);
+
+      const crecDiario   = crec(ptsHoy,    ptsAyer);
+      const crecSemanal  = crec(ptsSemana, ptsSemPasada);
+      const crecMensual  = crec(ptsMes,    ptsMesAnt);
+
+      // Últimos 7 días para la gráfica de barras
+      const ultimos7 = [];
+      for (let i = 6; i >= 0; i--) {
+        const d   = localDateStr(new Date(Date.now() - i * 86400000));
+        const pts = sumaRango(d, d);
+        const label = new Date(d + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short' });
+        ultimos7.push({ fecha: d, pts, label });
+      }
+
+      return {
+        ptsHoy, ptsAyer, ptsSemana, ptsSemPasada, ptsMes, ptsMesAnt,
+        promDia, crecDiario, crecSemanal, crecMensual, ultimos7,
+        copHoy:    Math.round(ptsHoy    * VALOR_COP),
+        copSemana: Math.round(ptsSemana * VALOR_COP),
+        copMes:    Math.round(ptsMes    * VALOR_COP),
+      };
     }
 
     // Renderizar sección corte diario en dashboard operador
@@ -7069,6 +7247,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         } else {
           miss++;
           d.rawName = null;
+          // Guardar perfiles sin match para debug
+          if (!window._rrMissedProfiles) window._rrMissedProfiles = new Set();
+          window._rrMissedProfiles.add(`ID:${d.idPerfil} Modelo:${d.modelo}`);
         }
       });
 
@@ -7559,7 +7740,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           renderOpDashboard(currentOpName);
         }
         const label = mode === 'unificado' ? '📊 Puntos y perfiles actualizados en un solo paso.' : '📊 Métricas por perfil guardadas.';
-        alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.\n${label}`);
+        let missMsg = '';
+        if (window._rrMissedProfiles && window._rrMissedProfiles.size > 0) {
+          missMsg = `\n\n⚠️ ${window._rrMissedProfiles.size} perfil(es) SIN OPERADOR asignado:\n` +
+            [...window._rrMissedProfiles].slice(0,8).join('\n');
+          window._rrMissedProfiles.clear();
+        }
+        alert(`✅ Corte registrado a las ${hora}.\n${aplicados} operadores actualizados.\n${label}${missMsg}`);
       } else {
         // Modo simple: también filtrar por jornada
         const _simpleData = _jornada
@@ -8547,7 +8734,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       // Confirm button
       document.getElementById('btn-confirmar-meta').addEventListener('click', () => {
-        const meta = parseInt(inp.value) || sugerido;
+        const meta = Math.max(50, parseInt(inp.value) || sugerido);
         localStorage.setItem(metaKey, String(meta));
         overlay.style.display = 'none';
         finalizarLoginOperador(opName);
@@ -8758,6 +8945,78 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         }).join('')}`;
     }
 
+
+    // ══════════════════════════════════════════════════════════════
+    // RENDER ESTADÍSTICAS — tarjetas + gráfica 7 días
+    // ══════════════════════════════════════════════════════════════
+    function renderOpStats(name) {
+      const el = document.getElementById('op-stats-content');
+      if (!el) return;
+      const s = getStatsOp(name);
+
+      const badge = (pct) => {
+        if (pct === 0) return `<span class="op-stat-badge flat">→ Sin cambio</span>`;
+        const sign = pct > 0 ? '+' : '';
+        const cls  = pct > 0 ? 'up' : 'down';
+        const ico  = pct > 0 ? '▲' : '▼';
+        return `<span class="op-stat-badge ${cls}">${ico} ${sign}${pct.toFixed(1)}%</span>`;
+      };
+
+      const fmt = n => n.toLocaleString('es-CO');
+      const fmtPts = n => n.toFixed(1);
+
+      // Gráfica de barras 7 días
+      const maxPts = Math.max(...s.ultimos7.map(d => d.pts), 1);
+      const hoy = localDateStr();
+      const bars = s.ultimos7.map(d => {
+        const pct    = Math.max(3, Math.round((d.pts / maxPts) * 100));
+        const isHoy  = d.fecha === hoy;
+        const color  = isHoy ? '#5eead4' : d.pts > 0 ? '#818cf8' : 'rgba(255,255,255,.08)';
+        return `
+          <div class="op-bar-col">
+            <div class="op-bar-pts">${d.pts > 0 ? fmtPts(d.pts) : ''}</div>
+            <div class="op-bar-fill" style="height:${pct}%;background:${color};"></div>
+            <div class="op-bar-lbl" style="color:${isHoy ? '#5eead4' : '#475569'}">${d.label}</div>
+          </div>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="op-stats-grid">
+          <div class="op-stat-card highlight">
+            <div class="op-stat-label">📅 Hoy</div>
+            <div class="op-stat-pts">${fmtPts(s.ptsHoy)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
+            <div class="op-stat-cop">💰 $${fmt(s.copHoy)} COP</div>
+            ${badge(s.crecDiario)}
+          </div>
+          <div class="op-stat-card">
+            <div class="op-stat-label">📆 Ayer</div>
+            <div class="op-stat-pts">${fmtPts(s.ptsAyer)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
+            <div class="op-stat-cop">💰 $${fmt(Math.round(s.ptsAyer * VALOR_COP))} COP</div>
+            <span class="op-stat-badge flat" style="opacity:.5">Referencia</span>
+          </div>
+          <div class="op-stat-card">
+            <div class="op-stat-label">📊 Esta semana</div>
+            <div class="op-stat-pts">${fmtPts(s.ptsSemana)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
+            <div class="op-stat-cop">💰 $${fmt(s.copSemana)} COP</div>
+            ${badge(s.crecSemanal)}
+          </div>
+          <div class="op-stat-card">
+            <div class="op-stat-label">🗓️ Este mes</div>
+            <div class="op-stat-pts">${fmtPts(s.ptsMes)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
+            <div class="op-stat-cop">💰 $${fmt(s.copMes)} COP</div>
+            ${badge(s.crecMensual)}
+          </div>
+        </div>
+        <div class="op-barchart-wrap">
+          <div class="op-barchart-title">📈 Últimos 7 días (pts/día)</div>
+          <div class="op-barchart">${bars}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.68rem;color:#475569;padding:0 2px;margin-bottom:4px;">
+          <span>📊 Prom/día este mes: <strong style="color:#a78bfa;">${fmtPts(s.promDia)} pts</strong></span>
+          <span>💵 $${fmt(Math.round(s.promDia * VALOR_COP))} COP/día</span>
+        </div>`;
+    }
+
     function renderOpDashboard(name) {
       const op = operatorsData.find(o => o.name.toUpperCase() === name?.toUpperCase());
       if (!op) {
@@ -8778,8 +9037,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const growthSign = op.growth > 0 ? '+' : '';
       const growthColor = op.growth > 0 ? '#34d399' : '#f87171';
 
-      // Corte diario progress
+      // Corte diario progress + estadísticas completas
       renderCorteSection(name);
+      renderOpStats(name);
 
       // Avatar
       const av = typeof getAvatar === 'function' ? getAvatar(op.name) : null;

@@ -10622,6 +10622,37 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         </div>`;
       }
 
+      // ── Perfiles del operador (solo para rol operador) ──
+      let perfilesHTML = '';
+      if (role === 'operador') {
+        const opData = (typeof operatorsData !== 'undefined')
+          ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
+        const perfs  = opData?.profiles || [];
+        if (perfs.length) {
+          const items = perfs.map(p => {
+            const esCob  = p.tipo === 'cobertura';
+            const badge  = esCob
+              ? '<span style="font-size:.55rem;padding:1px 5px;border-radius:4px;background:rgba(248,113,113,.15);color:#f87171;font-weight:700;">🔴 Cob</span>'
+              : '<span style="font-size:.55rem;padding:1px 5px;border-radius:4px;background:rgba(52,211,153,.12);color:#34d399;font-weight:700;">🟢 Propio</span>';
+            const cubre  = esCob && p.cubreA
+              ? `<span style="font-size:.5rem;color:#475569;"> → ${p.cubreA}</span>` : '';
+            return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04);">
+              <span style="font-size:.6rem;color:#94a3b8;flex:1;">ID: ${p.id} — ${p.model || p.modelo || ''}</span>
+              ${badge}${cubre}
+            </div>`;
+          }).join('');
+          perfilesHTML = `
+          <details style="margin-top:6px;">
+            <summary style="font-size:.6rem;color:#475569;cursor:pointer;text-transform:uppercase;
+              letter-spacing:.6px;list-style:none;display:flex;align-items:center;gap:4px;">
+              🗂️ Perfiles (${perfs.length})
+              <span style="margin-left:auto;font-size:.55rem;">▼</span>
+            </summary>
+            <div style="margin-top:4px;padding:4px 0;">${items}</div>
+          </details>`;
+        }
+      }
+
       return `<div class="asi-card${est ? ' estado-' + est : ''}" >
     ${avatarHTML}
     <div class="asi-info">
@@ -10629,6 +10660,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <div class="asi-role">${groupTag}</div>
       ${horaIngresoHTML}
       ${horasHTML}
+      ${perfilesHTML}
       <div class="asi-nota-wrap ${noteVis}">
         <textarea class="asi-nota" rows="1" placeholder="Nota..."
           onchange="asiSetNota('${sn}','${role}',this.value)">${cur.nota || ''}</textarea>

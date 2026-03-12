@@ -8593,6 +8593,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       }
     }
 
+    function registrarLogEntrada(opName) {
+      if (!opName) return;
+      const now   = new Date();
+      const fecha = now.toLocaleDateString('es-CO');
+      const hora  = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      const turno = detectarTurno();
+      const logs  = getLogsEntrada();
+      // No duplicar si ya hay un log del mismo operador en los últimos 5 minutos
+      const reciente = logs.find(l => l.name === opName && (now.getTime() - (l.ts || 0)) < 5 * 60 * 1000);
+      if (reciente) return;
+      logs.unshift({ name: opName, fecha, hora, turno, ts: now.getTime() });
+      if (logs.length > 500) logs.splice(500);
+      saveLogsEntrada(logs);
+    }
+
     function finalizarLoginOperador(opName) {
       const op = operatorsData.find(o => o.name.toUpperCase() === opName?.toUpperCase());
       // ── AUTO-ASISTENCIA: marcar presente con hora de ingreso ──

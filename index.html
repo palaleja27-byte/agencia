@@ -7230,13 +7230,56 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const byOp = {};
       let ok = 0, miss = 0;
 
+      // ── Leer redirecciones de cobertura desde asistencia ──────────
+      // Si un operador tiene un perfil marcado tipo='cobertura'
+      // en el draft de asistencia del día, redirigir esos puntos
+      // al operador que está cubriendo (el que realmente trabajó)
+      const _hoyMatch = localDateStr();
+      // Construir mapa: idPerfil → opName del que cubre (si hay cobertura activa hoy)
+      const _coberturaMap = {}; // { idPerfil: opNameQueCubre }
+      operatorsData.forEach(op => {
+        (op.profiles || []).forEach(p => {
+          if (p.tipo === 'cobertura' && p.cubreA) {
+            // Este operador está cubriendo el perfil de cubreA
+            // Verificar que esté marcado Presente en asistencia hoy
+            const shifts = ['manana','tarde','noche'];
+            let estaPresente = false;
+            for (const sh of shifts) {
+              const key   = ASI_KEY + '_draft_' + _hoyMatch + '_' + sh;
+              const draft = JSON.parse(localStorage.getItem(key) || '{}');
+              const k     = op.name + '||operador';
+              if (draft[k]?.estado === 'P' || draft[k]?.estado === 'T') {
+                estaPresente = true; break;
+              }
+            }
+            if (estaPresente) {
+              // Redirigir: cualquier punto del perfil original va a este operador
+              _coberturaMap[String(p.id).trim()] = op.name;
+            }
+          }
+        });
+      });
+      // ──────────────────────────────────────────────────────────────
+
       allEntries.forEach(d => {
         let opMatch = null;
-        for (const op of operatorsData) {
-          if (op.profiles && op.profiles.some(p => String(p.id).trim() === d.idPerfil)) {
-            opMatch = op; break;
+
+        // PRIMERO: verificar si hay cobertura activa para este perfil hoy
+        if (_coberturaMap[d.idPerfil]) {
+          const cubreOp = operatorsData.find(o => _normName(o.name) === _normName(_coberturaMap[d.idPerfil]));
+          if (cubreOp) opMatch = cubreOp;
+        }
+
+        // SEGUNDO: match normal por perfil asignado
+        if (!opMatch) {
+          for (const op of operatorsData) {
+            if (op.profiles && op.profiles.some(p => String(p.id).trim() === d.idPerfil)) {
+              opMatch = op; break;
+            }
           }
         }
+
+        // TERCERO: match por nombre del modelo
         if (!opMatch) opMatch = matchOperator(d.modelo);
 
         if (opMatch) {
@@ -8081,16 +8124,15 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         : `<div style="font-size:12px;color:#475569;margin-bottom:4px;">💤 Sin corte hoy</div>`}
       ${_novDetalle}
       <div class="chart-container"><canvas></canvas></div>
-      <div class="profiles-section">
-        <div class="profiles-title">
-          Perfiles que maneja
-          <button class="add-btn" onclick="toggleAddForm(${globalIndex})">+ Agregar</button>
+      <div class="profiles-section" style="margin-top:12px;">
+        <div class="profiles-title" style="font-size:.72rem;">
+          🗂️ Perfiles asignados
         </div>
         <div id="profiles-list-${globalIndex}" class="profiles-lazy">
           <div style="color:#334155;font-size:.75rem;padding:6px 0;">Cargando perfiles...</div>
         </div>
-        <div class="add-form" id="add-form-${globalIndex}">
-          <div class="add-form-lazy"></div>
+        <div style="margin-top:6px;font-size:.62rem;color:#334155;font-style:italic;text-align:center;">
+          ✏️ Edita perfiles desde la pestaña <strong style="color:#a78bfa;">✅ Asistencia</strong>
         </div>
       </div>`;
         fragment.appendChild(div);
@@ -8303,6 +8345,90 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // ══════════════════════════════════════════
 
         // ==================== AGREGAR / QUITAR ====================
+
+    // ══════════════════════════════════════════════════════════════
+    // GESTIÓN DE PERFILES DESDE ASISTENCIA — por nombre de operador
+    // ══════════════════════════════════════════════════════════════
+    window.asiPerfilToggleForm = function(opName) {
+      const safeId = opName.replace(/[^a-zA-Z0-9]/g, '_');
+      const form = document.getElementById('asi-add-form-' + safeId);
+      if (!form) return;
+      form.style.display = form.style.display === 'flex' ? 'none' : 'flex';
+    };
+
+    window.asiPerfilToggleCubre = function(opName) {
+      const safeId = opName.replace(/[^a-zA-Z0-9]/g, '_');
+      const tipo    = document.getElementById('asi-tipo-' + safeId)?.value;
+      const cubreEl = document.getElementById('asi-cubre-' + safeId);
+      if (cubreEl) cubreEl.style.display = tipo === 'cobertura' ? 'block' : 'none';
+    };
+
+    window.asiPerfilAdd = function(opName) {
+      const safeId  = opName.replace(/[^a-zA-Z0-9]/g, '_');
+      const idVal   = document.getElementById('asi-nid-'   + safeId)?.value.trim();
+      const modVal  = document.getElementById('asi-nmod-'  + safeId)?.value.trim();
+      const tipo    = document.getElementById('asi-tipo-'  + safeId)?.value || 'propio';
+      const cubreA  = tipo === 'cobertura' ? (document.getElementById('asi-cubre-' + safeId)?.value || '') : '';
+
+      if (!idVal || !modVal) return alert('Completa ID y Nombre del modelo');
+      if (tipo === 'cobertura' && !cubreA) return alert('Selecciona a quién está cubriendo');
+
+      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+      if (!op) return alert('Operador no encontrado');
+      if (!op.profiles) op.profiles = [];
+
+      // Evitar ID duplicado
+      if (op.profiles.some(p => String(p.id).trim() === idVal)) {
+        return alert('Ese ID ya está asignado a este operador');
+      }
+
+      op.profiles.push({ id: idVal, model: modVal, tipo, cubreA });
+      saveData();
+      // Subir a Supabase
+      if (typeof _sb !== 'undefined' && _sb) {
+        const val = JSON.stringify(operatorsData);
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+      }
+      asiRender();
+    };
+
+    window.asiPerfilRemove = function(opName, pIdx) {
+      if (!confirm('¿Eliminar este perfil?')) return;
+      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+      if (!op || !op.profiles) return;
+      op.profiles.splice(pIdx, 1);
+      saveData();
+      if (typeof _sb !== 'undefined' && _sb) {
+        const val = JSON.stringify(operatorsData);
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+      }
+      asiRender();
+    };
+
+    window.asiPerfilSetTipo = function(opName, pIdx, tipo) {
+      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+      if (!op?.profiles?.[pIdx]) return;
+      // toggle: si ya es ese tipo, volver a 'propio'
+      op.profiles[pIdx].tipo = op.profiles[pIdx].tipo === tipo ? 'propio' : tipo;
+      if (op.profiles[pIdx].tipo !== 'cobertura') op.profiles[pIdx].cubreA = '';
+      saveData();
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
+      }
+      asiRender();
+    };
+
+    window.asiPerfilSetCubre = function(opName, pIdx, cubreA) {
+      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+      if (!op?.profiles?.[pIdx]) return;
+      op.profiles[pIdx].cubreA = cubreA;
+      saveData();
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
+      }
+      // no re-render completo — solo actualizar visual del select
+    };
+
     window.toggleCubreField = function (globalIndex) {
       const tipo = document.getElementById(`new-tipo-${globalIndex}`)?.value;
       const cubreEl = document.getElementById(`new-cubre-${globalIndex}`);
@@ -10622,35 +10748,87 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         </div>`;
       }
 
-      // ── Perfiles del operador (solo para rol operador) ──
+      // ── Módulo completo de perfiles (solo para rol operador) ──
       let perfilesHTML = '';
       if (role === 'operador') {
-        const opData = (typeof operatorsData !== 'undefined')
+        const opData  = (typeof operatorsData !== 'undefined')
           ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
-        const perfs  = opData?.profiles || [];
-        if (perfs.length) {
-          const items = perfs.map(p => {
-            const esCob  = p.tipo === 'cobertura';
-            const badge  = esCob
-              ? '<span style="font-size:.55rem;padding:1px 5px;border-radius:4px;background:rgba(248,113,113,.15);color:#f87171;font-weight:700;">🔴 Cob</span>'
-              : '<span style="font-size:.55rem;padding:1px 5px;border-radius:4px;background:rgba(52,211,153,.12);color:#34d399;font-weight:700;">🟢 Propio</span>';
-            const cubre  = esCob && p.cubreA
-              ? `<span style="font-size:.5rem;color:#475569;"> → ${p.cubreA}</span>` : '';
-            return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04);">
-              <span style="font-size:.6rem;color:#94a3b8;flex:1;">ID: ${p.id} — ${p.model || p.modelo || ''}</span>
-              ${badge}${cubre}
-            </div>`;
-          }).join('');
-          perfilesHTML = `
-          <details style="margin-top:6px;">
-            <summary style="font-size:.6rem;color:#475569;cursor:pointer;text-transform:uppercase;
-              letter-spacing:.6px;list-style:none;display:flex;align-items:center;gap:4px;">
-              🗂️ Perfiles (${perfs.length})
-              <span style="margin-left:auto;font-size:.55rem;">▼</span>
-            </summary>
-            <div style="margin-top:4px;padding:4px 0;">${items}</div>
-          </details>`;
-        }
+        const perfs   = opData?.profiles || [];
+        const safeId  = name.replace(/[^a-zA-Z0-9]/g, '_');
+        const snq     = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+        // Lista de otros operadores para selector de cobertura
+        const otherOps = (typeof operatorsData !== 'undefined')
+          ? operatorsData
+              .filter(o => _normName(o.name) !== _normName(name) && o.group !== 'SP' && o.group !== 'N/A')
+              .map(o => `<option value="${o.name}">${o.name} (Grp ${o.group})</option>`)
+              .join('')
+          : '';
+
+        // Lista de perfiles existentes
+        const listItems = perfs.length
+          ? perfs.map((p, pIdx) => {
+              const esCob   = p.tipo === 'cobertura';
+              const snqCubre = (p.cubreA || '').replace(/'/g, "\\'");
+              return `<div class="profile-item${esCob ? ' cobertura' : ''}" style="font-size:.75rem;">
+                <div class="profile-item-row">
+                  <span>ID: ${p.id} — ${p.model || p.modelo || ''}
+                    <span class="profile-badge ${esCob ? 'badge-cobertura' : 'badge-propio'}">${esCob ? '🔴 Cobertura' : '🟢 Propio'}</span>
+                  </span>
+                  <span class="delete-profile" onclick="asiPerfilRemove('${snq}',${pIdx})" title="Eliminar">✕</span>
+                </div>
+                ${esCob
+                  ? `<div class="profile-cubre-tag" style="display:flex;align-items:center;gap:6px;">
+                      ↳ Cubriendo:
+                      <select onchange="asiPerfilSetCubre('${snq}',${pIdx},this.value)"
+                        style="font-size:.65rem;padding:1px 4px;border-radius:4px;border:1px solid rgba(248,113,113,.3);
+                               background:#0d1526;color:#f87171;flex:1;max-width:180px;">
+                        <option value="">— ¿A quién cubre? —</option>
+                        ${otherOps.replace(new RegExp('value="' + snqCubre + '"'), 'value="' + snqCubre + '" selected')}
+                      </select>
+                    </div>`
+                  : ''}
+              </div>`;
+            }).join('')
+          : '<div style="color:#475569;font-size:.72rem;padding:4px 0;">Sin perfiles asignados.</div>';
+
+        perfilesHTML = `
+        <div class="profiles-section" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">
+          <div class="profiles-title" style="font-size:.65rem;">
+            🗂️ Perfiles (${perfs.length})
+            <button class="add-btn" style="font-size:.6rem;padding:2px 8px;"
+              onclick="asiPerfilToggleForm('${snq}')">+ Agregar</button>
+          </div>
+          <div id="asi-perfiles-list-${safeId}">${listItems}</div>
+          <div id="asi-add-form-${safeId}" class="add-form" style="display:none;gap:6px;flex-direction:column;margin-top:6px;">
+            <input id="asi-nid-${safeId}"  type="text" placeholder="ID del perfil"
+              style="font-size:.7rem;padding:5px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);
+                     background:#0d1526;color:#e2e8f0;width:100%;box-sizing:border-box;"/>
+            <input id="asi-nmod-${safeId}" type="text" placeholder="Nombre del modelo"
+              style="font-size:.7rem;padding:5px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);
+                     background:#0d1526;color:#e2e8f0;width:100%;box-sizing:border-box;"/>
+            <select id="asi-tipo-${safeId}" onchange="asiPerfilToggleCubre('${snq}')"
+              style="font-size:.7rem;padding:5px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);
+                     background:#0d1526;color:#e2e8f0;width:100%;box-sizing:border-box;">
+              <option value="propio">🟢 Perfil Propio</option>
+              <option value="cobertura">🔴 Cubriendo otro grupo</option>
+            </select>
+            <select id="asi-cubre-${safeId}" style="display:none;font-size:.7rem;padding:5px 8px;border-radius:6px;
+                     border:1px solid rgba(248,113,113,.3);background:#0d1526;color:#f87171;
+                     width:100%;box-sizing:border-box;">
+              <option value="">— ¿A quién cubre? —</option>
+              ${otherOps}
+            </select>
+            <div style="display:flex;gap:6px;">
+              <button onclick="asiPerfilAdd('${snq}')"
+                style="flex:1;padding:5px 10px;font-size:.7rem;font-weight:700;border-radius:6px;cursor:pointer;
+                       border:none;background:#34d399;color:#0d1526;">✓ Guardar</button>
+              <button onclick="asiPerfilToggleForm('${snq}')"
+                style="padding:5px 10px;font-size:.7rem;font-weight:700;border-radius:6px;cursor:pointer;
+                       border:1px solid rgba(255,255,255,.1);background:transparent;color:#64748b;">✕</button>
+            </div>
+          </div>
+        </div>`;
       }
 
       return `<div class="asi-card${est ? ' estado-' + est : ''}" >
@@ -10820,19 +10998,46 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (!date) { alert('Selecciona una fecha primero.'); return; }
       const ops = (typeof operatorsData !== 'undefined') ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : [];
       const mons = loadMonitores();
+
+      // Incluir perfiles y turno de cada operador en el registro de asistencia
       const record = {
         fecha: date, turno: asiShift, ts: Date.now(),
-        operadores: ops.map(o => ({ name: o.name, group: o.group, estado: asiEstados[asiKey(o.name, 'operador')]?.estado || '—', nota: asiEstados[asiKey(o.name, 'operador')]?.nota || '' })),
+        operadores: ops.map(o => ({
+          name: o.name,
+          group: o.group,
+          turno: o.turno || '',
+          profiles: (o.profiles || []).map(p => ({ id: p.id, model: p.model || p.modelo || '', tipo: p.tipo || 'propio', cubreA: p.cubreA || '' })),
+          estado: asiEstados[asiKey(o.name, 'operador')]?.estado || '—',
+          nota:   asiEstados[asiKey(o.name, 'operador')]?.nota   || '',
+          horaIngreso: asiEstados[asiKey(o.name, 'operador')]?.horaIngreso || ''
+        })),
         monitores: mons.map(m => ({ name: m, estado: asiEstados[asiKey(m, 'monitor')]?.estado || '—', nota: asiEstados[asiKey(m, 'monitor')]?.nota || '' }))
       };
+
       const all = JSON.parse(localStorage.getItem(ASI_KEY) || '[]');
       const idx = all.findIndex(r => r.fecha === date && r.turno === asiShift);
       if (idx >= 0) all[idx] = record; else all.unshift(record);
-      // Bug 14: LocalStorage limit (max 100 records)
       if (all.length > 100) all.splice(100);
       localStorage.setItem(ASI_KEY, JSON.stringify(all));
+
+      // Persistir también los perfiles actualizados en primeOperatorsData2026
+      saveData();
+      if (typeof _sb !== 'undefined' && _sb) {
+        // Subir asistencia + operadores actualizados a Supabase
+        Promise.all([
+          _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+        ]).then(() => console.info('[Asistencia] Guardado en Supabase ✅'));
+      }
+
       const btn = document.querySelector('.btn-asi-save');
-      if (btn) { const o = btn.innerHTML; btn.innerHTML = '✅ ¡Guardado!'; btn.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)'; btn.style.color = '#fff'; setTimeout(() => { btn.innerHTML = o; btn.style.background = ''; btn.style.color = ''; }, 2200); }
+      if (btn) {
+        const o = btn.innerHTML;
+        btn.innerHTML = '✅ ¡Guardado con perfiles!';
+        btn.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
+        btn.style.color = '#fff';
+        setTimeout(() => { btn.innerHTML = o; btn.style.background = ''; btn.style.color = ''; }, 2200);
+      }
     }
 
     function asiVerHistorial() {

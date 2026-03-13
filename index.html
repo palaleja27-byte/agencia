@@ -1886,10 +1886,8 @@
 
     .rkinfo-tooltip {
       display: none;
-      position: absolute;
-      bottom: calc(100% + 12px);
-      right: -8px;
-      width: 360px;
+      position: fixed;
+      width: min(360px, calc(100vw - 32px));
       background: #0f172a;
       border: 1px solid rgba(94, 234, 212, .3);
       border-radius: 16px;
@@ -1913,18 +1911,7 @@
       to   { opacity:1; transform: translateY(0); }
     }
 
-    .rkinfo-tooltip::after {
-      content: '';
-      position: absolute;
-      bottom: -6px;
-      right: 18px;
-      width: 10px;
-      height: 10px;
-      background: #0f172a;
-      border-right: 1px solid rgba(94, 234, 212, .3);
-      border-bottom: 1px solid rgba(94, 234, 212, .3);
-      transform: rotate(45deg);
-    }
+    /* arrow removed — tooltip usa posición fixed inteligente */
 
     .rktt-header {
       background: rgba(94,234,212,.07);
@@ -4257,8 +4244,10 @@
             <span style="font-size:1rem;font-weight:900;color:${crecColor};">${crecSign}${crec.toFixed(1)}%</span>
           </div>
           <div style="font-size:.65rem;color:#64748b;margin-top:4px;">
-            ${prevLabel}: <strong style="color:#94a3b8;">${totalAnt.toFixed(0)} pts</strong>
-            → ${currLabel}: <strong style="color:#5eead4;">${totalConPSA.toFixed(0)} pts</strong>
+            ${prevLabel}: <strong style="color:${totalAnt>0?'#94a3b8':'#f87171'};">
+              ${totalAnt > 0 ? totalAnt.toFixed(0)+' pts' : '⚠️ Sin datos — sube el Excel de '+prevLabel+' en Registrar Corte'}
+            </strong><br>
+            ${currLabel}: <strong style="color:#5eead4;">${totalConPSA.toFixed(0)} pts</strong>
           </div>
         </div>
         <div class="rktt-body">
@@ -4296,16 +4285,63 @@
 
       panel.classList.add('tooltip-visible');
 
+      // Posicionar inteligentemente según espacio disponible
+      requestAnimationFrame(() => {
+        const btn   = document.getElementById('btn-crec-info');
+        if (!btn) return;
+        const rect  = btn.getBoundingClientRect();
+        const ph    = panel.offsetHeight || 420;
+        const pw    = panel.offsetWidth  || 360;
+        const vw    = window.innerWidth;
+        const vh    = window.innerHeight;
+        // Horizontal: alinear a la derecha del botón, sin salirse
+        let left = rect.right - pw;
+        if (left < 8) left = 8;
+        if (left + pw > vw - 8) left = vw - pw - 8;
+        // Vertical: abrir hacia arriba si hay espacio, si no hacia abajo
+        let top;
+        if (rect.top - ph - 12 > 8) {
+          top = rect.top - ph - 12; // arriba del botón
+        } else {
+          top = rect.bottom + 12;    // abajo del botón
+        }
+        if (top + ph > vh - 8) top = vh - ph - 8;
+        if (top < 8) top = 8;
+        panel.style.top  = top  + 'px';
+        panel.style.left = left + 'px';
+      });
+
       // Cerrar al click fuera
       setTimeout(() => {
         document.addEventListener('click', function _closeCrecTT(e) {
-          if (!panel.contains(e.target)) {
+          if (!panel.contains(e.target) && e.target.id !== 'btn-crec-info') {
             panel.classList.remove('tooltip-visible');
             _crecTooltipOpen = false;
             document.removeEventListener('click', _closeCrecTT);
           }
         });
       }, 50);
+    }
+
+
+    // ── Configurar base del mes anterior ──────────────────────
+    function abrirSetBaseMes() {
+      const { prev } = getActivePair();
+      const mesStr   = getMesAnteriorStr();
+      const label    = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
+      const actual   = getBaseMeses()[mesStr] || getTotalMesPts(mesStr) || '';
+      const val = prompt(
+        `Total de puntos de ${label} (base para calcular crecimiento):\n` +
+        `Ejemplo: 56773.45\n\nValor actual: ${actual || 'No definido'}`,
+        actual
+      );
+      if (val === null) return;
+      const pts = parseFloat(String(val).replace(',', '.'));
+      if (isNaN(pts) || pts <= 0) return alert('Valor inválido. Ingresa un número positivo.');
+      setBaseMes(mesStr, pts);
+      renderRanking();
+      if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
+      alert(`✅ Base de ${label} guardada: ${pts.toLocaleString('es-CO')} pts`);
     }
 
     function filterRanking() {
@@ -4552,6 +4588,7 @@
       <div style="font-size:.6rem;color:#475569;margin-top:3px;">
         ${prevLabel}: ${totalPtsAnt.toFixed(0)} pts → ${currLabel}: ${totalPtsCurr.toFixed(0)} pts
       </div>
+      <!-- base mes anterior: sube el Excel histórico en Registrar Corte -->
       <button id="btn-crec-info" onclick="toggleCrecTooltip(event)"
         style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;
                background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.3);
@@ -6855,10 +6892,22 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function getPSATotalMes(mesStr) {
       return getPSAMes(mesStr).reduce((s, e) => s + (e.puntos || 0), 0);
     }
+    // ── Base histórica de meses: rr_base_meses ──────────────────
+    // { 'YYYY-MM': pts }  ej: { '2026-02': 56773.45 }
+    // Admin la setea manualmente para meses anteriores al sistema
+    const BASE_MESES_KEY = 'rr_base_meses';
+    function getBaseMeses() {
+      return JSON.parse(localStorage.getItem(BASE_MESES_KEY) || '{}');
+    }
+    function setBaseMes(mesStr, pts) {
+      const base = getBaseMeses();
+      base[mesStr] = pts;
+      localStorage.setItem(BASE_MESES_KEY, JSON.stringify(base));
+    }
+
     // ── Suma total de cortes reales de toda la operación en un mes ──
-    // Fuente de verdad: rr_prime_cortes (nunca op[prev] que puede estar vacío)
     function getTotalMesPts(mesStr) {
-      // mesStr = 'YYYY-MM'  ej: '2026-02'
+      // 1. Sumar cortes reales en rr_prime_cortes
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       let total = 0;
       Object.values(allCortes).forEach(cortes => {
@@ -6868,8 +6917,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             total += (c.puntos || 0);
         });
       });
-      // Sumar también PSA del mes (perfiles sin operador asignado)
+      // 2. Sumar PSA del mes
       total += getPSATotalMes(mesStr);
+      // 3. Si no hay cortes (mes anterior al sistema) → usar base guardada
+      if (total === 0) {
+        const base = getBaseMeses();
+        if (base[mesStr]) total = base[mesStr];
+      }
       return total;
     }
 
@@ -7853,19 +7907,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const byPerfil = {}; // idPerfil → { "fecha||jornada" → entry }  (una entrada POR TURNO POR DIA)
 
       // Extraer fecha real del nombre de hoja: "1 MAR", "15 MAR", "2 FEB" etc.
+      // Retorna null para hojas que no sean fechas (FINAL FEB, RESUMEN, etc.) → se ignoran
       const MONTH_ES = { ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,OCT:10,NOV:11,DIC:12 };
       function sheetToDate(name) {
         const m = name.trim().toUpperCase().match(/^(\d{1,2})\s+([A-Z]{3})/);
-        if (!m) return localDateStr();
+        if (!m) return null; // hoja resumen/total (FINAL FEB, etc.) → NO importar
         const day = parseInt(m[1]);
         const mon = MONTH_ES[m[2]];
-        if (!mon) return localDateStr();
+        if (!mon) return null;
         const now = new Date();
-        const curMon = now.getMonth() + 1; // 1-12
-        // FIX: si el mes de la hoja es mayor que el mes actual,
-        // el Excel pertenece al año anterior (ej: subir dic en enero)
+        const curMon = now.getMonth() + 1;
         const yr = (mon > curMon + 1) ? now.getFullYear() - 1 : now.getFullYear();
-        return `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        return `\${yr}-\${String(mon).padStart(2,'0')}-\${String(day).padStart(2,'0')}`;
       }
 
       wb.SheetNames.forEach(sheetName => {
@@ -7904,6 +7957,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
               const id      = String(Math.round(idNum));
               const fecha   = sheetToDate(sheetName);
+              if (!fecha) continue; // hoja sin fecha válida (FINAL FEB, RESUMEN, etc.) → skip
               const jornada = _jornadaDeHora(hora); // Mañana/Tarde/Noche según hora del bloque
               const gKey    = fecha + '||' + jornada; // clave única por turno por día
 

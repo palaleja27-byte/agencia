@@ -3407,6 +3407,10 @@
         <button class="btn-corte-rk" onclick="abrirModalCorte()">📸 Registrar Corte</button>
         <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
+        <button id="btn-purgar-mes" onclick="purgarCortesMes()"
+          style="display:none;padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;
+                 cursor:pointer;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);
+                 color:#f87171;" title="Purgar cortes de un mes">🗑️ Purgar mes</button>
       </div>
     </div>
 
@@ -4342,6 +4346,70 @@
       renderRanking();
       if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
       alert(`✅ Base de ${label} guardada: ${pts.toLocaleString('es-CO')} pts`);
+    }
+
+
+    // ── Purgar cortes de un mes específico ────────────────────
+    function purgarCortesMes() {
+      if (currentRole !== 'monitor' && currentRole !== 'admin') return;
+
+      // Opciones de mes a purgar
+      const opciones = MONTH_KEYS.map((k, i) => `${i+1}. ${MONTH_LABELS[i]} (${k})`).join('\n');
+      const sel = prompt(
+        'Selecciona el número del mes a PURGAR de rr_prime_cortes:\n\n' + opciones +
+        '\n\n⚠️ Esto borra TODOS los cortes de ese mes. Acción irreversible.',
+        '2'
+      );
+      if (!sel) return;
+
+      const idx = parseInt(sel) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= MONTH_KEYS.length) return alert('Número inválido.');
+
+      const mesKey   = MONTH_KEYS[idx];
+      const mesLabel = MONTH_LABELS[idx];
+      const mesStr   = '2026-' + String(idx + 1).padStart(2, '0'); // 'YYYY-MM'
+
+      if (!confirm(
+        `¿Borrar TODOS los cortes de ${mesLabel} (${mesStr}) de rr_prime_cortes?\n\n` +
+        `Esta acción NO se puede deshacer.\nDespués podrás subir el Excel de ${mesLabel} limpio.`
+      )) return;
+
+      // Leer todos los cortes
+      const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+      let totalBorrados = 0;
+      let totalPts = 0;
+
+      Object.keys(allCortes).forEach(opName => {
+        const antes  = allCortes[opName].length;
+        const ptsBef = allCortes[opName].reduce((s,c) => s+(c.puntos||0), 0);
+        // Filtrar: dejar solo cortes que NO sean del mes a purgar
+        allCortes[opName] = allCortes[opName].filter(c =>
+          !(c.fecha && c.fecha.slice(0,7) === mesStr)
+        );
+        const borrados = antes - allCortes[opName].length;
+        totalBorrados += borrados;
+        totalPts += ptsBef - allCortes[opName].reduce((s,c) => s+(c.puntos||0), 0);
+      });
+
+      // Guardar y sincronizar con Supabase (vía override)
+      localStorage.setItem(CORTE_KEY, JSON.stringify(allCortes));
+
+      // También purgar PSA del mismo mes
+      const psaAntes = getPSA().length;
+      const psaResta = getPSA().filter(e => !(e.fecha && e.fecha.slice(0,7) === mesStr));
+      savePSA(psaResta);
+      const psaBorrados = psaAntes - psaResta.length;
+
+      renderRanking();
+      if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
+      if (typeof renderPSAPanel === 'function') renderPSAPanel();
+
+      alert(
+        `✅ Purga de ${mesLabel} completada:\n` +
+        `· ${totalBorrados} cortes eliminados (${totalPts.toFixed(1)} pts)\n` +
+        `· ${psaBorrados} entradas PSA eliminadas\n\n` +
+        `Ahora puedes subir el Excel de ${mesLabel} limpio.`
+      );
     }
 
     function filterRanking() {
@@ -9349,6 +9417,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // Btn grupos: solo admin puede crear/borrar grupos
       const btnGrupos = document.getElementById('btn-grupo-manager');
       if (btnGrupos) btnGrupos.style.display = role === 'admin' ? 'inline-block' : 'none';
+      // Btn purgar mes: solo admin
+      const btnPurgar = document.getElementById('btn-purgar-mes');
+      if (btnPurgar) btnPurgar.style.display = role === 'admin' ? 'inline-block' : 'none';
     }
 
     // ==================== INICIO ====================

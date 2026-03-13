@@ -3429,6 +3429,9 @@
     <!-- Alertas de rendimiento -->
     <div id="rk-alertas-wrap" style="max-width:1200px;margin:0 auto 24px;"></div>
 
+    <!-- Panel análisis de crecimiento (solo monitor/admin) -->
+    <div id="rk-crec-analisis" style="display:none;max-width:1200px;margin:0 auto 24px;padding:0 16px;"></div>
+
     <!-- Metas Grupales y General (solo monitor/admin) -->
     <div id="rk-metas-wrap" style="display:none;max-width:1200px;margin:0 auto 24px;">
       <div style="background:var(--panel);border:1px solid rgba(251,191,36,.25);border-radius:16px;overflow:hidden;">
@@ -4529,6 +4532,8 @@
       if (_metasBody && _metasBody.style.display === 'block') renderMetasPanel();
       // Actualizar cajón de puntos sin asignar
       if (typeof renderPSAPanel === 'function') renderPSAPanel();
+      // Actualizar bloque de análisis de crecimiento
+      if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
     }
 
     // ══════════════════════════════════════════════════════
@@ -6521,7 +6526,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function renderMetasPanel() {
       const p = _metasPeriodo;
-      const ops = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
+      // Filtrar operadores por jornada activa
+      const _allOps = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
+      const ops = alertasJornada
+        ? _allOps.filter(o => (o.turno || '') === alertasJornada)
+        : _allOps;
 
       // ── Meta General ──
       const totalPts = ops.reduce((s, o) => s + getPuntosPeriodo(o.name, p), 0);
@@ -7058,7 +7067,19 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // MÓDULO: ALERTAS DE RENDIMIENTO (DÍA / SEMANA / MES)
     // ══════════════════════════════════════════
 
-    let alertasPeriodo = 'dia'; // 'dia' | 'semana' | 'mes'
+    let alertasPeriodo = 'dia';        // 'dia' | 'semana' | 'mes'
+    let alertasJornada = 'Tarde';       // '' = todos | 'Mañana' | 'Tarde' | 'Noche' — default Tarde
+
+    function setAlertaJornada(j) {
+      alertasJornada = j;
+      // Actualizar pills
+      ['todos','manana','tarde','noche'].forEach(id => {
+        const btn = document.getElementById('alerta-j-' + id);
+        const map = { todos: '', manana: 'Mañana', tarde: 'Tarde', noche: 'Noche' };
+        if (btn) btn.classList.toggle('active', map[id] === j);
+      });
+      renderAlertas();
+    }
 
     // Get ISO week number
     function getWeek(date) {
@@ -7079,8 +7100,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     // Aggregate cortes for one operator by period
     // Returns { current, previous } totals
-    function agregarCortesPorPeriodo(opName, periodo) {
-      const cortes = getCortesOp(opName);
+    function agregarCortesPorPeriodo(opName, periodo, jornada) {
+      // jornada: '' | 'Mañana' | 'Tarde' | 'Noche'
+      // Si se especifica, solo suma cortes de esa jornada
+      const cortesAll = getCortesOp(opName);
+      const cortes = jornada
+        ? cortesAll.filter(c => (c.jornada || '') === jornada)
+        : cortesAll;
       const now = new Date();
       const hoy = localDateStr(now);
 
@@ -7143,16 +7169,166 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       renderAlertas();
     }
 
+
+    // ══════════════════════════════════════════════════════════════
+    // ANÁLISIS DE CRECIMIENTO DE LA OPERACIÓN — solo monitor/admin
+    // ══════════════════════════════════════════════════════════════
+    function renderCrecimientoAnalisis() {
+      const panel = document.getElementById('rk-crec-analisis');
+      if (!panel) return;
+      if (currentRole !== 'monitor' && currentRole !== 'admin') {
+        panel.style.display = 'none'; return;
+      }
+
+      const { prev, curr } = getActivePair();
+      const MONTH_LABELS_MAP = {};
+      MONTH_KEYS.forEach((k, i) => { MONTH_LABELS_MAP[k] = MONTH_LABELS[i]; });
+      const prevLabel = MONTH_LABELS_MAP[prev] || prev;
+      const currLabel = MONTH_LABELS_MAP[curr] || curr;
+      const mesActual = localDateStr().slice(0, 7);
+
+      // Calcular totales usando cortes reales
+      let totalCurr = 0, totalAnt = 0;
+      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
+        const cortes = getCortesOp(o.name);
+        const ptsMes = cortes
+          .filter(c => c.fecha && c.fecha.slice(0,7) === mesActual)
+          .reduce((s, c) => s + (c.puntos || 0), 0);
+        totalCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
+        totalAnt  += o[prev] || 0;
+      });
+
+      // Incluir PSA en el total (son puntos reales de la operación)
+      const psaTotal = getPSATotalMes(mesActual);
+      const totalCurrConPSA = totalCurr + psaTotal;
+
+      // Crecimiento
+      const crec = totalAnt > 0 ? ((totalCurrConPSA - totalAnt) / totalAnt * 100) : 0;
+      const crecSign  = crec >= 0 ? '+' : '';
+      const crecColor = crec >= 0 ? '#34d399' : '#f87171';
+      const crecIcon  = crec >= 0 ? '📈' : '📉';
+
+      // Días del mes
+      const hoy     = new Date();
+      const diaHoy  = hoy.getDate();
+      const diasMes = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0).getDate();
+      const diasRest= diasMes - diaHoy;
+      const promDia = diaHoy > 0 ? totalCurrConPSA / diaHoy : 0;
+      const proyecc = Math.round(promDia * diasMes);
+
+      // Top 3 operadores por cortes reales del mes
+      const opsConPts = operatorsData
+        .filter(o => o.group !== 'SP')
+        .map(o => {
+          const c = getCortesOp(o.name);
+          const p = c.filter(x => x.fecha && x.fecha.slice(0,7) === mesActual)
+                     .reduce((s, x) => s + (x.puntos || 0), 0);
+          return { name: o.name.split(' ').slice(0,2).join(' '), pts: p, turno: o.turno || '' };
+        })
+        .filter(o => o.pts > 0)
+        .sort((a, b) => b.pts - a.pts);
+
+      const top3 = opsConPts.slice(0, 3);
+      const top3Pts = top3.reduce((s, o) => s + o.pts, 0);
+      const top3Pct = totalCurrConPSA > 0 ? Math.round((top3Pts / totalCurrConPSA) * 100) : 0;
+
+      // Mejor turno del mes
+      const ptsPorTurno = { Mañana: 0, Tarde: 0, Noche: 0 };
+      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
+        const t = o.turno || 'Noche';
+        const c = getCortesOp(o.name);
+        const p = c.filter(x => x.fecha && x.fecha.slice(0,7) === mesActual)
+                   .reduce((s, x) => s + (x.puntos || 0), 0);
+        if (ptsPorTurno[t] !== undefined) ptsPorTurno[t] += p;
+      });
+      const mejorTurno = Object.entries(ptsPorTurno).sort((a,b)=>b[1]-a[1])[0];
+
+      // Consejos automáticos
+      const consejos = [];
+      if (psaTotal > 0) {
+        consejos.push(`⚠️ Hay <strong>${psaTotal.toFixed(1)} pts</strong> en el cajón sin asignar — asígnales sus perfiles para reflejar el 100% real.`);
+      }
+      if (top3Pct >= 50) {
+        consejos.push(`🎯 Los top 3 operadores (${top3.map(o=>o.name.split(' ')[0]).join(', ')}) concentran el <strong>${top3Pct}%</strong> de los puntos — diversifica la carga.`);
+      }
+      if (crec < 0) {
+        consejos.push(`📉 La operación va por debajo de ${prevLabel}. Revisa ausencias y perfiles inactivos.`);
+      }
+      if (crec > 30) {
+        consejos.push(`🚀 Crecimiento fuerte de <strong>${crecSign}${crec.toFixed(1)}%</strong>. Mantén el ritmo de cortes cada 2h.`);
+      }
+      if (diasRest <= 5) {
+        consejos.push(`⏳ Quedan <strong>${diasRest} días</strong> del mes. Sprint final — maximiza cortes en turno Tarde y Noche.`);
+      }
+      if (mejorTurno && mejorTurno[1] > 0) {
+        consejos.push(`🏆 El turno más productivo este mes es <strong>${mejorTurno[0]}</strong> con ${mejorTurno[1].toFixed(0)} pts.`);
+      }
+
+      const consejosHTML = consejos.length
+        ? consejos.map(c => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);line-height:1.6;">→ ${c}</div>`).join('')
+        : '<div style="color:#475569;font-size:.75rem;">Sin alertas especiales por ahora.</div>';
+
+      const top3HTML = top3.map((o, i) => `
+        <span style="background:rgba(255,255,255,.05);border-radius:8px;padding:3px 8px;font-size:.7rem;white-space:nowrap;">
+          ${['🥇','🥈','🥉'][i]} ${o.name} · ${o.pts.toFixed(1)} pts
+        </span>`).join('');
+
+      panel.style.display = 'block';
+      panel.innerHTML = `
+        <div style="background:var(--panel);border:1px solid rgba(94,234,212,.15);border-radius:16px;
+          overflow:hidden;margin-bottom:0;">
+          <div style="background:rgba(94,234,212,.06);padding:14px 18px;display:flex;align-items:center;
+            justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:1.1rem;">${crecIcon}</span>
+              <div>
+                <span style="font-weight:800;font-size:.9rem;color:#e2e8f0;">Análisis de Crecimiento</span>
+                <span style="margin-left:8px;font-size:1rem;font-weight:900;color:${crecColor};">
+                  ${crecSign}${crec.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+            <div style="font-size:.7rem;color:#475569;">
+              ${prevLabel}: <strong style="color:#94a3b8;">${totalAnt.toFixed(0)} pts</strong>
+              → ${currLabel}: <strong style="color:#5eead4;">${totalCurrConPSA.toFixed(0)} pts</strong>
+              · Proyección fin de mes: <strong style="color:#fbbf24;">${proyecc.toLocaleString()} pts</strong>
+            </div>
+          </div>
+          <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div>
+              <div style="font-size:.7rem;font-weight:700;color:#64748b;text-transform:uppercase;
+                letter-spacing:.8px;margin-bottom:8px;">💡 Consejos</div>
+              <div style="font-size:.75rem;color:#94a3b8;">${consejosHTML}</div>
+            </div>
+            <div>
+              <div style="font-size:.7rem;font-weight:700;color:#64748b;text-transform:uppercase;
+                letter-spacing:.8px;margin-bottom:8px;">🏅 Top producción ${currLabel}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">${top3HTML}</div>
+              <div style="margin-top:10px;font-size:.7rem;color:#475569;">
+                Días transcurridos: <strong style="color:#e2e8f0;">${diaHoy}</strong> /
+                ${diasMes} · Prom/día: <strong style="color:#5eead4;">${promDia.toFixed(1)} pts</strong>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
     function renderAlertas() {
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
 
-      const ops = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
+      // Filtrar operadores: si jornada seleccionada → solo los de ese turno asignado
+      const ops = operatorsData.filter(o => {
+        if (o.group === 'SP' || o.group === 'N/A') return false;
+        if (alertasJornada) return (o.turno || '') === alertasJornada;
+        return true;
+      });
       const periodoLabel = { dia: 'Hoy vs Prom. 7 días', semana: 'Esta semana vs anterior', mes: 'Este mes vs anterior' }[alertasPeriodo];
 
       // Build alert data for each operator
+      // Pasar jornada para que los puntos también se filtren por turno
       const alertData = ops.map(op => {
-        const { current, previous } = agregarCortesPorPeriodo(op.name, alertasPeriodo);
+        const { current, previous } = agregarCortesPorPeriodo(op.name, alertasPeriodo, alertasJornada);
         let pct = 0, tipo = 'zero', pctLabel = '—';
         if (previous > 0 && current > 0) {
           pct = Math.round(((current - previous) / previous) * 100);
@@ -7171,7 +7347,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         wrap.innerHTML = `
       <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;">
         <div class="alertas-header">
-          <div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">⚡ Alertas de Rendimiento</div>
+          <div>
+            <div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">⚡ Alertas de Rendimiento</div>
+            
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">
+            <button id="alerta-j-todos"  class="rk-turno-pill ${alertasJornada===''?'active':''}"      onclick="setAlertaJornada('')">👥 Todos</button>
+            <button id="alerta-j-manana" class="rk-turno-pill ${alertasJornada==='Mañana'?'active':''}" onclick="setAlertaJornada('Mañana')">☀️ Mañana</button>
+            <button id="alerta-j-tarde"  class="rk-turno-pill ${alertasJornada==='Tarde'?'active':''}"  onclick="setAlertaJornada('Tarde')">🌆 Tarde</button>
+            <button id="alerta-j-noche"  class="rk-turno-pill ${alertasJornada==='Noche'?'active':''}"  onclick="setAlertaJornada('Noche')">🌙 Noche</button>
+          </div>
+          </div>
           <div class="alertas-tabs">
             <button class="alerta-tab ${alertasPeriodo === 'dia' ? 'active' : ''}"    data-p="dia"    onclick="setAlertaTab('dia')">Día</button>
             <button class="alerta-tab ${alertasPeriodo === 'semana' ? 'active' : ''}" data-p="semana" onclick="setAlertaTab('semana')">Semana</button>
@@ -7209,13 +7394,23 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       wrap.innerHTML = `
     <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;">
-      <div class="alertas-header">
-        <div>
+      <div class="alertas-header" style="flex-wrap:wrap;gap:8px;">
+        <div style="flex:1;min-width:200px;">
           <div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">⚡ Alertas de Rendimiento</div>
-          <div style="font-size:.65rem;color:#334155;margin-top:3px;">${periodoLabel} ·
+          <div style="font-size:.65rem;color:#334155;margin-top:3px;">
+            ${periodoLabel} · 
+            <span style="color:${alertasJornada?'#5eead4':'#64748b'};font-weight:${alertasJornada?'700':'400'};">
+              ${alertasJornada||'Todos los turnos'}
+            </span> ·
             <span style="color:#f87171;">🔴 ${downCount} bajando</span> ·
             <span style="color:#fbbf24;">🟡 ${warnCount} alerta</span> ·
             <span style="color:#34d399;">🟢 ${upCount} subiendo</span>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">
+            <button id="alerta-j-todos"  class="rk-turno-pill ${alertasJornada===''?'active':''}"       onclick="setAlertaJornada('')">👥 Todos</button>
+            <button id="alerta-j-manana" class="rk-turno-pill ${alertasJornada==='Mañana'?'active':''}" onclick="setAlertaJornada('Mañana')">☀️ Mañana</button>
+            <button id="alerta-j-tarde"  class="rk-turno-pill ${alertasJornada==='Tarde'?'active':''}"  onclick="setAlertaJornada('Tarde')">🌆 Tarde</button>
+            <button id="alerta-j-noche"  class="rk-turno-pill ${alertasJornada==='Noche'?'active':''}"  onclick="setAlertaJornada('Noche')">🌙 Noche</button>
           </div>
         </div>
         <div class="alertas-tabs">
@@ -8731,6 +8926,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const val = JSON.stringify(operatorsData);
         _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
       }
+
+      // ── Reclamo automático del cajón PSA ──────────────────────
+      // Si había puntos sin asignar para este ID, moverlos al operador
+      if (tipo !== 'cobertura') {
+        const psa     = getPSA();
+        const matches = psa.filter(e => String(e.idPerfil).trim() === String(idVal).trim());
+        if (matches.length > 0) {
+          matches.forEach(e => {
+            registrarCorte(op.name, e.puntos, e.fecha, e.jornada);
+          });
+          // Eliminar del cajón los que ya se asignaron
+          const restantes = psa.filter(e => String(e.idPerfil).trim() !== String(idVal).trim());
+          savePSA(restantes);
+          const ptsMov = matches.reduce((s, e) => s + (e.puntos || 0), 0);
+          const copMov = Math.round(ptsMov * 1400).toLocaleString('es-CO');
+          alert(`✅ ${matches.length} corte(s) del cajón asignados a ${op.name}\n📦 ${ptsMov.toFixed(1)} pts · $${copMov} COP transferidos al historial del operador.`);
+          if (typeof renderPSAPanel === 'function') renderPSAPanel();
+          if (typeof renderRanking  === 'function') renderRanking();
+        }
+      }
+      // ──────────────────────────────────────────────────────────
       asiRender();
     };
 

@@ -3,6 +3,10 @@
 
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <!-- build:20260313_223019 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reporte Enero - Febrero 2026</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3408,9 +3412,9 @@
         <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
         <button id="btn-purgar-mes" onclick="purgarCortesMes()"
-          style="display:none;padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;
+          style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;
                  cursor:pointer;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);
-                 color:#f87171;" title="Purgar cortes de un mes">🗑️ Purgar mes</button>
+                 color:#f87171;display:none;" title="Purgar cortes de un mes">🗑️ Purgar mes</button>
       </div>
     </div>
 
@@ -6242,18 +6246,40 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     const SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
     const SUPABASE_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
 
-    // Claves que nunca salen de este PC (sesión, timers)
+    // Claves que NUNCA van a Supabase — son per-device
     const _SB_EXCLUDE = new Set([
-      'rr_prime_session', 'rr_autologout_timer'
+      // Sesión y timers
+      'rr_prime_session', 'rr_autologout_timer',
+      // API keys del dispositivo
+      'rr_anthropic_api_key',
+      // Flags de migración/preload (no compartir entre PCs)
+      'rr_perfil_preload_mar2026',
+      // Avatares: se excluyen por prefijo en el override (ver abajo)
+      // rr_prime_avatar_* — manejado dinámicamente
     ]);
+
+    // Prefijos que también se excluyen de Supabase
+    const _SB_EXCLUDE_PREFIXES = [
+      'rr_prime_avatar_',   // avatares base64 (grandes, per-device)
+      'rr_det_consejos_',   // cache de consejos por operador (menor)
+    ];
+
+    function _sbShouldExclude(key) {
+      if (_sbShouldExclude(key)) return true;
+      return _SB_EXCLUDE_PREFIXES.some(p => key.startsWith(p));
+    }
 
     // ── Inicialización ──────────────────────────────────────────────
     let _sb        = null;   // cliente Supabase
     let _sbOnline  = false;  // estado de conexión
     const _localSaveTs = {};  // timestamp último guardado local por clave (evita race condition)
 
+    // ── Memory cache: fuente de verdad en runtime ──────────────
+    // Se llena en boot desde Supabase y se actualiza en cada write/realtime
+    const _sbMemCache = {};
+
     function _initSupabase() {
-      if (!SUPABASE_URL.startsWith('https://')) return; // credenciales no configuradas
+      if (!SUPABASE_URL.startsWith('https://')) return;
       try {
         _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         _sbSyncOnLoad();
@@ -6295,10 +6321,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (error) throw error;
 
         _bootProgress(70, 'Cargando operadores y cortes...');
-        // Supabase gana siempre — sobreescribe localStorage completo
+        // Supabase gana siempre — sobreescribe localStorage Y memory cache
         data.forEach(({ key, value }) => {
-          if (_SB_EXCLUDE.has(key)) return;
-          _origSetItem(key, value); // escribe directo sin pasar por el override
+          if (_sbShouldExclude(key)) return;
+          _origSetItem(key, value);   // localStorage
+          _sbMemCache[key] = value;   // memory cache — lectura instantánea
         });
 
         _sbOnline = true;
@@ -6314,11 +6341,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (currentRole === 'operador' && currentOpName) {
           if (typeof renderOpDashboard   === 'function') renderOpDashboard(currentOpName);
           if (typeof renderCorteSection  === 'function') renderCorteSection(currentOpName);
+          if (typeof renderOpStats       === 'function') renderOpStats(currentOpName);
         } else {
-          if (typeof renderRanking    === 'function') renderRanking();
-          if (typeof renderPSAPanel   === 'function') renderPSAPanel();
+          if (typeof renderRanking             === 'function') renderRanking();
+          if (typeof renderPSAPanel            === 'function') renderPSAPanel();
+          if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
+          if (typeof renderAlertas             === 'function') renderAlertas();
         }
-        _toastSync('🟢 Datos sincronizados');
+        _toastSync('🟢 Datos sincronizados con Supabase');
 
       } catch(e) {
         _sbOnline = false;
@@ -6363,12 +6393,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           ({ eventType, new: row, old: oldRow }) => {
             if (eventType === 'DELETE') {
               _origRemoveItem(oldRow.key);
-            } else if (row?.key && !_SB_EXCLUDE.has(row.key)) {
+            } else if (row?.key && !_sbShouldExclude(row.key)) {
               // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
               const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
               // rr_prime_cortes NUNCA se ignora — es la fuente de puntos del operador
               if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes') return;
               _origSetItem(row.key, row.value);
+              _sbMemCache[row.key] = row.value; // memory cache actualizado por realtime
               // Recargar datos en memoria si es una clave de negocio crítica
               const critical = [
                 'primeOperatorsData2026','rr_prime_cortes','rr_prime_asistencia',
@@ -6435,11 +6466,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     const _origRemoveItem = localStorage.removeItem.bind(localStorage);
 
     localStorage.setItem = function(key, value) {
-      // 1. Caché local inmediato (UI no espera)
+      // 1. Memory cache — lectura instantánea en runtime
+      if (!_sbShouldExclude(key)) _sbMemCache[key] = value;
+      // 2. localStorage — caché persistente offline
       _origSetItem(key, value);
       _localSaveTs[key] = Date.now();
-      // 2. Supabase como fuente principal (write-through async)
-      if (_sb && !_SB_EXCLUDE.has(key)) {
+      // 3. Supabase — fuente de verdad compartida (async)
+      if (_sb && !_sbShouldExclude(key)) {
         _sb.from('kv_store')
           .upsert({ key, value }, { onConflict: 'key' })
           .then(({ error }) => {
@@ -6468,9 +6501,63 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // Reintentar escrituras pendientes cada 30s
     setInterval(_sbRetryPending, 30000);
 
+    // ── Re-sync periódico de claves críticas ─────────────────
+    // Cada 3 minutos verifica que localStorage == Supabase
+    // para las claves de negocio más importantes
+    const _CRITICAL_KEYS = [
+      'primeOperatorsData2026',
+      'rr_prime_cortes',
+      'rr_prime_asistencia',
+      'rr_puntos_sin_asignar',
+      'rr_base_meses',
+      'rr_prime_months_meta',
+      'rr_prime_op_pins',
+      'rr_metas_operacion',
+    ];
+
+    async function _sbPeriodicResync() {
+      if (!_sb || !_sbOnline) return;
+      try {
+        const { data, error } = await _sb
+          .from('kv_store')
+          .select('key, value')
+          .in('key', _CRITICAL_KEYS);
+        if (error) return;
+
+        let changed = false;
+        data.forEach(({ key, value }) => {
+          // Solo actualizar si el valor es diferente al memCache
+          if (_sbMemCache[key] !== value) {
+            _origSetItem(key, value);
+            _sbMemCache[key] = value;
+            changed = true;
+          }
+        });
+
+        if (changed) {
+          if (typeof loadData === 'function') loadData();
+          if (currentRole === 'operador' && currentOpName) {
+            if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
+            if (typeof renderOpStats     === 'function') renderOpStats(currentOpName);
+          } else {
+            if (typeof renderRanking    === 'function') renderRanking();
+            if (typeof renderPSAPanel   === 'function') renderPSAPanel();
+          }
+          console.log('[Supabase] Re-sync: datos actualizados');
+        }
+      } catch(e) {
+        console.warn('[Supabase] Re-sync error:', e.message);
+      }
+    }
+
+    // Correr cada 3 minutos
+    setInterval(_sbPeriodicResync, 3 * 60 * 1000);
+
+
+
     localStorage.removeItem = function(key) {
       _origRemoveItem(key);
-      if (_sb && !_SB_EXCLUDE.has(key)) {
+      if (_sb && !_sbShouldExclude(key)) {
         _sb.from('kv_store')
           .delete().eq('key', key)
           .then(({ error }) => { if (error) console.warn('[Supabase] del:', error.message); });

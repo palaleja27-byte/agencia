@@ -2970,6 +2970,26 @@
       color: #64748b;
       margin-top: 2px;
     }
+
+    /* ── Turno pills ranking ── */
+    .rk-turno-pill {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color: #64748b;
+      font-size: .72rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: .2s;
+      white-space: nowrap;
+    }
+    .rk-turno-pill:hover { border-color: rgba(94,234,212,.3); color: #94a3b8; }
+    .rk-turno-pill.active {
+      background: rgba(94,234,212,.12);
+      border-color: rgba(94,234,212,.4);
+      color: #5eead4;
+    }
 </style>
 </head>
 
@@ -3345,41 +3365,33 @@
   <!-- TAB 0: RANKING PRINCIPAL -->
   <div id="tab-ranking" class="tab-content active">
 
-    <!-- Top bar: búsqueda + filtro + subir mes -->
+    <!-- Top bar simplificada: solo búsqueda + turno + acciones -->
     <div class="rk-topbar">
       <div class="rk-search-wrap">
         <span class="rk-search-icon">🔍</span>
         <input type="text" id="rankingSearch" placeholder="Buscar operador..." oninput="filterRanking()">
       </div>
       <div class="rk-filters-wrap">
-        <select class="rk-select" id="rankingGroupFilter" onchange="filterRanking()">
-          <option value="">Todos los grupos</option>
-          <option value="1">Grupo 1</option>
-          <option value="2">Grupo 2</option>
-          <option value="3">Grupo 3</option>
-          <option value="4">Grupo 4</option>
-          <option value="5">Grupo 5</option>
-          <option value="6">Grupo 6</option>
-          <option value="7">Grupo 7</option>
-          <option value="8">Grupo 8</option>
-          <option value="9">Grupo 9</option>
-          <option value="10">Grupo 10</option>
-          <option value="11">Grupo 11</option>
-          <option value="G4">G4 AMO</option>
-        </select>
-        <select class="rk-select" id="rankingTurnoFilter" onchange="filterRanking()">
+        <!-- Turno: filtro principal para monitor/admin -->
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button id="rk-turno-btn-todos" class="rk-turno-pill active"
+            onclick="setRkTurno('')">👥 Todos</button>
+          <button id="rk-turno-btn-manana" class="rk-turno-pill"
+            onclick="setRkTurno('Mañana')">☀️ Mañana</button>
+          <button id="rk-turno-btn-tarde" class="rk-turno-pill"
+            onclick="setRkTurno('Tarde')">🌆 Tarde</button>
+          <button id="rk-turno-btn-noche" class="rk-turno-pill"
+            onclick="setRkTurno('Noche')">🌙 Noche</button>
+        </div>
+        <!-- Select grupo oculto (mantener para compatibilidad con buildGroupSelect) -->
+        <select id="rankingGroupFilter" onchange="filterRanking()" style="display:none;"></select>
+        <select id="rankingTurnoFilter" onchange="filterRanking()" style="display:none;">
           <option value="">Todos los turnos</option>
-          <option value="Mañana">☀️ Mañana</option>
-          <option value="Tarde">🌆 Tarde</option>
-          <option value="Noche">🌙 Noche</option>
-          <option value="Completo">🔄 Completo</option>
+          <option value="Mañana">Mañana</option>
+          <option value="Tarde">Tarde</option>
+          <option value="Noche">Noche</option>
         </select>
-        <select class="rk-select" id="rankingPlataformaFilter" onchange="filterRanking()">
-          <option value="">Todas las plataformas</option>
-          <option value="Prime">⭐ Prime</option>
-          <option value="AmoLatina">💜 AmoLatina</option>
-          <option value="Camilo">🎯 Camilo</option>
-        </select>
+        <select id="rankingPlataformaFilter" onchange="filterRanking()" style="display:none;"></select>
       </div>
       <div class="rk-actions-wrap">
         <button class="btn-corte-rk" onclick="abrirModalCorte()">📸 Registrar Corte</button>
@@ -3387,6 +3399,9 @@
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
       </div>
     </div>
+
+    <!-- Badge turno activo (solo monitor/admin) -->
+    <div id="rk-turno-activo-badge" style="display:none;padding:4px 16px 0;max-width:1200px;margin:0 auto;"></div>
 
     <!-- Stats cards -->
     <div class="rk-stats" id="rkStatsRow"></div>
@@ -3529,20 +3544,19 @@
     <!-- Tabla -->
     <!-- Tabla (desktop) / Cards (mobile) -->
     <div class="rk-table-wrap" id="rk-table-desktop">
-      <div class="rk-view-toggle">
+      <!-- Vista Día / Mes — único control de ordenamiento -->
+      <div class="rk-view-toggle" style="padding:10px 0 6px;">
         <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')">📅 Mes</button>
         <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy</button>
       </div>
-      <div class="rk-sort-bar">
-        <span class="rk-sort-lbl">Ordenar:</span>
-        <button class="rk-sort-btn" onclick="sortRanking(0)" id="rth-0">Pos</button>
-        <button class="rk-sort-btn" onclick="sortRanking(1)" id="rth-1">Operador</button>
-        <button class="rk-sort-btn" onclick="sortRanking(2)" id="rth-2">Grupo</button>
-        <button class="rk-sort-btn" onclick="sortRanking(3)" id="rth-3">Mes Ant.</button>
-        <button class="rk-sort-btn" onclick="sortRanking(4)" id="rth-4">Mes Act.</button>
-        <button class="rk-sort-btn" onclick="sortRanking(5)" id="rth-5">Crecimiento</button>
-        <button class="rk-sort-btn" onclick="sortRanking(6)" id="rth-6">Ganancia</button>
-      </div>
+      <!-- Mantener IDs para compatibilidad con headers de tabla -->
+      <span id="rth-0" style="display:none"></span>
+      <span id="rth-1" style="display:none"></span>
+      <span id="rth-2" style="display:none"></span>
+      <span id="rth-3" style="display:none"></span>
+      <span id="rth-4" style="display:none"></span>
+      <span id="rth-5" style="display:none"></span>
+      <span id="rth-6" style="display:none"></span>
       <div id="rankingBody" class="rk-cards-grid"></div>
     </div>
     <!-- Mobile cards unified with desktop -->
@@ -4080,6 +4094,23 @@
     // ==================== TABS ====================
     // ── Performance: debounce search ──
     let _rkSearchTimer = null;
+
+    // ── Control de turno en ranking principal ──────────────────
+    function setRkTurno(turno) {
+      // Actualizar hidden select (filterRanking lo lee)
+      const sel = document.getElementById('rankingTurnoFilter');
+      if (sel) sel.value = turno;
+
+      // Actualizar pills visuales
+      const map = { '': 'todos', 'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche' };
+      Object.entries(map).forEach(([t, id]) => {
+        const btn = document.getElementById('rk-turno-btn-' + id);
+        if (btn) btn.classList.toggle('active', t === turno);
+      });
+
+      filterRanking();
+    }
+
     function filterRanking() {
       clearTimeout(_rkSearchTimer);
       _rkSearchTimer = setTimeout(() => renderRanking(), 120);
@@ -4115,7 +4146,7 @@
     }
 
     // ==================== RANKING COMPLETO ====================
-    let rkSortCol = 4; // default: Feb pts
+    let rkSortCol = 7; // default: pts hoy desc (monitor ve quién produce más HOY)
     let rkSortDir = -1; // -1 desc, 1 asc
     let rkDataFiltered = [];
     let rkViewMode = 'mes'; // 'mes' | 'dia'
@@ -4132,6 +4163,42 @@
       renderRanking();
     }
 
+
+    // ══════════════════════════════════════════════════════════════
+    // HELPER — operadores presentes/tardanza en asistencia de hoy
+    // ══════════════════════════════════════════════════════════════
+    function _getOpsEnTurnoHoy(turnoFiltro) {
+      if (typeof ASI_KEY === 'undefined') return null;
+      const fecha  = localDateStr();
+      const shiftMap = { 'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche' };
+
+      // Qué turnos revisar
+      const shifts = turnoFiltro && shiftMap[turnoFiltro]
+        ? [shiftMap[turnoFiltro]]
+        : ['manana', 'tarde', 'noche'];
+
+      let totalEntries = 0;
+      const presentes = new Set();
+
+      shifts.forEach(sh => {
+        const draft = JSON.parse(
+          localStorage.getItem(ASI_KEY + '_draft_' + fecha + '_' + sh) || '{}'
+        );
+        const entries = Object.entries(draft);
+        totalEntries += entries.length;
+        entries.forEach(([k, v]) => {
+          if (!k.endsWith('||operador')) return;
+          if (v?.estado === 'P' || v?.estado === 'T') {
+            presentes.add(k.replace('||operador', '').toUpperCase());
+          }
+        });
+      });
+
+      // Si el draft está vacío (nadie marcado aún) → null = mostrar todos
+      if (totalEntries === 0) return null;
+      return presentes;
+    }
+
     function renderRanking() {
       const { prev, curr } = getActivePair();
       const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
@@ -4141,6 +4208,29 @@
       const th3 = document.getElementById('rth-3'); if (th3) th3.textContent = prevLabel + ' (pts)';
       const th4 = document.getElementById('rth-4'); if (th4) th4.textContent = currLabel + ' (pts)';
 
+      // Badge: cuántos ops están activos en turno (solo monitor/admin)
+      const _badgeEl = document.getElementById('rk-turno-activo-badge');
+      if (_badgeEl && (currentRole === 'monitor' || currentRole === 'admin') && rkViewMode === 'dia') {
+        const _presSet   = _getOpsEnTurnoHoy('');
+        const turnoSel   = document.getElementById('rankingTurnoFilter')?.value || '';
+        const _presTurno = turnoSel ? _getOpsEnTurnoHoy(turnoSel) : _presSet;
+        const n = _presTurno ? _presTurno.size : 0;
+        _badgeEl.innerHTML = n > 0
+          ? `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;
+               background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.25);
+               color:#34d399;font-size:.7rem;font-weight:700;">
+               🟢 ${n} operador${n !== 1 ? 'es' : ''} activo${n !== 1 ? 's' : ''} hoy ${turnoSel ? '· ' + turnoSel : ''}
+             </span>`
+          : `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;
+               background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);
+               color:#fbbf24;font-size:.7rem;font-weight:700;">
+               ⏳ Esperando que los operadores se logueen...
+             </span>`;
+        _badgeEl.style.display = 'block';
+      } else if (_badgeEl) {
+        _badgeEl.style.display = 'none'; // Ocultar en vista Mes
+      }
+
       // Base: excluir SP y N/A
       const base = operatorsData.filter(op => op.group !== 'SP' && op.group !== 'N/A');
       const search = (document.getElementById('rankingSearch')?.value || '').toLowerCase().trim();
@@ -4148,12 +4238,30 @@
       const turno = document.getElementById('rankingTurnoFilter')?.value || '';
       const plataforma = document.getElementById('rankingPlataformaFilter')?.value || '';
 
+      // ── Filtro de asistencia: monitor/admin ──────────────────────
+      // Vista MES  → sin filtro de asistencia, todos los operadores
+      // Vista DÍA  → solo los logueados hoy (P o T en draft)
+      //              si nadie logueado aún → array vacío (muestra aviso)
+      let _opsEnTurno = null; // null = sin restricción (mes o draft vacío en mes)
+      if ((currentRole === 'monitor' || currentRole === 'admin') && rkViewMode === 'dia') {
+        _opsEnTurno = _getOpsEnTurnoHoy(turno); // null solo si draft vacío → ver abajo
+      }
+
       rkDataFiltered = base.filter(op => {
-        const matchSearch = !search || op.name.toLowerCase().includes(search);
-        const matchGrp = !grp || op.group === grp;
-        const matchTurno = !turno || (op.turno || '').toLowerCase() === turno.toLowerCase();
+        const matchSearch     = !search     || op.name.toLowerCase().includes(search);
+        const matchGrp        = !grp        || op.group === grp;
         const matchPlataforma = !plataforma || (op.plataforma || '') === plataforma;
-        return matchSearch && matchGrp && matchTurno && matchPlataforma;
+        const matchTurno      = !turno      || (op.turno || '').toLowerCase() === turno.toLowerCase();
+
+        // En vista DÍA: filtrar por asistencia
+        // _opsEnTurno null = draft vacío → nadie pasa (array vacío → aviso)
+        // En vista MES: _opsEnTurno es null → todos pasan
+        let matchAsistencia = true;
+        if ((currentRole === 'monitor' || currentRole === 'admin') && rkViewMode === 'dia') {
+          matchAsistencia = _opsEnTurno !== null && _opsEnTurno.has(op.name.toUpperCase());
+        }
+
+        return matchSearch && matchGrp && matchTurno && matchPlataforma && matchAsistencia;
       });
 
       // Calcular pts del día para cada op (solo en modo día o siempre para sort)
@@ -4217,7 +4325,20 @@
       // Cards grid
       const tbody = document.getElementById('rankingBody');
       if (rkDataFiltered.length === 0) {
-        tbody.innerHTML = `<div class="rk-cards-empty">😕 Sin resultados para este filtro</div>`;
+        const esDia = rkViewMode === 'dia' && (currentRole === 'monitor' || currentRole === 'admin');
+        const turnoLabel = { '': 'en ningún turno', 'Mañana': 'en turno Mañana', 'Tarde': 'en turno Tarde', 'Noche': 'en turno Noche' };
+        const turnoMsg   = turnoLabel[turno] || '';
+        tbody.innerHTML = esDia
+          ? `<div class="rk-cards-empty" style="grid-column:1/-1;text-align:center;padding:48px 24px;">
+               <div style="font-size:2.5rem;margin-bottom:12px;">⏳</div>
+               <div style="font-weight:800;font-size:1rem;color:#e2e8f0;margin-bottom:6px;">
+                 Aún nadie se ha logueado ${turnoMsg}
+               </div>
+               <div style="font-size:.78rem;color:#475569;max-width:320px;margin:0 auto;line-height:1.6;">
+                 Cuando los operadores ingresen su PIN, aparecerán aquí automáticamente en tiempo real.
+               </div>
+             </div>`
+          : `<div class="rk-cards-empty">😕 Sin resultados para este filtro</div>`;
         return;
       }
 
@@ -5911,11 +6032,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               // ── Asistencia draft en tiempo real (auto-login del operador) ──
               // La clave es dinámica: rr_prime_asistencia_draft_FECHA_TURNO
               if (row.key.startsWith('rr_prime_asistencia_draft')) {
-                // Monitor/admin: re-renderizar grilla de asistencia con el nuevo presente
+                // Monitor/admin: re-renderizar grilla de asistencia + ranking en tiempo real
                 if ((currentRole === 'monitor' || currentRole === 'admin') &&
                     typeof asiLoadDraft === 'function' && typeof asiRender === 'function') {
                   asiLoadDraft();
                   asiRender();
+                  // Ranking se actualiza: el nuevo op aparece automáticamente
+                  if (typeof renderRanking === 'function') renderRanking();
                 }
               }
 
@@ -9024,6 +9147,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         // Mostrar btn Grupos solo para admin
         const btnGrupos = document.getElementById('btn-grupo-manager');
         if (btnGrupos) btnGrupos.style.display = role === 'admin' ? 'inline-block' : 'none';
+        // Monitor/admin arrancan en vista Día — ver quién produce HOY
+        if (role === 'monitor' || role === 'admin') {
+          rkViewMode = 'dia';
+          rkSortCol  = 7;  // pts hoy
+          rkSortDir  = -1;
+          const btnMes = document.getElementById('rk-btn-mes');
+          const btnDia = document.getElementById('rk-btn-dia');
+          if (btnMes) btnMes.className = 'rk-view-btn';
+          if (btnDia) btnDia.className = 'rk-view-btn active-dia';
+        }
         switchTab(0);
       }
     }

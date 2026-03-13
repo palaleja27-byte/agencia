@@ -4180,18 +4180,12 @@
       const currLabel  = MONTH_LABELS_MAP[curr] || curr;
       const mesActual  = localDateStr().slice(0, 7);
 
-      let totalCurr = 0, totalAnt = 0;
-      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
-        const cortes = getCortesOp(o.name);
-        const ptsMes = cortes
-          .filter(c => c.fecha && c.fecha.slice(0,7) === mesActual)
-          .reduce((s, c) => s + (c.puntos || 0), 0);
-        totalCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
-        totalAnt  += o[prev] || 0;
-      });
-
+      // Totales reales desde rr_prime_cortes (PSA ya incluido)
+      const mesAntTooltip  = getMesAnteriorStr();
+      const totalCurr      = getTotalMesPts(mesActual);
+      const totalAnt       = getTotalMesPts(mesAntTooltip);
       const psaTotal       = getPSATotalMes(mesActual);
-      const totalConPSA    = totalCurr + psaTotal;
+      const totalConPSA    = totalCurr; // PSA ya dentro de getTotalMesPts
       const crec           = totalAnt > 0 ? ((totalConPSA - totalAnt) / totalAnt * 100) : 0;
       const crecSign       = crec >= 0 ? '+' : '';
       const crecColor      = crec >= 0 ? '#34d399' : '#f87171';
@@ -4497,30 +4491,29 @@
       });
 
       // ── Stats cards ──────────────────────────────────────────────
-      const _hoyStats   = localDateStr();
+      const _hoyStats    = localDateStr();
       const _mesActStats = _hoyStats.slice(0, 7);
 
-      // Pts mes actual: CORTES REALES (rr_prime_cortes) — más preciso que op[curr]
-      // Solo los operadores visibles en el ranking actual (rkDataFiltered)
-      let totalPtsCurr = 0;
-      let totalPtsAnt  = 0;
+      // ── Totales reales de la operación desde rr_prime_cortes ──
+      // getPSATotalMes ya incluido dentro de getTotalMesPts
+      const _mesAntStats = getMesAnteriorStr(); // '2026-02'
+      const totalPtsCurr = getTotalMesPts(_mesActStats); // Marzo cortes reales + PSA
+      const totalPtsAnt  = getTotalMesPts(_mesAntStats); // Febrero cortes reales + PSA
+
+      // Pts visibles en pantalla (para avg por operador del filtro actual)
+      let _visPtsCurr = 0;
       rkDataFiltered.forEach(o => {
-        const cortes  = getCortesOp(o.name);
-        const ptsMes  = cortes
+        const cortes = getCortesOp(o.name);
+        const ptsMes = cortes
           .filter(c => c.fecha && c.fecha.slice(0,7) === _mesActStats)
           .reduce((s, c) => s + (c.puntos || 0), 0);
-        // Si hay cortes reales usar esos, si no usar op[curr] como fallback
-        totalPtsCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
-        totalPtsAnt  += o[prev] || 0;
+        _visPtsCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
       });
 
-      // ── Sumar puntos sin asignar del mes actual al total de la operación ──
-      // Así el crecimiento refleja el 100% de producción real aunque haya perfiles
-      // sin dueño. NO interfiere con los cortes individuales de cada operador.
-      const _psaTotalMes = getPSATotalMes(_mesActStats);
-      totalPtsCurr += _psaTotalMes;
+      // PSA ya incluido en getTotalMesPts — no necesita suma extra
+      const _psaTotalMes = getPSATotalMes(_mesActStats); // para mostrar en tooltip
 
-      // Crecimiento de toda la operación vs mes anterior
+      // Crecimiento de toda la operación vs mes anterior (base = todos los ops)
       const crecOp = totalPtsAnt > 0
         ? ((totalPtsCurr - totalPtsAnt) / totalPtsAnt * 100)
         : (totalPtsCurr > 0 ? 100 : 0);
@@ -4528,15 +4521,15 @@
       const crecOpColor = crecOp >= 0 ? '#34d399' : '#f87171';
       const crecOpIcon  = crecOp >= 0 ? '📈' : '📉';
 
-      // Promedio por operador (cortes reales del mes)
-      const avgPts = rkDataFiltered.length ? totalPtsCurr / rkDataFiltered.length : 0;
+      // Promedio por operador visible en pantalla (no el total)
+      const avgPts = rkDataFiltered.length ? _visPtsCurr / rkDataFiltered.length : 0;
 
       // % operadores individuales en crecimiento (se mantiene como métrica secundaria)
       const mejoraCount = rkDataFiltered.filter(o => o.growth > 0).length;
       const mejoraPct   = rkDataFiltered.length
         ? Math.round((mejoraCount / rkDataFiltered.length) * 100) : 0;
 
-      // COP total operación
+      // COP total operación (suma real de todos los ops + PSA)
       const copTotal = Math.round(totalPtsCurr * 1400).toLocaleString('es-CO');
 
       document.getElementById('rkStatsRow').innerHTML = `
@@ -6862,6 +6855,42 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function getPSATotalMes(mesStr) {
       return getPSAMes(mesStr).reduce((s, e) => s + (e.puntos || 0), 0);
     }
+    // ── Suma total de cortes reales de toda la operación en un mes ──
+    // Fuente de verdad: rr_prime_cortes (nunca op[prev] que puede estar vacío)
+    function getTotalMesPts(mesStr) {
+      // mesStr = 'YYYY-MM'  ej: '2026-02'
+      const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+      let total = 0;
+      Object.values(allCortes).forEach(cortes => {
+        if (!Array.isArray(cortes)) return;
+        cortes.forEach(c => {
+          if (c.fecha && c.fecha.slice(0,7) === mesStr)
+            total += (c.puntos || 0);
+        });
+      });
+      // Sumar también PSA del mes (perfiles sin operador asignado)
+      total += getPSATotalMes(mesStr);
+      return total;
+    }
+
+    // ── Obtiene el YYYY-MM del mes anterior al activo ──
+    function getMesAnteriorStr() {
+      const { prev } = getActivePair(); // 'feb', 'mar', etc.
+      const idx = MONTH_KEYS.indexOf(prev);
+      // Construir YYYY-MM: asumimos año 2026
+      const mm = String(idx + 1).padStart(2, '0');
+      return '2026-' + mm;
+    }
+
+    // ── Obtiene el YYYY-MM del mes actual activo ──
+    function getMesActualStr() {
+      const { curr } = getActivePair();
+      const idx = MONTH_KEYS.indexOf(curr);
+      const mm = String(idx + 1).padStart(2, '0');
+      return '2026-' + mm;
+    }
+
+
 
     function getPuntosHoy(opName) {
       const all   = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
@@ -7362,20 +7391,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const currLabel = MONTH_LABELS_MAP[curr] || curr;
       const mesActual = localDateStr().slice(0, 7);
 
-      // Calcular totales usando cortes reales
-      let totalCurr = 0, totalAnt = 0;
-      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
-        const cortes = getCortesOp(o.name);
-        const ptsMes = cortes
-          .filter(c => c.fecha && c.fecha.slice(0,7) === mesActual)
-          .reduce((s, c) => s + (c.puntos || 0), 0);
-        totalCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
-        totalAnt  += o[prev] || 0;
-      });
-
-      // Incluir PSA en el total (son puntos reales de la operación)
-      const psaTotal = getPSATotalMes(mesActual);
-      const totalCurrConPSA = totalCurr + psaTotal;
+      // Totales reales desde rr_prime_cortes (PSA ya incluido en getTotalMesPts)
+      const mesAntCrecStr   = getMesAnteriorStr();
+      const totalCurr       = getTotalMesPts(mesActual);
+      const totalAnt        = getTotalMesPts(mesAntCrecStr);
+      const psaTotal        = getPSATotalMes(mesActual);
+      const totalCurrConPSA = totalCurr; // PSA ya incluido
 
       // Crecimiento
       const crec = totalAnt > 0 ? ((totalCurrConPSA - totalAnt) / totalAnt * 100) : 0;

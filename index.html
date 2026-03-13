@@ -3403,6 +3403,26 @@
     <!-- Badge turno activo (solo monitor/admin) -->
     <div id="rk-turno-activo-badge" style="display:none;padding:4px 16px 0;max-width:1200px;margin:0 auto;"></div>
 
+    <!-- Cajón: Puntos Sin Asignar (solo monitor/admin) -->
+    <div id="rk-psa-panel" style="display:none;max-width:1200px;margin:6px auto 0;padding:0 16px;">
+      <div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);border-radius:14px;overflow:hidden;">
+        <div onclick="togglePSAPanel()" style="display:flex;align-items:center;justify-content:space-between;
+          padding:10px 16px;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:.95rem;">📦</span>
+            <span id="rk-psa-title" style="font-weight:700;font-size:.82rem;color:#fbbf24;">
+              Puntos sin asignar
+            </span>
+            <span id="rk-psa-badge"
+              style="background:rgba(251,191,36,.2);color:#fbbf24;padding:2px 8px;
+                     border-radius:8px;font-size:.68rem;font-weight:700;">0 perfiles</span>
+          </div>
+          <span id="rk-psa-chevron" style="color:#64748b;font-size:.8rem;">▼</span>
+        </div>
+        <div id="rk-psa-body" style="display:none;padding:0 16px 14px;"></div>
+      </div>
+    </div>
+
     <!-- Stats cards -->
     <div class="rk-stats" id="rkStatsRow"></div>
 
@@ -4311,6 +4331,12 @@
         totalPtsAnt  += o[prev] || 0;
       });
 
+      // ── Sumar puntos sin asignar del mes actual al total de la operación ──
+      // Así el crecimiento refleja el 100% de producción real aunque haya perfiles
+      // sin dueño. NO interfiere con los cortes individuales de cada operador.
+      const _psaTotalMes = getPSATotalMes(_mesActStats);
+      totalPtsCurr += _psaTotalMes;
+
       // Crecimiento de toda la operación vs mes anterior
       const crecOp = totalPtsAnt > 0
         ? ((totalPtsCurr - totalPtsAnt) / totalPtsAnt * 100)
@@ -4501,6 +4527,8 @@
       // Refresh metas if panel is open
       const _metasBody = document.getElementById('metas-panel-body');
       if (_metasBody && _metasBody.style.display === 'block') renderMetasPanel();
+      // Actualizar cajón de puntos sin asignar
+      if (typeof renderPSAPanel === 'function') renderPSAPanel();
     }
 
     // ══════════════════════════════════════════════════════
@@ -6009,7 +6037,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (typeof renderOpDashboard   === 'function') renderOpDashboard(currentOpName);
           if (typeof renderCorteSection  === 'function') renderCorteSection(currentOpName);
         } else {
-          if (typeof renderRanking === 'function') renderRanking();
+          if (typeof renderRanking    === 'function') renderRanking();
+          if (typeof renderPSAPanel   === 'function') renderPSAPanel();
         }
         _toastSync('🟢 Datos sincronizados');
 
@@ -6612,6 +6641,44 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     // Obtener puntos acumulados hoy — suma todos los turnos del día
     // Usa _normName para evitar bug de espacios/case en el nombre del operador
+
+    // ══════════════════════════════════════════════════════════════
+    // CAJÓN — Puntos sin asignar (perfiles sin operador dueño)
+    // ══════════════════════════════════════════════════════════════
+    const PSA_KEY = 'rr_puntos_sin_asignar';
+
+    function getPSA() {
+      return JSON.parse(localStorage.getItem(PSA_KEY) || '[]');
+    }
+
+    function savePSA(arr) {
+      localStorage.setItem(PSA_KEY, JSON.stringify(arr));
+    }
+
+    function agregarPSA(entry) {
+      // entry: { idPerfil, modelo, fecha, jornada, puntos, horaCorte, ts }
+      const all = getPSA();
+      // Si ya existe el mismo idPerfil + fecha + jornada → actualizar si pts es mayor
+      const idx = all.findIndex(e => e.idPerfil === entry.idPerfil
+        && e.fecha === entry.fecha && e.jornada === entry.jornada);
+      if (idx >= 0) {
+        if (entry.puntos > all[idx].puntos) all[idx] = entry;
+      } else {
+        all.unshift(entry);
+        if (all.length > 500) all.splice(500); // máx 500 entradas históricas
+      }
+      savePSA(all);
+    }
+
+    function getPSAMes(mesStr) {
+      // mesStr formato 'YYYY-MM'
+      return getPSA().filter(e => e.fecha && e.fecha.slice(0,7) === mesStr);
+    }
+
+    function getPSATotalMes(mesStr) {
+      return getPSAMes(mesStr).reduce((s, e) => s + (e.puntos || 0), 0);
+    }
+
     function getPuntosHoy(opName) {
       const all   = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       const norm  = _normName(opName);
@@ -6623,6 +6690,96 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         .reduce((s, c) => s + (c.puntos || 0), 0);
     }
 
+
+
+    // ══════════════════════════════════════════════════════════════
+    // PANEL CAJÓN — Puntos Sin Asignar
+    // ══════════════════════════════════════════════════════════════
+    let _psaPanelOpen = false;
+
+    function togglePSAPanel() {
+      _psaPanelOpen = !_psaPanelOpen;
+      const body = document.getElementById('rk-psa-body');
+      const chev = document.getElementById('rk-psa-chevron');
+      if (body) body.style.display = _psaPanelOpen ? 'block' : 'none';
+      if (chev) chev.textContent = _psaPanelOpen ? '▲' : '▼';
+    }
+
+    function renderPSAPanel() {
+      const panel = document.getElementById('rk-psa-panel');
+      if (!panel) return;
+
+      // Solo visible para monitor/admin
+      if (currentRole !== 'monitor' && currentRole !== 'admin') {
+        panel.style.display = 'none';
+        return;
+      }
+
+      const mesActual = localDateStr().slice(0, 7);
+      const psaMes    = getPSAMes(mesActual);
+      const totalPts  = psaMes.reduce((s, e) => s + (e.puntos || 0), 0);
+      const totalCOP  = Math.round(totalPts * 1400).toLocaleString('es-CO');
+
+      // Ocultar panel si no hay nada
+      if (psaMes.length === 0) {
+        panel.style.display = 'none';
+        return;
+      }
+
+      panel.style.display = 'block';
+
+      // Actualizar header
+      const titleEl = document.getElementById('rk-psa-title');
+      const badgeEl = document.getElementById('rk-psa-badge');
+      if (titleEl) titleEl.textContent =
+        `Puntos sin asignar · ${totalPts.toFixed(1)} pts · $${totalCOP} COP`;
+      if (badgeEl) badgeEl.textContent = `${psaMes.length} perfil${psaMes.length !== 1 ? 'es' : ''}`;
+
+      // Cuerpo de la tabla
+      const body = document.getElementById('rk-psa-body');
+      if (!body) return;
+
+      const rows = psaMes.map(e => `
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:center;
+          padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.75rem;">
+          <div>
+            <div style="font-weight:700;color:#e2e8f0;">${e.modelo || '—'}</div>
+            <div style="color:#64748b;font-size:.65rem;">ID: ${e.idPerfil}</div>
+          </div>
+          <div style="color:#64748b;">
+            ${e.fecha} · ${e.jornada}
+            <div style="font-size:.65rem;">🕐 ${e.horaCorte}</div>
+          </div>
+          <div style="font-weight:700;color:#fbbf24;text-align:right;">
+            ${(e.puntos || 0).toFixed(1)} pts
+          </div>
+          <div style="color:#f87171;font-size:.65rem;text-align:right;max-width:120px;line-height:1.4;">
+            ${e.motivo}
+          </div>
+        </div>`).join('');
+
+      body.innerHTML = `
+        <div style="margin-bottom:10px;padding:8px 10px;background:rgba(251,191,36,.05);
+          border-radius:8px;font-size:.72rem;color:#94a3b8;line-height:1.6;">
+          ℹ️ Estos perfiles llegaron en el Excel pero no tienen operador asignado.
+          Para asignarlos ve a <strong style="color:#fbbf24;">✅ Asistencia</strong>
+          → tarjeta del operador → <strong style="color:#fbbf24;">+ Agregar perfil</strong>.
+          Una vez asignados, el próximo corte los distribuye automáticamente.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;
+          padding:6px 0;border-bottom:1px solid rgba(255,255,255,.1);
+          font-size:.65rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;">
+          <div>Perfil / Modelo</div><div>Fecha · Turno</div>
+          <div style="text-align:right;">Pts</div>
+          <div style="text-align:right;">Motivo</div>
+        </div>
+        ${rows}
+        <div style="margin-top:10px;font-size:.7rem;color:#475569;text-align:right;">
+          Total mes: <strong style="color:#fbbf24;">${totalPts.toFixed(1)} pts</strong>
+          · <strong style="color:#34d399;">$${totalCOP} COP</strong>
+          ya sumados al crecimiento de la operación
+        </div>`;
+    }
 
     // ══════════════════════════════════════════════════════════════
     // MOTOR DE ESTADÍSTICAS — getStatsOp(name)
@@ -7444,7 +7601,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           }
         }
 
-        // TERCERO: match por nombre del modelo
+        // TERCERO: match por nombre del modelo en profiles
+        if (!opMatch) {
+          for (const op of operatorsData) {
+            if (op.profiles && op.profiles.some(p =>
+              _normName(p.model) === _normName(d.modelo) && _normName(d.modelo).length > 2
+            )) { opMatch = op; break; }
+          }
+        }
+
+        // CUARTO: fallback por nombre del operador (último recurso)
         if (!opMatch) opMatch = matchOperator(d.modelo);
 
         if (opMatch) {
@@ -7455,9 +7621,20 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         } else {
           miss++;
           d.rawName = null;
-          // Guardar perfiles sin match para debug
+          // ── Guardar en cajón de puntos sin asignar ──────────────
+          const _psaHora = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+          agregarPSA({
+            idPerfil : d.idPerfil,
+            modelo   : d.modelo,
+            fecha    : d.fecha || localDateStr(),
+            jornada  : d.jornada || detectarTurno(),
+            puntos   : d.puntos || 0,
+            horaCorte: _psaHora,
+            ts       : Date.now(),
+            motivo   : 'Perfil no asignado a ningún operador'
+          });
           if (!window._rrMissedProfiles) window._rrMissedProfiles = new Set();
-          window._rrMissedProfiles.add(`ID:${d.idPerfil} Modelo:${d.modelo}`);
+          window._rrMissedProfiles.add(`ID:${d.idPerfil} Modelo:${d.modelo} · ${(d.puntos||0).toFixed(1)} pts`);
         }
       });
 
@@ -7940,7 +8117,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         saveData();
 
         cerrarModalCorte();
-        renderRanking();
+        renderRanking(); // también dispara renderPSAPanel internamente
         if (typeof renderOperators === 'function') renderOperators();
         if (typeof renderAlertas === 'function') renderAlertas();
         // FIX 5: refrescar dashboard del operador logueado en este PC al instante

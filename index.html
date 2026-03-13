@@ -1887,36 +1887,59 @@
     .rkinfo-tooltip {
       display: none;
       position: absolute;
-      bottom: calc(100% + 10px);
-      right: 0;
-      width: 230px;
-      background: #1a2236;
-      border: 1px solid rgba(94, 234, 212, .25);
-      border-radius: 12px;
-      padding: 14px 16px;
+      bottom: calc(100% + 12px);
+      right: -8px;
+      width: 360px;
+      background: #0f172a;
+      border: 1px solid rgba(94, 234, 212, .3);
+      border-radius: 16px;
+      padding: 0;
       font-size: 12px;
       color: #cbd5e1;
       line-height: 1.6;
-      z-index: 200;
+      z-index: 500;
       text-align: left;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .7);
+      overflow: hidden;
     }
 
     .rkinfo-tooltip.tooltip-visible {
       display: block;
+      animation: tooltipFadeIn .18s ease;
+    }
+
+    @keyframes tooltipFadeIn {
+      from { opacity:0; transform: translateY(6px); }
+      to   { opacity:1; transform: translateY(0); }
     }
 
     .rkinfo-tooltip::after {
       content: '';
       position: absolute;
       bottom: -6px;
-      right: 14px;
+      right: 18px;
       width: 10px;
       height: 10px;
-      background: #1a2236;
-      border-right: 1px solid rgba(94, 234, 212, .25);
-      border-bottom: 1px solid rgba(94, 234, 212, .25);
+      background: #0f172a;
+      border-right: 1px solid rgba(94, 234, 212, .3);
+      border-bottom: 1px solid rgba(94, 234, 212, .3);
       transform: rotate(45deg);
+    }
+
+    .rktt-header {
+      background: rgba(94,234,212,.07);
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid rgba(94,234,212,.12);
+    }
+    .rktt-body { padding: 12px 14px; }
+    .rktt-row  { 
+      display:flex; justify-content:space-between; align-items:center;
+      padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+      font-size:.72rem;
+    }
+    .rktt-consejo {
+      font-size:.7rem; color:#94a3b8; padding:4px 0;
+      border-bottom:1px solid rgba(255,255,255,.04); line-height:1.5;
     }
 
     /* Table */
@@ -3430,7 +3453,7 @@
     <div id="rk-alertas-wrap" style="max-width:1200px;margin:0 auto 24px;"></div>
 
     <!-- Panel análisis de crecimiento (solo monitor/admin) -->
-    <div id="rk-crec-analisis" style="display:none;max-width:1200px;margin:0 auto 24px;padding:0 16px;"></div>
+    <!-- rk-crec-analisis movido al tooltip del botón ℹ en stats card -->
 
     <!-- Metas Grupales y General (solo monitor/admin) -->
     <div id="rk-metas-wrap" style="display:none;max-width:1200px;margin:0 auto 24px;">
@@ -4134,6 +4157,163 @@
       filterRanking();
     }
 
+
+    // ── Tooltip completo de crecimiento operación ──────────────
+    let _crecTooltipOpen = false;
+
+    function toggleCrecTooltip(event) {
+      event && event.stopPropagation();
+      const panel = document.getElementById('crec-tooltip-panel');
+      if (!panel) return;
+
+      _crecTooltipOpen = !_crecTooltipOpen;
+      if (!_crecTooltipOpen) {
+        panel.classList.remove('tooltip-visible');
+        return;
+      }
+
+      // ── Calcular datos reales ─────────────────────────────────
+      const { prev, curr } = getActivePair();
+      const MONTH_LABELS_MAP = {};
+      MONTH_KEYS.forEach((k, i) => { MONTH_LABELS_MAP[k] = MONTH_LABELS[i]; });
+      const prevLabel  = MONTH_LABELS_MAP[prev] || prev;
+      const currLabel  = MONTH_LABELS_MAP[curr] || curr;
+      const mesActual  = localDateStr().slice(0, 7);
+
+      let totalCurr = 0, totalAnt = 0;
+      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
+        const cortes = getCortesOp(o.name);
+        const ptsMes = cortes
+          .filter(c => c.fecha && c.fecha.slice(0,7) === mesActual)
+          .reduce((s, c) => s + (c.puntos || 0), 0);
+        totalCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
+        totalAnt  += o[prev] || 0;
+      });
+
+      const psaTotal       = getPSATotalMes(mesActual);
+      const totalConPSA    = totalCurr + psaTotal;
+      const crec           = totalAnt > 0 ? ((totalConPSA - totalAnt) / totalAnt * 100) : 0;
+      const crecSign       = crec >= 0 ? '+' : '';
+      const crecColor      = crec >= 0 ? '#34d399' : '#f87171';
+
+      // Proyección
+      const hoyDate  = new Date();
+      const diaHoy   = hoyDate.getDate();
+      const diasMes  = new Date(hoyDate.getFullYear(), hoyDate.getMonth()+1, 0).getDate();
+      const diasRest = diasMes - diaHoy;
+      const promDia  = diaHoy > 0 ? totalConPSA / diaHoy : 0;
+      const proyecc  = Math.round(promDia * diasMes);
+      const proyCOP  = Math.round(proyecc * 1400).toLocaleString('es-CO');
+
+      // Top 3 operadores del mes
+      const opsConPts = operatorsData
+        .filter(o => o.group !== 'SP')
+        .map(o => {
+          const c = getCortesOp(o.name);
+          const p = c.filter(x => x.fecha && x.fecha.slice(0,7) === mesActual)
+                     .reduce((s,x) => s+(x.puntos||0), 0);
+          return { name: o.name.split(' ').slice(0,2).join(' '), pts: p, turno: o.turno||'' };
+        })
+        .filter(o => o.pts > 0)
+        .sort((a,b) => b.pts - a.pts);
+      const top3    = opsConPts.slice(0, 3);
+      const top3Pts = top3.reduce((s,o) => s+o.pts, 0);
+      const top3Pct = totalConPSA > 0 ? Math.round((top3Pts/totalConPSA)*100) : 0;
+
+      // Mejor turno
+      const ptsPorTurno = { 'Mañana':0, 'Tarde':0, 'Noche':0 };
+      operatorsData.filter(o=>o.group!=='SP').forEach(o => {
+        const t = o.turno||'Noche';
+        const c = getCortesOp(o.name);
+        const p = c.filter(x=>x.fecha&&x.fecha.slice(0,7)===mesActual).reduce((s,x)=>s+(x.puntos||0),0);
+        if (ptsPorTurno[t]!==undefined) ptsPorTurno[t] += p;
+      });
+      const mejorTurno = Object.entries(ptsPorTurno).sort((a,b)=>b[1]-a[1])[0];
+
+      // Consejos dinámicos
+      const consejos = [];
+      if (psaTotal > 0)
+        consejos.push(`⚠️ <strong>${psaTotal.toFixed(1)} pts</strong> en el cajón sin asignar`);
+      if (crec < 0)
+        consejos.push(`📉 Operación por debajo de ${prevLabel} — revisa ausencias`);
+      if (crec > 30)
+        consejos.push(`🚀 Ritmo fuerte — mantén cortes cada 2h en turno activo`);
+      if (top3Pct >= 50)
+        consejos.push(`🎯 Top 3 concentran <strong>${top3Pct}%</strong> — distribuye mejor la carga`);
+      if (diasRest <= 5)
+        consejos.push(`⏳ Sprint final: <strong>${diasRest} días</strong> para cerrar el mes`);
+      if (mejorTurno && mejorTurno[1] > 0)
+        consejos.push(`🏆 Turno más productivo: <strong>${mejorTurno[0]}</strong>`);
+
+      const consejosHTML = consejos.length
+        ? consejos.map(c => `<div class="rktt-consejo">→ ${c}</div>`).join('')
+        : '<div class="rktt-consejo" style="color:#475569;">Sin alertas especiales por ahora.</div>';
+
+      const top3HTML = top3.map((o,i) => `
+        <div class="rktt-row">
+          <span>${['🥇','🥈','🥉'][i]} ${o.name}</span>
+          <span style="color:#5eead4;font-weight:700;">${o.pts.toFixed(1)} pts</span>
+        </div>`).join('');
+
+      // ── Renderizar tooltip ────────────────────────────────────
+      panel.innerHTML = `
+        <div class="rktt-header">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-weight:800;font-size:.85rem;color:#e2e8f0;">📊 Análisis de Crecimiento</span>
+            <span style="font-size:1rem;font-weight:900;color:${crecColor};">${crecSign}${crec.toFixed(1)}%</span>
+          </div>
+          <div style="font-size:.65rem;color:#64748b;margin-top:4px;">
+            ${prevLabel}: <strong style="color:#94a3b8;">${totalAnt.toFixed(0)} pts</strong>
+            → ${currLabel}: <strong style="color:#5eead4;">${totalConPSA.toFixed(0)} pts</strong>
+          </div>
+        </div>
+        <div class="rktt-body">
+          <!-- Proyección -->
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <div style="flex:1;background:rgba(94,234,212,.05);border:1px solid rgba(94,234,212,.1);
+              border-radius:10px;padding:8px 10px;text-align:center;">
+              <div style="font-size:.65rem;color:#64748b;margin-bottom:2px;">PROM/DÍA</div>
+              <div style="font-weight:800;color:#5eead4;font-size:.88rem;">${promDia.toFixed(1)} pts</div>
+            </div>
+            <div style="flex:1;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.12);
+              border-radius:10px;padding:8px 10px;text-align:center;">
+              <div style="font-size:.65rem;color:#64748b;margin-bottom:2px;">PROYECCIÓN MES</div>
+              <div style="font-weight:800;color:#fbbf24;font-size:.88rem;">${proyecc.toLocaleString()} pts</div>
+              <div style="font-size:.58rem;color:#64748b;">$${proyCOP} COP</div>
+            </div>
+            <div style="flex:1;background:rgba(168,85,247,.05);border:1px solid rgba(168,85,247,.12);
+              border-radius:10px;padding:8px 10px;text-align:center;">
+              <div style="font-size:.65rem;color:#64748b;margin-bottom:2px;">DÍAS RESTANTES</div>
+              <div style="font-weight:800;color:#a855f7;font-size:.88rem;">${diasRest}</div>
+            </div>
+          </div>
+          <!-- Top 3 -->
+          <div style="font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;
+            letter-spacing:.6px;margin-bottom:4px;">🏅 Top Producción ${currLabel}</div>
+          ${top3HTML || '<div class="rktt-row" style="color:#475569;">Sin cortes este mes aún</div>'}
+          <!-- Consejos -->
+          <div style="font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;
+            letter-spacing:.6px;margin:8px 0 4px;">💡 Consejos</div>
+          ${consejosHTML}
+          <div style="margin-top:8px;font-size:.6rem;color:#334155;text-align:right;">
+            Se actualiza con cada corte subido · ${diaHoy}/${diasMes} días
+          </div>
+        </div>`;
+
+      panel.classList.add('tooltip-visible');
+
+      // Cerrar al click fuera
+      setTimeout(() => {
+        document.addEventListener('click', function _closeCrecTT(e) {
+          if (!panel.contains(e.target)) {
+            panel.classList.remove('tooltip-visible');
+            _crecTooltipOpen = false;
+            document.removeEventListener('click', _closeCrecTT);
+          }
+        });
+      }, 50);
+    }
+
     function filterRanking() {
       clearTimeout(_rkSearchTimer);
       _rkSearchTimer = setTimeout(() => renderRanking(), 120);
@@ -4379,17 +4559,12 @@
       <div style="font-size:.6rem;color:#475569;margin-top:3px;">
         ${prevLabel}: ${totalPtsAnt.toFixed(0)} pts → ${currLabel}: ${totalPtsCurr.toFixed(0)} pts
       </div>
-      <button onclick="this.nextElementSibling.classList.toggle('tooltip-visible')"
-        style="position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;
-               background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-               color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>
-      <div class="rkinfo-tooltip">
-        <strong>Crecimiento de toda la operación</strong> vs el mes anterior.<br><br>
-        ${prevLabel}: <strong>${totalPtsAnt.toFixed(0)} pts</strong><br>
-        ${currLabel}: <strong>${totalPtsCurr.toFixed(0)} pts</strong> (cortes reales)<br><br>
-        👥 ${mejoraCount} de ${rkDataFiltered.length} operadores individuales mejoraron (${mejoraPct}%).<br><br>
-        📈 <em>Se actualiza automáticamente con cada corte subido.</em>
-      </div>
+      <button id="btn-crec-info" onclick="toggleCrecTooltip(event)"
+        style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;
+               background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.3);
+               color:#5eead4;font-size:10px;font-weight:700;cursor:pointer;line-height:1;
+               transition:.2s;">ℹ</button>
+      <div class="rkinfo-tooltip" id="crec-tooltip-panel"></div>
     </div>
   `;
 

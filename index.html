@@ -4293,31 +4293,73 @@
         return rkSortDir * (vb - va);
       });
 
-      // Stats cards — "Con Crecimiento" en %
-      const currPts = rkDataFiltered.map(o => o[curr] || 0);
-      const maxCurr = currPts.length ? Math.max(...currPts) : 1;
-      const totalPts = currPts.reduce((s, v) => s + v, 0);
-      const avgPts = rkDataFiltered.length ? totalPts / rkDataFiltered.length : 0;
+      // ── Stats cards ──────────────────────────────────────────────
+      const _hoyStats   = localDateStr();
+      const _mesActStats = _hoyStats.slice(0, 7);
+
+      // Pts mes actual: CORTES REALES (rr_prime_cortes) — más preciso que op[curr]
+      // Solo los operadores visibles en el ranking actual (rkDataFiltered)
+      let totalPtsCurr = 0;
+      let totalPtsAnt  = 0;
+      rkDataFiltered.forEach(o => {
+        const cortes  = getCortesOp(o.name);
+        const ptsMes  = cortes
+          .filter(c => c.fecha && c.fecha.slice(0,7) === _mesActStats)
+          .reduce((s, c) => s + (c.puntos || 0), 0);
+        // Si hay cortes reales usar esos, si no usar op[curr] como fallback
+        totalPtsCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
+        totalPtsAnt  += o[prev] || 0;
+      });
+
+      // Crecimiento de toda la operación vs mes anterior
+      const crecOp = totalPtsAnt > 0
+        ? ((totalPtsCurr - totalPtsAnt) / totalPtsAnt * 100)
+        : (totalPtsCurr > 0 ? 100 : 0);
+      const crecOpSign  = crecOp >= 0 ? '+' : '';
+      const crecOpColor = crecOp >= 0 ? '#34d399' : '#f87171';
+      const crecOpIcon  = crecOp >= 0 ? '📈' : '📉';
+
+      // Promedio por operador (cortes reales del mes)
+      const avgPts = rkDataFiltered.length ? totalPtsCurr / rkDataFiltered.length : 0;
+
+      // % operadores individuales en crecimiento (se mantiene como métrica secundaria)
       const mejoraCount = rkDataFiltered.filter(o => o.growth > 0).length;
-      const mejoraPct = rkDataFiltered.length ? Math.round((mejoraCount / rkDataFiltered.length) * 100) : 0;
+      const mejoraPct   = rkDataFiltered.length
+        ? Math.round((mejoraCount / rkDataFiltered.length) * 100) : 0;
+
+      // COP total operación
+      const copTotal = Math.round(totalPtsCurr * 1400).toLocaleString('es-CO');
 
       document.getElementById('rkStatsRow').innerHTML = `
-    <div class="rk-stat-card"><div class="stat-val">${rkDataFiltered.length}</div><div class="stat-lbl">Operadores</div></div>
-    <div class="rk-stat-card"><div class="stat-val">${totalPts.toFixed(0)}</div><div class="stat-lbl">Pts totales ${currLabel}</div></div>
-    <div class="rk-stat-card"><div class="stat-val">${avgPts.toFixed(1)}</div><div class="stat-lbl">Promedio ${currLabel}</div></div>
+    <div class="rk-stat-card">
+      <div class="stat-val">${rkDataFiltered.length}</div>
+      <div class="stat-lbl">Operadores</div>
+    </div>
+    <div class="rk-stat-card">
+      <div class="stat-val" style="font-size:1.1rem;">${totalPtsCurr.toFixed(1)}</div>
+      <div class="stat-lbl">Pts totales ${currLabel}</div>
+      <div style="font-size:.65rem;color:#34d399;margin-top:2px;">💰 $${copTotal} COP</div>
+    </div>
+    <div class="rk-stat-card">
+      <div class="stat-val">${avgPts.toFixed(1)}</div>
+      <div class="stat-lbl">Promedio / op ${currLabel}</div>
+    </div>
     <div class="rk-stat-card" style="position:relative;">
-      <div class="stat-val" style="color:${mejoraPct >= 50 ? '#34d399' : '#f87171'}">${mejoraPct}%</div>
-      <div class="stat-lbl">% Con Crecimiento</div>
+      <div class="stat-val" style="color:${crecOpColor};">${crecOpIcon} ${crecOpSign}${crecOp.toFixed(1)}%</div>
+      <div class="stat-lbl">Crecimiento operación</div>
+      <div style="font-size:.6rem;color:#475569;margin-top:3px;">
+        ${prevLabel}: ${totalPtsAnt.toFixed(0)} pts → ${currLabel}: ${totalPtsCurr.toFixed(0)} pts
+      </div>
       <button onclick="this.nextElementSibling.classList.toggle('tooltip-visible')"
         style="position:absolute;top:10px;right:10px;width:18px;height:18px;border-radius:50%;
                background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
                color:#94a3b8;font-size:10px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>
       <div class="rkinfo-tooltip">
-        <strong>${mejoraCount} de ${rkDataFiltered.length} operadores</strong> subieron sus puntos vs el mes anterior.<br><br>
-        📈 <em>Para subirlo:</em><br>
-        · Más conversaciones nuevas iniciadas<br>
-        · Mantener tráfico VIP activo cada hora<br>
-        · Reducir ausencias en turno
+        <strong>Crecimiento de toda la operación</strong> vs el mes anterior.<br><br>
+        ${prevLabel}: <strong>${totalPtsAnt.toFixed(0)} pts</strong><br>
+        ${currLabel}: <strong>${totalPtsCurr.toFixed(0)} pts</strong> (cortes reales)<br><br>
+        👥 ${mejoraCount} de ${rkDataFiltered.length} operadores individuales mejoraron (${mejoraPct}%).<br><br>
+        📈 <em>Se actualiza automáticamente con cada corte subido.</em>
       </div>
     </div>
   `;

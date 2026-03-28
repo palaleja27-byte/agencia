@@ -20,6 +20,8 @@ const PERFILES_AGENCIA = []; /**
   page.on('response', async (response) => {
     const resUrl = response.url();
     if (response.request().resourceType() === 'fetch' || response.request().resourceType() === 'xhr') {
+      console.log(`\x1b[90m [RADAR] Captando: ${resUrl} \x1b[0m`);
+      
       try {
         const json = await response.json();
         let dataList = Array.isArray(json) ? json : (json.data || json.result || [json]);
@@ -78,8 +80,17 @@ const PERFILES_AGENCIA = []; /**
       // 3. DATA EXTRACTION IN STATS
       console.log("\x1b[33m [NAVEGACIÓN] Re-direccionando a /statistics... \x1b[0m");
       await page.goto(`https://datame.cloud/statistics?from=${dateStart}&to=${dateEnd}`);
-      await page.waitForTimeout(8000); // Dar tiempo a que los datos fluyan
+      
+      console.log("\x1b[33m [BOTÓN] Forzando ejecución del reporte (SHOW)... \x1b[0m");
+      try {
+          // Intentamos varios selectores comunes para el botón de cargar datos
+          await page.click('button:has-text("SHOW"), button:has-text("Filtrar"), .q-btn:has-text("SHOW")', { timeout: 10000 });
+      } catch(e) {
+          console.log("\x1b[90m [DEBUG] No se halló botón literal de SHOW, esperando flujo natural... \x1b[0m");
+      }
 
+      await page.waitForTimeout(10000); 
+      
       // Tomar evidencia visual final
       await page.screenshot({ path: 'debug.png', fullPage: true });
       console.log("\x1b[32m [SUCCESS] Transmisión de datos completada. \x1b[0m");

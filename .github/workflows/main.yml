@@ -1,0 +1,32 @@
+name: Datame Auto-Scraper
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # El bot correrá automáticamente cada 2 horas
+  workflow_dispatch: # Activa el botón para ejecutarlo MANUALMENTE cuando quieras
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar Código
+        uses: actions/checkout@v3
+
+      - name: Preparar Entorno Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Instalar Playwright y Supabase
+        run: |
+          npm init -y
+          npm install playwright @supabase/supabase-js
+          npx playwright install --with-deps chromium
+          
+      - name: Ejecutar Extracción
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DATAME_USERNAME: ${{ secrets.DATAME_USERNAME }}
+          DATAME_PASSWORD: ${{ secrets.DATAME_PASSWORD }}
+        run: node scraper.js

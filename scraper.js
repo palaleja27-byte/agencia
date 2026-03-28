@@ -59,17 +59,26 @@ const PERFILES_AGENCIA = [];
       
       // Intentar múltiples selectores por si Datame lo cambió a "email" en su diseño
       const inputUsuario = 'input[type="text"], input[type="email"], input[name="username"]';
+      // Validación anti-errores
+      if (!process.env.DATAME_USERNAME || !process.env.DATAME_PASSWORD) {
+          console.error("❌ ERROR GIGANTE: Las credenciales DATAME_USERNAME o DATAME_PASSWORD están VACÍAS. Por favor verifica tus Secrets de GitHub.");
+          process.exit(1);
+      }
+
       await page.waitForSelector(inputUsuario, { timeout: 15000 });
       await page.fill(inputUsuario, process.env.DATAME_USERNAME);
       await page.fill('input[type="password"]', process.env.DATAME_PASSWORD);
       
-      // Estrategia Universal: Presionar Enter dentro de la clave (casi siempre envía el formulario)
-      await page.press('input[type="password"]', 'Enter');
-      
-      // Respaldo de click por si no reacciona al Enter (Botones clásicos de Login)
-      try { await page.click('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")', { timeout: 3000 }); } catch(e) {}
+      console.log("[NAVEGADOR] Haciendo clic directo en el botón azul LOG IN...");
+      try { 
+          // Click super específico basado en tu foto
+          await page.click('text="LOG IN"', { timeout: 4000 }); 
+      } catch(e) {
+          console.log("[NAVEGADOR] Falló clic por texto, probando tecla Enter...");
+          await page.press('input[type="password"]', 'Enter');
+      }
 
-      await page.waitForTimeout(5000);
+      await page.waitForTimeout(6000); 
       
       console.log("[NAVEGADOR] Yendo a la página de Miembros para forzar descarga de datos...");
       await page.goto('https://datame.cloud/members').catch((e) => console.log("Advertencia falló navegacion /members", e.message));

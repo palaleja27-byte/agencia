@@ -66,23 +66,36 @@ const PERFILES_AGENCIA = [];
       }
 
       await page.waitForSelector(inputUsuario, { timeout: 15000 });
-      await page.fill(inputUsuario, process.env.DATAME_USERNAME);
-      await page.fill('input[type="password"]', process.env.DATAME_PASSWORD);
       
-      console.log("[NAVEGADOR] Haciendo clic directo en el botón azul LOG IN...");
+      console.log("[NAVEGADOR] Escribiendo credenciales modo humano...");
+      // Escribir letra por letra para disparar eventos de validación del sitio
+      await page.type(inputUsuario, process.env.DATAME_USERNAME, { delay: 100 });
+      await page.type('input[type="password"]', process.env.DATAME_PASSWORD, { delay: 100 });
+      
+      console.log("[NAVEGADOR] Buscando botón de acceso azul...");
+      // Probamos el selector de clase de Quasar que suele usar Datame (.q-btn) o el texto
+      const loginBtn = 'button.q-btn, button:has-text("LOG IN"), .q-btn__content';
+      
       try { 
-          // Click super específico basado en tu foto
-          await page.click('text="LOG IN"', { timeout: 4000 }); 
+          await page.click(loginBtn, { timeout: 5000 }); 
       } catch(e) {
-          console.log("[NAVEGADOR] Falló clic por texto, probando tecla Enter...");
+          console.log("[NAVEGADOR] Falló clic especializado, intentando Enter...");
           await page.press('input[type="password"]', 'Enter');
       }
 
-      await page.waitForTimeout(6000); 
+      // Esperar la navegación o el cambio de estado
+      await page.waitForTimeout(8000); 
       
-      console.log("[NAVEGADOR] Yendo a la página de Miembros para forzar descarga de datos...");
-      await page.goto('https://datame.cloud/members').catch((e) => console.log("Advertencia falló navegacion /members", e.message));
-      await page.waitForTimeout(5000); // 5 seg extra para asegurar que las peticiones XHR terminen
+      const currentUrl = page.url();
+      console.log(`[NAVEGADOR] URL actual tras login: ${currentUrl}`);
+      
+      if (currentUrl.includes('login') || currentUrl.includes('logout')) {
+          console.log("⚠️ Seguimos en login/logout. Revisando errores en pantalla...");
+      } else {
+          console.log("✅ ¡Parece que entramos! Navegando a sección de datos...");
+          await page.goto('https://datame.cloud/members').catch(() => {});
+          await page.waitForTimeout(5000);
+      }
       
       console.log("[DEBUG] Tomando captura de pantalla de la situación actual...");
       await page.screenshot({ path: 'debug.png', fullPage: true });

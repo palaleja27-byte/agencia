@@ -70,26 +70,37 @@ const PERFILES_AGENCIA = []; /**
       await page.waitForTimeout(6000);
 
       // 2. TIME-TRAVEL PROTOCOL (Cálculo de fechas)
-      const dateStart = "2026-02-01"; // El inicio de la gloria
+      const dateStart = "2026-02-01"; 
       const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 3); // 3 días al futuro (Gap Ucrania)
+      futureDate.setDate(futureDate.getDate() + 3); 
       const dateEnd = futureDate.toISOString().split('T')[0];
       
-      console.log(`\x1b[35m [WARP] Sincronizando Reloj: ${dateStart} -> ${dateEnd} (Future Edge) \x1b[0m`);
+      console.log(`\x1b[35m [WARP] Sincronizando Período: ${dateStart} -> ${dateEnd} \x1b[0m`);
 
       // 3. DATA EXTRACTION IN STATS
       console.log("\x1b[33m [NAVEGACIÓN] Re-direccionando a /statistics... \x1b[0m");
-      await page.goto(`https://datame.cloud/statistics?from=${dateStart}&to=${dateEnd}`);
-      
-      console.log("\x1b[33m [BOTÓN] Forzando ejecución del reporte (SHOW)... \x1b[0m");
-      try {
-          // Intentamos varios selectores comunes para el botón de cargar datos
-          await page.click('button:has-text("SHOW"), button:has-text("Filtrar"), .q-btn:has-text("SHOW")', { timeout: 10000 });
-      } catch(e) {
-          console.log("\x1b[90m [DEBUG] No se halló botón literal de SHOW, esperando flujo natural... \x1b[0m");
-      }
+      await page.goto(`https://datame.cloud/statistics`);
+      await page.waitForTimeout(5000);
 
-      await page.waitForTimeout(10000); 
+      console.log("\x1b[33m [FILTRO] Configurando Calendario Físico... \x1b[0m");
+      // Intentamos ubicar los inputs de fecha (From/To) de la foto
+      try {
+          const dateInputs = page.locator('input[type="text"], input.q-field__native');
+          // El primero suele ser From, el segundo To
+          await dateInputs.nth(0).fill(dateStart);
+          await page.waitForTimeout(500);
+          await dateInputs.nth(1).fill(dateEnd);
+          await page.waitForTimeout(500);
+      } catch(e) {
+          console.log("\x1b[90m [DEBUG] No se pudo llenar el input, intentando via URL... \x1b[0m");
+          await page.goto(`https://datame.cloud/statistics?from=${dateStart}&to=${dateEnd}`);
+      }
+      
+      console.log("\x1b[33m [BOTÓN] Disparando Clic en SHOW... \x1b[0m");
+      await page.click('button:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 8000 }).catch(() => {});
+
+      console.log("\x1b[36m [ESPERA] Escaneando frecuencia de Red por 15 segundos... \x1b[0m");
+      await page.waitForTimeout(15000); 
       
       // Tomar evidencia visual final
       await page.screenshot({ path: 'debug.png', fullPage: true });

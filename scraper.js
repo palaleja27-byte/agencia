@@ -50,7 +50,12 @@ const PERFILES_AGENCIA = [];
       await page.waitForSelector(inputUsuario, { timeout: 15000 });
       await page.fill(inputUsuario, process.env.DATAME_USERNAME);
       await page.fill('input[type="password"]', process.env.DATAME_PASSWORD);
-      await page.click('button[type="submit"]');
+      
+      // Estrategia Universal: Presionar Enter dentro de la clave (casi siempre envía el formulario)
+      await page.press('input[type="password"]', 'Enter');
+      
+      // Respaldo de click por si no reacciona al Enter (Botones clásicos de Login)
+      try { await page.click('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")', { timeout: 3000 }); } catch(e) {}
 
       await page.waitForTimeout(5000); 
       

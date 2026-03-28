@@ -42,19 +42,33 @@ const PERFILES_AGENCIA = [];
   });
 
   // Autenticación Autónoma
-  await page.goto('https://datame.cloud/statistics');
-  await page.fill('input[type="text"]', process.env.DATAME_USERNAME);
-  await page.fill('input[type="password"]', process.env.DATAME_PASSWORD);
-  await page.click('button[type="submit"]');
-
-  await page.waitForTimeout(5000); 
-  
   try {
-     // Forzar la recarga visual en Datame para activar el XHR
-     await page.click('button:has-text("SHOW")');
-     await page.waitForTimeout(5000); 
-  } catch(e) {
-     console.log("Advertencia: No se detectó botón SHOW.");
+      await page.goto('https://datame.cloud/statistics');
+      
+      // Intentar múltiples selectores por si Datame lo cambió a "email" en su diseño
+      const inputUsuario = 'input[type="text"], input[type="email"], input[name="username"]';
+      await page.waitForSelector(inputUsuario, { timeout: 15000 });
+      await page.fill(inputUsuario, process.env.DATAME_USERNAME);
+      await page.fill('input[type="password"]', process.env.DATAME_PASSWORD);
+      await page.click('button[type="submit"]');
+
+      await page.waitForTimeout(5000); 
+      
+      try {
+         // Forzar la recarga visual en Datame para activar el XHR
+         await page.click('button:has-text("SHOW")');
+         await page.waitForTimeout(5000); 
+      } catch(e) {
+         console.log("Advertencia: No se detectó botón SHOW.");
+      }
+  } catch (err) {
+      console.error("ERROR CRÍTICO AL LOGUEARSE:", err.message);
+      console.log("\n--- EXTRACCIÓN DEL HTML PARA DIAGNÓSTICO ---");
+      const pageHtml = await page.innerHTML('body'); // Leemos la página para saber si Datame bloqueó al robot
+      console.log(pageHtml.substring(0, 2000));
+      console.log("--------------------------------------------\n");
+      await browser.close();
+      process.exit(1);
   }
 
   // Se eliminó la invocación al RPC ya que ahora el dashboard escucha directamente postgres_changes

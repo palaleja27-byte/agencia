@@ -13,30 +13,42 @@ const PERFILES_AGENCIA = [];
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  // Interceptar la capa de Red (XHR) antes de que dibuje la pantalla
+  // Interceptar la capa de Red (XHR)
   page.on('response', async (response) => {
-    if (response.url().includes('count-by-status-for-agency')) {
+    if (response.request().resourceType() === 'fetch' || response.request().resourceType() === 'xhr') {
+      const url = response.url();
+      console.log(`[RED] Cargando: ${url}`);
+      
       try {
         const json = await response.json();
         
-        // Sintaxis reparada: Extracción segura de datos
-        const id = parseInt(json.id || json.result?.id);
-        const puntos = parseFloat(json.bonuses || json.total || 0);
-        const agencia = json.member || 'Agencia Operativa';
+        // Convertimos a array por si Datame manda todos los perfiles en un solo golpe (array) o dentro de "data"
+        let dataList = [];
+        if (Array.isArray(json)) dataList = json;
+        else if (Array.isArray(json.data)) dataList = json.data;
+        else if (Array.isArray(json.result)) dataList = json.result;
+        else dataList = [json]; // o es un objeto simple
 
-        // Filtrar y enviar a Supabase SOLO si el ID pertenece a la lista blanca, o si la lista está VACIÁ (extraer todos)
-        if (PERFILES_AGENCIA.length === 0 || PERFILES_AGENCIA.includes(id)) {
-          console.log(`[+] Perfil Extraído: ${id} | Puntos: ${puntos}`);
-          
-          await supabase.from('operaciones').upsert({
-            id_perfil: id,
-            agencia: agencia,
-            puntos: puntos,
-            fecha_corte: new Date().toISOString()
-          }, { onConflict: 'id_perfil, fecha_corte' });
+        for (const item of dataList) {
+           const id = parseInt(item.id || item.profile_id || item.user_id);
+           if (id && !isNaN(id)) {
+               const puntos = parseFloat(item.bonuses || item.total || item.points || 0);
+               const agencia = item.member || item.agency || 'Agencia Operativa';
+
+               if (PERFILES_AGENCIA.length === 0 || PERFILES_AGENCIA.includes(id)) {
+                 console.log(`[+++] ¡BINGO! Perfil: ${id} | Puntos: ${puntos}`);
+                 
+                 await supabase.from('operaciones').upsert({
+                   id_perfil: id,
+                   agencia: agencia,
+                   puntos: puntos,
+                   fecha_corte: new Date().toISOString()
+                 }, { onConflict: 'id_perfil, fecha_corte' });
+               }
+           }
         }
       } catch (err) {
-        // Silenciar respuestas JSON malformadas sin crashear el bot
+        // Ignoramos respuestas que no son JSON validos (como archivos vacios)
       }
     }
   });

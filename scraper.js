@@ -14,14 +14,10 @@ const PERFILES_AGENCIA = []; /**
   
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
-  const page = await context.newPage();
-
-  // 🛰️ RADAR XHR MULTI-CAPA (Radar de Red)
+  const page = await context.newPage(); // 🛰️ RADAR XHR MULTI-CAPA (Radar de Red)
   page.on('response', async (response) => {
     const resUrl = response.url();
     if (response.request().resourceType() === 'fetch' || response.request().resourceType() === 'xhr') {
-      console.log(`\x1b[90m [RADAR] Captando: ${resUrl} \x1b[0m`);
-      
       try {
         const json = await response.json();
         let dataList = Array.isArray(json) ? json : (json.data || json.result || [json]);
@@ -30,7 +26,12 @@ const PERFILES_AGENCIA = []; /**
         for (const item of dataList) {
           // Buscamos ID y Puntos en cualquier propiedad posible (Fuerza Bruta)
           const id = parseInt(item.id || item.profile_id || item.user_id || item.ID);
-          const puntos = parseFloat(item.bonuses || item.total || item.points || item.amount || 0);
+          
+          // --- LIMPIEZA DE DIVISAS (6 776.34$ -> 6776.34) ---
+          const rawPuntos = item.bonuses || item.total || item.points || item.amount || 0;
+          const cleanPuntos = String(rawPuntos).replace(/[^\d.]/g, ''); // Solo dígitos y puntos
+          const puntos = parseFloat(cleanPuntos);
+          
           const agencia = item.member || item.agency || 'Agencia RR';
 
           if (id && !isNaN(id) && puntos > 0) {
@@ -80,21 +81,21 @@ const PERFILES_AGENCIA = []; /**
       // 3. DATA EXTRACTION IN STATS
       console.log("\x1b[33m [NAVEGACIÓN] Re-direccionando a /statistics... \x1b[0m");
       await page.goto(`https://datame.cloud/statistics`);
-      await page.waitForTimeout(5000);
+      await page.waitForTimeout(6000);
 
-      console.log("\x1b[33m [FILTRO] Configurando Calendario Físico... \x1b[0m");
-      // Intentamos ubicar los inputs de fecha (From/To) de la foto
-      try {
-          const dateInputs = page.locator('input[type="text"], input.q-field__native');
-          // El primero suele ser From, el segundo To
-          await dateInputs.nth(0).fill(dateStart);
-          await page.waitForTimeout(500);
-          await dateInputs.nth(1).fill(dateEnd);
-          await page.waitForTimeout(500);
-      } catch(e) {
-          console.log("\x1b[90m [DEBUG] No se pudo llenar el input, intentando via URL... \x1b[0m");
-          await page.goto(`https://datame.cloud/statistics?from=${dateStart}&to=${dateEnd}`);
-      }
+      console.log("\x1b[33m [FILTRO] Perforando Calendario vía Script Injection... \x1b[0m");
+      // Forzamos la escritura de fechas usando inyección directa al DOM
+      await page.evaluate(({start, end}) => {
+          const inputs = document.querySelectorAll('input[type="text"], input.q-field__native');
+          if (inputs.length >= 2) {
+              inputs[0].value = start;
+              inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+              inputs[1].value = end;
+              inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+          }
+      }, { start: dateStart, end: dateEnd });
+
+      await page.waitForTimeout(1000);
       
       console.log("\x1b[33m [BOTÓN] Disparando Clic en SHOW... \x1b[0m");
       await page.click('button:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 8000 }).catch(() => {});

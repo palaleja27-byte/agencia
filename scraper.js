@@ -69,27 +69,24 @@ const PERFILES_AGENCIA = [];
       // Respaldo de click por si no reacciona al Enter (Botones clásicos de Login)
       try { await page.click('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")', { timeout: 3000 }); } catch(e) {}
 
-      await page.waitForTimeout(5000); 
+      await page.waitForTimeout(5000);
       
-      try {
-         // Forzar la recarga visual en Datame para activar el XHR
-         await page.click('button:has-text("SHOW")');
-         await page.waitForTimeout(5000); 
-      } catch(e) {
-         console.log("Advertencia: No se detectó botón SHOW.");
-      }
+      console.log("[NAVEGADOR] Yendo a la página de Miembros para forzar descarga de datos...");
+      await page.goto('https://datame.cloud/members').catch((e) => console.log("Advertencia falló navegacion /members", e.message));
+      await page.waitForTimeout(5000); // 5 seg extra para asegurar que las peticiones XHR terminen
+      
+      console.log("[DEBUG] Tomando captura de pantalla de la situación actual...");
+      await page.screenshot({ path: 'debug.png', fullPage: true });
+      console.log("[DEBUG] Captura guardada como debug.png");
+      
   } catch (err) {
-      console.error("ERROR CRÍTICO AL LOGUEARSE:", err.message);
-      console.log("\n--- EXTRACCIÓN DEL HTML PARA DIAGNÓSTICO ---");
-      const pageHtml = await page.innerHTML('body'); // Leemos la página para saber si Datame bloqueó al robot
-      console.log(pageHtml.substring(0, 2000));
-      console.log("--------------------------------------------\n");
+      console.error("ERROR CRÍTICO:", err.message);
+      await page.screenshot({ path: 'debug.png', fullPage: true }).catch(() => {});
       await browser.close();
       process.exit(1);
   }
 
-  // Se eliminó la invocación al RPC ya que ahora el dashboard escucha directamente postgres_changes
-
+  // Desconectando
   await browser.close();
   console.log("Operación completada. Desconectando.");
 })();

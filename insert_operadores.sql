@@ -1,5 +1,0 @@
--- ===========================================================
--- INSERCIÓN INICIAL DE OPERADORES DESDE EXCEL
--- (Usando el 'DOCUMENTO' como 'id_perfil' temporalmente)
--- Posteriormente actualizaremos el id_perfil real.
--- ===========================================================

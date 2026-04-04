@@ -46,17 +46,20 @@ const PERFILES_AGENCIA = [
         if (!Array.isArray(dataList)) dataList = [dataList];
 
         for (const item of dataList) {
-          // 🛡️ REFUERZO DE IDENTIDAD: Priorizar IDs largos (evita el "4" y "6" de Datame)
-          const id = parseInt(item.member_id || item.member_profile_id || item.profile_id || item.id_profile || item.id || item.user_id);
-          
           // --- LIMPIEZA DE DIVISAS (6 776.34$ -> 6776.34) ---
           const rawPuntos = item.bonuses || item.total || item.points || item.amount || 0;
           const cleanPuntos = String(rawPuntos).replace(/[^\d.]/g, ''); 
           const puntos = parseFloat(cleanPuntos);
           
+          if (puntos > 0) {
+            // 🔍 DEBUG: Si hay puntos, imprimimos qué campos tiene el objeto para no adivinar el ID
+            console.log("\x1b[35m [DEBUG] Campos encontrados en el objeto:", Object.keys(item).join(", "), "\x1b[0m");
+          }
+
+          // 🛡️ REFUERZO DE IDENTIDAD: Priorizar IDs largos 
+          const id = parseInt(item.member_id || item.member_profile_id || item.profile_id || item.id_profile || item.id || item.user_id);
           const agencia = item.member || item.agency || 'Agencia RR';
 
-          // Solo guardamos si el ID parece un Perfil Real (5+ dígitos) y hay puntos
           if (id > 10000 && !isNaN(id) && puntos > 0) {
             console.log(`\x1b[32m [✓] MATCH: Perfil ${id} | Puntos: ${puntos} \x1b[0m`);
             

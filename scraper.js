@@ -4,13 +4,19 @@ const { createClient } = require('@supabase/supabase-js');
 // Conexión con privilegios de administrador usando GitHub Secrets
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-// Lista de los 34 perfiles activos únicos de la Agencia RR extraídos del catálogo
+// 🚀 LISTA DE IDs FILTRADA (Basada en la imagen de Datame para pruebas)
 const PERFILES_AGENCIA = [
-  79679899, 88243516, 91360720, 91733663, 95955130, 95956014, 98389135,
-  98540781, 101652076, 103289167, 103291980, 108018336, 109551682, 118179794,
-  118404407, 118692242, 120275229, 120720195, 130338853, 130422416, 130431310,
-  131130713, 132062039, 133085188, 137163229, 138130329, 139245989, 139247498,
-  143014129, 143017065, 144863124, 145211163, 145834230, 145844971
+  95956014,  // PABLO
+  91733663,  // DANIEL (DANIEL 68)
+  138130329, // AGUSTIN
+  144863124, // FERNANDO
+  95955130,  // HECTOR
+  98389135,  // RAUL
+  98540781,  // LEANDRO
+  103291980, // ARMANDO
+  130431310, // RAFAEL
+  143014129  // RENEE
+  // VALQUIMAR y LUIS DAROSA (Pendientes de ID para agregar)
 ]; 
 /**
  * ⚡ CYBER-SCRAPE PROTOCOL 2026 ⚡

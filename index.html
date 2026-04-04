@@ -12092,12 +12092,26 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (payloadLoader) payloadLoader.innerText = "Inyectando Operaciones Datame...";
 
         try {
+            console.log("[Bridge] Iniciando sincronización con Supabase (Leyendo tablas)...");
             // 1. Extraer Perfiles y Operaciones de las BD nuevas
-            const { data: perfilesAsignados } = await _sb.from('perfiles_asignados').select('id_perfil, id_operador_actual, operador_original_id, nombre_modelo, tipo_asignacion');
-            const { data: operaciones } = await _sb.from('operaciones').select('id_perfil, puntos, fecha_corte');
-            const { data: catOperadores } = await _sb.from('operadores_v3').select('id, nombre_real, grupo');
+            const resPerfiles = await _sb.from('perfiles_asignados').select('id_perfil, id_operador_actual, operador_original_id, nombre_modelo, tipo_asignacion');
+            const resOperaciones = await _sb.from('operaciones').select('id_perfil, puntos, fecha_corte');
+            const resCatOp = await _sb.from('operadores_v3').select('id, nombre_real, grupo');
 
-            if (!operaciones || !perfilesAsignados || !catOperadores) return;
+            if (resPerfiles.error) console.error("[Bridge Error] perfiles_asignados (RLS o Tabla):", resPerfiles.error);
+            if (resOperaciones.error) console.error("[Bridge Error] operaciones (RLS o Tabla):", resOperaciones.error);
+            if (resCatOp.error) console.error("[Bridge Error] operadores_v3 (RLS o Tabla):", resCatOp.error);
+
+            const perfilesAsignados = resPerfiles.data;
+            const operaciones = resOperaciones.data;
+            const catOperadores = resCatOp.data;
+
+            if (!operaciones || !perfilesAsignados || !catOperadores) {
+                console.warn("[Bridge] Datos nulos, la sincronización se abortó. ¿Ejecutaste el SQL de políticas Públicas de lectura (RLS)?");
+                return;
+            }
+
+            console.log(`[Bridge] Lectura Exitosa! Operaciones: ${operaciones.length}, Perfiles: ${perfilesAsignados.length}`);
 
             // 2. FUZZY MATCHER: Mapear UUID de operadores_v3 al NOMBRE EXACTO de la UI
             const idToNameMap = {};

@@ -1,8 +1,17 @@
 const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 
+// 🛡️ SECURITY CHECK: Validar que existan las llaves en los Secrets de GitHub
+const { SUPABASE_URL, SUPABASE_SERVICE_KEY, DATAME_USERNAME, DATAME_PASSWORD } = process.env;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !DATAME_USERNAME || !DATAME_PASSWORD) {
+  console.error("❌ ERROR CRÍTICO: Faltan variables de entorno (Secrets).");
+  console.error("Asegúrate de configurar SUPABASE_URL, SUPABASE_SERVICE_KEY, DATAME_USERNAME y DATAME_PASSWORD en los Settings del repositorio.");
+  process.exit(1);
+}
+
 // Conexión con privilegios de administrador usando GitHub Secrets
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // 🚀 LISTA DE IDs FILTRADA (Basada en la imagen de Datame para pruebas)
 const PERFILES_AGENCIA = [

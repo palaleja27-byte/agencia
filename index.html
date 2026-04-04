@@ -12146,16 +12146,24 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             const opRealPoints = {}; // { "JHORIANNYS ESTHER...": 4500 }
             
             Object.keys(latestPts).forEach(pId => {
-               const perfilAsignado = perfilesAsignados.find(pa => String(pa.id_perfil) === pId);
+               const cleanPid = String(pId).trim();
+               const perfilAsignado = perfilesAsignados.find(pa => String(pa.id_perfil).trim() === cleanPid);
+               
                if (perfilAsignado) {
                    const ownerAct = idToNameMap[perfilAsignado.id_operador_actual];
                    if (ownerAct) {
                        opRealPoints[ownerAct] = (opRealPoints[ownerAct] || 0) + latestPts[pId].pts;
+                       console.log(`[Bridge] ✅ MATCH: Perfil ${cleanPid} -> Operador: ${ownerAct} (+${latestPts[pId].pts} pts)`);
+                   } else {
+                       console.warn(`[Bridge] ⚠️ Perfil ${cleanPid} tiene un operador UUID no reconocido en el catálogo.`);
                    }
+               } else {
+                   // Este log es normal para IDs basura como el "4" o "6" que pronto desaparecerán
+                   if (cleanPid.length > 5) console.log(`[Bridge] ℹ️ ID ${cleanPid} no está asignado a nadie en Supabase.`);
                }
             });
 
-            console.log("[Bridge] Puntos extraídos de Relacional: ", opRealPoints);
+            console.log("[Bridge] Mapa final de Puntos acumulados:", opRealPoints);
 
             // 5. INYECTAR RESULTADOS COMO "CORTES VIRTUALES" AL KV_STORE
             // index.html lee los crecimientos desde 'rr_prime_cortes', no desde 'feb'/'mar' directos

@@ -46,18 +46,19 @@ const PERFILES_AGENCIA = [
         if (!Array.isArray(dataList)) dataList = [dataList];
 
         for (const item of dataList) {
-          // Buscamos ID y Puntos en cualquier propiedad posible (Fuerza Bruta)
-          const id = parseInt(item.id || item.profile_id || item.user_id || item.ID);
+          // 🛡️ REFUERZO DE IDENTIDAD: Priorizar IDs largos (evita el "4" y "6" de Datame)
+          const id = parseInt(item.member_id || item.member_profile_id || item.profile_id || item.id_profile || item.id || item.user_id);
           
           // --- LIMPIEZA DE DIVISAS (6 776.34$ -> 6776.34) ---
           const rawPuntos = item.bonuses || item.total || item.points || item.amount || 0;
-          const cleanPuntos = String(rawPuntos).replace(/[^\d.]/g, ''); // Solo dígitos y puntos
+          const cleanPuntos = String(rawPuntos).replace(/[^\d.]/g, ''); 
           const puntos = parseFloat(cleanPuntos);
           
           const agencia = item.member || item.agency || 'Agencia RR';
 
-          if (id && !isNaN(id) && puntos > 0) {
-            console.log(`\x1b[32m [✓] EXTRAÍDO: ID ${id} | SCORE: ${puntos} | AGENCIA: ${agencia} \x1b[0m`);
+          // Solo guardamos si el ID parece un Perfil Real (5+ dígitos) y hay puntos
+          if (id > 10000 && !isNaN(id) && puntos > 0) {
+            console.log(`\x1b[32m [✓] MATCH: Perfil ${id} | Puntos: ${puntos} \x1b[0m`);
             
             await supabase.from('operaciones').upsert({
               id_perfil: id,

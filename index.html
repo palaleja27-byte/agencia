@@ -12095,13 +12095,26 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             // 1. Extraer Perfiles y Operaciones de las BD nuevas
             const { data: perfilesAsignados } = await _sb.from('perfiles_asignados').select('id_perfil, id_operador_actual, operador_original_id, nombre_modelo, tipo_asignacion');
             const { data: operaciones } = await _sb.from('operaciones').select('id_perfil, puntos, fecha_corte');
-            const { data: catOperadores } = await _sb.from('operadores_v3').select('id, nombre_real');
+            const { data: catOperadores } = await _sb.from('operadores_v3').select('id, nombre_real, grupo');
 
             if (!operaciones || !perfilesAsignados || !catOperadores) return;
 
-            // 2. Mapear UUID de operadores_v3 a sus Nombres (el nombre real que el app base usa)
+            // 2. FUZZY MATCHER: Mapear UUID de operadores_v3 al NOMBRE EXACTO de la UI
             const idToNameMap = {};
-            catOperadores.forEach(o => idToNameMap[o.id] = o.nombre_real);
+            const normalizeString = s => typeof s === 'string' ? s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : '';
+
+            catOperadores.forEach(o => {
+                const dbNameNorm = normalizeString(o.nombre_real);
+                const dbFirstName = dbNameNorm.split(' ')[0];
+                
+                // Buscar coincidencia en operatorsData por nombre exacto, o por Primer Nombre + Grupo
+                const uiOp = operatorsData.find(ui => {
+                    const uiNameNorm = normalizeString(ui.name);
+                    return (uiNameNorm === dbNameNorm) || (uiNameNorm.includes(dbFirstName) && String(ui.group) === String(o.grupo));
+                });
+                
+                idToNameMap[o.id] = uiOp ? uiOp.name : o.nombre_real;
+            });
 
             // 3. Mapear qué perfil pertenece a quién y sus puntos
             const opRealPoints = {}; // { "JHORIANNYS ESTHER...": 4500 }

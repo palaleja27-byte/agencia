@@ -12127,26 +12127,58 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
             console.log("[Bridge] Puntos extraídos de Relacional: ", opRealPoints);
 
-            // 5. INYECTAR RESULTADOS AL KV_STORE INTERNO DE ESTE APP GIGANTE
+            // 5. INYECTAR RESULTADOS COMO "CORTES VIRTUALES" AL KV_STORE
+            // index.html lee los crecimientos desde 'rr_prime_cortes', no desde 'feb'/'mar' directos
+            const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
             let changesMade = false;
-            operatorsData.forEach(opLocal => {
-                const nombreLocal = opLocal.name;
-                if (opRealPoints[nombreLocal] !== undefined) {
-                    // Sobre-escribe Febrero (ya que la app base calcula Feb vs Ene u organiza por Feb como total)
-                    // Si el tablero base ya soporta "mar", se puede inyectar: opLocal.mar = opRealPoints[nombreLocal];
-                    if (opLocal.feb !== opRealPoints[nombreLocal]) {
-                        opLocal.feb = opRealPoints[nombreLocal]; 
-                        changesMade = true;
-                    }
+            
+            const hoyVirtual = new Date();
+            hoyVirtual.setMinutes(hoyVirtual.getMinutes() - hoyVirtual.getTimezoneOffset());
+            const hoyStr = hoyVirtual.toISOString().slice(0, 10);
+            const horaStr = hoyVirtual.toISOString().slice(11, 16);
+
+            Object.keys(opRealPoints).forEach(opName => {
+                const totalDatameHoy = opRealPoints[opName];
+                
+                if (!cortesObj[opName]) cortesObj[opName] = [];
+                
+                // ¿Cuántos puntos tiene este operador HOY registrados en la matriz de index.html?
+                const cortesExistentesHoy = cortesObj[opName].filter(c => c.fecha && c.fecha.slice(0,7) === hoyStr.slice(0,7)); // Puntos del MES
+                const puntosRegistradosMes = cortesExistentesHoy.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+                
+                // Como los Datame points vienen acumulados del mes, debemos restar la diferencia
+                const diferencia = totalDatameHoy - puntosRegistradosMes;
+                
+                // Si la diferencia es positiva (hay crecimiento desde Datame no registrado aca)
+                if (diferencia > 0) { 
+                    cortesObj[opName].push({
+                       id: 'dtm_sync_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                       fecha: hoyStr,
+                       hora: horaStr,
+                       puntos: Number(diferencia.toFixed(2)),
+                       novedades: "Extracción Autónoma Datame",
+                       timestamp: Date.now()
+                    });
+                    changesMade = true;
                 }
             });
 
             if (changesMade) {
-                // Forzamos guardar de nuevo la Matrix json base
-                saveData();
-                renderRanking();     // Dispara la recarga de Graficas del dashboard original!
-                renderCards?.();     // Dispara el update de cartas base si existen
-                console.log("[Bridge] 🟢 Carga de puente aplicada correctamente! UI Refrescada.");
+                // Guarda la base local
+                localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
+                saveData(); // Guarda operationsList original
+                
+                // Si existe supabase, lo empuja directo para que no se pierda en F5
+                try {
+                    await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }, { onConflict: 'key' });
+                } catch(e) {}
+                
+                // Dispara refrescos de UI Masivas
+                if (typeof renderRanking === 'function') renderRanking();     
+                if (typeof renderOperators === 'function') renderOperators();
+                if (typeof renderAlertas === 'function') renderAlertas();
+                
+                console.log("[Bridge] 🟢 Sincronizacion Finalizada. Pantallas Acutaliazdas con Puntos");
             }
 
         } catch (err) {

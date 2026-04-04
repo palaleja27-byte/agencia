@@ -4,8 +4,15 @@ const { createClient } = require('@supabase/supabase-js');
 // Conexión con privilegios de administrador usando GitHub Secrets
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
-// Si dejas esta lista vacía [], el bot extraerá TODOS los perfiles a los que tenga acceso la cuenta DATAME.
-const PERFILES_AGENCIA = []; /**
+// Lista de los 34 perfiles activos únicos de la Agencia RR extraídos del catálogo
+const PERFILES_AGENCIA = [
+  79679899, 88243516, 91360720, 91733663, 95955130, 95956014, 98389135,
+  98540781, 101652076, 103289167, 103291980, 108018336, 109551682, 118179794,
+  118404407, 118692242, 120275229, 120720195, 130338853, 130422416, 130431310,
+  131130713, 132062039, 133085188, 137163229, 138130329, 139245989, 139247498,
+  143014129, 143017065, 144863124, 145211163, 145834230, 145844971
+]; 
+/**
  * ⚡ CYBER-SCRAPE PROTOCOL 2026 ⚡
  * Agencia RR: Infiltración Temporal Activada
  */
@@ -83,8 +90,7 @@ const PERFILES_AGENCIA = []; /**
       await page.goto(`https://datame.cloud/statistics`);
       await page.waitForTimeout(6000);
 
-      console.log("\x1b[33m [FILTRO] Perforando Calendario vía Script Injection... \x1b[0m");
-      // Forzamos la escritura de fechas usando inyección directa al DOM
+      console.log("\x1b[33m [FILTRO] Inyectando Fechas de Búsqueda... \x1b[0m");
       await page.evaluate(({start, end}) => {
           const inputs = document.querySelectorAll('input[type="text"], input.q-field__native');
           if (inputs.length >= 2) {
@@ -95,17 +101,53 @@ const PERFILES_AGENCIA = []; /**
           }
       }, { start: dateStart, end: dateEnd });
 
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1500);
       
-      console.log("\x1b[33m [BOTÓN] Disparando Clic en SHOW... \x1b[0m");
-      await page.click('button:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 8000 }).catch(() => {});
+      const perfilesABuscar = PERFILES_AGENCIA.length > 0 ? PERFILES_AGENCIA : [''];
 
-      console.log("\x1b[36m [ESPERA] Escaneando frecuencia de Red por 15 segundos... \x1b[0m");
-      await page.waitForTimeout(15000); 
+      for (let i = 0; i < perfilesABuscar.length; i++) {
+        const idPerfil = String(perfilesABuscar[i]);
+        console.log(`\n\x1b[35m [SCAN] Analizando Perfil ${i+1}/${perfilesABuscar.length}: [${idPerfil}] \x1b[0m`);
+
+        if (idPerfil !== '') {
+          try {
+            await page.evaluate((idValue) => {
+              const allInputs = Array.from(document.querySelectorAll('input'));
+              let targetInput = allInputs.find(i => 
+                (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') || 
+                (i.placeholder || '').toLowerCase().includes('profile') ||
+                (i.closest('label') && i.closest('label').innerText.toLowerCase().includes('profile'))
+              );
+              
+              if (!targetInput && allInputs.length >= 3) {
+                  targetInput = allInputs[2];
+              }
+
+              if (targetInput) {
+                  targetInput.value = idValue;
+                  targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                  targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }, idPerfil);
+          } catch (e) {
+            console.error("\x1b[31m [WARN] No se pudo escribir en la casilla Member's profile \x1b[0m", e);
+          }
+          await page.waitForTimeout(800);
+        }
+
+        // Disparamos el clic en el botón SHOW
+        await page.click('button:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 8000 }).catch(() => {});
+        
+        // Esperamos para que la red responda el XHR de este perfil
+        await page.waitForTimeout(4000);
+      }
+
+      console.log("\x1b[36m [ESPERA FINAL] Cierre de red... \x1b[0m");
+      await page.waitForTimeout(3000); 
       
       // Tomar evidencia visual final
       await page.screenshot({ path: 'debug.png', fullPage: true });
-      console.log("\x1b[32m [SUCCESS] Transmisión de datos completada. \x1b[0m");
+      console.log("\x1b[32m [SUCCESS] Transmisión de datos iterativa completada. \x1b[0m");
 
   } catch (err) {
       console.error("\x1b[31m [CRITICAL ERROR] Fallo en la Matrix: " + err.message + "\x1b[0m");

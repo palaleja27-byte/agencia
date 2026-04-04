@@ -982,15 +982,15 @@
            6. CARGA DIRECTA DE DATOS (sin depender del RPC)
         ======================================================= */
         async function cargarDatosDirecto() {
-            console.log('Cargando catálogo maestro de operadores...');
+            console.log('Cargando catálogo maestro de operadores_v2...');
             try {
-                // 1. Extraer Catálogo Maestro
+                // 1. Extraer Catálogo Maestro desde operadores_v2 (con array de perfiles)
                 const { data: catOperadores, error: errCat } = await supabaseClient
-                    .from('operadores')
-                    .select('id_perfil, nombre_real, agencia, estado');
+                    .from('operadores_v2')
+                    .select('id, nombre_real, agencia, estado, perfiles_datame');
 
                 if (errCat) {
-                    console.warn('Tabla operadores no encontrada o vacía, asumiendo sin catálogo:', errCat.message);
+                    console.warn('Tabla operadores_v2 no encontrada, intentando tabla legacy:', errCat.message);
                 }
 
                 // 2. Extraer Puntos/Transacciones
@@ -1003,58 +1003,97 @@
                     return;
                 }
 
-                // Agrupar por operador 
-                const operadoresMap = {};
+                // 3. Construir mapa: perfil_datame → operador (nombre_real)
+                //    Un operador puede tener múltiples perfiles
+                const perfilToOperador = {}; // { "91733663": "EDWIN JOSE ROMERO FERRER", ... }
+                const operadoresMap = {};    // { "EDWIN JOSE ROMERO FERRER|Amolatina": { ... } }
                 let globalFeb = 0, globalMar = 0;
 
-                // Inicializar datos con el catálogo maestro (incluso si tienen 0 puntos)
                 if (catOperadores && catOperadores.length > 0) {
                     catOperadores.forEach(op => {
-                        const key = String(op.id_perfil);
-                        operadoresMap[key] = {
-                            perfil: key,
-                            nombre_real: op.nombre_real,
-                            nombre_agencia: op.agencia || 'Sin Agencia',
-                            estado: op.estado || 'Activo',
-                            feb_pts: 0,
-                            mar_pts: 0
-                        };
+                        const key = `${op.nombre_real}|${op.agencia || 'Sin Agencia'}`;
+                        const perfiles = op.perfiles_datame || [];
+
+                        // Registrar cada perfil → operador
+                        perfiles.forEach(perfil => {
+                            perfilToOperador[String(perfil)] = key;
+                        });
+
+                        // Inicializar operador en el mapa (incluso si tiene 0 puntos)
+                        if (!operadoresMap[key]) {
+                            operadoresMap[key] = {
+                                perfil: perfiles.map(String).join(', '),
+                                nombre_real: op.nombre_real,
+                                nombre_agencia: op.agencia || 'Sin Agencia',
+                                estado: op.estado || 'Activo',
+                                perfiles_arr: perfiles.map(String),
+                                feb_pts: 0,
+                                mar_pts: 0
+                            };
+                        } else {
+                            // Merge perfiles si hay duplicados
+                            perfiles.forEach(p => {
+                                if (!operadoresMap[key].perfiles_arr.includes(String(p))) {
+                                    operadoresMap[key].perfiles_arr.push(String(p));
+                                }
+                            });
+                            operadoresMap[key].perfil = operadoresMap[key].perfiles_arr.join(', ');
+                        }
                     });
                 }
 
-                // Sumar puntos de transacciones
+                console.log(`Catálogo cargado: ${Object.keys(operadoresMap).length} operadores, ${Object.keys(perfilToOperador).length} perfiles mapeados`);
+
+                // 4. Sumar puntos de transacciones cruzando con el mapa de perfiles
+                const perfilesNoRegistrados = new Set();
+
                 if (operaciones && operaciones.length > 0) {
                     operaciones.forEach(op => {
                         const fecha = new Date(op.fecha_corte);
                         const mes = fecha.getUTCMonth(); // 0=Jan, 1=Feb, 2=Mar
                         const anio = fecha.getUTCFullYear();
-                        const key = String(op.id_perfil);
-
-                        // Si el operador tiene historial pero no está en la tabla maestra, lo creamos "on-the-fly"
-                        if (!operadoresMap[key]) {
-                            operadoresMap[key] = {
-                                perfil: key,
-                                nombre_real: 'Desconocido (No Registrado)',
-                                nombre_agencia: op.agencia || 'Sin Agencia',
-                                estado: 'No Registrado',
-                                feb_pts: 0,
-                                mar_pts: 0
-                            };
-                        }
-
+                        const perfilId = String(op.id_perfil);
                         const pts = Number(op.puntos) || 0;
 
+                        // Buscar a qué operador pertenece este perfil
+                        let operadorKey = perfilToOperador[perfilId];
+
+                        if (!operadorKey) {
+                            // Perfil no registrado en operadores_v2
+                            operadorKey = `DESCONOCIDO_${perfilId}|${op.agencia || 'Sin Agencia'}`;
+                            perfilesNoRegistrados.add(perfilId);
+
+                            if (!operadoresMap[operadorKey]) {
+                                operadoresMap[operadorKey] = {
+                                    perfil: perfilId,
+                                    nombre_real: `Desconocido (Perfil ${perfilId})`,
+                                    nombre_agencia: op.agencia || 'Sin Agencia',
+                                    estado: 'No Registrado',
+                                    perfiles_arr: [perfilId],
+                                    feb_pts: 0,
+                                    mar_pts: 0
+                                };
+                            }
+                        }
+
                         if (mes === 1 && anio === 2026) { // Febrero
-                            operadoresMap[key].feb_pts += pts;
+                            operadoresMap[operadorKey].feb_pts += pts;
                             globalFeb += pts;
                         } else if (mes === 2 && anio === 2026) { // Marzo
-                            operadoresMap[key].mar_pts += pts;
+                            operadoresMap[operadorKey].mar_pts += pts;
+                            globalMar += pts;
+                        } else if (mes === 3 && anio === 2026) { // Abril
+                            operadoresMap[operadorKey].mar_pts += pts;
                             globalMar += pts;
                         }
                     });
                 }
 
-                // Calcular crecimiento por operador
+                if (perfilesNoRegistrados.size > 0) {
+                    console.warn(`⚠️ ${perfilesNoRegistrados.size} perfiles en operaciones NO están registrados en operadores_v2:`, [...perfilesNoRegistrados]);
+                }
+
+                // 5. Calcular crecimiento por operador
                 const operadoresArr = Object.values(operadoresMap).map(op => {
                     op.crecimiento_pct = op.feb_pts > 0
                         ? Math.round(((op.mar_pts - op.feb_pts) / op.feb_pts) * 100 * 100) / 100
@@ -1062,14 +1101,13 @@
                     return op;
                 });
 
-                // Si no hay datos, construir un payload vacío
                 const payload = {
                     global_febrero: globalFeb,
                     global_marzo: globalMar,
                     operadores: operadoresArr
                 };
 
-                console.log('Datos cruzados cargados:', payload);
+                console.log('Datos cruzados v2 cargados:', payload);
                 actualizarPantallas(payload);
 
             } catch (e) {
@@ -1111,9 +1149,9 @@
             catChannel.on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'operadores'
+                table: 'operadores_v2'
             }, () => {
-                console.log('Cambio detectado en el catálogo de operadores, recargando datos...');
+                console.log('Cambio detectado en el catálogo de operadores_v2, recargando datos...');
                 cargarDatosDirecto();
             }).subscribe();
 

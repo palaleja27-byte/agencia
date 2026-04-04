@@ -12116,24 +12116,24 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                 idToNameMap[o.id] = uiOp ? uiOp.name : o.nombre_real;
             });
 
-            // 3. Mapear qué perfil pertenece a quién y sus puntos
-            const opRealPoints = {}; // { "JHORIANNYS ESTHER...": 4500 }
-            
-            perfilesAsignados.forEach(p => {
-               const opName = idToNameMap[p.id_operador_actual];
-               if (opName && !opRealPoints[opName]) opRealPoints[opName] = 0;
+            // 3. Obtener EL ÚLTIMO corte exportado de cada perfil (así evitamos duplicar sumas si corres scraping varias veces o días distintos)
+            const latestPts = {}; // { '95955130': { pts: 1200, date: '...' } }
+            operaciones.forEach(op => {
+               const pId = String(op.id_perfil);
+               if (!latestPts[pId] || new Date(op.fecha_corte) > new Date(latestPts[pId].date)) {
+                   latestPts[pId] = { pts: Number(op.puntos) || 0, date: op.fecha_corte };
+               }
             });
 
-            // 4. Agregar puntos a cada operador por perfil
-            operaciones.forEach(op => {
-               const perfilId = String(op.id_perfil);
-               const perfilAsignado = perfilesAsignados.find(pa => String(pa.id_perfil) === perfilId);
-               
+            // 4. Mapear los puntos al Operador Correspondiente
+            const opRealPoints = {}; // { "JHORIANNYS ESTHER...": 4500 }
+            
+            Object.keys(latestPts).forEach(pId => {
+               const perfilAsignado = perfilesAsignados.find(pa => String(pa.id_perfil) === pId);
                if (perfilAsignado) {
                    const ownerAct = idToNameMap[perfilAsignado.id_operador_actual];
                    if (ownerAct) {
-                       const pts = Number(op.puntos) || 0;
-                       opRealPoints[ownerAct] = (opRealPoints[ownerAct] || 0) + pts;
+                       opRealPoints[ownerAct] = (opRealPoints[ownerAct] || 0) + latestPts[pId].pts;
                    }
                }
             });

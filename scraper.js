@@ -77,8 +77,9 @@ const PERFILES_AGENCIA = [
 
       await page.waitForTimeout(6000);
 
-      // 2. TIME-TRAVEL PROTOCOL (Cálculo de fechas)
-      const dateStart = "2026-02-01"; 
+      // 2. TIME-TRAVEL PROTOCOL (Cálculo de fechas - MES ACTUAL ÚNICAMENTE)
+      const now = new Date();
+      const dateStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]; 
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 3); 
       const dateEnd = futureDate.toISOString().split('T')[0];

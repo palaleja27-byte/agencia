@@ -13100,95 +13100,83 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           }
         });
 
-        // 4. Mapear los puntos al Operador Correspondiente
-        const opRealPoints = {}; // { "JHORIANNYS ESTHER...": 4500 }
-
+        // 4. AGRUPACIÓN DINÁMICA POR MES Y OPERADOR (Soporte Multi-Mes)
+        const statsPorMesOp = {}; // { '2026-03': { 'ESPERANZA': 450, ... } }
+        
         Object.keys(latestPts).forEach(pId => {
           const cleanPid = String(pId).trim();
           const perfilAsignado = perfilesAsignados.find(pa => String(pa.id_perfil).trim() === cleanPid);
-
+          const rawDate = latestPts[pId].date || '2026-04-01';
+          const mesKey = rawDate.slice(0, 7); // '2026-04', '2026-03', etc.
+          
           if (perfilAsignado) {
             const ownerAct = idToNameMap[perfilAsignado.id_operador_actual];
             if (ownerAct) {
-              opRealPoints[ownerAct] = (opRealPoints[ownerAct] || 0) + latestPts[pId].pts;
-              console.log(`[Bridge] ✅ MATCH: Perfil ${cleanPid} -> Operador: ${ownerAct} (+${latestPts[pId].pts} pts)`);
-            } else {
-              console.warn(`[Bridge] ⚠️ Perfil ${cleanPid} tiene un operador UUID no reconocido en el catálogo.`);
+              if (!statsPorMesOp[mesKey]) statsPorMesOp[mesKey] = {};
+              statsPorMesOp[mesKey][ownerAct] = (statsPorMesOp[mesKey][ownerAct] || 0) + latestPts[pId].pts;
+              console.log(`[Bridge] Multi-Mes: ${mesKey} | Perfil ${cleanPid} -> ${ownerAct} (+${latestPts[pId].pts} pts)`);
             }
-          } else {
-            if (cleanPid.length > 5) {
-              console.log(`[Bridge] ℹ️ ID ${cleanPid} no está asignado. Enviando al cajón PSA.`);
-              if (typeof agregarPSA === 'function') {
-                agregarPSA({
-                  idPerfil: cleanPid,
-                  modelo: `Datame ID: ${cleanPid}`,
-                  fecha: latestPts[pId].date.split('T')[0],
-                  jornada: typeof detectarTurno === 'function' ? detectarTurno() : 'Global',
-                  puntos: latestPts[pId].pts,
-                  horaCorte: new Date(latestPts[pId].date).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}),
-                  ts: Date.now(),
-                  motivo: 'Detectado automáticamente desde Datame'
-                });
-              }
+          } else if (cleanPid.length > 5) {
+            // Caso PSA: Mandar al cajón
+            if (typeof agregarPSA === 'function') {
+              agregarPSA({
+                idPerfil: cleanPid,
+                modelo: `Datame ID: ${cleanPid}`,
+                fecha: rawDate.split('T')[0],
+                jornada: typeof detectarTurno === 'function' ? detectarTurno() : 'Global',
+                puntos: latestPts[pId].pts,
+                horaCorte: new Date(rawDate).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+                ts: Date.now(),
+                motivo: 'Sincronización Automática'
+              });
             }
           }
         });
 
-        console.log("[Bridge] Mapa final de Puntos acumulados:", opRealPoints);
-        if (typeof renderPSAPanel === 'function') renderPSAPanel();
-
-        // 5. INYECTAR RESULTADOS COMO "CORTES VIRTUALES" AL KV_STORE
-        // index.html lee los crecimientos desde 'rr_prime_cortes', no desde 'feb'/'mar' directos
+        // 5. INYECCIÓN INTELIGENTE DE CORTES VIRTUALES AL KV_STORE
         const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
         let changesMade = false;
 
-        const hoyVirtual = new Date();
-        hoyVirtual.setMinutes(hoyVirtual.getMinutes() - hoyVirtual.getTimezoneOffset());
-        const hoyStr = hoyVirtual.toISOString().slice(0, 10);
-        const horaStr = hoyVirtual.toISOString().slice(11, 16);
+        Object.keys(statsPorMesOp).forEach(mesKey => {
+          const dataMes = statsPorMesOp[mesKey];
+          Object.keys(dataMes).forEach(opName => {
+             const totalDatameMes = dataMes[opName];
+             if (!cortesObj[opName]) cortesObj[opName] = [];
+             
+             // Buscar puntos ya registrados LOCALMENTE para este operador en este mes específico
+             const cortesLocalMes = cortesObj[opName].filter(c => c.fecha && c.fecha.slice(0, 7) === mesKey);
+             const puntosLocalMes = cortesLocalMes.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+             const diferencia = totalDatameMes - puntosLocalMes;
 
-        Object.keys(opRealPoints).forEach(opName => {
-          const totalDatameHoy = opRealPoints[opName];
-
-          if (!cortesObj[opName]) cortesObj[opName] = [];
-
-          // ¿Cuántos puntos tiene este operador HOY registrados en la matriz de index.html?
-          const cortesExistentesHoy = cortesObj[opName].filter(c => c.fecha && c.fecha.slice(0, 7) === hoyStr.slice(0, 7)); // Puntos del MES
-          const puntosRegistradosMes = cortesExistentesHoy.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-
-          // Como los Datame points vienen acumulados del mes, debemos restar la diferencia
-          const diferencia = totalDatameHoy - puntosRegistradosMes;
-
-          // Si la diferencia es positiva (hay crecimiento desde Datame no registrado aca)
-          if (diferencia > 0) {
-            cortesObj[opName].push({
-              id: 'dtm_sync_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-              fecha: hoyStr,
-              hora: horaStr,
-              puntos: Number(diferencia.toFixed(2)),
-              novedades: "Extracción Autónoma Datame",
-              timestamp: Date.now()
-            });
-            changesMade = true;
-          }
+             if (diferencia > 0.1) { // Tolerancia mínima
+               console.log(`[Bridge] Inyectando Delta para ${opName} (${mesKey}): ${diferencia.toFixed(2)} pts`);
+               const hoyVirtual = new Date(); 
+               const diagFecha = mesKey === localDateStr().slice(0, 7) ? localDateStr() : `${mesKey}-01`;
+               
+               cortesObj[opName].push({
+                 id: 'dtm_pro_v3_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                 fecha: diagFecha,
+                 hora: new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}),
+                 puntos: Number(diferencia.toFixed(2)),
+                 novedades: `Sincronización Pro (${mesKey})`,
+                 timestamp: Date.now()
+               });
+               changesMade = true;
+             }
+          });
         });
 
         if (changesMade) {
-          // Guarda la base local
           localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
-          saveData(); // Guarda operationsList original
-
-          // Si existe supabase, lo empuja directo para que no se pierda en F5
+          saveData(); 
           try {
             await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }, { onConflict: 'key' });
           } catch (e) { }
 
-          // Dispara refrescos de UI Masivas
           if (typeof renderRanking === 'function') renderRanking();
           if (typeof renderOperators === 'function') renderOperators();
           if (typeof renderAlertas === 'function') renderAlertas();
-
-          console.log("[Bridge] 🟢 Sincronizacion Finalizada. Pantallas Acutaliazdas con Puntos");
+          console.log("[Bridge] 🟢 Sincronizacion Finalizada Core Correctamente.");
         }
 
       } catch (err) {

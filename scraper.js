@@ -46,29 +46,51 @@ const PERFILES_AGENCIA = [
         if (!Array.isArray(dataList)) dataList = [dataList];
 
         for (const item of dataList) {
-          // --- LIMPIEZA DE DIVISAS (6 776.34$ -> 6776.34) ---
+          // --- LIMPIEZA DE DIVISAS ---
           const rawPuntos = item.bonuses || item.total || item.points || item.amount || 0;
           const cleanPuntos = String(rawPuntos).replace(/[^\d.]/g, ''); 
           const puntos = parseFloat(cleanPuntos);
           
           if (puntos > 0) {
-            // 🔍 DEBUG: Si hay puntos, imprimimos qué campos tiene el objeto para no adivinar el ID
-            console.log("\x1b[35m [DEBUG] Campos encontrados en el objeto:", Object.keys(item).join(", "), "\x1b[0m");
-          }
-
-          // 🛡️ REFUERZO DE IDENTIDAD: Priorizar IDs largos 
-          const id = parseInt(item.member_id || item.member_profile_id || item.profile_id || item.id_profile || item.id || item.user_id);
-          const agencia = item.member || item.agency || 'Agencia RR';
-
-          if (id > 10000 && !isNaN(id) && puntos > 0) {
-            console.log(`\x1b[32m [✓] MATCH: Perfil ${id} | Puntos: ${puntos} \x1b[0m`);
+            console.log("\x1b[35m [DEBUG] Analizando objeto con puntos. Buscando ID... \x1b[0m");
             
-            await supabase.from('operaciones').upsert({
-              id_perfil: id,
-              agencia: agencia,
-              puntos: puntos,
-              fecha_corte: new Date().toISOString()
-            }, { onConflict: 'id_perfil, fecha_corte' });
+            // 🔍 ESTRATEGIA 1: Buscar ID en la URL (Muy común en Datame)
+            let id = null;
+            const urlMatch = resUrl.match(/\d{8,9}/); // Busca 8 o 9 dígitos seguidos en la URL
+            if (urlMatch) {
+              id = parseInt(urlMatch[0]);
+              console.log(`\x1b[35m [DEBUG] ID detectado en la URL: ${id} \x1b[0m`);
+            }
+
+            // 🔍 ESTRATEGIA 2: Si no hay en URL, buscar cualquier número largo en el objeto
+            if (!id || id < 10000) {
+                const fullString = JSON.stringify(item);
+                const stringMatch = fullString.match(/\d{8,9}/);
+                if (stringMatch) {
+                   id = parseInt(stringMatch[0]);
+                   console.log(`\x1b[35m [DEBUG] ID detectado en el contenido: ${id} \x1b[0m`);
+                }
+            }
+
+            // 🛡️ REFUERZO: Si fallan las anteriores, intentar los campos conocidos
+            if (!id) {
+                id = parseInt(item.member_id || item.member_profile_id || item.profile_id || item.id_profile || item.id || item.user_id);
+            }
+
+            const agencia = item.member || item.agency || 'Agencia RR';
+
+            if (id > 10000 && !isNaN(id)) {
+              console.log(`\x1b[32m [✓] MATCH: Perfil ${id} | Puntos: ${puntos} \x1b[0m`);
+              
+              await supabase.from('operaciones').upsert({
+                id_perfil: id,
+                agencia: agencia,
+                puntos: puntos,
+                fecha_corte: new Date().toISOString()
+              }, { onConflict: 'id_perfil, fecha_corte' });
+            } else {
+              console.log("\x1b[33m [WARN] Puntos detectados pero no pudimos identificar a quién pertenecen. \x1b[0m");
+            }
           }
         }
       } catch (e) {} 

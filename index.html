@@ -601,6 +601,27 @@
       }
     }
 
+    .rkinfo-tooltip {
+      position: fixed;
+      width: 320px;
+      max-height: 85vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(94, 234, 212, 0.2);
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      padding: 16px;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s, transform .3s;
+      transform: translateY(10px) scale(0.95);
+    }
+    .rkinfo-tooltip::-webkit-scrollbar { width: 4px; }
+    .rkinfo-tooltip::-webkit-scrollbar-thumb { background: rgba(94, 234, 212, 0.3); border-radius: 2px; }
+
     .op-dash-hero {
       background: linear-gradient(135deg, #0f1a35, #111827);
       border: 1px solid rgba(94, 234, 212, .2);
@@ -4459,6 +4480,27 @@
       return { prev: months[months.length - 2], curr: months[months.length - 1] };
     }
 
+    // --- MOTOR DE SNAPSHOTS DIARIOS (MEMORIA v18.3) ---
+    const HISTORY_DAYS_KEY = 'rr_prime_history_days_v1';
+    function saveDailySnapshot() {
+      const today = localDateStr();
+      const data = {};
+      operatorsData.forEach(op => {
+        const cortes = getCortesOp(op.name).filter(c => c.fecha === today);
+        const pts = cortes.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        if (pts > 0) data[op.name] = pts;
+      });
+      if (Object.keys(data).length === 0) return;
+      
+      const history = JSON.parse(localStorage.getItem(HISTORY_DAYS_KEY) || '{}');
+      history[today] = data;
+      // Mantener solo los últimos 60 días para no saturar el buffer
+      const keys = Object.keys(history).sort();
+      if (keys.length > 61) delete history[keys[0]];
+      
+      localStorage.setItem(HISTORY_DAYS_KEY, JSON.stringify(history));
+    }
+
     // ==================== LOCALSTORAGE ====================
     const STORAGE_KEY = 'primeOperatorsData2026';
 
@@ -4605,11 +4647,16 @@
 
         <div style="margin:18px 0;padding:15px;background:rgba(94,234,212,0.06);border:1px solid rgba(94,234,212,0.2);border-radius:15px;">
           <div style="font-size:.7rem;font-weight:900;color:#5eead4;margin-bottom:12px;text-transform:uppercase;letter-spacing:3px;opacity:0.9;">🗃️ CRONOS_DATA_POOL_2026</div>
-          <div class="rktt-row" style="opacity:0.5;font-size:0.8rem;margin-bottom:6px;"><span>FEB_GENESIS</span> <strong>${totalFeb.toLocaleString()}</strong></div>
-          <div class="rktt-row" style="opacity:0.8;font-size:0.85rem;margin-bottom:6px;"><span>MAR_STABLE</span> <strong>${totalMar.toLocaleString()}</strong> <span style="color:#34d399;font-weight:900;">+${crecMarFeb.toFixed(1)}%</span></div>
-          <div class="rktt-row" style="color:#5eead4;font-size:0.95rem;background:rgba(94,234,212,0.12);padding:10px;border-radius:10px;border-left:5px solid #5eead4;margin-top:6px;box-shadow:0 0 15px rgba(94,234,212,0.15);">
-            <span>APR_STREAM</span> <strong>${totalAbr.toLocaleString()}</strong> 
-            <span style="color:#34d399;font-weight:900;margin-left:auto;">+${crecAbrMar.toFixed(1)}%</span>
+          <div class="rktt-row" style="opacity:0.5;font-size:0.8rem;margin-bottom:6px;"><span>FEB_GENESIS</span> <strong>${totalFeb.toLocaleString()}</strong> <span style="font-size:0.6rem;color:#475569;">(+0 pts)</span></div>
+          <div class="rktt-row" style="opacity:0.8;font-size:0.85rem;margin-bottom:6px;"><span>MAR_STABLE</span> <strong>${totalMar.toLocaleString()}</strong> <span style="color:#34d399;font-weight:900;">+${(totalMar - totalFeb).toLocaleString()} pts</span> <span style="font-size:0.6rem;color:#475569;">· ${crecMarFeb.toFixed(1)}%</span></div>
+          <div class="rktt-row" style="color:#5eead4;font-size:0.95rem;background:rgba(94,234,212,0.12);padding:10px;border-radius:10px;border-left:5px solid #5eead4;margin-top:6px;box-shadow:0 0 15px rgba(94,234,212,0.15); display:flex; flex-direction:column; gap:2px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span>APR_STREAM</span> <strong>${totalAbr.toLocaleString()}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem;">
+              <span style="color:#34d399;font-weight:900;">+${(totalAbr - totalMar).toLocaleString()} pts</span>
+              <span style="color:#34d399;font-weight:900;opacity:0.7;">+${crecAbrMar.toFixed(1)}%</span>
+            </div>
           </div>
         </div>
 
@@ -4947,6 +4994,7 @@
     <div class="rk-stat-card">
       <div class="stat-val">${rkDataFiltered.length}</div>
       <div class="stat-lbl">Operadores</div>
+      <button onclick="showDailyHistory()" style="margin-top:8px;padding:4px 8px;font-size:0.6rem;background:rgba(147,197,253,0.1);border:1px solid rgba(147,197,253,0.3);color:#93c5fd;border-radius:4px;cursor:pointer;">🕰️ Historial Días</button>
     </div>
     <div class="rk-stat-card" style="border: 2px solid rgba(94, 234, 212, 0.4); background: rgba(94, 234, 212, 0.05); transform: scale(1.05); z-index: 10;">
       <div class="stat-val" style="font-size:1.8rem; letter-spacing: -1px; text-shadow: 0 0 15px rgba(94, 234, 212, 0.6); color: #5eead4;">${totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 2})}</div>
@@ -5115,6 +5163,8 @@
           </div>
         </div>`;
       }).join('');
+
+      saveDailySnapshot();
 
       // Update sort arrows
       document.querySelectorAll('[id^="rth-"]').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
@@ -13108,14 +13158,66 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       } catch (err) { console.error("[Bridge Error]", err); }
     }
 
+    // --- UI PARA HISTORIAL DIARIO (v18.9) ---
+    function showDailyHistory() {
+      const history = JSON.parse(localStorage.getItem(HISTORY_DAYS_KEY) || '{}');
+      const container = document.getElementById('history-content');
+      const modal = document.getElementById('modal-history');
+      
+      const dates = Object.keys(history).sort().reverse();
+      if (dates.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#475569;">No hay días grabados todavía. El sistema grabará el rendimiento al finalizar la jornada.</div>';
+      } else {
+        container.innerHTML = dates.map(date => {
+          const opsData = history[date];
+          const totalTags = Object.keys(opsData).length;
+          const totalPts = Object.values(opsData).reduce((s, p) => s + p, 0);
+          return `
+            <div class="history-day-card" style="margin-bottom:15px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:15px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px;">
+                <span style="font-weight:900;color:#5eead4;letter-spacing:1px;">📅 ${date}</span>
+                <span style="font-size:0.75rem;color:#94a3b8;">${totalTags} operadores · ${totalPts.toFixed(1)} pts total</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                ${Object.entries(opsData).sort((a,b)=>b[1]-a[1]).map(([name, pts]) => `
+                  <div style="font-size:0.7rem;color:#e2e8f0;display:flex;justify-content:space-between;">
+                    <span style="opacity:0.7;">${name}</span>
+                    <strong style="color:#34d399;">${pts.toFixed(1)}</strong>
+                  </div>
+                `).join('')}
+              </div>
+            </div>`;
+        }).join('');
+      }
+      modal.classList.add('open');
+    }
 
-    // Lanzar puente después de que inicie la App (cuando carga todo y cierra boot)
+    function closeDailyHistory() {
+      document.getElementById('modal-history').classList.remove('open');
+    }
+
+    // --- RELLENO DEL BRIDGE ---
     setTimeout(() => { sincronizarDatameRelacional(); }, 3000);
-
-    // Auto-actualización cada 3 minutos (como el Realtime original)
     setInterval(sincronizarDatameRelacional, 180000);
 
   </script>
+
+  <!-- MODAL HISTORIAL DIARIO -->
+  <div id="modal-history" class="modal">
+    <div class="modal-content" style="max-width:600px; max-height:80vh; display:flex; flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:2px solid #5eead4;padding-bottom:10px;">
+        <h2 style="margin:0;color:#5eead4;letter-spacing:2px;font-size:1.2rem;">🕰️ HISTORIAL DE DÍAS (SNC)</h2>
+        <button class="close-btn" onclick="closeDailyHistory()">✕</button>
+      </div>
+      <div id="history-content" style="flex:1;overflow-y:auto;padding-right:10px;">
+        <!-- Inyectado por JS -->
+      </div>
+      <div style="margin-top:20px;font-size:0.65rem;color:#475569;text-align:center;font-style:italic;">
+        El historial guarda los puntos acumulados por cada operador durante el día. Se limpia automáticamente después de 60 días para optimizar memoria.
+      </div>
+    </div>
+  </div>
+
 </body>
 
 </html>

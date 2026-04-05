@@ -4480,11 +4480,26 @@
       if (saved) {
         try {
           const savedArr = JSON.parse(saved);
-          // Merge: for each source operator, apply saved editable fields
-          // but always keep source fields for personal info (doc, phone, email, etc.)
           const editableFields = ['group', 'profiles', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-          // Iterar savedArr (no OPERATORS_SOURCE) para respetar eliminaciones:
-          // si un operador fue borrado de s    function recalcGrowth() {
+          operatorsData = savedArr.map(savedOp => {
+            const srcOp = OPERATORS_SOURCE.find(s => s.name === savedOp.name);
+            if (srcOp) {
+              const merged = { ...srcOp };
+              editableFields.forEach(f => {
+                if (savedOp[f] !== undefined) merged[f] = savedOp[f];
+              });
+              return merged;
+            }
+            return { ...savedOp };
+          });
+        } catch (e) {
+          operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
+        }
+      }
+      recalcGrowth();
+    }
+
+    function recalcGrowth() {
       const { prev, curr } = getActivePair();
       operatorsData.forEach(op => {
         const pPrev = op[prev] != null ? op[prev] : 0;

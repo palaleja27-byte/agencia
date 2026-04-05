@@ -4559,25 +4559,34 @@
         return;
       }
 
-      // ── Calcular datos reales ─────────────────────────────────
+      // ── Cálculos Reales v16 ──────────────────────────────────
+      const MARCH_VALOR_FIJO = 78852.5; 
       const { prev, curr } = getActivePair();
-      const MONTH_LABELS_MAP = {};
-      MONTH_KEYS.forEach((k, i) => { MONTH_LABELS_MAP[k] = MONTH_LABELS[i]; });
-      const prevLabel = MONTH_LABELS_MAP[prev] || prev;
-      const currLabel = MONTH_LABELS_MAP[curr] || curr;
       const mesActual = localDateStr().slice(0, 7);
 
-      // Totales reales desde rr_prime_cortes (PSA ya incluido)
+      // 1. Totales Históricos
+      const totalFeb = operatorsData.reduce((s, o) => s + (Number(o.feb) || 0), 0);
+      let totalMar = getTotalMesPts('2026-03');
+      if (totalMar < MARCH_VALOR_FIJO) totalMar = MARCH_VALOR_FIJO;
+      const totalAbr = getTotalMesPts('2026-04');
+
+      // 2. Crecimientos
+      const crecMarFeb = totalFeb > 0 ? ((totalMar - totalFeb) / totalFeb * 100) : 0;
+      const crecAbrMar = totalMar > 0 ? ((totalAbr - totalMar) / totalMar * 100) : 0;
+
+      // 3. Datos Panel Principal (Comparativo actual)
       const mesAntTooltip = getMesAnteriorStr();
+      let totalAnt = getTotalMesPts(mesAntTooltip);
+      if (mesAntTooltip === '2026-03' && totalAnt < MARCH_VALOR_FIJO) totalAnt = MARCH_VALOR_FIJO;
+      
       const totalCurr = getTotalMesPts(mesActual);
-      const totalAnt = getTotalMesPts(mesAntTooltip);
       const psaTotal = getPSATotalMes(mesActual);
-      const totalConPSA = totalCurr; // PSA ya dentro de getTotalMesPts
+      const totalConPSA = totalCurr; 
       const crec = totalAnt > 0 ? ((totalConPSA - totalAnt) / totalAnt * 100) : 0;
       const crecSign = crec >= 0 ? '+' : '';
       const crecColor = crec >= 0 ? '#34d399' : '#f87171';
 
-      // Proyección
+      // 4. Proyección y Top 3
       const hoyDate = new Date();
       const diaHoy = hoyDate.getDate();
       const diasMes = new Date(hoyDate.getFullYear(), hoyDate.getMonth() + 1, 0).getDate();
@@ -4586,22 +4595,15 @@
       const proyecc = Math.round(promDia * diasMes);
       const proyCOP = Math.round(proyecc * 1400).toLocaleString('es-CO');
 
-      // Top 3 operadores del mes
       const opsConPts = operatorsData
-        .filter(o => o.group !== 'SP')
-        .map(o => {
+        .filter(o => o.group !== 'SP').map(o => {
           const c = getCortesOp(o.name);
-          const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual)
-            .reduce((s, x) => s + (x.puntos || 0), 0);
+          const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual).reduce((s, x) => s + (x.puntos || 0), 0);
           return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p, turno: o.turno || '' };
         })
-        .filter(o => o.pts > 0)
-        .sort((a, b) => b.pts - a.pts);
+        .filter(o => o.pts > 0).sort((a, b) => b.pts - a.pts);
       const top3 = opsConPts.slice(0, 3);
-      const top3Pts = top3.reduce((s, o) => s + o.pts, 0);
-      const top3Pct = totalConPSA > 0 ? Math.round((top3Pts / totalConPSA) * 100) : 0;
 
-      // Mejor turno
       const ptsPorTurno = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
       operatorsData.filter(o => o.group !== 'SP').forEach(o => {
         const t = o.turno || 'Noche';
@@ -4611,77 +4613,98 @@
       });
       const mejorTurno = Object.entries(ptsPorTurno).sort((a, b) => b[1] - a[1])[0];
 
-      // Consejos dinámicos
+      // 5. Consejos y Tooltip HTML
       const consejos = [];
-      if (psaTotal > 0)
-        consejos.push(`⚠️ <strong>${psaTotal.toFixed(1)} pts</strong> en el cajón sin asignar`);
-      if (crec < 0)
-        consejos.push(`📉 Operación por debajo de ${prevLabel} — revisa ausencias`);
-      if (crec > 30)
-        consejos.push(`🚀 Ritmo fuerte — mantén cortes cada 2h en turno activo`);
-      if (top3Pct >= 50)
-        consejos.push(`🎯 Top 3 concentran <strong>${top3Pct}%</strong> — distribuye mejor la carga`);
-      if (diasRest <= 5)
-        consejos.push(`⏳ Sprint final: <strong>${diasRest} días</strong> para cerrar el mes`);
-      if (mejorTurno && mejorTurno[1] > 0)
-        consejos.push(`🏆 Turno más productivo: <strong>${mejorTurno[0]}</strong>`);
+      if (psaTotal > 0) consejos.push(`⚠️ <strong>${psaTotal.toFixed(1)} pts</strong> en el cajón sin asignar`);
+      if (crec < 0) consejos.push(`📉 Operación por debajo de Marzo — revisa ausencias`);
+      if (crec > 30) consejos.push(`🚀 Ritmo fuerte — mantén cortes cada 2h`);
+      if (mejorTurno && mejorTurno[1] > 0) consejos.push(`🏆 Turno más productivo: <strong>${mejorTurno[0]}</strong>`);
 
-      const consejosHTML = consejos.length
-        ? consejos.map(c => `<div class="rktt-consejo">→ ${c}</div>`).join('')
-        : '<div class="rktt-consejo" style="color:#475569;">Sin alertas especiales por ahora.</div>';
+      const consejosHTML = consejos.length ? consejos.map(c => `<div class="rktt-consejo">→ ${c}</div>`).join('') : '<div class="rktt-consejo" style="color:#475569;">Sin alertas especiales.</div>';
+      const top3HTML = top3.map((o, i) => `<div class="rktt-row"><span>${['🥇', '🥈', '🥉'][i]} ${o.name}</span><span style="color:#5eead4;font-weight:700;">${o.pts.toFixed(1)} pts</span></div>`).join('');
 
-      const top3HTML = top3.map((o, i) => `
-        <div class="rktt-row">
-          <span>${['🥇', '🥈', '🥉'][i]} ${o.name}</span>
-          <span style="color:#5eead4;font-weight:700;">${o.pts.toFixed(1)} pts</span>
-        </div>`).join('');
-
-      // ── Renderizar tooltip ────────────────────────────────────
       panel.innerHTML = `
         <div class="rktt-header">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:800;font-size:.85rem;color:#e2e8f0;">📊 Análisis de Crecimiento</span>
+            <span style="font-weight:800;font-size:.85rem;color:#e2e8f0;">📈 Análisis de Crecimiento</span>
             <span style="font-size:1rem;font-weight:900;color:${crecColor};">${crecSign}${crec.toFixed(1)}%</span>
           </div>
           <div style="font-size:.65rem;color:#64748b;margin-top:4px;">
-            ${prevLabel}: <strong style="color:${totalAnt > 0 ? '#94a3b8' : '#f87171'};">
-              ${totalAnt > 0 ? totalAnt.toFixed(0) + ' pts' : '⚠️ Sin datos — sube el Excel de ' + prevLabel + ' en Registrar Corte'}
-            </strong><br>
-            ${currLabel}: <strong style="color:#5eead4;">${totalConPSA.toFixed(0)} pts</strong>
+            Marzo: <strong style="color:#94a3b8;">${totalMar.toFixed(0)} pts</strong> (Consolidado)<br>
+            Abril: <strong style="color:#5eead4;">${totalConPSA.toFixed(0)} pts</strong>
           </div>
         </div>
-        <div class="rktt-body">
-          <!-- Proyección -->
-          <div style="display:flex;gap:8px;margin-bottom:10px;">
-            <div style="flex:1;background:rgba(94,234,212,.05);border:1px solid rgba(94,234,212,.1);
-              border-radius:10px;padding:8px 10px;text-align:center;">
-              <div style="font-size:.65rem;color:#64748b;margin-bottom:2px;">PROM/DÍA</div>
-              <div style="font-weight:800;color:#5eead4;font-size:.88rem;">${promDia.toFixed(1)} pts</div>
-            </div>
-            <div style="flex:1;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.12);
-              border-radius:10px;padding:8px 10px;text-align:center;">
-              <div style="font-size:.65rem;color:#64748b;margin-bottom:2px;">PROYECCIÓN MES</div>
-              <div style="font-weight:800;color:#fbbf24;font-size:.88rem;">${proyecc.toLocaleString()} pts</div>
-              <div style="font-size:.58rem;color:#64748b;">$${proyCOP} COP</div>
-            </div>
-            <div style="flex:1;background:rgba(168,85,247,.05);border:1px solid rgba(168,85,247,.12);
-              border-radius:10px;padding:8px 10px;text-align:center;">
-              <div style="font-size:.65rem;color:#64748b;margin-bottom:2px;">DÍAS RESTANTES</div>
-              <div style="font-weight:800;color:#a855f7;font-size:.88rem;">${diasRest}</div>
-            </div>
+
+        <div style="margin:8px 0;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;">
+          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">🗃️ Historial Operación 2026</div>
+          <div class="rktt-row" style="opacity:0.8;"><span>Febrero</span> <strong>${totalFeb.toLocaleString('es-CO')} pts</strong></div>
+          <div class="rktt-row" style="opacity:0.9;"><span>Marzo</span> <strong>${totalMar.toLocaleString('es-CO')} pts</strong> <span style="font-size:.6rem;color:#34d399;">(+${crecMarFeb.toFixed(1)}%)</span></div>
+          <div class="rktt-row" style="color:#5eead4;"><span>Abril (Actual)</span> <strong>${totalAbr.toLocaleString('es-CO')} pts</strong> <span style="font-size:.6rem;color:#34d399;">(+${crecAbrMar.toFixed(1)}%)</span></div>
+        </div>
+
+        <div class="rktt-section" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div class="rktt-box">
+             <div class="rktt-box-val" style="color:#34d399;">${promDia.toFixed(0)} pts</div>
+             <div class="rktt-box-lbl">PROM/DÍA</div>
           </div>
-          <!-- Top 3 -->
-          <div style="font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;
-            letter-spacing:.6px;margin-bottom:4px;">🏅 Top Producción ${currLabel}</div>
-          ${top3HTML || '<div class="rktt-row" style="color:#475569;">Sin cortes este mes aún</div>'}
-          <!-- Consejos -->
-          <div style="font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;
-            letter-spacing:.6px;margin:8px 0 4px;">💡 Consejos</div>
+          <div class="rktt-box">
+             <div class="rktt-box-val" style="color:#fbbf24;">${proyecc.toLocaleString('es-CO')} pts</div>
+             <div class="rktt-box-lbl">PROYECCIÓN MES</div>
+             <div style="font-size:10px;color:#a3a3a3;margin-top:2px;">$${proyCOP}</div>
+          </div>
+          <div class="rktt-box">
+             <div class="rktt-box-val" style="color:#a78bfa;">${diasRest}</div>
+             <div class="rktt-box-lbl">DÍAS RESTANTES</div>
+          </div>
+        </div>
+
+        <div class="rktt-section">
+          <div class="rktt-sec-title">🏅 TOP PRODUCCIÓN ABRIL</div>
+          ${top3HTML || '<div class="rktt-row" style="color:#475569;">Cargando datos...</div>'}
+        </div>
+
+        <div class="rktt-section">
+          <div class="rktt-sec-title">💡 CONSEJOS</div>
           ${consejosHTML}
-          <div style="margin-top:8px;font-size:.6rem;color:#334155;text-align:right;">
-            Se actualiza con cada corte subido · ${diaHoy}/${diasMes} días
-          </div>
-        </div>`;
+        </div>
+        
+        <div style="font-size:9px;color:#475569;text-align:right;margin-top:8px;">Se actualiza en vivo con cada corte - 2026</div>
+      `;
+
+      // Posicionar tooltip
+      const rect = document.getElementById('btn-crec-info').getBoundingClientRect();
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      const ph = 360; 
+      const pw = 280; 
+
+      requestAnimationFrame(() => {
+        panel.classList.add('tooltip-visible');
+        let left = rect.left - pw + 30;
+        if (left < 8) left = 8;
+        if (left + pw > vw - 8) left = vw - pw - 8;
+        let top;
+        if (rect.top - ph - 12 > 8) {
+          top = rect.top - ph - 12;
+        } else {
+          top = rect.bottom + 12;
+        }
+        if (top + ph > vh - 8) top = vh - ph - 8;
+        if (top < 8) top = 8;
+        panel.style.top = top + 'px';
+        panel.style.left = left + 'px';
+      });
+
+      setTimeout(() => {
+        document.addEventListener('click', function _closeCrecTT(e) {
+          if (!panel.contains(e.target) && e.target.id !== 'btn-crec-info') {
+            panel.classList.remove('tooltip-visible');
+            _crecTooltipOpen = false;
+            document.removeEventListener('click', _closeCrecTT);
+          }
+        });
+      }, 50);
+    }
 
       panel.classList.add('tooltip-visible');
 

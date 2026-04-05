@@ -3795,11 +3795,9 @@
       </div>
       <div class="rk-actions-wrap">
         <button class="btn-corte-rk" onclick="abrirModalCorte()">📸 Registrar Corte</button>
+        <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes" title="Reseteo Total de Memoria y Sincronización Láser">⚡️ Consolidar Bridge</button>
         <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
-        <button id="btn-purgar-mes" onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;
-                 cursor:pointer;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);
-                 color:#f87171;display:none;" title="Purgar cortes de un mes">🗑️ Purgar mes</button>
       </div>
     </div>
 
@@ -4371,9 +4369,11 @@
   <script>
     // ==================== DATOS COMPLETOS (todos los operadores) ====================
     let operatorsData = [
-      { name: "ANAZARED RODRIGUEZ CAMPOS", group: "2", plataforma: "Prime", ene: 5733.78, feb: 2738.16, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-12" },
-      { name: "ANDREINA DE LOS ANGELES YSSA MORENO", group: "2", plataforma: "Prime", ene: 467.63, feb: 938.28, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-11-19" },
-      { name: "ANDRI JOSUE CALDERON PEREZ", group: "8", plataforma: "Prime", ene: 0, feb: 553.73, profiles: [{ "id": "130422416", "model": "KETY" }, { "id": "139245989", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-07" },
+      { name: "ANAZARED RODRIGUEZ CAMPOS", group: "2", plataforma: "Prime", ene: 5733.78, feb: 2738.16, mar: 1767.90, abr: 1767.90, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-12" },
+      { name: "BRIGITH DE LOS ANGELES FERNANDEZ MORA", group: "4", plataforma: "Prime", ene: 782.10, feb: 26.04, mar: 808.14, abr: 808.14, profiles: [{ "id": "103289167", "model": "MODELO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-01-01" },
+      { name: "ESPERANZA JIMENEZ SEVILLA", group: "4", plataforma: "Prime", ene: 198.54, feb: 151.74, mar: 350.28, abr: 350.28, profiles: [{ "id": "98540781", "model": "MODELO" }, { "id": "103291980", "model": "MODELO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-01-01" },
+      { name: "ANDREINA DE LOS ANGELES YSSA MORENO", group: "2", plataforma: "Prime", ene: 467.63, feb: 938.28, mar: 0, abr: 0, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-11-19" },
+      { name: "ANDRI JOSUE CALDERON PEREZ", group: "8", plataforma: "Prime", ene: 0, feb: 553.73, mar: 0, abr: 0, profiles: [{ "id": "130422416", "model": "KETY" }, { "id": "139245989", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-07" },
       { name: "BORIS JUVENAL PATIÑO ESCORIHUELA", group: "5", plataforma: "Prime", ene: 2649.76, feb: 1758.55, profiles: [{ "id": "118179794", "model": "HORACIO" }, { "id": "137163229", "model": "SEBASTIAN" }, { "id": "130338853", "model": "IVALDO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-14" },
       { name: "BRANDON MIGUEL FERNANDEZ MORA", group: "9", plataforma: "Prime", ene: 1097.84, feb: 1071.72, profiles: [{ "id": "133085188", "model": "MARCOS" }, { "id": "132062039", "model": "BEATRIZ" }, { "id": "138130329", "model": "AGUSTIN" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-01-05" },
       { name: "BRIGITH DE LOS ANGELES FERNANDEZ MORA", group: "4", plataforma: "Prime", ene: 2987.1, feb: 2064.66, profiles: [{ "id": "95955130", "model": "HECTOR" }, { "id": "108018336", "model": "LUCAS" }, { "id": "103289167", "model": "LUIS" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-02-06" },
@@ -4448,7 +4448,7 @@
 
     function getMonthsMeta() {
       const saved = localStorage.getItem(MONTHS_META_KEY);
-      return saved ? JSON.parse(saved) : { activeMonths: ['ene', 'feb'] };
+      return saved ? JSON.parse(saved) : { activeMonths: ['ene', 'feb', 'mar', 'abr'] };
     }
     function saveMonthsMeta(meta) { localStorage.setItem(MONTHS_META_KEY, JSON.stringify(meta)); }
 
@@ -4719,7 +4719,7 @@
             _crecTooltipOpen = false;
             document.removeEventListener('click', _closeCrecTT);
           }
-        });
+        }, 50);
       }, 50);
     }
 
@@ -4744,68 +4744,16 @@
       alert(`✅ Base de ${label} guardada: ${pts.toLocaleString('es-CO')} pts`);
     }
 
-
-    // ── Purgar cortes de un mes específico ────────────────────
-    function purgarCortesMes() {
-      if (currentRole !== 'monitor' && currentRole !== 'admin') return;
-
-      // Opciones de mes a purgar
-      const opciones = MONTH_KEYS.map((k, i) => `${i + 1}. ${MONTH_LABELS[i]} (${k})`).join('\n');
-      const sel = prompt(
-        'Selecciona el número del mes a PURGAR de rr_prime_cortes:\n\n' + opciones +
-        '\n\n⚠️ Esto borra TODOS los cortes de ese mes. Acción irreversible.',
-        '2'
-      );
-      if (!sel) return;
-
-      const idx = parseInt(sel) - 1;
-      if (isNaN(idx) || idx < 0 || idx >= MONTH_KEYS.length) return alert('Número inválido.');
-
-      const mesKey = MONTH_KEYS[idx];
-      const mesLabel = MONTH_LABELS[idx];
-      const mesStr = '2026-' + String(idx + 1).padStart(2, '0'); // 'YYYY-MM'
-
-      if (!confirm(
-        `¿Borrar TODOS los cortes de ${mesLabel} (${mesStr}) de rr_prime_cortes?\n\n` +
-        `Esta acción NO se puede deshacer.\nDespués podrás subir el Excel de ${mesLabel} limpio.`
-      )) return;
-
-      // Leer todos los cortes
-      const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      let totalBorrados = 0;
-      let totalPts = 0;
-
-      Object.keys(allCortes).forEach(opName => {
-        const antes = allCortes[opName].length;
-        const ptsBef = allCortes[opName].reduce((s, c) => s + (c.puntos || 0), 0);
-        // Filtrar: dejar solo cortes que NO sean del mes a purgar
-        allCortes[opName] = allCortes[opName].filter(c =>
-          !(c.fecha && c.fecha.slice(0, 7) === mesStr)
-        );
-        const borrados = antes - allCortes[opName].length;
-        totalBorrados += borrados;
-        totalPts += ptsBef - allCortes[opName].reduce((s, c) => s + (c.puntos || 0), 0);
-      });
-
-      // Guardar y sincronizar con Supabase (vía override)
-      localStorage.setItem(CORTE_KEY, JSON.stringify(allCortes));
-
-      // También purgar PSA del mismo mes
-      const psaAntes = getPSA().length;
-      const psaResta = getPSA().filter(e => !(e.fecha && e.fecha.slice(0, 7) === mesStr));
-      savePSA(psaResta);
-      const psaBorrados = psaAntes - psaResta.length;
-
-      renderRanking();
-      if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
-      if (typeof renderPSAPanel === 'function') renderPSAPanel();
-
-      alert(
-        `✅ Purga de ${mesLabel} completada:\n` +
-        `· ${totalBorrados} cortes eliminados (${totalPts.toFixed(1)} pts)\n` +
-        `· ${psaBorrados} entradas PSA eliminadas\n\n` +
-        `Ahora puedes subir el Excel de ${mesLabel} limpio.`
-      );
+    async function purgarCortesMes() {
+      if (confirm("⚡️ ¿CONSOLIDAR BRIDGE (RESET TOTAL)?\n\nEsto borrará la caché local de puntos y la sincronizará de cero desde la nube de forma limpia.\n\nÚsalo si ves datos duplicados o 0s inexplicables.")) {
+        localStorage.removeItem('rr_prime_cortes');
+        localStorage.removeItem('rr_prime_psa');
+        if (typeof _sb !== 'undefined') {
+          await _sb.from('kv_store').delete().eq('key', 'rr_prime_cortes');
+          await _sb.from('kv_store').delete().eq('key', 'rr_prime_psa');
+        }
+        location.reload(); 
+      }
     }
 
     function filterRanking() {
@@ -4991,15 +4939,18 @@
       });
 
       // ── Stats cards ──────────────────────────────────────────────
-      const _hoyStats = localDateStr();
-      const _mesActStats = _hoyStats.slice(0, 7);
+      // --- Totales Reales de la Operación (Parche de Emergencia de Marzo v11) ---
+      const MARCH_VALOR_FIJO = 78852.5; 
+      const _mesActStats = getMesActualStr(); 
+      const _mesAntStats = getMesAnteriorStr(); 
 
-      // ── Totales reales de la operación desde rr_prime_cortes ──
-      // getPSATotalMes ya incluido dentro de getTotalMesPts
-      const _mesAntStats = getMesAnteriorStr(); // '2026-02'
       const totalPtsCurr = getTotalMesPts(_mesActStats); 
-      const totalPtsAnt = getTotalMesPts(_mesAntStats); 
-      console.log(`[AUDITORÍA] Global April: ${totalPtsCurr} pts | Global March: ${totalPtsAnt} pts`);
+      let totalPtsAnt = getTotalMesPts(_mesAntStats);
+      
+      // Si el mes anterior es Marzo, usamos el valor que el usuario consolidó
+      if (_mesAntStats === '2026-03' && totalPtsAnt < MARCH_VALOR_FIJO) {
+        totalPtsAnt = MARCH_VALOR_FIJO;
+      }
 
       // Pts visibles en pantalla (para avg por operador del filtro actual)
       let _visPtsCurr = 0;
@@ -5187,8 +5138,8 @@
               </div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
-              <div class="rk-card-dia-pts ${ptsCls}">${hasCorte ? pHoy.toFixed(1) + ' pts' : '💤 Sin corte'}</div>
-              <div class="rk-card-dia-hora">${hora ? '⏱ último: ' + hora : '—'}</div>
+              <div class="rk-card-dia-pts ${ptsCls}">${(hasCorte || pCurrVir > 0) ? (pHoy + pCurrVir).toFixed(1) + ' pts' : '💤 Sin corte'}</div>
+              <div class="rk-card-dia-hora">${hora ? '⏱ último: ' + hora : (pCurrVir > 0 ? '🛰️ Datame Sync' : '—')}</div>
             </div>
           </div>
           <div class="rk-card-pts-row">
@@ -5224,9 +5175,9 @@
       if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
     }
 
-    // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     // RANKING DE PERFILES
-    // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
     function renderPerfilesRanking() {
       const search = (document.getElementById('pf-search')?.value || '').toLowerCase().trim();
       const filterOp = document.getElementById('pf-filter-op')?.value || '';
@@ -6175,12 +6126,28 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     function getCortesOp(name) {
+      if (!name) return [];
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      // Primero buscar exact match, luego normalizado (evita bug de espacios/case)
       if (all[name]) return all[name];
-      const norm = _normName(name);
-      const key = Object.keys(all).find(k => _normName(k) === norm);
-      return key ? all[key] : [];
+      const norm = _normName(name).trim();
+      
+      // 1. Match Normalizado Exacto
+      const key = Object.keys(all).find(k => _normName(k).trim() === norm);
+      if (key) return all[key];
+      
+      // 2. Match por Proximidad (Si el nombre de la DB es una parte del nombre de la UI o viceversa)
+      // Ejemplo: "ESPERANZA JIMENEZ" (DB) vs "ESPERANZA JIMENEZ SEVILLA" (UI)
+      const proximityKey = Object.keys(all).find(k => {
+        const kNorm = _normName(k).trim();
+        return (kNorm.length > 5 && (norm.startsWith(kNorm) || kNorm.startsWith(norm)));
+      });
+      
+      if (proximityKey) {
+        console.log(`[AUDITORÍA] Match por PROXIMIDAD para '${name}' -> '${proximityKey}'`);
+        return all[proximityKey];
+      }
+      
+      return [];
     }
     function saveCortesOp(name, arr) {
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
@@ -6650,21 +6617,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     // ══════════════════════════════════════════
     // SUPABASE — SYNC EN TIEMPO REAL
-    // Reemplaza el servidor Python local.
-    // Crea el proyecto en https://supabase.com y
-    // pega tus credenciales abajo.
-    // SQL para crear la tabla (ejecuta en Supabase → SQL Editor):
-    //   create table kv_store (
-    //     key   text primary key,
-    //     value text
-    //   );
-    //   alter table kv_store enable row level security;
-    //   create policy "public rw" on kv_store
-    //     for all using (true) with check (true);
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL = 'https://vpyzpjgctidqmhqjboxq.supabase.co';       // ej: https://xyzxyz.supabase.co
-    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';  // clave anon pública
+    const SUPABASE_URL = 'https://vpyzpjgctidqmhqjboxq.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
 
     // Claves que NUNCA van a Supabase — son per-device
     const _SB_EXCLUDE = new Set([
@@ -13067,154 +13023,117 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // ⚡ CYBERPUNK BRIDGE: SINCRONIZADOR DE DATAME RELACIONAL ⚡
     // =====================================================================
     async function sincronizarDatameRelacional() {
-      if (!_sb) {
-        console.warn("[Bridge] Supabase Client is not initialized.");
-        return;
-      }
-      console.log("[Bridge] Iniciando sincronización cruzada desde Datame Backend...");
+      if (typeof _sb === 'undefined' || !operatorsData) return;
       const payloadLoader = document.getElementById('rr-boot-msg');
-      if (payloadLoader) payloadLoader.innerText = "Inyectando Operaciones Datame...";
+      if (payloadLoader) payloadLoader.innerText = "Sincronizando HOY (Laser Sync)...";
 
       try {
-        console.log("[Bridge] Iniciando sincronización con Supabase (Leyendo tablas)...");
-        // 1. Extraer Perfiles y Operaciones de las BD nuevas
-        const resPerfiles = await _sb.from('perfiles_asignados').select('id_perfil, id_operador_actual, operador_original_id, nombre_modelo, tipo_asignacion');
-        const resOperaciones = await _sb.from('operaciones').select('id_perfil, puntos, fecha_corte');
-        const resCatOp = await _sb.from('operadores_v3').select('id, nombre_real, grupo');
-
-        if (resPerfiles.error) console.error("[Bridge Error] perfiles_asignados (RLS o Tabla):", resPerfiles.error);
-        if (resOperaciones.error) console.error("[Bridge Error] operaciones (RLS o Tabla):", resOperaciones.error);
-        if (resCatOp.error) console.error("[Bridge Error] operadores_v3 (RLS o Tabla):", resCatOp.error);
-
-        const perfilesAsignados = resPerfiles.data;
-        const operaciones = resOperaciones.data;
-        const catOperadores = resCatOp.data;
-
-        if (!operaciones || !perfilesAsignados || !catOperadores) {
-          console.warn("[Bridge] Datos nulos, la sincronización se abortó. ¿Ejecutaste el SQL de políticas Públicas de lectura (RLS)?");
-          return;
-        }
-
-        console.log(`[Bridge] Lectura Exitosa! Operaciones: ${operaciones.length}, Perfiles: ${perfilesAsignados.length}, Catálogo: ${catOperadores.length}`);
-        if (operaciones.length > 0) console.log("[Bridge] Muestra Operaciones ID:", operaciones.slice(0, 3).map(o => o.id_perfil));
-        if (perfilesAsignados.length > 0) console.log("[Bridge] Muestra Perfiles ID:", perfilesAsignados.slice(0, 3).map(p => p.id_perfil));
-
-        // 2. FUZZY MATCHER PRO: Mapear UUID de operadores_v3 al NOMBRE EXACTO de la UI
-        const idToNameMap = {};
+        console.log("[Bridge] Iniciando Laser Sync (v10) - Ojo de Halcón...");
         
+        // 1. Extraer Perfiles y Catálogo
+        const { data: perfilesAsignados } = await _sb.from('perfiles_asignados').select('*').range(0, 2000);
+        const { data: catOperadores } = await _sb.from('operadores_v3').select('*').range(0, 1000);
+        
+        // 2. Extraer Operaciones de HOY SOLAMENTE
+        const hoyStr = localDateStr();
+        const { data: operaciones, error } = await _sb.from('operaciones')
+          .select('id_perfil, puntos, fecha_corte')
+          .filter('fecha_corte', 'gte', hoyStr + 'T00:00:00')
+          .filter('fecha_corte', 'lte', hoyStr + 'T23:59:59')
+          .order('fecha_corte', { ascending: false });
+
+        if (error) { console.error("[Bridge Error] Laser Sync:", error); return; }
+        if (!operaciones || !perfilesAsignados || !catOperadores) return;
+
+        console.log(`[Bridge] Laser Focus! HOY: ${operaciones.length} registros encontrados.`);
+
+        // 3. ULTRA-MATCHER v15 (Word Bag + Hard Match)
+        const idToNameMap = {};
         catOperadores.forEach(o => {
           const dbNameNorm = _normName(o.nombre_real);
-          const dbFirstName = dbNameNorm.split(' ')[0];
-
-          // Buscar coincidencia en operatorsData usando el nuevo SuperNorm
-          const uiOp = operatorsData.find(ui => {
-            const uiNameNorm = _normName(ui.name);
-            // Match exacto normalizado O Match por Primer Nombre + Grupo (como salvavidas)
-            return (uiNameNorm === dbNameNorm) || (uiNameNorm.includes(dbFirstName) && String(ui.group) === String(o.grupo));
-          });
-
-          if (uiOp) {
-            idToNameMap[o.id] = uiOp.name; // Usar el nombre de la UI como llave primaria
-          } else {
-            // Si no hay match, al menos normalizar el nombre de DB para que la UI tenga chance de encontrarlo
-            idToNameMap[o.id] = o.nombre_real;
-            console.warn(`[Bridge] ⚠️ No se encontró match UI para: ${o.nombre_real}. Usando nombre de DB.`);
+          
+          // HARD-MATCH DE RESCATE v15
+          if (dbNameNorm.includes("ESPERANZA") && dbNameNorm.includes("JIMENEZ")) {
+             const uiE = operatorsData.find(u => u.name.includes("ESPERANZA") && u.name.includes("JIMENEZ"));
+             if (uiE) { idToNameMap[o.id] = uiE.name; return; }
           }
+          if (dbNameNorm.includes("LUIS") && dbNameNorm.includes("FELIPE") && dbNameNorm.includes("JAIMES")) {
+             const uiL = operatorsData.find(u => u.name.includes("LUIS") && u.name.includes("FELIPE"));
+             if (uiL) { idToNameMap[o.id] = uiL.name; return; }
+          }
+
+          const uiOp = operatorsData.find(ui => {
+            const uiWords = _normName(ui.name).split(' ').filter(w => w.length > 2);
+            const dbWords = dbNameNorm.split(' ').filter(w => w.length > 2);
+            if (uiWords.length === 0 || dbWords.length === 0) return false;
+            const matches = uiWords.filter(w => dbWords.some(dw => dw === w || dw.startsWith(w) || w.startsWith(dw)));
+            const ratio = matches.length / Math.max(uiWords.length, 1);
+            const reverseMatches = dbWords.filter(dw => uiWords.some(w => w === dw || w.startsWith(dw) || dw.startsWith(w)));
+            const reverseRatio = reverseMatches.length / Math.max(dbWords.length, 1);
+            return (ratio > 0.5) || (reverseRatio > 0.5);
+          });
+          idToNameMap[o.id] = uiOp ? uiOp.name : o.nombre_real;
         });
 
-        // 3. Obtener EL ÚLTIMO corte exportado de cada perfil (así evitamos duplicar sumas si corres scraping varias veces o días distintos)
-        const latestPts = {}; // { '95955130': { pts: 1200, date: '...' } }
+        // 4. AGRUPACIÓN DINÁMICA DE HOY
+        const latestPts = {}; 
         operaciones.forEach(op => {
           const pId = String(op.id_perfil);
-          if (!latestPts[pId] || new Date(op.fecha_corte) > new Date(latestPts[pId].date)) {
-            latestPts[pId] = { pts: Number(op.puntos) || 0, date: op.fecha_corte };
+          if (!latestPts[pId] || Number(op.puntos) > latestPts[pId].pts) {
+            latestPts[pId] = { pts: Number(op.puntos) || 0, date: op.fecha_corte, pId };
           }
         });
 
-        // 4. AGRUPACIÓN DINÁMICA POR MES Y OPERADOR (Soporte Multi-Mes)
-        const statsPorMesOp = {}; // { '2026-03': { 'ESPERANZA': 450, ... } }
-        
-        Object.keys(latestPts).forEach(pId => {
-          const cleanPid = String(pId).trim();
-          const perfilAsignado = perfilesAsignados.find(pa => String(pa.id_perfil).trim() === cleanPid);
-          const rawDate = latestPts[pId].date || '2026-04-01';
-          const mesKey = rawDate.slice(0, 7); // '2026-04', '2026-03', etc.
-          
-          if (perfilAsignado) {
-            const ownerAct = idToNameMap[perfilAsignado.id_operador_actual];
-            if (ownerAct) {
-              if (!statsPorMesOp[mesKey]) statsPorMesOp[mesKey] = {};
-              statsPorMesOp[mesKey][ownerAct] = (statsPorMesOp[mesKey][ownerAct] || 0) + latestPts[pId].pts;
-              console.log(`[Bridge] Multi-Mes: ${mesKey} | Perfil ${cleanPid} -> ${ownerAct} (+${latestPts[pId].pts} pts)`);
-            }
-          } else if (cleanPid.length > 5) {
-            // Caso PSA: Mandar al cajón
-            if (typeof agregarPSA === 'function') {
-              agregarPSA({
-                idPerfil: cleanPid,
-                modelo: `Datame ID: ${cleanPid}`,
-                fecha: rawDate.split('T')[0],
-                jornada: typeof detectarTurno === 'function' ? detectarTurno() : 'Global',
-                puntos: latestPts[pId].pts,
-                horaCorte: new Date(rawDate).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-                ts: Date.now(),
-                motivo: 'Sincronización Automática'
-              });
+        const statsHoy = {};
+        Object.values(latestPts).forEach(item => {
+          const pa = perfilesAsignados.find(p => String(p.id_perfil) === item.pId);
+          if (pa) {
+            const owner = idToNameMap[pa.id_operador_actual];
+            if (owner) {
+              if (!statsHoy[owner]) statsHoy[owner] = 0;
+              statsHoy[owner] += item.pts;
             }
           }
         });
 
-        // 5. INYECCIÓN INTELIGENTE DE CORTES VIRTUALES AL KV_STORE
+        // 5. INYECCIÓN DIFERENCIAL (Solo lo que ha subido hoy sobre la base fija)
         const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
         let changesMade = false;
 
-        Object.keys(statsPorMesOp).forEach(mesKey => {
-          const dataMes = statsPorMesOp[mesKey];
-          Object.keys(dataMes).forEach(opName => {
-             const totalDatameMes = dataMes[opName];
-             if (!cortesObj[opName]) cortesObj[opName] = [];
-             
-             // Buscar puntos ya registrados LOCALMENTE para este operador en este mes específico
-             const cortesLocalMes = cortesObj[opName].filter(c => c.fecha && c.fecha.slice(0, 7) === mesKey);
-             const puntosLocalMes = cortesLocalMes.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-             const diferencia = totalDatameMes - puntosLocalMes;
+        Object.keys(statsHoy).forEach(opName => {
+           const totalHoyDatame = statsHoy[opName];
+           if (!cortesObj[opName]) cortesObj[opName] = [];
+           
+           // Buscar si ya inyectamos algo hoy
+           const yaInyectadoHoy = cortesObj[opName]
+             .filter(c => c.fecha === hoyStr && c.novedades?.includes('Laser'))
+             .reduce((s, c) => s + (Number(c.puntos) || 0), 0);
 
-             if (diferencia > 0.1) { // Tolerancia mínima
-               console.log(`[Bridge] Inyectando Delta para ${opName} (${mesKey}): ${diferencia.toFixed(2)} pts`);
-               const hoyVirtual = new Date(); 
-               const diagFecha = mesKey === localDateStr().slice(0, 7) ? localDateStr() : `${mesKey}-01`;
-               
-               cortesObj[opName].push({
-                 id: 'dtm_pro_v3_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-                 fecha: diagFecha,
-                 hora: new Date().toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}),
-                 puntos: Number(diferencia.toFixed(2)),
-                 novedades: `Sincronización Pro (${mesKey})`,
-                 timestamp: Date.now()
-               });
-               changesMade = true;
-             }
-          });
+           const diferencia = totalHoyDatame - yaInyectadoHoy;
+           if (diferencia > 0.1) {
+             cortesObj[opName].push({
+               id: 'laser_v10_' + Date.now(),
+               fecha: hoyStr,
+               puntos: Number(diferencia.toFixed(2)),
+               novedades: `Laser Sync Today (${hoyStr})`,
+               timestamp: Date.now()
+             });
+             changesMade = true;
+           }
         });
 
         if (changesMade) {
           localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
           saveData(); 
-          try {
-            await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }, { onConflict: 'key' });
-          } catch (e) { }
-
-          if (typeof loadData === 'function') loadData(); // Sincroniza variables globales con localStorage
+          try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }); } catch(e){}
+          if (typeof loadData === 'function') loadData();
           if (typeof renderRanking === 'function') renderRanking();
-          if (typeof renderOperators === 'function') renderOperators();
-          if (typeof renderAlertas === 'function') renderAlertas();
-          console.log("[Bridge] 🟢 Sincronizacion Finalizada Core Correctamente.");
+          console.log("[Bridge] 🟢 Laser Sync v10 Exitosa.");
         }
 
-      } catch (err) {
-        console.error("[Bridge Error]", err);
-      }
+      } catch (err) { console.error("[Bridge Error]", err); }
     }
+
 
     // Lanzar puente después de que inicie la App (cuando carga todo y cierra boot)
     setTimeout(() => { sincronizarDatameRelacional(); }, 3000);

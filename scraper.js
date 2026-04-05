@@ -118,12 +118,11 @@ const PERFILES_AGENCIA = [
 
       await page.waitForTimeout(6000);
 
-      // 2. TIME-TRAVEL PROTOCOL (Cálculo de fechas - MES ACTUAL ÚNICAMENTE)
+      // 2. TIME-TRAVEL PROTOCOL (Cálculo de fechas - Soporta Históricos)
       const now = new Date();
-      const dateStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]; 
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 3); 
-      const dateEnd = futureDate.toISOString().split('T')[0];
+      // Si existen variables de entorno, las usamos (para Febrero/Marzo), si no, mes actual.
+      const dateStart = process.env.START_DATE || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]; 
+      const dateEnd   = process.env.END_DATE || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
       
       console.log(`\x1b[35m [WARP] Sincronizando Período: ${dateStart} -> ${dateEnd} \x1b[0m`);
 

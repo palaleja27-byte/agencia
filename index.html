@@ -4484,30 +4484,11 @@
           // but always keep source fields for personal info (doc, phone, email, etc.)
           const editableFields = ['group', 'profiles', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
           // Iterar savedArr (no OPERATORS_SOURCE) para respetar eliminaciones:
-          // si un operador fue borrado de savedArr, no vuelve aunque este en OPERATORS_SOURCE
-          operatorsData = savedArr.map(savedOp => {
-            const srcOp = OPERATORS_SOURCE.find(s => s.name === savedOp.name);
-            if (srcOp) {
-              const merged = { ...srcOp }; // datos personales frescos del source
-              editableFields.forEach(f => {
-                if (savedOp[f] !== undefined) merged[f] = savedOp[f];
-              });
-              return merged;
-            }
-            return { ...savedOp }; // operador agregado manualmente (no esta en source)
-          });
-        } catch (e) { operatorsData = OPERATORS_SOURCE.map(o => ({ ...o })); }
-      }
-      // Enriquecer con datos personales del Excel
-      recalcGrowth();
-    }
-
-    function recalcGrowth() {
+          // si un operador fue borrado de s    function recalcGrowth() {
       const { prev, curr } = getActivePair();
       operatorsData.forEach(op => {
         const pPrev = op[prev] != null ? op[prev] : 0;
         const pCurr = op[curr] != null ? op[curr] : 0;
-        // Bug 10: Growth should be 0 for new operators (misleading 100%)
         op.growth = (pPrev <= 0) ? 0 : ((pCurr - pPrev) / pPrev) * 100;
       });
     }
@@ -4525,27 +4506,19 @@
     }
 
     // ==================== TABS ====================
-    // ── Performance: debounce search ──
     let _rkSearchTimer = null;
 
-    // ── Control de turno en ranking principal ──────────────────
     function setRkTurno(turno) {
-      // Actualizar hidden select (filterRanking lo lee)
       const sel = document.getElementById('rankingTurnoFilter');
       if (sel) sel.value = turno;
-
-      // Actualizar pills visuales
       const map = { '': 'todos', 'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche' };
       Object.entries(map).forEach(([t, id]) => {
         const btn = document.getElementById('rk-turno-btn-' + id);
         if (btn) btn.classList.toggle('active', t === turno);
       });
-
       filterRanking();
     }
 
-
-    // ── Tooltip completo de crecimiento operación ──────────────
     let _crecTooltipOpen = false;
 
     function toggleCrecTooltip(event) {
@@ -4559,138 +4532,114 @@
         return;
       }
 
-      // ── Cálculos Reales v16 ──────────────────────────────────
+      // ── Métrica Cronos v16.6 Cyberpunk ────────────────────────
       const MARCH_VALOR_FIJO = 78852.5; 
-      const { prev, curr } = getActivePair();
       const mesActual = localDateStr().slice(0, 7);
 
-      // 1. Totales Históricos
       const totalFeb = operatorsData.reduce((s, o) => s + (Number(o.feb) || 0), 0);
       let totalMar = getTotalMesPts('2026-03');
       if (totalMar < MARCH_VALOR_FIJO) totalMar = MARCH_VALOR_FIJO;
       const totalAbr = getTotalMesPts('2026-04');
 
-      // 2. Crecimientos
       const crecMarFeb = totalFeb > 0 ? ((totalMar - totalFeb) / totalFeb * 100) : 0;
       const crecAbrMar = totalMar > 0 ? ((totalAbr - totalMar) / totalMar * 100) : 0;
 
-      // 3. Datos Panel Principal (Comparativo actual)
       const mesAntTooltip = getMesAnteriorStr();
       let totalAnt = getTotalMesPts(mesAntTooltip);
       if (mesAntTooltip === '2026-03' && totalAnt < MARCH_VALOR_FIJO) totalAnt = MARCH_VALOR_FIJO;
       
       const totalCurr = getTotalMesPts(mesActual);
-      const psaTotal = getPSATotalMes(mesActual);
-      const totalConPSA = totalCurr; 
-      const crec = totalAnt > 0 ? ((totalConPSA - totalAnt) / totalAnt * 100) : 0;
+      const crec = totalAnt > 0 ? ((totalCurr - totalAnt) / totalAnt * 100) : 0;
       const crecSign = crec >= 0 ? '+' : '';
-      const crecColor = crec >= 0 ? '#34d399' : '#f87171';
+      const crecColor = crec >= 0 ? '#34d399' : '#f87171'; // Neon Green / Neon Red
 
-      // 4. Proyección y Top 3
       const hoyDate = new Date();
       const diaHoy = hoyDate.getDate();
       const diasMes = new Date(hoyDate.getFullYear(), hoyDate.getMonth() + 1, 0).getDate();
       const diasRest = diasMes - diaHoy;
-      const promDia = diaHoy > 0 ? totalConPSA / diaHoy : 0;
+      const promDia = diaHoy > 0 ? totalCurr / diaHoy : 0;
       const proyecc = Math.round(promDia * diasMes);
-      const proyCOP = Math.round(proyecc * 1400).toLocaleString('es-CO');
 
       const opsConPts = operatorsData
-        .filter(o => o.group !== 'SP').map(o => {
+        .filter(o => o.group !== 'SP')
+        .map(o => {
           const c = getCortesOp(o.name);
-          const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual).reduce((s, x) => s + (x.puntos || 0), 0);
-          return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p, turno: o.turno || '' };
+          const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual).reduce((s, x) => s + (Number(x.puntos) || 0), 0);
+          return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p };
         })
         .filter(o => o.pts > 0).sort((a, b) => b.pts - a.pts);
       const top3 = opsConPts.slice(0, 3);
 
-      const ptsPorTurno = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
-      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
-        const t = o.turno || 'Noche';
-        const c = getCortesOp(o.name);
-        const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual).reduce((s, x) => s + (x.puntos || 0), 0);
-        if (ptsPorTurno[t] !== undefined) ptsPorTurno[t] += p;
-      });
-      const mejorTurno = Object.entries(ptsPorTurno).sort((a, b) => b[1] - a[1])[0];
-
-      // 5. Consejos y Tooltip HTML
-      const consejos = [];
-      if (psaTotal > 0) consejos.push(`⚠️ <strong>${psaTotal.toFixed(1)} pts</strong> en el cajón sin asignar`);
-      if (crec < 0) consejos.push(`📉 Operación por debajo de Marzo — revisa ausencias`);
-      if (crec > 30) consejos.push(`🚀 Ritmo fuerte — mantén cortes cada 2h`);
-      if (mejorTurno && mejorTurno[1] > 0) consejos.push(`🏆 Turno más productivo: <strong>${mejorTurno[0]}</strong>`);
-
-      const consejosHTML = consejos.length ? consejos.map(c => `<div class="rktt-consejo">→ ${c}</div>`).join('') : '<div class="rktt-consejo" style="color:#475569;">Sin alertas especiales.</div>';
-      const top3HTML = top3.map((o, i) => `<div class="rktt-row"><span>${['🥇', '🥈', '🥉'][i]} ${o.name}</span><span style="color:#5eead4;font-weight:700;">${o.pts.toFixed(1)} pts</span></div>`).join('');
+      panel.style.background = 'rgba(7, 10, 15, 0.98)';
+      panel.style.border = '1px solid rgba(94, 234, 212, 0.4)';
+      panel.style.boxShadow = '0 0 35px rgba(0,0,0,0.9), inset 0 0 15px rgba(94, 234, 212, 0.1)';
+      panel.style.padding = '22px';
+      panel.style.backdropFilter = 'blur(12px)';
 
       panel.innerHTML = `
-        <div class="rktt-header">
+        <div class="rktt-header" style="border-bottom: 2px solid rgba(94,234,212,0.1); padding-bottom: 15px; margin-bottom: 18px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:800;font-size:.85rem;color:#e2e8f0;">📈 Análisis de Crecimiento</span>
-            <span style="font-size:1rem;font-weight:900;color:${crecColor};">${crecSign}${crec.toFixed(1)}%</span>
+            <span style="font-weight:900;font-size:1rem;color:#5eead4;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 12px rgba(94,234,212,0.6);">📡 NETWORK_ANALYSIS</span>
+            <span style="font-size:1.4rem;font-weight:900;color:${crecColor};text-shadow:0 0 15px ${crecColor}aa;">${crecSign}${crec.toFixed(1)}%</span>
           </div>
-          <div style="font-size:.65rem;color:#64748b;margin-top:4px;">
-            Marzo: <strong style="color:#94a3b8;">${totalMar.toFixed(0)} pts</strong> (Consolidado)<br>
-            Abril: <strong style="color:#5eead4;">${totalConPSA.toFixed(0)} pts</strong>
-          </div>
-        </div>
-
-        <div style="margin:8px 0;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;">
-          <div style="font-size:.65rem;font-weight:700;color:#94a3b8;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">🗃️ Historial Operación 2026</div>
-          <div class="rktt-row" style="opacity:0.8;"><span>Febrero</span> <strong>${totalFeb.toLocaleString('es-CO')} pts</strong></div>
-          <div class="rktt-row" style="opacity:0.9;"><span>Marzo</span> <strong>${totalMar.toLocaleString('es-CO')} pts</strong> <span style="font-size:.6rem;color:#34d399;">(+${crecMarFeb.toFixed(1)}%)</span></div>
-          <div class="rktt-row" style="color:#5eead4;"><span>Abril (Actual)</span> <strong>${totalAbr.toLocaleString('es-CO')} pts</strong> <span style="font-size:.6rem;color:#34d399;">(+${crecAbrMar.toFixed(1)}%)</span></div>
-        </div>
-
-        <div class="rktt-section" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-          <div class="rktt-box">
-             <div class="rktt-box-val" style="color:#34d399;">${promDia.toFixed(0)} pts</div>
-             <div class="rktt-box-lbl">PROM/DÍA</div>
-          </div>
-          <div class="rktt-box">
-             <div class="rktt-box-val" style="color:#fbbf24;">${proyecc.toLocaleString('es-CO')} pts</div>
-             <div class="rktt-box-lbl">PROYECCIÓN MES</div>
-             <div style="font-size:10px;color:#a3a3a3;margin-top:2px;">$${proyCOP}</div>
-          </div>
-          <div class="rktt-box">
-             <div class="rktt-box-val" style="color:#a78bfa;">${diasRest}</div>
-             <div class="rktt-box-lbl">DÍAS RESTANTES</div>
+          <div style="font-size:.75rem;color:#94a3b8;margin-top:10px;font-family:monospace;letter-spacing:1px;opacity:0.8;">
+            STMT_MAR_03: <span style="color:#f1f5f9;font-weight:900;">${totalMar.toLocaleString()}</span><br>
+            STMT_APR_04: <span style="color:#5eead4;font-weight:900;">${totalCurr.toLocaleString()}</span>
           </div>
         </div>
 
-        <div class="rktt-section">
-          <div class="rktt-sec-title">🏅 TOP PRODUCCIÓN ABRIL</div>
-          ${top3HTML || '<div class="rktt-row" style="color:#475569;">Cargando datos...</div>'}
+        <div style="margin:18px 0;padding:15px;background:rgba(94,234,212,0.06);border:1px solid rgba(94,234,212,0.2);border-radius:15px;">
+          <div style="font-size:.7rem;font-weight:900;color:#5eead4;margin-bottom:12px;text-transform:uppercase;letter-spacing:3px;opacity:0.9;">🗃️ CRONOS_DATA_POOL_2026</div>
+          <div class="rktt-row" style="opacity:0.5;font-size:0.8rem;margin-bottom:6px;"><span>FEB_GENESIS</span> <strong>${totalFeb.toLocaleString()}</strong></div>
+          <div class="rktt-row" style="opacity:0.8;font-size:0.85rem;margin-bottom:6px;"><span>MAR_STABLE</span> <strong>${totalMar.toLocaleString()}</strong> <span style="color:#34d399;font-weight:900;">+${crecMarFeb.toFixed(1)}%</span></div>
+          <div class="rktt-row" style="color:#5eead4;font-size:0.95rem;background:rgba(94,234,212,0.12);padding:10px;border-radius:10px;border-left:5px solid #5eead4;margin-top:6px;box-shadow:0 0 15px rgba(94,234,212,0.15);">
+            <span>APR_STREAM</span> <strong>${totalAbr.toLocaleString()}</strong> 
+            <span style="color:#34d399;font-weight:900;margin-left:auto;">+${crecAbrMar.toFixed(1)}%</span>
+          </div>
         </div>
 
-        <div class="rktt-section">
-          <div class="rktt-sec-title">💡 CONSEJOS</div>
-          ${consejosHTML}
+        <div class="rktt-section" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;margin-top:25px;">
+          <div class="rktt-box" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);padding:12px;">
+             <div class="rktt-box-val" style="color:#34d399;font-size:1.3rem;font-family:monospace;text-shadow:0 0 10px rgba(52,211,153,0.5);">${promDia.toFixed(0)}</div>
+             <div class="rktt-box-lbl" style="font-size:0.55rem;letter-spacing:1.5px;color:#94a3b8;margin-top:6px;">BITRATE_AVG</div>
+          </div>
+          <div class="rktt-box" style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.2);padding:12px;">
+             <div class="rktt-box-val" style="color:#fbbf24;font-size:1.3rem;font-family:monospace;">${proyecc.toLocaleString()}</div>
+             <div class="rktt-box-lbl" style="font-size:0.55rem;letter-spacing:1.5px;color:#94a3b8;margin-top:6px;">PROJ_MONTH</div>
+          </div>
+          <div class="rktt-box" style="background:rgba(167,139,250,0.03);border:1px solid rgba(167,139,250,0.2);padding:12px;">
+             <div class="rktt-box-val" style="color:#a78bfa;font-size:1.3rem;font-family:monospace;">${diasRest}</div>
+             <div class="rktt-box-lbl" style="font-size:0.55rem;letter-spacing:1.5px;color:#94a3b8;margin-top:6px;">STMT_REM</div>
+          </div>
+        </div>
+
+        <div class="rktt-section" style="margin-top:30px;">
+          <div style="font-size:.75rem;font-weight:900;color:#94a3b8;margin-bottom:15px;text-transform:uppercase;letter-spacing:3px;display:flex;align-items:center;gap:12px;">
+             <span style="width:12px;height:3px;background:#5eead4;box-shadow:0 0 10px #5eead4;"></span> ELITE_FORCE_LIVE
+          </div>
+          ${top3.map((o, i) => `
+            <div class="rktt-row" style="background:rgba(255,255,255,0.04);margin-bottom:10px;padding:12px;border-radius:12px;border-right:5px solid ${['#fbbf24','#94a3b8','#cd7f32'][i]}cc;transition:0.3s;cursor:pointer;">
+              <span style="font-size:0.9rem;color:#f1f5f9;font-weight:bold;">${['🥇','🥈','🥉'][i]} ${o.name}</span>
+              <span style="color:#5eead4;font-weight:900;font-size:1rem;font-family:monospace;text-shadow:0 0 8px rgba(94,234,212,0.5);">${o.pts.toFixed(1)} P</span>
+            </div>
+          `).join('') || '<div class="rktt-row" style="color:#475569;">AWAITING_UPSCALE...</div>'}
         </div>
         
-        <div style="font-size:9px;color:#475569;text-align:right;margin-top:8px;">Se actualiza en vivo con cada corte - 2026</div>
+        <div style="font-size:9px;color:#334155;text-align:right;margin-top:25px;letter-spacing:3px;font-family:monospace;opacity:0.6;text-transform:uppercase;border-top:1px solid rgba(255,255,255,0.05);padding-top:10px;">AGENT_ANTIGRAVITY_STREET_CRED_v16.6</div>
       `;
 
-      // Posicionar tooltip
-      const rect = document.getElementById('btn-crec-info').getBoundingClientRect();
-      const vh = window.innerHeight;
-      const vw = window.innerWidth;
-      const ph = 360; 
-      const pw = 280; 
+      const btn = document.getElementById('btn-crec-info');
+      const rect = btn.getBoundingClientRect();
+      const ph = 460, pw = 340;
+      const vw = window.innerWidth, vh = window.innerHeight;
 
       requestAnimationFrame(() => {
         panel.classList.add('tooltip-visible');
-        let left = rect.left - pw + 30;
+        let left = rect.right - pw;
         if (left < 8) left = 8;
         if (left + pw > vw - 8) left = vw - pw - 8;
-        let top;
-        if (rect.top - ph - 12 > 8) {
-          top = rect.top - ph - 12;
-        } else {
-          top = rect.bottom + 12;
-        }
+        let top = (rect.top - ph - 12 > 8) ? (rect.top - ph - 12) : (rect.bottom + 12);
         if (top + ph > vh - 8) top = vh - ph - 8;
-        if (top < 8) top = 8;
         panel.style.top = top + 'px';
         panel.style.left = left + 'px';
       });
@@ -4705,19 +4654,7 @@
         });
       }, 50);
     }
-
-      panel.classList.add('tooltip-visible');
-
-      // Posicionar inteligentemente según espacio disponible
-      requestAnimationFrame(() => {
-        const btn = document.getElementById('btn-crec-info');
-        if (!btn) return;
-        const rect = btn.getBoundingClientRect();
-        const ph = panel.offsetHeight || 420;
-        const pw = panel.offsetWidth || 360;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        // Horizontal: alinear a la derecha del botón, sin salirse
+izontal: alinear a la derecha del botón, sin salirse
         let left = rect.right - pw;
         if (left < 8) left = 8;
         if (left + pw > vw - 8) left = vw - pw - 8;
@@ -4742,7 +4679,7 @@
             _crecTooltipOpen = false;
             document.removeEventListener('click', _closeCrecTT);
           }
-        }, 50);
+        });
       }, 50);
     }
 

@@ -5085,20 +5085,20 @@
               </div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
-              <div class="rk-card-dia-pts ${ptsCls}">${(hasCorte || pCurrVir > 0) ? (pHoy + pCurrVir).toFixed(1) + ' pts' : '💤 Sin corte'}</div>
+              <div class="rk-card-dia-pts ${ptsCls}">⚡ ${pHoy.toFixed(1)} pts hoy</div>
               <div class="rk-card-dia-hora">${hora ? '⏱ último: ' + hora : (pCurrVir > 0 ? '🛰️ Datame Sync' : '—')}</div>
             </div>
           </div>
           <div class="rk-card-pts-row">
             <div class="rk-card-pts-prev" style="white-space:nowrap;">
-              ${hasCorte ? `<span style="color:#34d399;font-weight:700;">$${copHoy} COP</span>` : '<span style="color:#475569;">$0 COP hoy</span>'}
+              ${hasCorte ? `<span style="color:#34d399;font-weight:700;">$${copHoy} COP hoy</span>` : '<span style="color:#475569;">$0 COP hoy</span>'}
             </div>
             <div class="rk-card-pts-curr">
               <div class="pts-bar-bg" style="flex:1;max-width:100px;"><div class="pts-bar-fill" style="width:${barPctDia}%;background:${hasCorte ? 'linear-gradient(90deg,#34d399,#5eead4)' : 'rgba(248,113,113,.3)'}"></div></div>
             </div>
           </div>
           <div class="rk-card-foot">
-            <div style="font-size:.65rem;color:#475569;">Mes act: ${pCurr.toFixed(1)} pts</div>
+            <div style="font-size:.68rem;color:#5eead4;font-weight:700;">📊 Mes act: ${pCurr.toFixed(1)} pts</div>
             <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
           </div>
         </div>`;
@@ -9331,9 +9331,19 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       filtered.forEach(op => {
         const globalIndex = operatorsData.indexOf(op);
-
-        // Puntos REALES desde rr_prime_cortes (no el valor hardcoded del objeto)
         const cortesOp = getCortesOp(op.name);
+
+        // --- CÁLCULO DE HISTORIAL PARA GRÁFICAS (Feb en adelante) ---
+        const feb2026 = '2026-02';
+        const mar2026 = '2026-03';
+        const abr2026 = '2026-04';
+        const may2026 = '2026-05';
+
+        const ptsFeb = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === feb2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.feb || 0;
+        const ptsMar = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mar2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.mar || 0;
+        const ptsAbr = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === abr2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.abr || 0;
+        const ptsMay = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === may2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.may || 0;
+
         const ptsCurr = cortesOp
           .filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)
           .reduce((s, c) => s + (c.puntos || 0), 0) || op[curr] || 0;
@@ -9367,12 +9377,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         div.className = 'operator-card';
         div.dataset.opIndex = globalIndex;
         div.dataset.rendered = '0';
-        // Guardar datos para el chart (prev/curr dinámico)
-        div.dataset.ptsPrev = ptsPrev;
+        
+        // --- DATASET EXPANDIDO PARA CHART ---
+        div.dataset.ptsFeb = ptsFeb;
+        div.dataset.ptsMar = ptsMar;
+        div.dataset.ptsAbr = ptsAbr;
+        div.dataset.ptsMay = ptsMay;
         div.dataset.ptsCurr = ptsCurr;
         div.dataset.growth = growth;
         div.dataset.prevLabel = prevLabel;
         div.dataset.currLabel = currLabel;
+
         div.innerHTML = `
       <div class="op-header">
         <div>

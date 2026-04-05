@@ -3044,10 +3044,21 @@
       background: rgba(94, 234, 212, .1);
     }
 
-    .pos-upload-hint {
-      font-size: 9px;
-      color: #475569;
-      letter-spacing: .3px;
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: rgba(0, 0, 0, .8);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .modal.open {
+      display: flex !important;
+      opacity: 1;
     }
 
     .pos-input-hidden {
@@ -4718,15 +4729,13 @@
         panel.style.left = Math.max(pad, left) + 'px';
       });
 
-      setTimeout(() => {
-        document.addEventListener('click', function _closeCrecTT(e) {
-          if (!panel.contains(e.target) && e.target.id !== 'btn-crec-info') {
-            panel.classList.remove('tooltip-visible');
-            _crecTooltipOpen = false;
-            document.removeEventListener('click', _closeCrecTT);
-          }
-        });
-      }, 50);
+      document.addEventListener('mousedown', function _closeCrecTT(e) {
+        if (!panel.contains(e.target) && e.target.id !== 'btn-crec-info') {
+          panel.classList.remove('tooltip-visible');
+          _crecTooltipOpen = false;
+          document.removeEventListener('mousedown', _closeCrecTT);
+        }
+      });
     }
 
 
@@ -5011,15 +5020,17 @@
       <div style="font-size:.6rem;color:#475569;margin-top:3px;">
         ${prevLabel}: ${totalPtsAnt.toFixed(0)} pts → ${currLabel}: ${totalPtsCurr.toFixed(0)} pts
       </div>
-      <!-- base mes anterior: sube el Excel histórico en Registrar Corte -->
       <button id="btn-crec-info" onclick="toggleCrecTooltip(event)"
         style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;
                background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.3);
                color:#5eead4;font-size:10px;font-weight:700;cursor:pointer;line-height:1;
                transition:.2s;">ℹ</button>
-      <div class="rkinfo-tooltip" id="crec-tooltip-panel"></div>
     </div>
   `;
+
+  // --- FIN DE FILA DE ESTADÍSTICAS ---
+
+  // --- FIN DE FILA DE ESTADÍSTICAS ---
 
       // Cards grid
       const tbody = document.getElementById('rankingBody');
@@ -13201,6 +13212,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     setInterval(sincronizarDatameRelacional, 180000);
 
   </script>
+
+  <!-- PANEL DE ESTADÍSTICAS GLOBAL (TOOLTIP INFALIBLE) -->
+  <div class="rkinfo-tooltip" id="crec-tooltip-panel"></div>
 
   <!-- MODAL HISTORIAL DIARIO -->
   <div id="modal-history" class="modal">

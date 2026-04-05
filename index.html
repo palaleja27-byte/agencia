@@ -4650,13 +4650,25 @@
 
       requestAnimationFrame(() => {
         panel.classList.add('tooltip-visible');
-        let left = rect.right - pw;
-        if (left < 8) left = 8;
-        if (left + pw > vw - 8) left = vw - pw - 8;
-        let top = (rect.top - ph - 12 > 8) ? (rect.top - ph - 12) : (rect.bottom + 12);
-        if (top + ph > vh - 8) top = vh - ph - 8;
-        panel.style.top = top + 'px';
-        panel.style.left = left + 'px';
+        
+        const pad = 16;
+        let left = rect.left + (rect.width / 2) - (pw / 2);
+        if (left < pad) left = pad;
+        if (left + pw > vw - pad) left = vw - pw - pad;
+
+        let top = rect.top - ph - 12;
+        if (top < pad || (top + ph > vh - pad)) {
+          // Si no cabe arriba, intentar abajo
+          top = rect.bottom + 12;
+          if (top + ph > vh - pad) {
+            // Si tampoco cabe abajo, CENTRAR EN PANTALLA (modo pánico)
+            top = (vh - ph) / 2;
+            left = (vw - pw) / 2;
+          }
+        }
+
+        panel.style.top = Math.max(pad, top) + 'px';
+        panel.style.left = Math.max(pad, left) + 'px';
       });
 
       setTimeout(() => {
@@ -4936,10 +4948,10 @@
       <div class="stat-val">${rkDataFiltered.length}</div>
       <div class="stat-lbl">Operadores</div>
     </div>
-    <div class="rk-stat-card">
-      <div class="stat-val" style="font-size:1.1rem;">${totalPtsCurr.toFixed(1)}</div>
-      <div class="stat-lbl">Pts totales ${currLabel}</div>
-      <div style="font-size:.65rem;color:#34d399;margin-top:2px;">💰 $${copTotal} COP</div>
+    <div class="rk-stat-card" style="border: 2px solid rgba(94, 234, 212, 0.4); background: rgba(94, 234, 212, 0.05); transform: scale(1.05); z-index: 10;">
+      <div class="stat-val" style="font-size:1.8rem; letter-spacing: -1px; text-shadow: 0 0 15px rgba(94, 234, 212, 0.6); color: #5eead4;">${totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 2})}</div>
+      <div class="stat-lbl" style="color:#5eead4; font-weight: 800;">🛰️ GLOBAL TOTAL ${currLabel.toUpperCase()}</div>
+      <div style="font-size:.75rem;color:#34d399;margin-top:4px; font-weight: 700;">💰 $${copTotal} COP</div>
     </div>
     <div class="rk-stat-card">
       <div class="stat-val">${avgPts.toFixed(1)}</div>
@@ -9339,14 +9351,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const abr2026 = '2026-04';
         const may2026 = '2026-05';
 
-        const ptsFeb = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === feb2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.feb || 0;
-        const ptsMar = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mar2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.mar || 0;
-        const ptsAbr = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === abr2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.abr || 0;
-        const ptsMay = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === may2026).reduce((s, c) => s + (c.puntos || 0), 0) || op.may || 0;
+        const ptsFeb = Math.max(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === feb2026).reduce((s, c) => s + (c.puntos || 0), 0), (op.feb || 0));
+        const ptsMar = Math.max(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mar2026).reduce((s, c) => s + (c.puntos || 0), 0), (op.mar || 0));
+        const ptsAbr = Math.max(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === abr2026).reduce((s, c) => s + (c.puntos || 0), 0), (op.abr || 0));
+        const ptsMay = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === may2026).reduce((s, c) => s + (c.puntos || 0), 0) || (op.may || 0);
 
-        const ptsCurr = cortesOp
+        const ptsCurr = Math.max(cortesOp
           .filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)
-          .reduce((s, c) => s + (c.puntos || 0), 0) || op[curr] || 0;
+          .reduce((s, c) => s + (c.puntos || 0), 0), (op[curr] || 0));
         const ptsPrev = op[prev] || 0;
         const growth = ptsPrev > 0 ? ((ptsCurr - ptsPrev) / ptsPrev * 100) : 0;
         const growthSign = growth > 0 ? '+' : '';

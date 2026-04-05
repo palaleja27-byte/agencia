@@ -4997,8 +4997,9 @@
       // ── Totales reales de la operación desde rr_prime_cortes ──
       // getPSATotalMes ya incluido dentro de getTotalMesPts
       const _mesAntStats = getMesAnteriorStr(); // '2026-02'
-      const totalPtsCurr = getTotalMesPts(_mesActStats); // Marzo cortes reales + PSA
-      const totalPtsAnt = getTotalMesPts(_mesAntStats); // Febrero cortes reales + PSA
+      const totalPtsCurr = getTotalMesPts(_mesActStats); 
+      const totalPtsAnt = getTotalMesPts(_mesAntStats); 
+      console.log(`[AUDITORÍA] Global April: ${totalPtsCurr} pts | Global March: ${totalPtsAnt} pts`);
 
       // Pts visibles en pantalla (para avg por operador del filtro actual)
       let _visPtsCurr = 0;
@@ -5089,8 +5090,25 @@
       tbody.innerHTML = rkDataFiltered.map((op, i) => {
         const globalIndex = operatorsData.indexOf(op);
         const pos = i + 1;
-        const pPrev = op[prev] != null ? op[prev] : 0;
-        const pCurr = op[curr] != null ? op[curr] : 0;
+        
+        // --- CÁLCULO DINÁMICO DE PUNTOS (Base + Virtuales) ---
+        const cortesAll = getCortesOp(op.name);
+        const pPrevBase = op[prev] != null ? Number(op[prev]) : 0;
+        const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
+        
+        const pPrevVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesAntStats).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        const pCurrVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActStats).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        
+        if (pCurrVir > 0) {
+          console.log(`[AUDITORÍA] Match Encontrado para '${op.name}': +${pCurrVir} pts (Cortes: ${cortesAll.length})`);
+        }
+        
+        const pPrev = pPrevBase + pPrevVir;
+        const pCurr = pCurrBase + pCurrVir;
+        
+        // Recalcular crecimiento para la tarjeta
+        const growthReal = pPrev > 0 ? ((pCurr - pPrev) / pPrev * 100) : (pCurr > 0 ? 100 : 0);
+        op.growth = growthReal; // Actualizar para que la clase CSS sea correcta
         const pHoy = _ptsHoyMap[op.name] || 0;
         const hora = _horaMap[op.name];
 
@@ -6147,7 +6165,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     function getLogsEntrada() { return JSON.parse(localStorage.getItem(LOGS_KEY) || '[]'); }
     function saveLogsEntrada(arr) { localStorage.setItem(LOGS_KEY, JSON.stringify(arr)); }
-    function _normName(n) { return (n || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+    function _normName(n) { 
+      return (n || '').trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Bye bye tildes
+        .toUpperCase()
+        .replace(/\s+/g, ' '); 
+    }
 
     function getCortesOp(name) {
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
@@ -13074,21 +13099,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (operaciones.length > 0) console.log("[Bridge] Muestra Operaciones ID:", operaciones.slice(0, 3).map(o => o.id_perfil));
         if (perfilesAsignados.length > 0) console.log("[Bridge] Muestra Perfiles ID:", perfilesAsignados.slice(0, 3).map(p => p.id_perfil));
 
-        // 2. FUZZY MATCHER: Mapear UUID de operadores_v3 al NOMBRE EXACTO de la UI
+        // 2. FUZZY MATCHER PRO: Mapear UUID de operadores_v3 al NOMBRE EXACTO de la UI
         const idToNameMap = {};
-        const normalizeString = s => typeof s === 'string' ? s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : '';
-
+        
         catOperadores.forEach(o => {
-          const dbNameNorm = normalizeString(o.nombre_real);
+          const dbNameNorm = _normName(o.nombre_real);
           const dbFirstName = dbNameNorm.split(' ')[0];
 
-          // Buscar coincidencia en operatorsData por nombre exacto, o por Primer Nombre + Grupo
+          // Buscar coincidencia en operatorsData usando el nuevo SuperNorm
           const uiOp = operatorsData.find(ui => {
-            const uiNameNorm = normalizeString(ui.name);
+            const uiNameNorm = _normName(ui.name);
+            // Match exacto normalizado O Match por Primer Nombre + Grupo (como salvavidas)
             return (uiNameNorm === dbNameNorm) || (uiNameNorm.includes(dbFirstName) && String(ui.group) === String(o.grupo));
           });
 
-          idToNameMap[o.id] = uiOp ? uiOp.name : o.nombre_real;
+          if (uiOp) {
+            idToNameMap[o.id] = uiOp.name; // Usar el nombre de la UI como llave primaria
+          } else {
+            // Si no hay match, al menos normalizar el nombre de DB para que la UI tenga chance de encontrarlo
+            idToNameMap[o.id] = o.nombre_real;
+            console.warn(`[Bridge] ⚠️ No se encontró match UI para: ${o.nombre_real}. Usando nombre de DB.`);
+          }
         });
 
         // 3. Obtener EL ÚLTIMO corte exportado de cada perfil (así evitamos duplicar sumas si corres scraping varias veces o días distintos)

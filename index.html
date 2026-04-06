@@ -4729,13 +4729,17 @@
         panel.style.left = Math.max(pad, left) + 'px';
       });
 
-      document.addEventListener('mousedown', function _closeCrecTT(e) {
-        if (!panel.contains(e.target) && e.target.id !== 'btn-crec-info') {
-          panel.classList.remove('tooltip-visible');
-          _crecTooltipOpen = false;
-          document.removeEventListener('mousedown', _closeCrecTT);
-        }
-      });
+      // BLINDAJE v19.1: Evitar cierre prematuro por clicks accidentales en el botón
+      setTimeout(() => {
+        const _antiFlicker = (e) => {
+          if (!panel.contains(e.target) && !e.target.closest('#btn-crec-info')) {
+            panel.classList.remove('tooltip-visible');
+            _crecTooltipOpen = false;
+            document.removeEventListener('mousedown', _antiFlicker);
+          }
+        };
+        document.addEventListener('mousedown', _antiFlicker);
+      }, 300); // Pequeño delay para asegurar que el click que abre no lo cierre al instante
     }
 
 
@@ -9315,22 +9319,29 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           new Chart(canvas, {
             type: 'bar',
             data: {
-              labels: [_prevLabel, _currLabel],
+              labels: ['FEB', 'MAR', 'ABR'],
               datasets: [{
-                label: 'Puntos',
-                data: [_ptsPrev, _ptsCurr],
+                label: 'Logro Mensual',
+                data: [
+                  parseFloat(card.dataset.ptsFeb) || 0,
+                  parseFloat(card.dataset.ptsMar) || 0,
+                  parseFloat(card.dataset.ptsAbr) || 0
+                ],
                 backgroundColor: [
-                  'rgba(94,234,212,0.5)',
-                  _growth > 0 ? '#34d399' : '#f87171'
-                ]
+                  'rgba(94,234,212,0.3)',
+                  'rgba(167,139,250,0.3)',
+                  'rgba(52,211,153,0.6)'
+                ],
+                borderColor: ['#5eead4', '#a78bfa', '#34d399'],
+                borderWidth: 1
               }]
             },
             options: {
+              plugins: { legend: { display: false } },
               scales: {
-                y: { beginAtZero: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
-                x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } }
-              },
-              plugins: { legend: { display: false } }
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { size: 9 } } },
+                x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 9, weight: 'bold' } } }
+              }
             }
           });
         }
@@ -11719,22 +11730,35 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           let sumaPuntos = 0;
 
           PT.baseDatos[PT.shiftActual].forEach((op, idx) => {
-            sumaPuntos += op.puntos;
-            const pct = Math.min((op.puntos / op.meta) * 100, 100);
-            const alerta = PT.obtenerAlerta(op);
+            // SINCRO v19.1: Buscar puntos reales en el Ranking Global
+            const globalOp = (typeof operatorsData !== 'undefined' && operatorsData) 
+              ? operatorsData.find(o => o.name.toLowerCase().includes(op.name.toLowerCase()))
+              : null;
+            
+            // Si el globalOp tiene puntos (del día), los priorizamos para el visor
+            const realPts = globalOp ? (globalOp.pHoy || op.puntos) : op.puntos;
+            sumaPuntos += realPts;
+            
+            const pct = Math.min((realPts / op.meta) * 100, 100);
+            const alerta = PT.obtenerAlerta({ ...op, puntos: realPts });
             const tarjeta = document.createElement('div');
             tarjeta.className = 'op-card';
             tarjeta.innerHTML = `
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <h2 style="margin:0;color:var(--accent);">${op.name}</h2>
+                    <h2 style="margin:0;color:var(--accent);">${op.name} <span style="font-size:0.6rem;opacity:0.5;">LIVE</span></h2>
                     <div style="text-align:right;">
-                        <input type="number" value="${op.puntos}" onchange="PT.updateVal(${idx},'puntos',this.value)" style="width:70px;font-weight:bold;"> /
-                        <input type="number" value="${op.meta}"   onchange="PT.updateVal(${idx},'meta',this.value)"   style="width:70px;">
+                        <input type="number" value="${realPts.toFixed(1)}" readonly style="width:70px;font-weight:bold;color:#34d399;border:1px solid #34d399;"> /
+                        <input type="number" value="${op.meta}" onchange="PT.updateVal(${idx},'meta',this.value)" style="width:70px;">
                     </div>
                 </div>
                 <div class="alert-box ${alerta.class}">${alerta.msg}</div>
-                <div style="color:var(--gold);font-weight:bold;">$${(op.puntos * PT.VALOR_PUNTO_COP).toLocaleString('es-CO')} COP</div>
-                <div class="progress-container"><div class="progress-bar" style="width:${pct}%"></div></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="color:var(--gold);font-weight:bold;">$${(realPts * PT.VALOR_PUNTO_COP).toLocaleString('es-CO')} COP</div>
+                    <div style="font-size:0.7rem;color:#94a3b8;">Avance: ${pct.toFixed(0)}%</div>
+                </div>
+                <div class="progress-container" style="height:12px;background:rgba(255,255,255,0.05);border-radius:10px;margin-top:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
+                    <div class="progress-bar" style="width:${pct}%;height:100%;transition:width 1s ease;background:linear-gradient(90deg, #6366f1, #5eead4);box-shadow:0 0 10px #5eead4;"></div>
+                </div>
                 <div class="task-grid">
                     <div class="task-col">
                         <div class="task-col-header">

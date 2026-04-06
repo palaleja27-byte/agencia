@@ -13117,11 +13117,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const { data: catOperadores } = await _sb.from('operadores_v3').select('*').range(0, 1000);
         
         // 2. Extraer Operaciones de HOY SOLAMENTE
-        const hoyStr = localDateStr();
+        // 2. Extraer Operaciones (Rango Ampliado v19.3 para Marzo/Abril)
+        const rangeStart = '2026-03-01T00:00:00';
         const { data: operaciones, error } = await _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
-          .filter('fecha_corte', 'gte', hoyStr + 'T00:00:00')
-          .filter('fecha_corte', 'lte', hoyStr + 'T23:59:59')
+          .filter('fecha_corte', 'gte', rangeStart)
           .order('fecha_corte', { ascending: false });
 
         if (error) { console.error("[Bridge Error] Laser Sync:", error); return; }
@@ -13158,50 +13158,58 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         });
 
         // 4. AGRUPACIÓN DINÁMICA DE HOY
-        const latestPts = {}; 
+        // 4. AGRUPACIÓN MULTIFECHA v19.3.1 (Laser Sync Evolution)
+        const statsCortes = {}; // statsCortes[fecha][owner] = suma_pts
+        const latestPerDay = {}; // latestPerDay[fecha][pId] = max_pts
+
         operaciones.forEach(op => {
+          const f = op.fecha_corte.split('T')[0];
           const pId = String(op.id_perfil);
-          if (!latestPts[pId] || Number(op.puntos) > latestPts[pId].pts) {
-            latestPts[pId] = { pts: Number(op.puntos) || 0, date: op.fecha_corte, pId };
+          if (!latestPerDay[f]) latestPerDay[f] = {};
+          if (!latestPerDay[f][pId] || Number(op.puntos) > latestPerDay[f][pId]) {
+            latestPerDay[f][pId] = Number(op.puntos) || 0;
           }
         });
 
-        const statsHoy = {};
-        Object.values(latestPts).forEach(item => {
-          const pa = perfilesAsignados.find(p => String(p.id_perfil) === item.pId);
-          if (pa) {
-            const owner = idToNameMap[pa.id_operador_actual];
-            if (owner) {
-              if (!statsHoy[owner]) statsHoy[owner] = 0;
-              statsHoy[owner] += item.pts;
+        Object.entries(latestPerDay).forEach(([f, perfiles]) => {
+          if (!statsCortes[f]) statsCortes[f] = {};
+          Object.entries(perfiles).forEach(([pId, pts]) => {
+            const pa = perfilesAsignados.find(p => String(p.id_perfil) === pId);
+            if (pa) {
+              const owner = idToNameMap[pa.id_operador_actual];
+              if (owner) {
+                if (!statsCortes[f][owner]) statsCortes[f][owner] = 0;
+                statsCortes[f][owner] += pts;
+              }
             }
-          }
+          });
         });
 
-        // 5. INYECCIÓN DIFERENCIAL (Solo lo que ha subido hoy sobre la base fija)
+        // 5. INYECCIÓN DIFERENCIAL (Historial vs Supabase)
+        const hoyStr = localDateStr();
         const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
         let changesMade = false;
 
-        Object.keys(statsHoy).forEach(opName => {
-           const totalHoyDatame = statsHoy[opName];
-           if (!cortesObj[opName]) cortesObj[opName] = [];
-           
-           // Buscar si ya inyectamos algo hoy
-           const yaInyectadoHoy = cortesObj[opName]
-             .filter(c => c.fecha === hoyStr && c.novedades?.includes('Laser'))
-             .reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        Object.entries(statsCortes).forEach(([f, opsData]) => {
+          Object.entries(opsData).forEach(([opName, totalDatame]) => {
+            if (!cortesObj[opName]) cortesObj[opName] = [];
+            
+            const yaInyectado = (cortesObj[opName] || [])
+              .filter(c => c.fecha === f && c.novedades?.includes('Laser'))
+              .reduce((s, c) => s + (Number(c.puntos) || 0), 0);
 
-           const diferencia = totalHoyDatame - yaInyectadoHoy;
-           if (diferencia > 0.1) {
-             cortesObj[opName].push({
-               id: 'laser_v10_' + Date.now(),
-               fecha: hoyStr,
-               puntos: Number(diferencia.toFixed(2)),
-               novedades: `Laser Sync Today (${hoyStr})`,
-               timestamp: Date.now()
-             });
-             changesMade = true;
-           }
+            const diferencia = totalDatame - yaInyectado;
+            if (diferencia > 0.1) {
+              cortesObj[opName].push({
+                id: 'laser_hist_' + f + '_' + Date.now(),
+                fecha: f,
+                puntos: Number(diferencia.toFixed(2)),
+                novedades: `Laser Sync Histórico (${f})`,
+                timestamp: Date.now()
+              });
+              changesMade = true;
+            }
+          });
         });
 
         if (changesMade) {
@@ -13210,7 +13218,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }); } catch(e){}
           if (typeof loadData === 'function') loadData();
           if (typeof renderRanking === 'function') renderRanking();
-          console.log("[Bridge] 🟢 Laser Sync v10 Exitosa.");
+          if (typeof renderOperators === 'function') renderOperators();
+          console.log("[Bridge] 🟢 Laser Sync Histórico v19.3.1 Exitoso.");
         }
 
       } catch (err) { console.error("[Bridge Error]", err); }

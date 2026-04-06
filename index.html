@@ -9310,26 +9310,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const op = operatorsData[idx];
         if (!op) return;
         // Render chart
+        const canvas = card.querySelector('canvas');
         if (canvas) {
-          const _labels = ['FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-          const _data = [
+          const _months = ['FEB', 'MAR', 'ABR', 'MAY'];
+          const _vals = [
             parseFloat(card.dataset.ptsFeb) || 0,
             parseFloat(card.dataset.ptsMar) || 0,
             parseFloat(card.dataset.ptsAbr) || 0,
-            parseFloat(card.dataset.ptsMay) || 0,
-            parseFloat(card.dataset.ptsJun) || 0,
-            parseFloat(card.dataset.ptsJul) || 0,
-            parseFloat(card.dataset.ptsAgo) || 0,
-            parseFloat(card.dataset.ptsSep) || 0,
-            parseFloat(card.dataset.ptsOct) || 0,
-            parseFloat(card.dataset.ptsNov) || 0,
-            parseFloat(card.dataset.ptsDic) || 0
+            parseFloat(card.dataset.ptsMay) || 0
           ];
 
-          // Filtrar para mostrar solo desde febrero hasta el mes actual
-          const currentMonthIdx = new Date().getMonth(); 
-          const activeLabels = _labels.slice(1, Math.max(currentMonthIdx + 1, 3)); 
-          const activeData = _data.slice(1, Math.max(currentMonthIdx + 1, 3));
+          // Mostrar desde Feb hasta el mes actual (mínimo 3 meses)
+          const monthIdx = new Date().getMonth(); // 0=Ene, 1=Feb, 2=Mar, 3=Abr
+          const showCount = Math.max(monthIdx, 3); // Al menos Feb-Mar-Abr
+          const activeLabels = _months.slice(0, showCount);
+          const activeData = _vals.slice(0, showCount);
 
           new Chart(canvas, {
             type: 'bar',
@@ -9338,9 +9333,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               datasets: [{
                 label: 'Logro Mensual',
                 data: activeData,
-                backgroundColor: activeData.map((_, i) => i === activeData.length - 1 ? '#34d399' : 'rgba(94,234,212,0.3)'),
-                borderColor: activeData.map((_, i) => i === activeData.length - 1 ? '#34d399' : '#5eead4'),
-                borderWidth: 1
+                backgroundColor: activeData.map((v, i) => i === activeData.length - 1 ? 'rgba(52,211,153,0.6)' : 'rgba(94,234,212,0.25)'),
+                borderColor: activeData.map((v, i) => i === activeData.length - 1 ? '#34d399' : '#5eead4'),
+                borderWidth: 1,
+                borderRadius: 4
               }]
             },
             options: {
@@ -13118,18 +13114,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const { data: perfilesAsignados } = await _sb.from('perfiles_asignados').select('*').range(0, 2000);
         const { data: catOperadores } = await _sb.from('operadores_v3').select('*').range(0, 1000);
         
-        // 2. Extraer Operaciones de HOY SOLAMENTE
-        // 2. Extraer Operaciones (Rango Ampliado v19.3 para Marzo/Abril)
+        // 2. Extraer Operaciones (Rango Ampliado v19.3 — Marzo en adelante)
         const rangeStart = '2026-03-01T00:00:00';
         const { data: operaciones, error } = await _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
           .filter('fecha_corte', 'gte', rangeStart)
-          .order('fecha_corte', { ascending: false });
+          .order('fecha_corte', { ascending: false })
+          .range(0, 5000);
 
         if (error) { console.error("[Bridge Error] Laser Sync:", error); return; }
         if (!operaciones || !perfilesAsignados || !catOperadores) return;
 
-        console.log(`[Bridge] Laser Focus! HOY: ${operaciones.length} registros encontrados.`);
+        console.log(`[Bridge] Laser Sync Histórico: ${operaciones.length} registros desde Marzo.`);
 
         // 3. ULTRA-MATCHER v15 (Word Bag + Hard Match)
         const idToNameMap = {};

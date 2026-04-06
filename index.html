@@ -9308,31 +9308,36 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const op = operatorsData[idx];
         if (!op) return;
         // Render chart
-        const canvas = card.querySelector(`canvas`);
         if (canvas) {
-          // Usar datos dinámicos guardados en dataset (prev/curr reales)
-          const _ptsPrev = parseFloat(card.dataset.ptsPrev) || 0;
-          const _ptsCurr = parseFloat(card.dataset.ptsCurr) || 0;
-          const _growth = parseFloat(card.dataset.growth) || 0;
-          const _prevLabel = card.dataset.prevLabel || 'Prev';
-          const _currLabel = card.dataset.currLabel || 'Curr';
+          const _labels = ['FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+          const _data = [
+            parseFloat(card.dataset.ptsFeb) || 0,
+            parseFloat(card.dataset.ptsMar) || 0,
+            parseFloat(card.dataset.ptsAbr) || 0,
+            parseFloat(card.dataset.ptsMay) || 0,
+            parseFloat(card.dataset.ptsJun) || 0,
+            parseFloat(card.dataset.ptsJul) || 0,
+            parseFloat(card.dataset.ptsAgo) || 0,
+            parseFloat(card.dataset.ptsSep) || 0,
+            parseFloat(card.dataset.ptsOct) || 0,
+            parseFloat(card.dataset.ptsNov) || 0,
+            parseFloat(card.dataset.ptsDic) || 0
+          ];
+
+          // Filtrar para mostrar solo desde febrero hasta el mes actual
+          const currentMonthIdx = new Date().getMonth(); 
+          const activeLabels = _labels.slice(1, Math.max(currentMonthIdx + 1, 3)); 
+          const activeData = _data.slice(1, Math.max(currentMonthIdx + 1, 3));
+
           new Chart(canvas, {
             type: 'bar',
             data: {
-              labels: ['FEB', 'MAR', 'ABR'],
+              labels: activeLabels,
               datasets: [{
                 label: 'Logro Mensual',
-                data: [
-                  parseFloat(card.dataset.ptsFeb) || 0,
-                  parseFloat(card.dataset.ptsMar) || 0,
-                  parseFloat(card.dataset.ptsAbr) || 0
-                ],
-                backgroundColor: [
-                  'rgba(94,234,212,0.3)',
-                  'rgba(167,139,250,0.3)',
-                  'rgba(52,211,153,0.6)'
-                ],
-                borderColor: ['#5eead4', '#a78bfa', '#34d399'],
+                data: activeData,
+                backgroundColor: activeData.map((_, i) => i === activeData.length - 1 ? '#34d399' : 'rgba(94,234,212,0.3)'),
+                borderColor: activeData.map((_, i) => i === activeData.length - 1 ? '#34d399' : '#5eead4'),
                 borderWidth: 1
               }]
             },
@@ -9489,7 +9494,25 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             ? `<div style="font-size:12px;color:#34d399;margin-bottom:4px;">⚡ Hoy: ${ptsHoy.toFixed(1)} pts · $${copHoy} COP${horaUltimo ? ' · ⏱ ' + horaUltimo : ''}</div>`
             : `<div style="font-size:12px;color:#475569;margin-bottom:4px;">💤 Sin corte hoy</div>`}
       ${_novDetalle}
-      <div class="chart-container"><canvas></canvas></div>
+
+      <!-- BITÁCORA DIARIA v19.2 -->
+      <div class="daily-log-minimal" style="margin-top:10px; background:rgba(0,0,0,0.2); border-radius:8px; padding:8px;">
+        <div style="font-size:0.6rem; color:#94a3b8; font-weight:bold; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">📅 ÚLTIMOS 7 DÍAS CON ACTIVIDAD</div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap:5px;">
+          ${(() => {
+            const dailyMap = {};
+            cortesOp.forEach(c => { if(c.fecha) dailyMap[c.fecha] = (dailyMap[c.fecha] || 0) + (c.puntos || 0); });
+            const sorted = Object.entries(dailyMap).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 7);
+            return sorted.length ? sorted.map(([f, p]) => `
+              <div style="background:rgba(255,255,255,0.03); padding:4px; border-radius:4px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+                <div style="font-size:0.55rem; color:#64748b;">${f.split('-').slice(1).join('/')}</div>
+                <div style="font-size:0.7rem; color:#5eead4; font-weight:bold;">${p.toFixed(1)}</div>
+              </div>`).join('') : '<div style="grid-column:1/-1; font-size:0.65rem; color:#475569; text-align:center;">Sin actividad reciente</div>';
+          })()}
+        </div>
+      </div>
+
+      <div class="chart-container" style="margin-top:15px;"><canvas></canvas></div>
       <div class="profiles-section" style="margin-top:12px;">
         <div class="profiles-title" style="font-size:.72rem;">
           🗂️ Perfiles asignados

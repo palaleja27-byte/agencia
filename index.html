@@ -3685,10 +3685,18 @@
           id="meta-op-nombre"></span>!</div>
       <div style="font-size:.82rem;color:#64748b;margin-bottom:24px;">Declara tu meta de puntos para hoy antes de
         ingresar.</div>
-      <input id="meta-input" type="number" min="1" placeholder="Ej: 500" style="width:100%;padding:14px;background:#1a2236;border:2px solid var(--accent);color:var(--text);
-             border-radius:12px;font-size:1.2rem;font-weight:700;text-align:center;outline:none;margin-bottom:8px;">
-      <div style="font-size:.72rem;color:#475569;margin-bottom:20px;">Puntos mínimos sugeridos: <span id="meta-sugerida"
-          style="color:#fbbf24;font-weight:700;"></span></div>
+      <input id="meta-input" type="number" min="1" placeholder="Ej: 500" style="width:100%;padding:14px;background:#1a2236;border:2px solid var(--accent);color:var(--text);border-radius:12px;font-size:1.2rem;font-weight:700;text-align:center;outline:none;margin-bottom:8px;">
+      <div style="font-size:.72rem;color:#475569;margin-bottom:15px;">Puntos mínimos sugeridos: <span id="meta-sugerida" style="color:#fbbf24;font-weight:700;"></span></div>
+
+      <!-- 🎮 SELECTOR DE PERFILES PARA EL LOGIN 🎮 -->
+      <div id="login-profile-selector-wrap" style="text-align:left; margin-bottom:20px; background:rgba(0,0,0,0.2); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:0.65rem; color:#64748b; font-weight:800; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:5px;">
+          🛡️ Selecciona perfiles para hoy:
+        </div>
+        <div id="login-profile-selector" style="display:flex; flex-wrap:wrap; gap:6px; max-height:120px; overflow-y:auto; padding:2px;">
+          <!-- Inyectado por JS -->
+        </div>
+      </div>
       <button onclick="confirmarMetaDiaria()" style="width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),#6366f1);
              color:#0f172a;font-weight:800;font-size:.95rem;border:none;border-radius:12px;cursor:pointer;">
         ✅ Ingresar a trabajar
@@ -7473,6 +7481,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     // ── Suma total de cortes reales de toda la operación en un mes ──
     function getTotalMesPts(mesStr) {
+      // 🏥 Saneamiento de emergencia para Abril 2026 (solo una vez)
+      const yaSaneado = localStorage.getItem('rr_sanar_abril_2026');
+      if (!yaSaneado && mesStr === '2026-04') {
+        asiSanarDatosAbril();
+      }
+
       // 1. Sumar cortes reales en rr_prime_cortes
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       const today = localDateStr();
@@ -10308,6 +10322,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             onmouseover="this.style.transform='scale(1.02)'"
             onmouseout="this.style.transform=''"
           >✅ ¡Vamos con todo!</button>
+          <div id="login-perfiles-wrap" style="text-align:left; margin-top:20px; border-top:1px solid rgba(255,255,255,0.1); padding-top:15px;">
+             <div style="font-size:0.65rem; color:#64748b; font-weight:800; margin-bottom:10px; text-transform:uppercase;">🛡️ MIS PERFILES PARA HOY:</div>
+             <div id="login-perfiles-list" style="display:flex; flex-wrap:wrap; gap:6px; max-height:100px; overflow-y:auto;">
+                ${(op?.profiles || []).map(p => `
+                  <label style="display:flex; align-items:center; gap:5px; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px; font-size:0.65rem; cursor:pointer; border:1px solid rgba(255,255,255,0.1);">
+                    <input type="checkbox" class="login-perfil-chk" value="${p.id}" checked style="accent-color:#5eead4;">
+                    <span>${p.name || p.id}</span>
+                  </label>
+                `).join('')}
+             </div>
+          </div>
           <button
             style="width:100%;padding:10px;background:none;color:#64748b;font-size:.75rem;
                    border:none;cursor:pointer;margin-top:8px;"
@@ -10327,48 +10352,53 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       document.getElementById('btn-confirmar-meta').addEventListener('click', () => {
         const meta = Math.max(50, parseInt(inp.value) || sugerido);
         localStorage.setItem(metaKey, String(meta));
+        
+        // 🛡️ CAPTURAR PERFILES SELECCIONADOS
+        const chosen = Array.from(document.querySelectorAll('.login-perfil-chk:checked')).map(el => el.value);
+        registrarAutoAsistencia(opName, chosen);
+
         overlay.style.display = 'none';
         finalizarLoginOperador(opName);
       });
     }
 
-    function registrarAutoAsistencia(opName) {
+    function registrarAutoAsistencia(opName, chosenProfiles = []) {
       // Solo registra si ASI está disponible y el operador no está ya marcado
       if (typeof ASI_KEY === 'undefined') return;
       const fecha = localDateStr();
       const horaObj = new Date();
       const hora = horaObj.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-      // Turno: convertir detectarTurno() a key de draft (manana/tarde/noche)
       const turnoDetectado = typeof detectarTurno === 'function' ? detectarTurno() : 'Mañana';
       const shiftKey = turnoDetectado === 'Mañana' ? 'manana' : turnoDetectado === 'Tarde' ? 'tarde' : 'noche';
       const draftKey = ASI_KEY + '_draft_' + fecha + '_' + shiftKey;
 
-      // Leer draft existente del turno/día correcto
       const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
       const k = opName + '||operador';
 
-      // Solo marcar si NO está ya marcado manualmente (monitor tiene prioridad)
-      let changed = false;
-      if (!draft[k] || !draft[k].estado) {
-        draft[k] = { estado: 'P', nota: '', horaIngreso: hora, autoMarcado: true };
-        changed = true;
-      } else if (draft[k].estado === 'P' && !draft[k].horaIngreso) {
-        draft[k].horaIngreso = hora;
-        draft[k].entradaTS = Date.now(); // Capturar sello de tiempo real
-        changed = true;
-      }
-      if (changed) {
-        // 1. Guardar en localStorage inmediatamente
-        localStorage.setItem(draftKey, JSON.stringify(draft));
-        // 2. Sincronizar a Supabase para que el monitor lo vea en tiempo real
-        if (typeof _sb !== 'undefined' && _sb) {
-          const val = JSON.stringify(draft);
-          _sb.from('kv_store')
-            .upsert({ key: draftKey, value: val }, { onConflict: 'key' })
-            .then(({ error }) => {
-              if (!error) console.info('[AutoAsi] Sincronizado a Supabase:', draftKey);
-            });
-        }
+      // 🛡️ Registrar con perfiles si se proporcionaron
+      const op = operatorsData.find(o => o.name.toUpperCase() === opName.toUpperCase());
+      const baseProfiles = op?.profiles || [];
+      const finalProfiles = chosenProfiles.length > 0 
+        ? baseProfiles.filter(p => chosenProfiles.includes(String(p.id))) 
+        : baseProfiles;
+
+      // Forzar estado 'P' y asignar perfiles
+      draft[k] = { 
+        estado: 'P', 
+        nota: chosenProfiles.length ? 'Perfiles auto-seleccionados' : '', 
+        horaIngreso: hora, 
+        autoMarcado: true,
+        perfiles: finalProfiles 
+      };
+
+      // 1. Guardar localmente
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+      
+      // 2. Sincronizar a Supabase
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }).then(() => {
+          console.info('[AutoAsi] Perfiles sincronizados:', opName, finalProfiles.length);
+        });
       }
     }
 
@@ -10379,12 +10409,34 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       const turno = detectarTurno();
       const logs = getLogsEntrada();
-      // No duplicar si ya hay un log del mismo operador en los últimos 5 minutos
       const reciente = logs.find(l => l.name === opName && (now.getTime() - (l.ts || 0)) < 5 * 60 * 1000);
       if (reciente) return;
       logs.unshift({ name: opName, fecha, hora, turno, ts: now.getTime() });
       if (logs.length > 500) logs.splice(500);
-      saveLogsEntrada(logs);
+      localStorage.setItem('rr_logs_entrada', JSON.stringify(logs));
+    }
+
+    // 🧹 SANEAMIENTO QUIRÚRGICO DE ABRIL 2026
+    function asiSanarDatosAbril() {
+      console.warn("[Sanity Check] Purgando registros inflados de Abril...");
+      const allCortes = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
+      let count = 0;
+      Object.keys(allCortes).forEach(opName => {
+        if (Array.isArray(allCortes[opName])) {
+           const initialCount = allCortes[opName].length;
+           allCortes[opName] = allCortes[opName].filter(c => {
+             const isApril = c.fecha && c.fecha.startsWith('2026-04');
+             const isOldSync = c.novedades && (c.novedades.includes('Laser Sync Histórico') || c.novedades.includes('Laser Sync ('));
+             const isSuspect = isApril && (Number(c.puntos) || 0) > 1500 && c.novedades?.includes('Laser');
+             return !(isApril && (isOldSync || isSuspect));
+           });
+           count += (initialCount - allCortes[opName].length);
+        }
+      });
+      localStorage.setItem('rr_prime_cortes', JSON.stringify(allCortes));
+      localStorage.setItem('rr_sanar_abril_2026', 'true');
+      console.log(`[Sanity Check] Se purgaron ${count} registros. Forzando re-sync...`);
+      if (typeof sincronizarDatameRelacional === 'function') sincronizarDatameRelacional();
     }
 
     function finalizarLoginOperador(opName) {

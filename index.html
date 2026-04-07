@@ -7728,6 +7728,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const frase = frases.find(f => pct >= f.min && pct < f.max)?.txt || '';
 
       const cortes = getCortesOp(opName).filter(c => c.fecha === localDateStr());
+      // ── Último corte conocido (cualquier día) para referencia cuando hoy=0 ──
+      const todosCortes = getCortesOp(opName).sort((a,b) => (b.ts||0)-(a.ts||0));
+      const ultimoCorte = todosCortes[0];
+      const sinDatosHoy = puntos === 0;
 
       el.innerHTML = `
     <div style="background:rgba(255,255,255,.04);border-radius:14px;padding:18px;margin-bottom:10px;">
@@ -7744,14 +7748,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <div style="font-size:.78rem;color:#94a3b8;margin-top:12px;font-style:italic;">${frase}</div>
       ${cortes.length ? `
       <details style="margin-top:12px;">
-        <summary style="font-size:.68rem;color:#475569;cursor:pointer;text-transform:uppercase;letter-spacing:.8px;">📊 Historial de cortes hoy (${cortes.length})</summary>
+        <summary style="font-size:.68rem;color:#475569;cursor:pointer;text-transform:uppercase;letter-spacing:.8px;">📊 Cortes de hoy (${cortes.length})</summary>
         <div style="margin-top:8px;">
           ${cortes.map(c => `
             <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);color:#94a3b8;">
-              <span>⏱️ ${c.hora}</span><span style="color:var(--accent);">+${c.puntos} pts</span><span>$${Math.round(c.puntos * 1400).toLocaleString('es-CO')}</span>
+              <span>⏱️ ${c.hora} · ${c.jornada || ''}</span><span style="color:var(--accent);">+${c.puntos} pts</span><span>$${Math.round(c.puntos * 1400).toLocaleString('es-CO')}</span>
             </div>`).join('')}
         </div>
-      </details>` : '<div style="font-size:.72rem;color:#334155;margin-top:8px;">El monitor aún no ha registrado cortes hoy.</div>'}
+      </details>` : sinDatosHoy && ultimoCorte ? `
+      <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(94,234,212,.05);border:1px solid rgba(94,234,212,.15);">
+        <div style="font-size:.65rem;color:#5eead4;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;">🛰️ Datame Sync — Esperando datos de hoy</div>
+        <div style="font-size:.72rem;color:#64748b;">El sistema actualiza automáticamente al recibir los datos del Datame.</div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);font-size:.72rem;color:#94a3b8;">
+          📌 Último registro: <strong style="color:#fbbf24;">${ultimoCorte.puntos.toFixed(1)} pts</strong>
+          · ${ultimoCorte.fecha} · ${ultimoCorte.jornada || 'N/A'}
+          ${ultimoCorte.hora ? '· ⏱️ ' + ultimoCorte.hora : ''}
+        </div>
+      </div>` : `
+      <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(94,234,212,.05);border:1px solid rgba(94,234,212,.12);">
+        <div style="font-size:.65rem;color:#5eead4;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom-4px;">🛰️ Datame Sync activo</div>
+        <div style="font-size:.72rem;color:#475569;">Sin historial de cortes aún. Los datos aparecerán en cuanto el Datame envíe información.</div>
+      </div>`}
     </div>`;
     }
 

@@ -3826,7 +3826,6 @@
         <select id="rankingPlataformaFilter" onchange="filterRanking()" style="display:none;"></select>
       </div>
       <div class="rk-actions-wrap">
-        <button class="btn-corte-rk" onclick="abrirModalCorte()">📸 Registrar Corte</button>
         <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes" title="Reseteo Total de Memoria y Sincronización Láser">⚡️ Consolidar Bridge</button>
         <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
@@ -5118,6 +5117,18 @@
           const growthSign = op.growth > 0 ? '+' : '';
           const barPct = maxCurr > 0 ? Math.round((pCurr / maxCurr) * 100) : 0;
           const cop = Math.round(pCurr * 1400).toLocaleString('es-CO');
+          // ── Desglose por turno (mes actual) ──
+          const _ptsMesManana = cortesAll.filter(c => c.fecha && c.fecha.slice(0,7) === _mesActStats && (c.jornada === 'Mañana')).reduce((s,c) => s+(c.puntos||0), 0);
+          const _ptsMesTarde  = cortesAll.filter(c => c.fecha && c.fecha.slice(0,7) === _mesActStats && (c.jornada === 'Tarde')).reduce((s,c) => s+(c.puntos||0), 0);
+          const _ptsMesNoche  = cortesAll.filter(c => c.fecha && c.fecha.slice(0,7) === _mesActStats && (c.jornada === 'Noche')).reduce((s,c) => s+(c.puntos||0), 0);
+          const _turnosMesPills = [
+            {label:'☀️ Mañana', pts:_ptsMesManana, color:'rgba(251,191,36,.18)', border:'rgba(251,191,36,.35)', text:'#fbbf24'},
+            {label:'🌆 Tarde',  pts:_ptsMesTarde,  color:'rgba(96,165,250,.15)',  border:'rgba(96,165,250,.35)',  text:'#60a5fa'},
+            {label:'🌙 Noche',  pts:_ptsMesNoche,  color:'rgba(167,139,250,.15)', border:'rgba(167,139,250,.35)', text:'#a78bfa'},
+          ].filter(t => t.pts > 0);
+          const _turnoMesHTML = _turnosMesPills.length > 0
+            ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${_turnosMesPills.map(t=>`<span style="background:${t.color};border:1px solid ${t.border};color:${t.text};font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;">${t.label}: ${t.pts.toFixed(1)}</span>`).join('')}</div>`
+            : '';
           return `<div class="rk-op-card ${cardClass}">
             <div class="rk-card-head">
               <div class="rk-card-avatar-wrap" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
@@ -5142,7 +5153,8 @@
                 <div class="pts-bar-bg" style="flex:1;max-width:80px;"><div class="pts-bar-fill" style="width:${barPct}%"></div></div>
               </div>
             </div>
-            <div class="rk-card-foot">
+            ${_turnoMesHTML}
+            <div class="rk-card-foot" style="margin-top:${_turnosMesPills.length?'6px':'0'}">
               <div class="rk-card-cop">$${cop} COP</div>
               <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
             </div>
@@ -5155,6 +5167,19 @@
         const ptsCls = hasCorte ? 'has-pts' : 'no-pts';
         const barPctDia = Math.round((pHoy / maxHoy) * 100);
         const copHoy = Math.round(pHoy * 1400).toLocaleString('es-CO');
+        // ── Desglose por turno (hoy) ──
+        const hoyCortes = cortesAll.filter(c => c.fecha === _hoy);
+        const _ptsHoyManana = hoyCortes.filter(c => c.jornada === 'Mañana').reduce((s,c) => s+(c.puntos||0), 0);
+        const _ptsHoyTarde  = hoyCortes.filter(c => c.jornada === 'Tarde').reduce((s,c) => s+(c.puntos||0), 0);
+        const _ptsHoyNoche  = hoyCortes.filter(c => c.jornada === 'Noche').reduce((s,c) => s+(c.puntos||0), 0);
+        const _turnosDiaPills = [
+          {label:'☀️ Mañana', pts:_ptsHoyManana, color:'rgba(251,191,36,.18)', border:'rgba(251,191,36,.35)', text:'#fbbf24'},
+          {label:'🌆 Tarde',  pts:_ptsHoyTarde,  color:'rgba(96,165,250,.15)',  border:'rgba(96,165,250,.35)',  text:'#60a5fa'},
+          {label:'🌙 Noche',  pts:_ptsHoyNoche,  color:'rgba(167,139,250,.15)', border:'rgba(167,139,250,.35)', text:'#a78bfa'},
+        ].filter(t => t.pts > 0);
+        const _turnoDiaHTML = _turnosDiaPills.length > 0
+          ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${_turnosDiaPills.map(t=>`<span style="background:${t.color};border:1px solid ${t.border};color:${t.text};font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;">${t.label}: ${t.pts.toFixed(1)}</span>`).join('')}</div>`
+          : '';
         return `<div class="rk-op-card ${cardClass}">
           <div class="rk-card-head">
             <div class="rk-card-avatar-wrap" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
@@ -5183,7 +5208,8 @@
               <div class="pts-bar-bg" style="flex:1;max-width:100px;"><div class="pts-bar-fill" style="width:${barPctDia}%;background:${hasCorte ? 'linear-gradient(90deg,#34d399,#5eead4)' : 'rgba(248,113,113,.3)'}"></div></div>
             </div>
           </div>
-          <div class="rk-card-foot">
+          ${_turnoDiaHTML}
+          <div class="rk-card-foot" style="margin-top:${_turnosDiaPills.length?'6px':'0'}">
             <div style="font-size:.68rem;color:#5eead4;font-weight:700;">📊 Mes act: ${pCurr.toFixed(1)} pts</div>
             <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
           </div>

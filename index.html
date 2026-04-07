@@ -3425,10 +3425,50 @@
       border-color: rgba(94, 234, 212, .4);
       color: #5eead4;
     }
+
+    /* ══ PANEL ANÁLISIS CRECIMIENTO ══ */
+    #crec-tooltip-panel {
+      position: fixed;
+      z-index: 2000000; /* Super-prioridad para que nada lo tape */
+      display: none;
+      width: 340px;
+      min-height: 480px;
+      border-radius: 20px;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(10px) scale(0.95);
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                  transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+      background: rgba(7, 10, 15, 0.98);
+      border: 1px solid rgba(94, 234, 212, 0.4);
+      box-shadow: 0 0 35px rgba(0,0,0,0.9), inset 0 0 15px rgba(94, 234, 212, 0.1);
+      backdrop-filter: blur(12px);
+    }
+
+    #crec-tooltip-panel.tooltip-visible {
+      display: block !important;
+      opacity: 1 !important;
+      transform: translateY(0) scale(1) !important;
+      pointer-events: auto !important;
+    }
+
+    .rktt-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+    }
+
+    .rktt-box {
+      border-radius: 12px;
+      text-align: center;
+    }
   </style>
 </head>
 
 <body>
+  <div id="crec-tooltip-panel"></div>
 
   <!-- ══ LOGIN SCREEN ══ -->
   <!-- Pantalla de carga inicial mientras Supabase sincroniza -->
@@ -4527,6 +4567,13 @@
       return y + '-' + m + '-' + day;
     }
 
+    // --- DA LGICO (6 AM) ---
+    function getLogicalDate(d) {
+      const dt = d ? new Date(d) : new Date();
+      const logical = new Date(dt.getTime() - (6 * 3600000)); // Restar 6 horas
+      return localDateStr(logical);
+    }
+
     function loadData() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -4581,176 +4628,70 @@
       }
     }
 
-    function toggleCrecTooltip(e) {
+    // Globalización forzada para que el dashboard la vea
+    window.toggleCrecTooltip = function(e) {
+      console.log(' [Análisis] Pulsado botón de información...');
       if (e) { e.stopPropagation(); e.preventDefault(); }
       const panel = document.getElementById('crec-tooltip-panel');
-      if (!panel) return;
-      // Toggle simple: si se ve, ocultarlo. Si no, renderizar y mostrar.
-      if (panel.style.display === 'block') {
-        panel.style.display = 'none';
-        return;
+      if (!panel) { console.error(' [Error] No se encontró el panel crec-tooltip-panel'); return; }
+      
+      const isVisible = panel.classList.contains('tooltip-visible');
+      if (isVisible) {
+        console.log(' [Análisis] Cerrando panel...');
+        panel.classList.remove('tooltip-visible');
+        _crecTooltipOpen = false;
+      } else {
+        console.log(' [Análisis] Renderizando datos profesionales...');
+        // Renderizar datos antes de mostrar
+        if (typeof renderCrecimientoAnalisis === 'function') {
+           renderCrecimientoAnalisis();
+        } else {
+           console.error(' [Error] La función renderCrecimientoAnalisis no existe');
+        }
+        
+        // Posicionamiento inteligente mejorado
+        // Si el event existe, usamos su target para mayor precisión que el ID
+        const targetBtn = (e && e.currentTarget) || document.getElementById('btn-crec-info');
+        if (targetBtn) {
+          console.log(' [Análisis] Calculando posición cerca del botón...');
+          const rect = targetBtn.getBoundingClientRect();
+          const pw = 340, ph = 480; 
+          const vw = window.innerWidth, vh = window.innerHeight;
+          const pad = 16;
+
+          let left = rect.left + (rect.width / 2) - (pw / 2);
+          if (left < pad) left = pad;
+          if (left + pw > vw - pad) left = vw - pw - pad;
+
+          let top = rect.top - ph - 12;
+          if (top < pad || (top + ph > vh - pad)) {
+            top = rect.bottom + 12;
+            if (top + ph > vh - pad) {
+              top = (vh - ph) / 2;
+              left = (vw - pw) / 2;
+            }
+          }
+          panel.style.top = Math.max(pad, top) + 'px';
+          panel.style.left = Math.max(pad, left) + 'px';
+        }
+        
+        panel.classList.add('tooltip-visible');
+        _crecTooltipOpen = true;
+        console.log(' [Análisis] Panel visible ahora');
+
+        // Cerrar al hacer clic fuera
+        const closeOnOut = (ev) => {
+          if (!panel.contains(ev.target) && !ev.target.closest('#btn-crec-info')) {
+            panel.classList.remove('tooltip-visible');
+            _crecTooltipOpen = false;
+            document.removeEventListener('mousedown', closeOnOut);
+          }
+        };
+        setTimeout(() => document.addEventListener('mousedown', closeOnOut), 200);
       }
-      renderCrecimientoAnalisis(); 
     }
 
     // ==================== TABS ====================
-    let _rkSearchTimer = null;
-
-    function setRkTurno(turno) {
-      const sel = document.getElementById('rankingTurnoFilter');
-      if (sel) sel.value = turno;
-      const map = { '': 'todos', 'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche' };
-      Object.entries(map).forEach(([t, id]) => {
-        const btn = document.getElementById('rk-turno-btn-' + id);
-        if (btn) btn.classList.toggle('active', t === turno);
-      });
-      filterRanking();
-    }
-
-    let _crecTooltipOpen = false;
-
-    function renderCrecimientoAnalisis() {
-      const MARCH_VALOR_FIJO = 78852.5; 
-      const mesActual = localDateStr().slice(0, 7);
-
-      const totalFeb = operatorsData.reduce((s, o) => s + (Number(o.feb) || 0), 0);
-      let totalMar = getTotalMesPts('2026-03');
-      if (totalMar < MARCH_VALOR_FIJO) totalMar = MARCH_VALOR_FIJO;
-      const totalAbr = getTotalMesPts('2026-04');
-
-      const crecMarFeb = totalFeb > 0 ? ((totalMar - totalFeb) / totalFeb * 100) : 0;
-      const crecAbrMar = totalMar > 0 ? ((totalAbr - totalMar) / totalMar * 100) : 0;
-
-      const mesAntTooltip = getMesAnteriorStr();
-      let totalAnt = getTotalMesPts(mesAntTooltip);
-      if (mesAntTooltip === '2026-03' && totalAnt < MARCH_VALOR_FIJO) totalAnt = MARCH_VALOR_FIJO;
-      
-      const totalCurr = getTotalMesPts(mesActual);
-      const crec = totalAnt > 0 ? ((totalCurr - totalAnt) / totalAnt * 100) : 0;
-      const crecSign = crec >= 0 ? '+' : '';
-      const crecColor = crec >= 0 ? '#34d399' : '#f87171'; // Neon Green / Neon Red
-
-      const hoyDate = new Date();
-      const diaHoy = hoyDate.getDate();
-      const diasMes = new Date(hoyDate.getFullYear(), hoyDate.getMonth() + 1, 0).getDate();
-      const diasRest = diasMes - diaHoy;
-      const promDia = diaHoy > 0 ? totalCurr / diaHoy : 0;
-      const proyecc = Math.round(promDia * diasMes);
-
-      const opsConPts = operatorsData
-        .filter(o => o.group !== 'SP')
-        .map(o => {
-          const c = getCortesOp(o.name);
-          const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual).reduce((s, x) => s + (Number(x.puntos) || 0), 0);
-          return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p };
-        })
-        .filter(o => o.pts > 0).sort((a, b) => b.pts - a.pts);
-      const top3 = opsConPts.slice(0, 3);
-
-      panel.style.display = 'block'; // v19.4 — HACER VISIBLE
-      panel.style.background = 'rgba(7, 10, 15, 0.98)';
-      panel.style.border = '1px solid rgba(94, 234, 212, 0.4)';
-      panel.style.boxShadow = '0 0 35px rgba(0,0,0,0.9), inset 0 0 15px rgba(94, 234, 212, 0.1)';
-      panel.style.padding = '22px';
-      panel.style.backdropFilter = 'blur(12px)';
-
-      panel.innerHTML = `
-        <div class="rktt-header" style="border-bottom: 2px solid rgba(94,234,212,0.1); padding-bottom: 15px; margin-bottom: 18px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:900;font-size:1rem;color:#5eead4;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 12px rgba(94,234,212,0.6);">📡 NETWORK_ANALYSIS</span>
-            <span style="font-size:1.4rem;font-weight:900;color:${crecColor};text-shadow:0 0 15px ${crecColor}aa;">${crecSign}${crec.toFixed(1)}%</span>
-          </div>
-          <div style="font-size:.75rem;color:#94a3b8;margin-top:10px;font-family:monospace;letter-spacing:1px;opacity:0.8;">
-            STMT_MAR_03: <span style="color:#f1f5f9;font-weight:900;">${totalMar.toLocaleString()}</span><br>
-            STMT_APR_04: <span style="color:#5eead4;font-weight:900;">${totalCurr.toLocaleString()}</span>
-          </div>
-        </div>
-
-        <div style="margin:18px 0;padding:15px;background:rgba(94,234,212,0.06);border:1px solid rgba(94,234,212,0.2);border-radius:15px;">
-          <div style="font-size:.7rem;font-weight:900;color:#5eead4;margin-bottom:12px;text-transform:uppercase;letter-spacing:3px;opacity:0.9;">🗃️ CRONOS_DATA_POOL_2026</div>
-          <div class="rktt-row" style="opacity:0.5;font-size:0.8rem;margin-bottom:6px;"><span>FEB_GENESIS</span> <strong>${totalFeb.toLocaleString()}</strong> <span style="font-size:0.6rem;color:#475569;">(+0 pts)</span></div>
-          <div class="rktt-row" style="opacity:0.8;font-size:0.85rem;margin-bottom:6px;"><span>MAR_STABLE</span> <strong>${totalMar.toLocaleString()}</strong> <span style="color:#34d399;font-weight:900;">+${(totalMar - totalFeb).toLocaleString()} pts</span> <span style="font-size:0.6rem;color:#475569;">· ${crecMarFeb.toFixed(1)}%</span></div>
-          <div class="rktt-row" style="color:#5eead4;font-size:0.95rem;background:rgba(94,234,212,0.12);padding:10px;border-radius:10px;border-left:5px solid #5eead4;margin-top:6px;box-shadow:0 0 15px rgba(94,234,212,0.15); display:flex; flex-direction:column; gap:2px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span>APR_STREAM</span> <strong>${totalAbr.toLocaleString()}</strong>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem;">
-              <span style="color:#34d399;font-weight:900;">+${(totalAbr - totalMar).toLocaleString()} pts</span>
-              <span style="color:#34d399;font-weight:900;opacity:0.7;">+${crecAbrMar.toFixed(1)}%</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="rktt-section" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;margin-top:25px;">
-          <div class="rktt-box" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);padding:12px;">
-             <div class="rktt-box-val" style="color:#34d399;font-size:1.3rem;font-family:monospace;text-shadow:0 0 10px rgba(52,211,153,0.5);">${promDia.toFixed(0)}</div>
-             <div class="rktt-box-lbl" style="font-size:0.55rem;letter-spacing:1.5px;color:#94a3b8;margin-top:6px;">BITRATE_AVG</div>
-          </div>
-          <div class="rktt-box" style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.2);padding:12px;">
-             <div class="rktt-box-val" style="color:#fbbf24;font-size:1.3rem;font-family:monospace;">${proyecc.toLocaleString()}</div>
-             <div class="rktt-box-lbl" style="font-size:0.55rem;letter-spacing:1.5px;color:#94a3b8;margin-top:6px;">PROJ_MONTH</div>
-          </div>
-          <div class="rktt-box" style="background:rgba(167,139,250,0.03);border:1px solid rgba(167,139,250,0.2);padding:12px;">
-             <div class="rktt-box-val" style="color:#a78bfa;font-size:1.3rem;font-family:monospace;">${diasRest}</div>
-             <div class="rktt-box-lbl" style="font-size:0.55rem;letter-spacing:1.5px;color:#94a3b8;margin-top:6px;">STMT_REM</div>
-          </div>
-        </div>
-
-        <div class="rktt-section" style="margin-top:30px;">
-          <div style="font-size:.75rem;font-weight:900;color:#94a3b8;margin-bottom:15px;text-transform:uppercase;letter-spacing:3px;display:flex;align-items:center;gap:12px;">
-             <span style="width:12px;height:3px;background:#5eead4;box-shadow:0 0 10px #5eead4;"></span> ELITE_FORCE_LIVE
-          </div>
-          ${top3.map((o, i) => `
-            <div class="rktt-row" style="background:rgba(255,255,255,0.04);margin-bottom:10px;padding:12px;border-radius:12px;border-right:5px solid ${['#fbbf24','#94a3b8','#cd7f32'][i]}cc;transition:0.3s;cursor:pointer;">
-              <span style="font-size:0.9rem;color:#f1f5f9;font-weight:bold;">${['🥇','🥈','🥉'][i]} ${o.name}</span>
-              <span style="color:#5eead4;font-weight:900;font-size:1rem;font-family:monospace;text-shadow:0 0 8px rgba(94,234,212,0.5);">${o.pts.toFixed(1)} P</span>
-            </div>
-          `).join('') || '<div class="rktt-row" style="color:#475569;">AWAITING_UPSCALE...</div>'}
-        </div>
-        
-        <div style="font-size:9px;color:#334155;text-align:right;margin-top:25px;letter-spacing:3px;font-family:monospace;opacity:0.6;text-transform:uppercase;border-top:1px solid rgba(255,255,255,0.05);padding-top:10px;">AGENT_ANTIGRAVITY_STREET_CRED_v16.6</div>
-      `;
-
-      const btn = document.getElementById('btn-crec-info');
-      const rect = btn.getBoundingClientRect();
-      const ph = 460, pw = 340;
-      const vw = window.innerWidth, vh = window.innerHeight;
-
-      requestAnimationFrame(() => {
-        panel.classList.add('tooltip-visible');
-        
-        const pad = 16;
-        let left = rect.left + (rect.width / 2) - (pw / 2);
-        if (left < pad) left = pad;
-        if (left + pw > vw - pad) left = vw - pw - pad;
-
-        let top = rect.top - ph - 12;
-        if (top < pad || (top + ph > vh - pad)) {
-          // Si no cabe arriba, intentar abajo
-          top = rect.bottom + 12;
-          if (top + ph > vh - pad) {
-            // Si tampoco cabe abajo, CENTRAR EN PANTALLA (modo pánico)
-            top = (vh - ph) / 2;
-            left = (vw - pw) / 2;
-          }
-        }
-
-        panel.style.top = Math.max(pad, top) + 'px';
-        panel.style.left = Math.max(pad, left) + 'px';
-      });
-
-      // BLINDAJE v19.1: Evitar cierre prematuro por clicks accidentales en el botón
-      setTimeout(() => {
-        const _antiFlicker = (e) => {
-          if (!panel.contains(e.target) && !e.target.closest('#btn-crec-info')) {
-            panel.classList.remove('tooltip-visible');
-            _crecTooltipOpen = false;
-            document.removeEventListener('mousedown', _antiFlicker);
-          }
-        };
-        document.addEventListener('mousedown', _antiFlicker);
-      }, 300); // Pequeño delay para asegurar que el click que abre no lo cierre al instante
-    }
 
 
     // ── Configurar base del mes anterior ──────────────────────
@@ -4945,7 +4886,11 @@
       rkDataFiltered.forEach(op => {
         const cortes = getCortesOp(op.name);
         const hoyCortes = cortes.filter(c => c.fecha === _hoy);
-        _ptsHoyMap[op.name] = hoyCortes.reduce((s, c) => s + (c.puntos || 0), 0);
+        // Filtrar cortes que parezcan acumulados (mayores a 800 en un solo registro de hoy es sospechoso para un turno promedio de 180)
+        _ptsHoyMap[op.name] = hoyCortes.reduce((s, c) => {
+          const val = (Number(c.puntos) || 0);
+          return s + (val > 1500 ? 0 : val); // Proteccin contra el bug de acumulados
+        }, 0);
         const last = hoyCortes[hoyCortes.length - 1];
         _horaMap[op.name] = last ? (last.hora || null) : null;
       });
@@ -4982,11 +4927,17 @@
       }
 
       // Pts visibles en pantalla (para avg por operador del filtro actual)
+      const _fut3 = localDateStr(new Date(Date.now() + 3 * 86400000));
       let _visPtsCurr = 0;
       rkDataFiltered.forEach(o => {
         const cortes = getCortesOp(o.name);
         const ptsMes = cortes
-          .filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActStats)
+          .filter(c => {
+            if (!c.fecha) return false;
+            const matchesMonth = c.fecha.slice(0, 7) === _mesActStats;
+            const matchesProj = (c.fecha >= _hoy && c.fecha <= _fut3);
+            return matchesMonth || matchesProj;
+          })
           .reduce((s, c) => s + (c.puntos || 0), 0);
         _visPtsCurr += ptsMes > 0 ? ptsMes : (o[curr] || 0);
       });
@@ -7524,20 +7475,50 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function getTotalMesPts(mesStr) {
       // 1. Sumar cortes reales en rr_prime_cortes
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+      const today = localDateStr();
+      const fut3 = localDateStr(new Date(Date.now() + 3 * 86400000));
+      const isCur = (mesStr === today.slice(0, 7));
+
       let total = 0;
       Object.values(allCortes).forEach(cortes => {
         if (!Array.isArray(cortes)) return;
         cortes.forEach(c => {
-          if (c.fecha && c.fecha.slice(0, 7) === mesStr)
-            total += (c.puntos || 0);
+          if (!c.fecha) return;
+          const matchesMonth = c.fecha.slice(0, 7) === mesStr;
+          const matchesProj = isCur && (c.fecha >= today && c.fecha <= fut3);
+          if (matchesMonth || matchesProj) {
+            const val = (Number(c.puntos) || 0);
+            total += (val > 1500 ? 0 : val); // Proteccin contra acumulado Datame
+          }
         });
       });
       // 2. Sumar PSA del mes
       total += getPSATotalMes(mesStr);
-      // 3. Si no hay cortes (mes anterior al sistema) → usar base guardada
+      
+      // 3. SI NO HAY CORTES -> Búsqueda flexible en Base Histórica (Feb/Mar)
       if (total === 0) {
         const base = getBaseMeses();
-        if (base[mesStr]) total = base[mesStr];
+        // Intentar con la clave YYYY-MM
+        if (base[mesStr]) {
+          total = base[mesStr];
+        } else {
+          // Intentar con nombre corto (mar, feb, ene, etc) - Útil para datos heredados
+          const mmIdx = parseInt(mesStr.split('-')[1]) - 1;
+          const shortName = MONTH_KEYS[mmIdx];
+          if (shortName && base[shortName]) {
+            total = base[shortName];
+          }
+          // Fallback final: Sumar el mes de cada operador desde operatorsData si no hay base consolidada
+          if (total === 0 && shortName) {
+            total = (operatorsData || []).reduce((acc, op) => {
+              // Limpiar puntos de miles y luego cambiar coma por punto decimal
+              const raw = String(op[shortName] || '0');
+              const clean = raw.replace(/\./g, '').replace(',', '.');
+              const val = parseFloat(clean) || 0;
+              return acc + val;
+            }, 0);
+          }
+        }
       }
       return total;
     }
@@ -7546,9 +7527,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function getMesAnteriorStr() {
       const { prev } = getActivePair(); // 'feb', 'mar', etc.
       const idx = MONTH_KEYS.indexOf(prev);
-      // Construir YYYY-MM: asumimos año 2026
+      // Construir YYYY-MM: usar año dinámico para mayor precisión
+      const year = localDateStr().slice(0, 4);
       const mm = String(idx + 1).padStart(2, '0');
-      return '2026-' + mm;
+      return year + '-' + mm;
     }
 
     // ── Obtiene el YYYY-MM del mes actual activo ──
@@ -7566,9 +7548,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const norm = _normName(opName);
       const key = Object.keys(all).find(k => _normName(k) === norm) || opName;
       const cortes = all[key] || [];
-      const hoy = localDateStr();
+      const hoy = getLogicalDate();
+      const futuro3 = getLogicalDate(new Date(Date.now() + 3 * 86400000));
       return cortes
-        .filter(c => c.fecha === hoy)
+        .filter(c => getLogicalDate(c.fecha) >= hoy && getLogicalDate(c.fecha) <= futuro3)
         .reduce((s, c) => s + (c.puntos || 0), 0);
     }
 
@@ -7687,12 +7670,20 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           .reduce((s, c) => s + (c.puntos || 0), 0);
 
       // Puntos por período
-      const ptsHoy = sumaRango(hoy, hoy);
+      const futuro3 = localDateStr(new Date(Date.now() + 3 * 86400000));
+      const ptsHoy = sumaRango(hoy, futuro3);
       const ptsAyer = sumaRango(ayer, ayer);
       const ptsSemana = sumaRango(hace7, hoy);
       const ptsSemPasada = sumaRango(hace14, ayer);
+      
+      // Mes actual: incluye puntos del mes y proyecciones inmediatas si hoy es fin de mes
       const ptsMes = cortes
-        .filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)
+        .filter(c => {
+          if (!c.fecha) return false;
+          const esEsteMes = c.fecha.slice(0, 7) === mesActual;
+          const esProyeccion = c.fecha >= hoy && c.fecha <= futuro3;
+          return esEsteMes || esProyeccion;
+        })
         .reduce((s, c) => s + (c.puntos || 0), 0);
 
       // Mes anterior desde op data (no hay cortes históricos antes del sistema)
@@ -7946,7 +7937,6 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (k.startsWith(detOpName + '::')) delete allPerfiles[k];
       });
       _origSetItem(PERFIL_KEY, JSON.stringify(allPerfiles));
-
       cerrarDetalle();
       renderRanking();
       if (typeof renderOperators === 'function') renderOperators();
@@ -7957,12 +7947,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // MÓDULO: ALERTAS DE RENDIMIENTO (DÍA / SEMANA / MES)
     // ══════════════════════════════════════════
 
-    let alertasPeriodo = 'dia';        // 'dia' | 'semana' | 'mes'
-    let alertasJornada = 'Tarde';       // '' = todos | 'Mañana' | 'Tarde' | 'Noche' — default Tarde
+    let alertasPeriodo = 'dia'; 
+    let alertasJornada = 'Tarde'; 
 
     function setAlertaJornada(j) {
       alertasJornada = j;
-      // Actualizar pills
       ['todos', 'manana', 'tarde', 'noche'].forEach(id => {
         const btn = document.getElementById('alerta-j-' + id);
         const map = { todos: '', manana: 'Mañana', tarde: 'Tarde', noche: 'Noche' };
@@ -7971,85 +7960,59 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       renderAlertas();
     }
 
-    // Get ISO week number
     function getWeek(date) {
       const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
       d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
       const y = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
       return Math.ceil((((d - y) / 86400000) + 1) / 7);
     }
-
     function getWeekKey(dateStr) {
       const d = new Date(dateStr);
       return `${d.getFullYear()}-W${String(getWeek(d)).padStart(2, '0')}`;
     }
+    function getMonthKey(dateStr) { return dateStr.slice(0, 7); }
 
-    function getMonthKey(dateStr) {
-      return dateStr.slice(0, 7); // "YYYY-MM"
-    }
-
-    // Aggregate cortes for one operator by period
-    // Returns { current, previous } totals
     function agregarCortesPorPeriodo(opName, periodo, jornada) {
-      // jornada: '' | 'Mañana' | 'Tarde' | 'Noche'
-      // Si se especifica, solo suma cortes de esa jornada
       const cortesAll = getCortesOp(opName);
-      const cortes = jornada
-        ? cortesAll.filter(c => (c.jornada || '') === jornada)
-        : cortesAll;
+      const cortes = jornada ? cortesAll.filter(c => (c.jornada || '') === jornada) : cortesAll;
       const now = new Date();
       const hoy = localDateStr(now);
-
       const totals = {};
       cortes.forEach(c => {
         let key;
         if (periodo === 'dia') key = c.fecha;
         else if (periodo === 'semana') key = getWeekKey(c.fecha);
         else key = getMonthKey(c.fecha);
-        totals[key] = (totals[key] || 0) + (c.puntos || 0);
+        
+        const pts = (Number(c.puntos) || 0);
+        totals[key] = (totals[key] || 0) + (pts > 1500 ? 0 : pts);
       });
 
       let current = 0, previous = 0, currKey, prevKey;
-
       if (periodo === 'dia') {
-        // Hoy vs promedio de los últimos 7 días con actividad (excluye hoy)
-        currKey = hoy;
-        current = totals[hoy] || 0;
-
-        // Últimos 7 días excluyendo hoy
+        currKey = hoy; current = totals[hoy] || 0;
         const diasPasados = [];
         for (let d = 1; d <= 7; d++) {
-          const fd = new Date(now);
-          fd.setDate(fd.getDate() - d);
+          const fd = new Date(now); fd.setDate(fd.getDate() - d);
           const fk = localDateStr(fd);
           if (totals[fk] > 0) diasPasados.push(totals[fk]);
         }
-        // Promedio de días con actividad — si no hay datos, usar el día más reciente
         if (diasPasados.length > 0) {
           previous = diasPasados.reduce((s, v) => s + v, 0) / diasPasados.length;
           prevKey = 'prom7d';
         } else {
-          // Sin historial: comparar con ayer
           const ayer = new Date(now); ayer.setDate(ayer.getDate() - 1);
-          prevKey = localDateStr(ayer);
-          previous = totals[prevKey] || 0;
+          prevKey = localDateStr(ayer); previous = totals[prevKey] || 0;
         }
-
       } else if (periodo === 'semana') {
         const semPasada = new Date(now); semPasada.setDate(semPasada.getDate() - 7);
-        currKey = getWeekKey(hoy);
-        prevKey = getWeekKey(localDateStr(semPasada));
-        current = totals[currKey] || 0;
-        previous = totals[prevKey] || 0;
-
+        currKey = getWeekKey(hoy); prevKey = getWeekKey(localDateStr(semPasada));
+        current = totals[currKey] || 0; previous = totals[prevKey] || 0;
       } else {
         const mesPasado = new Date(now); mesPasado.setMonth(mesPasado.getMonth() - 1);
-        currKey = getMonthKey(hoy);
-        prevKey = getMonthKey(localDateStr(mesPasado));
-        current = totals[currKey] || 0;
-        previous = totals[prevKey] || 0;
+        currKey = getMonthKey(hoy); prevKey = getMonthKey(localDateStr(mesPasado));
+        current = totals[currKey] || 0; previous = totals[prevKey] || 0;
       }
-
       return { current, previous, currKey, prevKey, totals };
     }
 
@@ -8059,16 +8022,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       renderAlertas();
     }
 
-
     // ══════════════════════════════════════════════════════════════
     // ANÁLISIS DE CRECIMIENTO DE LA OPERACIÓN — solo monitor/admin
     // ══════════════════════════════════════════════════════════════
     function renderCrecimientoAnalisis() {
-      const panel = document.getElementById('rk-crec-analisis');
+      const panel = document.getElementById('crec-tooltip-panel');
       if (!panel) return;
-      if (currentRole !== 'monitor' && currentRole !== 'admin') {
-        panel.style.display = 'none'; return;
-      }
 
       const { prev, curr } = getActivePair();
       const MONTH_LABELS_MAP = {};
@@ -8077,35 +8036,33 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const currLabel = MONTH_LABELS_MAP[curr] || curr;
       const mesActual = localDateStr().slice(0, 7);
 
-      // Totales reales desde rr_prime_cortes (PSA ya incluido en getTotalMesPts)
       const mesAntCrecStr = getMesAnteriorStr();
       const totalCurr = getTotalMesPts(mesActual);
       const totalAnt = getTotalMesPts(mesAntCrecStr);
-      const psaTotal = getPSATotalMes(mesActual);
-      const totalCurrConPSA = totalCurr; // PSA ya incluido
-
-      // Crecimiento
-      const crec = totalAnt > 0 ? ((totalCurrConPSA - totalAnt) / totalAnt * 100) : 0;
-      const crecSign = crec >= 0 ? '+' : '';
-      const crecColor = crec >= 0 ? '#34d399' : '#f87171';
-      const crecIcon = crec >= 0 ? '📈' : '📉';
-
-      // Días del mes
+      
       const hoy = new Date();
       const diaHoy = hoy.getDate();
       const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
-      const diasRest = diasMes - diaHoy;
-      const promDia = diaHoy > 0 ? totalCurrConPSA / diaHoy : 0;
+      
+      // --- PROYECCIN LINEAL ---
+      const promDia = diaHoy > 0 ? totalCurr / diaHoy : 0;
       const proyecc = Math.round(promDia * diasMes);
 
-      // Top 3 operadores por cortes reales del mes
+      // El crecimiento ahora se basa en la PROYECCIN vs Mes Pasado
+      const crec = totalAnt > 0 ? ((proyecc - totalAnt) / totalAnt * 100) : 0;
+      const totalCurrConPSA = totalCurr; // Ya incluye PSA desde getTotalMesPts
+
+      // Líderes
       const opsConPts = operatorsData
         .filter(o => o.group !== 'SP')
         .map(o => {
           const c = getCortesOp(o.name);
           const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual)
-            .reduce((s, x) => s + (x.puntos || 0), 0);
-          return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p, turno: o.turno || '' };
+            .reduce((s, x) => {
+              const val = (Number(x.puntos) || 0);
+              return s + (val > 1500 ? 0 : val);
+            }, 0);
+          return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p };
         })
         .filter(o => o.pts > 0)
         .sort((a, b) => b.pts - a.pts);
@@ -8114,85 +8071,77 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const top3Pts = top3.reduce((s, o) => s + o.pts, 0);
       const top3Pct = totalCurrConPSA > 0 ? Math.round((top3Pts / totalCurrConPSA) * 100) : 0;
 
-      // Mejor turno del mes
-      const ptsPorTurno = { Mañana: 0, Tarde: 0, Noche: 0 };
-      operatorsData.filter(o => o.group !== 'SP').forEach(o => {
-        const t = o.turno || 'Noche';
-        const c = getCortesOp(o.name);
-        const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual)
-          .reduce((s, x) => s + (x.puntos || 0), 0);
-        if (ptsPorTurno[t] !== undefined) ptsPorTurno[t] += p;
-      });
-      const mejorTurno = Object.entries(ptsPorTurno).sort((a, b) => b[1] - a[1])[0];
-
-      // Consejos automáticos
-      const consejos = [];
-      if (psaTotal > 0) {
-        consejos.push(`⚠️ Hay <strong>${psaTotal.toFixed(1)} pts</strong> en el cajón sin asignar — asígnales sus perfiles para reflejar el 100% real.`);
-      }
-      if (top3Pct >= 50) {
-        consejos.push(`🎯 Los top 3 operadores (${top3.map(o => o.name.split(' ')[0]).join(', ')}) concentran el <strong>${top3Pct}%</strong> de los puntos — diversifica la carga.`);
-      }
-      if (crec < 0) {
-        consejos.push(`📉 La operación va por debajo de ${prevLabel}. Revisa ausencias y perfiles inactivos.`);
-      }
-      if (crec > 30) {
-        consejos.push(`🚀 Crecimiento fuerte de <strong>${crecSign}${crec.toFixed(1)}%</strong>. Mantén el ritmo de cortes cada 2h.`);
-      }
-      if (diasRest <= 5) {
-        consejos.push(`⏳ Quedan <strong>${diasRest} días</strong> del mes. Sprint final — maximiza cortes en turno Tarde y Noche.`);
-      }
-      if (mejorTurno && mejorTurno[1] > 0) {
-        consejos.push(`🏆 El turno más productivo este mes es <strong>${mejorTurno[0]}</strong> con ${mejorTurno[1].toFixed(0)} pts.`);
+      // Mensaje amigable
+      let mensajeAmigable = "";
+      if (crec > 20) {
+        mensajeAmigable = `¡Vas volando! ${crecIcon} Estás un <b>${crec.toFixed(0)}%</b> arriba de ${prevLabel}. A este ritmo, romperás todos los récords.`;
+      } else if (crec > 0) {
+        mensajeAmigable = `¡Buen trabajo! 💪 Vas superando a ${prevLabel}. Mantén la constancia para cerrar el mes en verde.`;
+      } else {
+        mensajeAmigable = `¡A darle con toda! 🔥 Estamos un poco abajo de ${prevLabel}, pero con el empuje de los líderes podemos remontar.`;
       }
 
-      const consejosHTML = consejos.length
-        ? consejos.map(c => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);line-height:1.6;">→ ${c}</div>`).join('')
-        : '<div style="color:#475569;font-size:.75rem;">Sin alertas especiales por ahora.</div>';
-
-      const top3HTML = top3.map((o, i) => `
-        <span style="background:rgba(255,255,255,.05);border-radius:8px;padding:3px 8px;font-size:.7rem;white-space:nowrap;">
-          ${['🥇', '🥈', '🥉'][i]} ${o.name} · ${o.pts.toFixed(1)} pts
-        </span>`).join('');
-
-      panel.style.display = 'block';
       panel.innerHTML = `
-        <div style="background:var(--panel);border:1px solid rgba(94,234,212,.15);border-radius:16px;
-          overflow:hidden;margin-bottom:0;">
-          <div style="background:rgba(94,234,212,.06);padding:14px 18px;display:flex;align-items:center;
-            justify-content:space-between;flex-wrap:wrap;gap:10px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="font-size:1.1rem;">${crecIcon}</span>
-              <div>
-                <span style="font-weight:800;font-size:.9rem;color:#e2e8f0;">Análisis de Crecimiento</span>
-                <span style="margin-left:8px;font-size:1rem;font-weight:900;color:${crecColor};">
-                  ${crecSign}${crec.toFixed(1)}%
-                </span>
-              </div>
+        <div style="padding:18px; position:relative; min-height:450px; background:#0f172a; color:#f1f5f9; border-radius:16px;">
+          <button onclick="window.toggleCrecTooltip(event)" style="position:absolute; top:12px; right:12px; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:1.4rem;">&times;</button>
+          
+          <div style="color:#2dd4bf; font-weight:900; margin-bottom:15px; font-size:0.85rem; letter-spacing:1px; display:flex; align-items:center; gap:8px;">
+            📈 ¿CÓMO VAMOS ESTE MES?
+          </div>
+          
+          <div style="text-align:center; margin-bottom:20px;">
+            <div style="font-size:3.5rem; font-weight:900; color:${crecColor}; line-height:1; filter: drop-shadow(0 0 10px ${crecColor}44);">
+              ${crecSign}${crec.toFixed(1)}%
             </div>
-            <div style="font-size:.7rem;color:#475569;">
-              ${prevLabel}: <strong style="color:#94a3b8;">${totalAnt.toFixed(0)} pts</strong>
-              → ${currLabel}: <strong style="color:#5eead4;">${totalCurrConPSA.toFixed(0)} pts</strong>
-              · Proyección fin de mes: <strong style="color:#fbbf24;">${proyecc.toLocaleString()} pts</strong>
+            <div style="color:#64748b; font-size:0.8rem; margin-top:8px; font-weight:700; text-transform:uppercase;">
+              Comparado con tu total de ${prevLabel}
             </div>
           </div>
-          <div style="padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div>
-              <div style="font-size:.7rem;font-weight:700;color:#64748b;text-transform:uppercase;
-                letter-spacing:.8px;margin-bottom:8px;">💡 Consejos</div>
-              <div style="font-size:.75rem;color:#94a3b8;">${consejosHTML}</div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+              <div style="font-size:0.65rem; color:#94a3b8; font-weight:800; margin-bottom:4px;">RITMO ACTUAL ✨</div>
+              <div style="font-weight:900; color:#f1f5f9; font-size:1.1rem;">${proyecc.toLocaleString()} <small style="font-size:0.6rem; opacity:0.6;">pts</small></div>
+              <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">Cierre estimado 30 días</div>
             </div>
-            <div>
-              <div style="font-size:.7rem;font-weight:700;color:#64748b;text-transform:uppercase;
-                letter-spacing:.8px;margin-bottom:8px;">🏅 Top producción ${currLabel}</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">${top3HTML}</div>
-              <div style="margin-top:10px;font-size:.7rem;color:#475569;">
-                Días transcurridos: <strong style="color:#e2e8f0;">${diaHoy}</strong> /
-                ${diasMes} · Prom/día: <strong style="color:#5eead4;">${promDia.toFixed(1)} pts</strong>
-              </div>
+            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+              <div style="font-size:0.65rem; color:#94a3b8; font-weight:800; margin-bottom:4px;">PROMEDIO DÍA 📅</div>
+              <div style="font-weight:900; color:#f1f5f9; font-size:1.1rem;">${Math.round(promDia).toLocaleString()} <small style="font-size:0.6rem; opacity:0.6;">pts</small></div>
+              <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">Media diaria real</div>
             </div>
           </div>
-        </div>`;
+
+          <div style="margin-bottom:20px;">
+            <div style="font-size:0.7rem; font-weight:900; color:#94a3b8; margin-bottom:10px; text-transform:uppercase; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:5px;">🏆 Líderes de ${currLabel}</div>
+            ${top3.map((o,i) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
+                <span style="font-size:0.85rem;"><span style="color:#64748b; width:15px; display:inline-block;">${i+1}.</span> ${o.name}</span>
+                <span style="font-weight:900; color:#2dd4bf; font-size:0.85rem;">${o.pts.toLocaleString()}</span>
+              </div>
+            `).join('')}
+          </div>
+
+          <div style="background:rgba(45, 212, 191, 0.08); border-left:4px solid #2dd4bf; padding:15px; border-radius:8px; margin-bottom:20px;">
+            <div style="color:#2dd4bf; font-weight:900; font-size:0.75rem; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+              💡 RESUMEN PARA EL JEFE
+            </div>
+            <div style="color:#cbd5e1; font-size:0.85rem; line-height:1.5;">
+              ${mensajeAmigable}<br>
+              <span style="display:inline-block; margin-top:10px; font-size:0.75rem; color:#94a3b8;">
+                ⚠️ Nota: Tenemos <b>${psaTotal.toLocaleString()} puntos</b> "en el limbo" esperando validación final.
+              </span>
+            </div>
+          </div>
+
+          <div style="background:#070a0f; padding:12px; border-radius:10px; border:1px solid rgba(45, 212, 191, 0.15); font-family:monospace; font-size:0.65rem; color:#2dd4bf; line-height:1.3; opacity:0.8;">
+            <div style="color:#64748b; font-weight:800; margin-bottom:8px; font-size:0.55rem; letter-spacing:1px;">[ DATOS DE AUDITORÍA (OJO DE HALCÓN) ]</div>
+            <div>• Puntos Reales (+PSA): <span style="color:#fff;">${totalCurrConPSA.toLocaleString()} pts</span></div>
+            <div>• Meta del Mes Pasado: <span style="color:#fff;">${totalAnt.toLocaleString()} pts</span></div>
+            <div>• Ventaja Actual: <span style="color:#10b981;">+${(totalCurrConPSA - totalAnt).toLocaleString()} pts</span></div>
+            <div style="margin-top:4px; font-size:0.6rem; color:#64748b;">Analítica compensada +3d (Latencia Datame aplicada)</div>
+          </div>
+        </div>
+      `;
     }
 
     function renderAlertas() {
@@ -9076,8 +9025,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       entries.forEach(d => {
         if (!d.rawName || d.puntos <= 0) return;
-        // Use operator name directly (rawName is already matched)
         const opName = d.rawName;
+
+        // --- LGICA BASE 0 ---
+        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => _normName(o.name) === _normName(opName)) : null;
+        const profile = op?.profiles?.find(p => String(p.id) === String(d.idPerfil));
+        const base = profile?.ptsBase || 0;
+        
+        // Si enCurso viene de Datame (acumulado), calcular neto real
+        const puntosNetos = (d.enCurso > 0) ? Math.max(0, d.enCurso - base) : d.puntos;
+        // ---------------------
+
         const key = opName + '::' + d.idPerfil;
         const fecha = d.fecha || hoy;
 
@@ -9089,26 +9047,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
         const existing = metrics[key].historial.findIndex(h => h.fecha === fecha);
         if (existing >= 0) {
-          // Mismo día: solo actualizar si el nuevo enCurso es mayor (corte más reciente del día)
-          if ((d.enCurso || 0) > (metrics[key].historial[existing].enCurso || 0)) {
-            metrics[key].historial[existing].puntos = d.puntos;
-            metrics[key].historial[existing].enCurso = d.enCurso || 0;
-            metrics[key].historial[existing].comienza = d.comienza || 0;
-          }
-          // Si enCurso no viene, acumular (cortes manuales del día)
-          else if (!d.enCurso) {
-            metrics[key].historial[existing].puntos += d.puntos;
+          // Mismo da: actualizar con puntos netos
+          if (puntosNetos > (metrics[key].historial[existing].enCurso || 0)) {
+            metrics[key].historial[existing].puntos = puntosNetos;
+            metrics[key].historial[existing].enCurso = puntosNetos;
+            metrics[key].historial[existing].comienza = 0; // Se vuelve 0 porque ya estamos en neto
+          } else if (!d.enCurso) {
+            metrics[key].historial[existing].puntos += puntosNetos;
           }
         } else {
-          // Día nuevo: insertar al frente, respetar histórico
           metrics[key].historial.unshift({
             fecha,
-            puntos: d.puntos,
-            enCurso: d.enCurso || 0,
-            comienza: d.comienza || 0
+            puntos: puntosNetos,
+            enCurso: puntosNetos,
+            comienza: 0
           });
-          if (metrics[key].historial.length > 90) metrics[key].historial.splice(90);
         }
+        
+        // Registrar en el ranking del operador (puntos reales)
+        registrarCorte(opName, puntosNetos, d.fecha, d.jornada);
+        // Limitar historial a 90 das
+        if (metrics[key].historial.length > 90) metrics[key].historial.splice(90);
       });
 
       savePerfilMetrics(metrics);
@@ -9476,6 +9435,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
       const hoy = localDateStr();
       const mesActual = hoy.slice(0, 7);
+      
+      const feb2026 = '2026-02';
+      const mar2026 = '2026-03';
+      const abr2026 = '2026-04';
+      const may2026 = '2026-05';
 
       let filtered = operatorsData.filter(op => {
         const matchGroup = !filterGroup || op.group === filterGroup;
@@ -9495,29 +9459,27 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const globalIndex = operatorsData.indexOf(op);
         const cortesOp = getCortesOp(op.name);
 
-        // --- CÁLCULO DE HISTORIAL PARA GRÁFICAS (Feb en adelante) ---
-        const feb2026 = '2026-02';
-        const mar2026 = '2026-03';
-        const abr2026 = '2026-04';
-        const may2026 = '2026-05';
+        const _sumNet = (arr) => arr.reduce((s, c) => {
+          const v = (Number(c.puntos) || 0);
+          return s + (v > 1500 ? 0 : v);
+        }, 0);
 
-        const ptsFeb = Math.max(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === feb2026).reduce((s, c) => s + (c.puntos || 0), 0), (op.feb || 0));
-        const ptsMar = Math.max(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mar2026).reduce((s, c) => s + (c.puntos || 0), 0), (op.mar || 0));
-        const ptsAbr = Math.max(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === abr2026).reduce((s, c) => s + (c.puntos || 0), 0), (op.abr || 0));
-        const ptsMay = cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === may2026).reduce((s, c) => s + (c.puntos || 0), 0) || (op.may || 0);
+        const ptsFeb = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === feb2026)), (op.feb || 0));
+        const ptsMar = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mar2026)), (op.mar || 0));
+        const ptsAbr = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === abr2026)), (op.abr || 0));
+        const ptsMay = _sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === may2026)) || (op.may || 0);
 
-        const ptsCurr = Math.max(cortesOp
-          .filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)
-          .reduce((s, c) => s + (c.puntos || 0), 0), (op[curr] || 0));
+        const ptsCurr = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)), (op[curr] || 0));
         const ptsPrev = op[prev] || 0;
         const growth = ptsPrev > 0 ? ((ptsCurr - ptsPrev) / ptsPrev * 100) : 0;
         const growthSign = growth > 0 ? '+' : '';
         const growthCls = growth > 0 ? 'growth-up' : growth < 0 ? 'growth-down' : 'growth-neutral';
         const copCurr = Math.round(ptsCurr * 1400).toLocaleString('es-CO');
 
-        // Pts del día en tiempo real
-        const cortesHoy = cortesOp.filter(c => c.fecha === hoy);
-        const ptsHoy = cortesHoy.reduce((s, c) => s + (c.puntos || 0), 0);
+        // Pts del día en tiempo real (incluyendo proyección +3 días)
+        const futuro3 = localDateStr(new Date(Date.now() + 3 * 86400000));
+        const cortesHoy = cortesOp.filter(c => c.fecha >= hoy && c.fecha <= futuro3);
+        const ptsHoy = _sumNet(cortesHoy);
         const horaUltimo = cortesHoy.length ? cortesHoy[cortesHoy.length - 1].hora : null;
         const copHoy = Math.round(ptsHoy * 1400).toLocaleString('es-CO');
         const turnoIcon = op.turno === 'Mañana' ? '☀️' : op.turno === 'Tarde' ? '🌆' : op.turno === 'Noche' ? '🌙' : '🔄';
@@ -9574,7 +9536,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap:5px;">
           ${(() => {
             const dailyMap = {};
-            cortesOp.forEach(c => { if(c.fecha) dailyMap[c.fecha] = (dailyMap[c.fecha] || 0) + (c.puntos || 0); });
+            cortesOp.forEach(c => { 
+              if(c.fecha) {
+                const val = (Number(c.puntos) || 0);
+                dailyMap[c.fecha] = (dailyMap[c.fecha] || 0) + (val > 1500 ? 0 : val); 
+              }
+            });
             const sorted = Object.entries(dailyMap).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 7);
             return sorted.length ? sorted.map(([f, p]) => `
               <div style="background:rgba(255,255,255,0.03); padding:4px; border-radius:4px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
@@ -9844,7 +9811,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         return alert('Ese ID ya está asignado a este operador');
       }
 
-      op.profiles.push({ id: idVal, model: modVal, tipo, cubreA });
+      // Capturar puntos iniciales para lgica Base 0
+      const metrics = getPerfilMetrics();
+      const metricKey = Object.keys(metrics).find(mk => mk.endsWith('::' + idVal));
+      let ptsBase = 0;
+      if (metricKey) {
+        const hist = metrics[metricKey].historial || [];
+        const hoy = localDateStr();
+        const entryHoy = hist.find(h => h.fecha === hoy);
+        if (entryHoy) ptsBase = entryHoy.enCourse || entryHoy.enCurso || 0;
+      }
+
+      op.profiles.push({ id: idVal, model: modVal, tipo, cubreA, ptsBase });
       saveData();
       // Subir a Supabase
       if (typeof _sb !== 'undefined' && _sb) {
@@ -10376,6 +10354,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         changed = true;
       } else if (draft[k].estado === 'P' && !draft[k].horaIngreso) {
         draft[k].horaIngreso = hora;
+        draft[k].entradaTS = Date.now(); // Capturar sello de tiempo real
         changed = true;
       }
       if (changed) {
@@ -10553,10 +10532,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">
           Turno activo: ${turnoLabel[turnoActivo]}
         </div>
-        ${turnoData.sort((a, b) => (b.puntos || 0) - (a.puntos || 0)).map((op, i) => {
+        ${turnoData.map(op => ({ ...op, puntos: getPuntosHoy(op.name) }))
+          .sort((a, b) => (b.puntos || 0) - (a.puntos || 0)).map((op, i) => {
         const isMe = op.name.toUpperCase() === myName;
-        const pct = Math.round(((op.puntos || 0) / maxPts) * 100);
-        const metaPct = op.meta > 0 ? Math.min(Math.round(((op.puntos || 0) / op.meta) * 100), 100) : 0;
+        const ptsActuales = op.puntos || 0;
+        const pct = Math.round((ptsActuales / maxPts) * 100);
+        const metaPct = op.meta > 0 ? Math.min(Math.round((ptsActuales / op.meta) * 100), 100) : 0;
         const medals = ['🥇', '🥈', '🥉'];
         return `
             <div style="margin-bottom:10px;">
@@ -10564,7 +10545,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                 <span style="font-size:.82rem;font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">
                   ${medals[i] || '·'} ${op.name}${isMe ? ' (tú)' : ''}
                 </span>
-                <span style="font-size:.78rem;color:var(--gold);font-weight:700;">${op.puntos || 0} pts · ${metaPct}% meta</span>
+                <span style="font-size:.78rem;color:var(--gold);font-weight:700;">${ptsActuales} pts · ${metaPct}% meta</span>
               </div>
               <div style="background:rgba(255,255,255,0.08);border-radius:8px;height:10px;overflow:hidden;">
                 <div style="height:100%;width:${pct}%;background:${isMe ? 'linear-gradient(90deg,var(--accent),#6366f1)' : 'rgba(255,255,255,0.2)'};border-radius:8px;transition:.5s;"></div>
@@ -10704,10 +10685,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       // Ranking position — usa puntos reales del mes (cortes reales, no op[curr] hardcoded)
       const _mesRank = localDateStr().slice(0, 7);
+      const _hoyRank = localDateStr();
+      const _futRank = localDateStr(new Date(Date.now() + 3 * 86400000));
       const base = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
       base.sort((a, b) => {
-        const ptA = getCortesOp(a.name).filter(c => c.fecha?.slice(0, 7) === _mesRank).reduce((s, c) => s + (c.puntos || 0), 0) || a[curr] || 0;
-        const ptB = getCortesOp(b.name).filter(c => c.fecha?.slice(0, 7) === _mesRank).reduce((s, c) => s + (c.puntos || 0), 0) || b[curr] || 0;
+        const ptA = getCortesOp(a.name).filter(c => {
+          if (!c.fecha) return false;
+          return (c.fecha.slice(0, 7) === _mesRank) || (c.fecha >= _hoyRank && c.fecha <= _futRank);
+        }).reduce((s, c) => s + (c.puntos || 0), 0) || a[curr] || 0;
+        const ptB = getCortesOp(b.name).filter(c => {
+          if (!c.fecha) return false;
+          return (c.fecha.slice(0, 7) === _mesRank) || (c.fecha >= _hoyRank && c.fecha <= _futRank);
+        }).reduce((s, c) => s + (c.puntos || 0), 0) || b[curr] || 0;
         return ptB - ptA;
       });
       const pos = base.findIndex(o => o.name === op.name) + 1;
@@ -12756,7 +12745,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         saveData();
       }
 
-      all[name] = { fecha, horas: esCambio ? 'cambio' : horasNum, cambioTurno: esCambio };
+      // Calcular ventana de tiempo real
+      const k = asiKey(name, 'operador');
+      const entTS = asiEstados[k]?.entradaTS || Date.now();
+      const salTS = horasNum ? entTS + (horasNum * 3600000) : null;
+
+      all[name] = { 
+        fecha, 
+        horas: esCambio ? 'cambio' : horasNum, 
+        cambioTurno: esCambio,
+        entradaTS: entTS,
+        salidaTS: salTS
+      };
       localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(all));
       asiRender(); // re-render para mostrar cambio visual
     }
@@ -12789,7 +12789,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       let horaIngresoHTML = '';
       if (role === 'operador' && cur.horaIngreso) {
         const autoTag = cur.autoMarcado ? ' <span style="font-size:.55rem;color:#475569;">(auto)</span>' : '';
-        horaIngresoHTML = `<div style="font-size:.62rem;color:#34d399;margin-top:2px;">🕐 Ingresó: ${cur.horaIngreso}${autoTag}</div>`;
+        const horasReg = asiGetHoras(name);
+        let salidaStr = '';
+        if (horasReg?.salidaTS) {
+          const sTime = new Date(horasReg.salidaTS).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+          salidaStr = ` <span style="color:#fb7185;margin-left:4px;">(?? Salida: ${sTime})</span>`;
+        }
+        horaIngresoHTML = `<div style="font-size:.62rem;color:#34d399;margin-top:2px;">🕐 Ingresó: ${cur.horaIngreso}${autoTag}${salidaStr}</div>`;
       }
 
       // Horas de turno: solo operadores
@@ -12928,7 +12934,42 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
   </div>`;
     }
 
+    function asiAutoRelease() {
+      const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
+      const now = Date.now();
+      let changed = false;
+
+      for (const name in allHoras) {
+        const info = allHoras[name];
+        // Verificar si hay una salida programada y si ya pas la hora
+        if (info.salidaTS && now > info.salidaTS) {
+          const op = operatorsData.find(o => _normName(o.name) === _normName(name));
+          if (op && op.profiles && op.profiles.length > 0) {
+            console.warn(`[AutoRelease] Turno expirado para ${name}. Liberando perfiles.`);
+            op.profiles = []; // Liberar perfiles para el relevo
+            changed = true;
+          }
+          // Tambin desmarcar el estado de "Presente" si estaba activo
+          const k = asiKey(name, 'operador');
+          if (asiEstados[k] && asiEstados[k].estado === 'P') {
+            asiEstados[k].estado = '';
+            changed = true;
+          }
+          // Limpiar el timer para que no se repita en este operador hoy
+          delete info.salidaTS;
+          allHoras[name] = info;
+          localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+        }
+      }
+
+      if (changed) {
+        saveData();
+        asiSaveDraft();
+      }
+    }
+
     function asiRender() {
+      asiAutoRelease(); // Verificar expiraciones antes de pintar
       const _allOps = (typeof operatorsData !== 'undefined')
         ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : [];
 
@@ -13075,7 +13116,6 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const ops = (typeof operatorsData !== 'undefined') ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : [];
       const mons = loadMonitores();
 
-      // Incluir perfiles y turno de cada operador en el registro de asistencia
       const record = {
         fecha: date, turno: asiShift, ts: Date.now(),
         operadores: ops.map(o => ({
@@ -13083,11 +13123,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           group: o.group,
           turno: o.turno || '',
           profiles: (o.profiles || []).map(p => ({ id: p.id, model: p.model || p.modelo || '', tipo: p.tipo || 'propio', cubreA: p.cubreA || '' })),
-          estado: asiEstados[asiKey(o.name, 'operador')]?.estado || '—',
+          estado: asiEstados[asiKey(o.name, 'operador')]?.estado || '',
           nota: asiEstados[asiKey(o.name, 'operador')]?.nota || '',
           horaIngreso: asiEstados[asiKey(o.name, 'operador')]?.horaIngreso || ''
         })),
-        monitores: mons.map(m => ({ name: m, estado: asiEstados[asiKey(m, 'monitor')]?.estado || '—', nota: asiEstados[asiKey(m, 'monitor')]?.nota || '' }))
+        monitores: mons.map(m => ({ name: m, estado: asiEstados[asiKey(m, 'monitor')]?.estado || '', nota: asiEstados[asiKey(m, 'monitor')]?.nota || '' }))
       };
 
       const all = JSON.parse(localStorage.getItem(ASI_KEY) || '[]');
@@ -13096,23 +13136,20 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (all.length > 100) all.splice(100);
       localStorage.setItem(ASI_KEY, JSON.stringify(all));
 
-      // Persistir también los perfiles actualizados en primeOperatorsData2026
       saveData();
       if (typeof _sb !== 'undefined' && _sb) {
-        // Subir asistencia + operadores actualizados a Supabase
         Promise.all([
           _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-        ]).then(() => console.info('[Asistencia] Guardado en Supabase ✅'));
+        ]).then(() => console.info('[Asistencia] Guardado en Supabase \u2705'));
       }
 
       const btn = document.querySelector('.btn-asi-save');
       if (btn) {
         const o = btn.innerHTML;
-        btn.innerHTML = '✅ ¡Guardado con perfiles!';
+        btn.innerHTML = '\u2705 \u00a1Guardado!';
         btn.style.background = 'linear-gradient(135deg,#6366f1,#4f46e5)';
-        btn.style.color = '#fff';
-        setTimeout(() => { btn.innerHTML = o; btn.style.background = ''; btn.style.color = ''; }, 2200);
+        setTimeout(() => { btn.innerHTML = o; btn.style.background = ''; }, 2200);
       }
     }
 
@@ -13128,29 +13165,124 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function asiCerrarHistorial() { document.getElementById('modal-historial').classList.remove('open'); }
 
     function asiRenderHistorial() {
-      // (old code kept untouched below this chunk)
       const all = JSON.parse(localStorage.getItem(ASI_KEY) || '[]');
       const shift = document.getElementById('hist-shift-filter')?.value || '';
       const month = document.getElementById('hist-month-filter')?.value || '';
       const fil = all.filter(r => (!shift || r.turno === shift) && (!month || r.fecha.startsWith(month)));
       const body = document.getElementById('hist-body');
-      if (!fil.length) { body.innerHTML = '<div class="hist-empty">😕 Sin registros aún.<br>Guarda asistencias primero.</div>'; return; }
+      
+      if (!fil.length) { body.innerHTML = '<div class="hist-empty"> Sin registros a\u00fan.</div>'; return; }
       body.innerHTML = fil.map((r) => {
         const pp = [...(r.operadores || []), ...(r.monitores || [])];
         const P = pp.filter(p => p.estado === 'P').length, T = pp.filter(p => p.estado === 'T').length, A = pp.filter(p => p.estado === 'A').length;
         const pct = pp.length ? Math.round(((P + T) / pp.length) * 100) : 0;
-        const pills = pp.map(p => { const c = p.estado === 'P' ? 'hp-P' : p.estado === 'T' ? 'hp-T' : p.estado === 'A' ? 'hp-A' : ''; const ic = p.estado === 'P' ? '✅' : p.estado === 'T' ? '⏰' : p.estado === 'A' ? '❌' : '—'; return c ? `<span class="hist-pill ${c}">${ic} ${p.name}${p.nota ? ' (' + p.nota + ')' : ''}</span>` : ''; }).join('');
-        const sl = r.turno === 'manana' ? '☀️ Mañana' : r.turno === 'tarde' ? '🌆 Tarde' : '🌙 Noche';
+        const pills = pp.map(p => { 
+            const c = p.estado === 'P' ? 'hp-P' : p.estado === 'T' ? 'hp-T' : p.estado === 'A' ? 'hp-A' : ''; 
+            const ic = p.estado === 'P' ? '\u2705' : p.estado === 'T' ? '\u23f0' : '\u274c'; 
+            return c ? `<span class="hist-pill ${c}">${ic} ${p.name}</span>` : ''; 
+        }).join('');
+        const sl = r.turno === 'manana' ? '\ud832\udf00 Ma\u00f1ana' : r.turno === 'tarde' ? '\ud83c\udf07 Tarde' : '\ud83c\udf19 Noche';
         const ri = all.indexOf(r);
         return `<div class="hist-entry">
-      <div class="hist-entry-head">
-        <div><div class="hist-entry-date">📅 ${r.fecha}</div><span class="hist-entry-shift">${sl}</span></div>
-        <button class="btn-hist-del" onclick="asiEliminarRegistro(${ri})">🗑️</button>
-      </div>
-      <div class="hist-stats">${P} presentes · ${T} tardanzas · ${A} ausentes · ${pct}% asistencia</div>
+      <div class="hist-entry-head"><div>📅 ${r.fecha} <span class="hist-entry-shift">${sl}</span></div><button class="btn-hist-del" onclick="asiEliminarRegistro(${ri})">\ud83d\uddd1\ufe0f</button></div>
+      <div class="hist-stats">${P} P \u00b7 ${T} T \u00b7 ${A} A \u00b7 ${pct}%</div>
       <div class="hist-pills">${pills}</div>
     </div>`;
       }).join('');
+    }
+
+    function asiEliminarRegistro(idx) {
+      if (!confirm('\u00bfEliminar registro?')) return;
+      const all = JSON.parse(localStorage.getItem(ASI_KEY) || '[]');
+      all.splice(idx, 1);
+      localStorage.setItem(ASI_KEY, JSON.stringify(all));
+      asiRenderHistorial();
+    }
+
+    window.addEventListener('resize', () => {
+      const iframe = document.querySelector('#tab-plantrabajo iframe');
+      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
+        iframe.style.height = (window.innerHeight - 130) + 'px';
+      }
+    });
+
+    document.addEventListener('click', e => { if (e.target === document.getElementById('modal-historial')) asiCerrarHistorial(); });
+
+    // =====================================================================
+    // SINCRONIZADOR LASER SYNC (v20 - AMANECER 6 AM)
+    // =====================================================================
+    async function sincronizarDatameRelacional() {
+      if (typeof _sb === 'undefined' || !operatorsData) return;
+      const loader = document.getElementById('rr-boot-msg');
+      if (loader) loader.innerText = "Sincronizando (Amanecer 6 AM)...";
+
+      try {
+        const { data: catOperadores } = await _sb.from('operadores_v3').select('*').range(0, 1000);
+        const { data: operaciones, error } = await _sb.from('operaciones')
+          .select('id_perfil, puntos, fecha_corte')
+          .filter('fecha_corte', 'gte', '2026-03-01T00:00:00')
+          .order('fecha_corte', { ascending: true }) // ASC para capturar base primero
+          .range(0, 5000);
+
+        if (error || !operaciones) return;
+
+        const profilesByDay = {}; 
+        operaciones.forEach(op => {
+          const dt = new Date(op.fecha_corte);
+          const f = getLogicalDate(dt);
+          const hora = dt.toLocaleTimeString('es-CO', { hour12: false, hour: '2-digit', minute: '2-digit' });
+          const jornada = _jornadaDeHora(hora);
+          const pId = String(op.id_perfil);
+          const pts = Number(op.puntos) || 0;
+
+          if (!profilesByDay[f]) profilesByDay[f] = {};
+          if (!profilesByDay[f][pId]) profilesByDay[f][pId] = { 'Ma\u00f1ana':0, 'Tarde':0, 'Noche':0, 'base': 999999 };
+
+          if (pts < profilesByDay[f][pId].base && pts > 0) profilesByDay[f][pId].base = pts;
+          if (pts > (profilesByDay[f][pId][jornada] || 0)) profilesByDay[f][pId][jornada] = pts;
+        });
+
+        const statsCortes = {};
+        Object.entries(profilesByDay).forEach(([f, perfiles]) => {
+          statsCortes[f] = {};
+          Object.entries(perfiles).forEach(([pId, data]) => {
+            const b = data.base === 999999 ? 0 : data.base;
+            const netos = {
+              'Ma\u00f1ana': Math.max(0, (data['Ma\u00f1ana'] || b) - b),
+              'Tarde': Math.max(0, (data['Tarde'] || Math.max(data['Ma\u00f1ana'], b)) - Math.max(data['Ma\u00f1ana'], b)),
+              'Noche': Math.max(0, (data['Noche'] || Math.max(data['Tarde'], data['Ma\u00f1ana'], b)) - Math.max(data['Tarde'], data['Ma\u00f1ana'], b))
+            };
+            Object.entries(netos).forEach(([turno, pts]) => {
+              if (pts < 0.1) return;
+              const op = operatorsData.find(o => (o.turno||'').toLowerCase() === turno.toLowerCase() && (o.profiles||[]).some(p => String(p.id) === pId));
+              if (op) statsCortes[f][op.name] = (statsCortes[f][op.name] || 0) + pts;
+            });
+          });
+        });
+
+        const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
+        let changed = false;
+        Object.entries(statsCortes).forEach(([f, ops]) => {
+          Object.entries(ops).forEach(([name, pts]) => {
+            const ya = (cortesObj[name] || []).filter(c => c.fecha === f && c.novedades?.includes('Laser')).reduce((s,c)=>s+(Number(c.puntos)||0),0);
+            if (pts - ya > 0.1) {
+              if(!cortesObj[name]) cortesObj[name]=[];
+              cortesObj[name].push({ id: 'LSR_'+f+'_'+Date.now(), fecha: f, puntos: Number((pts-ya).toFixed(2)), novedades: `Laser Sync 6AM`, timestamp: Date.now() });
+              changed = true;
+            }
+          });
+        });
+
+        if (changed) {
+          localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
+          saveData();
+          try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }); } catch(e){}
+          if (typeof loadData === 'function') loadData();
+          if (typeof renderRanking === 'function') renderRanking();
+          if (typeof renderOperators === 'function') renderOperators();
+          console.log("[Bridge] Laser Sync 6 AM Exitoso.");
+        }
+      } catch (err) { console.error("[Bridge Error]", err); }
     }
 
     function asiEliminarRegistro(idx) {
@@ -13174,217 +13306,55 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (e.target === document.getElementById('modal-historial')) asiCerrarHistorial();
     });
 
-    // =====================================================================
-    // ⚡ CYBERPUNK BRIDGE: SINCRONIZADOR DE DATAME RELACIONAL ⚡
-    // =====================================================================
-    async function sincronizarDatameRelacional() {
-      if (typeof _sb === 'undefined' || !operatorsData) return;
-      const payloadLoader = document.getElementById('rr-boot-msg');
-      if (payloadLoader) payloadLoader.innerText = "Sincronizando HOY (Laser Sync)...";
-
-      try {
-        console.log("[Bridge] Iniciando Laser Sync (v10) - Ojo de Halcón...");
-        
-        // 1. Extraer Perfiles y Catálogo
-        const { data: perfilesAsignados } = await _sb.from('perfiles_asignados').select('*').range(0, 2000);
-        const { data: catOperadores } = await _sb.from('operadores_v3').select('*').range(0, 1000);
-        
-        // 2. Extraer Operaciones (Rango Ampliado v19.3 — Marzo en adelante)
-        const rangeStart = '2026-03-01T00:00:00';
-        const { data: operaciones, error } = await _sb.from('operaciones')
-          .select('id_perfil, puntos, fecha_corte')
-          .filter('fecha_corte', 'gte', rangeStart)
-          .order('fecha_corte', { ascending: false })
-          .range(0, 5000);
-
-        if (error) { console.error("[Bridge Error] Laser Sync:", error); return; }
-        if (!operaciones || !perfilesAsignados || !catOperadores) return;
-
-        console.log(`[Bridge] Laser Sync Histórico: ${operaciones.length} registros desde Marzo.`);
-
-        // 3. ULTRA-MATCHER v15 (Word Bag + Hard Match)
-        const idToNameMap = {};
-        catOperadores.forEach(o => {
-          const dbNameNorm = _normName(o.nombre_real);
-          
-          // HARD-MATCH DE RESCATE v15
-          if (dbNameNorm.includes("ESPERANZA") && dbNameNorm.includes("JIMENEZ")) {
-             const uiE = operatorsData.find(u => u.name.includes("ESPERANZA") && u.name.includes("JIMENEZ"));
-             if (uiE) { idToNameMap[o.id] = uiE.name; return; }
-          }
-          if (dbNameNorm.includes("LUIS") && dbNameNorm.includes("FELIPE") && dbNameNorm.includes("JAIMES")) {
-             const uiL = operatorsData.find(u => u.name.includes("LUIS") && u.name.includes("FELIPE"));
-             if (uiL) { idToNameMap[o.id] = uiL.name; return; }
-          }
-
-          const uiOp = operatorsData.find(ui => {
-            const uiWords = _normName(ui.name).split(' ').filter(w => w.length > 2);
-            const dbWords = dbNameNorm.split(' ').filter(w => w.length > 2);
-            if (uiWords.length === 0 || dbWords.length === 0) return false;
-            const matches = uiWords.filter(w => dbWords.some(dw => dw === w || dw.startsWith(w) || w.startsWith(dw)));
-            const ratio = matches.length / Math.max(uiWords.length, 1);
-            const reverseMatches = dbWords.filter(dw => uiWords.some(w => w === dw || w.startsWith(dw) || dw.startsWith(w)));
-            const reverseRatio = reverseMatches.length / Math.max(dbWords.length, 1);
-            return (ratio > 0.5) || (reverseRatio > 0.5);
-          });
-          idToNameMap[o.id] = uiOp ? uiOp.name : o.nombre_real;
-        });
-
-        // 4. AGRUPACIÓN DINÁMICA POR TURNO (v19.4 - Shift Division Edition)
-        const statsCortes = {}; // statsCortes[fecha][owner] = suma_pts
-        const profilesByShift = {}; // profilesByShift[fecha][pId][shift] = { max: pts, hora: str }
-        
-        operaciones.forEach(op => {
-          const f = op.fecha_corte.split('T')[0];
-          const hora = op.fecha_corte.split('T')[1]?.substring(0, 5) || "00:00";
-          const jornada = _jornadaDeHora(hora);
-          const pId = String(op.id_perfil);
-          
-          if (!profilesByShift[f]) profilesByShift[f] = {};
-          if (!profilesByShift[f][pId]) profilesByShift[f][pId] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
-          
-          if (Number(op.puntos) > (profilesByShift[f][pId][jornada] || 0)) {
-             profilesByShift[f][pId][jornada] = Number(op.puntos);
-          }
-        });
-
-        // 5. CÁLCULO DE PUNTOS NETOS Y ASIGNACIÓN AL DUEÑO DEL TURNO
-        Object.entries(profilesByShift).forEach(([f, perfiles]) => {
-          if (!statsCortes[f]) statsCortes[f] = {};
-          
-          Object.entries(perfiles).forEach(([pId, shifts]) => {
-            // Calcular puntos netos por turno (restando el acumulado del turno anterior)
-            // Se asume el orden: Mañana -> Tarde -> Noche
-            const ptsManana = shifts['Mañana'] || 0;
-            const ptsTarde  = Math.max(0, (shifts['Tarde'] || 0) - ptsManana);
-            const ptsNoche  = Math.max(0, (shifts['Noche'] || 0) - Math.max(shifts['Tarde'] || 0, ptsManana));
-            
-            const netos = { 'Mañana': ptsManana, 'Tarde': ptsTarde, 'Noche': ptsNoche };
-
-            // Buscar al operador correcto para cada turno que tenga este perfil asignado
-            Object.entries(netos).forEach(([turno, ptsNetos]) => {
-              if (ptsNetos <= 0.1) return;
-              
-              const ownerOp = operatorsData.find(o => 
-                (o.turno || '').toLowerCase() === turno.toLowerCase() && 
-                (o.profiles || []).some(p => String(p.id) === pId)
-              );
-              
-              if (ownerOp) {
-                if (!statsCortes[f][ownerOp.name]) statsCortes[f][ownerOp.name] = 0;
-                statsCortes[f][ownerOp.name] += ptsNetos;
-              }
-            });
-          });
-        });
-
-        // 6. INYECCIÓN DIFERENCIAL (Historial vs Supabase)
-        const hoyStr = localDateStr();
-        const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
-        let changesMade = false;
-
-        Object.entries(statsCortes).forEach(([f, opsData]) => {
-          Object.entries(opsData).forEach(([opName, totalDatame]) => {
-            if (!cortesObj[opName]) cortesObj[opName] = [];
-            
-            const yaInyectado = (cortesObj[opName] || [])
-              .filter(c => c.fecha === f && c.novedades?.includes('Laser'))
-              .reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-
-            const diferencia = totalDatame - yaInyectado;
-            if (diferencia > 0.1) {
-              cortesObj[opName].push({
-                id: 'laser_hist_' + f + '_' + Date.now(),
-                fecha: f,
-                puntos: Number(diferencia.toFixed(2)),
-                novedades: `Laser Sync Histórico (${f})`,
-                timestamp: Date.now()
-              });
-              changesMade = true;
-            }
-          });
-        });
-
-        if (changesMade) {
-          localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
-          saveData(); 
-          try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }); } catch(e){}
-          if (typeof loadData === 'function') loadData();
-          if (typeof renderRanking === 'function') renderRanking();
-          if (typeof renderOperators === 'function') renderOperators();
-          // ── Refrescar Dashboard del Operador si está activo ──
-          if (currentRole === 'operador' && currentOpName && typeof renderOpDashboard === 'function') {
-            renderOpDashboard(currentOpName);
-          }
-          console.log("[Bridge] 🟢 Laser Sync Histórico v19.3.1 Exitoso.");
-        }
-
-      } catch (err) { console.error("[Bridge Error]", err); }
-    }
-
-    // --- UI PARA HISTORIAL DIARIO (v18.9) ---
+    // --- UI HISTORIAL DIARIO ---
     function showDailyHistory() {
       const history = JSON.parse(localStorage.getItem(HISTORY_DAYS_KEY) || '{}');
       const container = document.getElementById('history-content');
       const modal = document.getElementById('modal-history');
-      
+      if (!container || !modal) return;
       const dates = Object.keys(history).sort().reverse();
       if (dates.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:40px;color:#475569;">No hay días grabados todavía. El sistema grabará el rendimiento al finalizar la jornada.</div>';
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;">Sin registros previos en memoria.</div>';
       } else {
         container.innerHTML = dates.map(date => {
           const opsData = history[date];
-          const totalTags = Object.keys(opsData).length;
           const totalPts = Object.values(opsData).reduce((s, p) => s + p, 0);
-          return `
-            <div class="history-day-card" style="margin-bottom:15px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:15px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:8px;">
-                <span style="font-weight:900;color:#5eead4;letter-spacing:1px;">📅 ${date}</span>
-                <span style="font-size:0.75rem;color:#94a3b8;">${totalTags} operadores · ${totalPts.toFixed(1)} pts total</span>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                ${Object.entries(opsData).sort((a,b)=>b[1]-a[1]).map(([name, pts]) => `
-                  <div style="font-size:0.7rem;color:#e2e8f0;display:flex;justify-content:space-between;">
-                    <span style="opacity:0.7;">${name}</span>
-                    <strong style="color:#34d399;">${pts.toFixed(1)}</strong>
-                  </div>
-                `).join('')}
-              </div>
-            </div>`;
+          return `<div class="history-day-card" style="margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
+            <div style="font-weight:900;color:#2dd4bf;margin-bottom:5px;">\ud83d\udcc5 ${date} <span style="float:right;color:#94a3b8;font-size:0.7rem;">${totalPts.toFixed(1)} pts</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+              ${Object.entries(opsData).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([n,p])=>`<div style="font-size:0.65rem;color:#f1f5f9;">${n}: <span style="color:#5eead4;">${p.toFixed(1)}</span></div>`).join('')}
+            </div>
+          </div>`;
         }).join('');
       }
       modal.classList.add('open');
     }
-
-    function closeDailyHistory() {
-      document.getElementById('modal-history').classList.remove('open');
-    }
+    function closeDailyHistory() { document.getElementById('modal-history').classList.remove('open'); }
 
     // --- RELLENO DEL BRIDGE ---
     setTimeout(() => { sincronizarDatameRelacional(); }, 3000);
-    setInterval(sincronizarDatameRelacional, 180000);
+    setInterval(sincronizarDatameRelacional, 300000);
 
   </script>
 
   <!-- PANEL DE ESTADÍSTICAS GLOBAL (TOOLTIP INFALIBLE) -->
   <div class="rkinfo-tooltip" id="crec-tooltip-panel"></div>
 
-  <!-- MODAL HISTORIAL DIARIO -->
+  <!-- MODAL HISTORIAL DIARIO (SNC) -->
   <div id="modal-history" class="modal">
-    <div class="modal-content" style="max-width:600px; max-height:80vh; display:flex; flex-direction:column;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:2px solid #5eead4;padding-bottom:10px;">
-        <h2 style="margin:0;color:#5eead4;letter-spacing:2px;font-size:1.2rem;">🕰️ HISTORIAL DE DÍAS (SNC)</h2>
-        <button class="close-btn" onclick="closeDailyHistory()">✕</button>
+    <div class="modal-content" style="max-width:500px; background:#0f172a; border: 1px solid rgba(45, 212, 191, 0.2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px; border-bottom: 1px solid rgba(45, 212, 191, 0.2); padding-bottom: 10px;">
+        <h2 style="margin:0;color:#2dd4bf;font-size:1.1rem; letter-spacing: 1px;">\ud83d\udd52 HISTORIAL DIARIO (SNC)</h2>
+        <button class="close-btn" onclick="closeDailyHistory()">\u2715</button>
       </div>
-      <div id="history-content" style="flex:1;overflow-y:auto;padding-right:10px;">
+      <div id="history-content" style="max-height:60vh; overflow-y:auto; padding-right:5px;">
         <!-- Inyectado por JS -->
       </div>
-      <div style="margin-top:20px;font-size:0.65rem;color:#475569;text-align:center;font-style:italic;">
-        El historial guarda los puntos acumulados por cada operador durante el día. Se limpia automáticamente después de 60 días para optimizar memoria.
+      <div style="margin-top:15px; font-size:0.6rem; color:#475569; text-align:center; font-style:italic;">
+        Los datos se graban autom\u00e1ticamente al cierre de cada jornada.
       </div>
     </div>
   </div>
 
 </body>
-
 </html>

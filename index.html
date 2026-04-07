@@ -6822,8 +6822,20 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     // ── Realtime: escucha cambios de otros PCs al instante ──────────
+    let _laserSyncTimer = null;
+    function _debouncedLaserSync() {
+      if (_laserSyncTimer) clearTimeout(_laserSyncTimer);
+      _laserSyncTimer = setTimeout(() => {
+        if (typeof sincronizarDatameRelacional === 'function') {
+          sincronizarDatameRelacional();
+        }
+      }, 5000); // 5s debounce: esperar a que el scraper termine su ráfaga
+    }
+
     function _sbRealtime() {
       if (!_sb) return;
+
+      // 1. Canal KV_STORE (Configuraciones y datos corregidos)
       _sb.channel('kv_store_changes')
         .on('postgres_changes',
           { event: '*', schema: 'public', table: 'kv_store' },
@@ -6896,6 +6908,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             if (_sbOnline) { _sbOnline = false; _toastSync('🔴 Realtime desconectado', true); }
           }
         });
+
+      // 2. Canal OPERACIONES (Detección instantánea de puntos Datame)
+      _sb.channel('operaciones_changes')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'operaciones' },
+          () => { 
+            console.log("[Bridge] ⚡ Cambio detectado en Datame Supabase -> Disparando Laser Sync...");
+            _debouncedLaserSync(); 
+          }
+        )
+        .subscribe();
     }
 
     // ── Override localStorage.setItem → también escribe en Supabase ─
@@ -13269,6 +13292,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (typeof loadData === 'function') loadData();
           if (typeof renderRanking === 'function') renderRanking();
           if (typeof renderOperators === 'function') renderOperators();
+          // ── Refrescar Dashboard del Operador si está activo ──
+          if (currentRole === 'operador' && currentOpName && typeof renderOpDashboard === 'function') {
+            renderOpDashboard(currentOpName);
+          }
           console.log("[Bridge] 🟢 Laser Sync Histórico v19.3.1 Exitoso.");
         }
 

@@ -13230,35 +13230,55 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           idToNameMap[o.id] = uiOp ? uiOp.name : o.nombre_real;
         });
 
-        // 4. AGRUPACIÓN DINÁMICA DE HOY
-        // 4. AGRUPACIÓN MULTIFECHA v19.3.1 (Laser Sync Evolution)
+        // 4. AGRUPACIÓN DINÁMICA POR TURNO (v19.4 - Shift Division Edition)
         const statsCortes = {}; // statsCortes[fecha][owner] = suma_pts
-        const latestPerDay = {}; // latestPerDay[fecha][pId] = max_pts
-
+        const profilesByShift = {}; // profilesByShift[fecha][pId][shift] = { max: pts, hora: str }
+        
         operaciones.forEach(op => {
           const f = op.fecha_corte.split('T')[0];
+          const hora = op.fecha_corte.split('T')[1]?.substring(0, 5) || "00:00";
+          const jornada = _jornadaDeHora(hora);
           const pId = String(op.id_perfil);
-          if (!latestPerDay[f]) latestPerDay[f] = {};
-          if (!latestPerDay[f][pId] || Number(op.puntos) > latestPerDay[f][pId]) {
-            latestPerDay[f][pId] = Number(op.puntos) || 0;
+          
+          if (!profilesByShift[f]) profilesByShift[f] = {};
+          if (!profilesByShift[f][pId]) profilesByShift[f][pId] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
+          
+          if (Number(op.puntos) > (profilesByShift[f][pId][jornada] || 0)) {
+             profilesByShift[f][pId][jornada] = Number(op.puntos);
           }
         });
 
-        Object.entries(latestPerDay).forEach(([f, perfiles]) => {
+        // 5. CÁLCULO DE PUNTOS NETOS Y ASIGNACIÓN AL DUEÑO DEL TURNO
+        Object.entries(profilesByShift).forEach(([f, perfiles]) => {
           if (!statsCortes[f]) statsCortes[f] = {};
-          Object.entries(perfiles).forEach(([pId, pts]) => {
-            const pa = perfilesAsignados.find(p => String(p.id_perfil) === pId);
-            if (pa) {
-              const owner = idToNameMap[pa.id_operador_actual];
-              if (owner) {
-                if (!statsCortes[f][owner]) statsCortes[f][owner] = 0;
-                statsCortes[f][owner] += pts;
+          
+          Object.entries(perfiles).forEach(([pId, shifts]) => {
+            // Calcular puntos netos por turno (restando el acumulado del turno anterior)
+            // Se asume el orden: Mañana -> Tarde -> Noche
+            const ptsManana = shifts['Mañana'] || 0;
+            const ptsTarde  = Math.max(0, (shifts['Tarde'] || 0) - ptsManana);
+            const ptsNoche  = Math.max(0, (shifts['Noche'] || 0) - Math.max(shifts['Tarde'] || 0, ptsManana));
+            
+            const netos = { 'Mañana': ptsManana, 'Tarde': ptsTarde, 'Noche': ptsNoche };
+
+            // Buscar al operador correcto para cada turno que tenga este perfil asignado
+            Object.entries(netos).forEach(([turno, ptsNetos]) => {
+              if (ptsNetos <= 0.1) return;
+              
+              const ownerOp = operatorsData.find(o => 
+                (o.turno || '').toLowerCase() === turno.toLowerCase() && 
+                (o.profiles || []).some(p => String(p.id) === pId)
+              );
+              
+              if (ownerOp) {
+                if (!statsCortes[f][ownerOp.name]) statsCortes[f][ownerOp.name] = 0;
+                statsCortes[f][ownerOp.name] += ptsNetos;
               }
-            }
+            });
           });
         });
 
-        // 5. INYECCIÓN DIFERENCIAL (Historial vs Supabase)
+        // 6. INYECCIÓN DIFERENCIAL (Historial vs Supabase)
         const hoyStr = localDateStr();
         const cortesObj = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
         let changesMade = false;

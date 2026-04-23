@@ -3464,6 +3464,45 @@
       border-radius: 12px;
       text-align: center;
     }
+
+    /* ── PANELES DATAME ──────────────────────────────────── */
+    #datame-panels-wrap { display:none; max-width:1200px; margin:0 auto 20px; padding:0 16px; }
+    .dp-panel-tabs { display:flex; gap:6px; flex-wrap:wrap; padding:10px 14px 0; }
+    .dp-tab {
+      padding:5px 14px; border-radius:20px; font-size:.72rem; font-weight:700;
+      cursor:pointer; border:1px solid rgba(45,212,191,.3);
+      background:rgba(45,212,191,.05); color:#5eead4;
+      transition:all .2s;
+    }
+    .dp-tab.active { background:rgba(45,212,191,.2); border-color:#2dd4bf; color:#2dd4bf; }
+    .dp-grid {
+      display:grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap:10px; padding:14px;
+    }
+    .dp-card {
+      background:rgba(255,255,255,.03); border:1px solid rgba(45,212,191,.12);
+      border-radius:12px; padding:12px 14px;
+      transition:border-color .3s, box-shadow .3s;
+    }
+    .dp-card:hover { border-color:rgba(45,212,191,.4); box-shadow:0 0 12px rgba(45,212,191,.1); }
+    .dp-card-name { font-size:.72rem; font-weight:700; color:#e2e8f0; margin-bottom:4px; }
+    .dp-card-id { font-size:.6rem; color:#475569; }
+    .dp-card-pts { font-size:1.3rem; font-weight:900; color:#2dd4bf; margin-top:6px; line-height:1; }
+    .dp-card-cop { font-size:.65rem; color:#34d399; margin-top:2px; }
+    .dp-card-ts  { font-size:.58rem; color:#475569; margin-top:4px; }
+    .dp-card.updated { border-color:#2dd4bf; box-shadow:0 0 16px rgba(45,212,191,.25); }
+    .dp-total-bar {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 14px; border-top:1px solid rgba(255,255,255,.05);
+      font-size:.72rem; color:#94a3b8;
+    }
+    @keyframes dp-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .dp-live-dot {
+      width:7px; height:7px; border-radius:50%; background:#2dd4bf;
+      display:inline-block; margin-right:5px;
+      animation:dp-pulse 2s infinite;
+    }
   </style>
 </head>
 
@@ -3901,6 +3940,44 @@
           <span id="rk-psa-chevron" style="color:#64748b;font-size:.8rem;">▼</span>
         </div>
         <div id="rk-psa-body" style="display:none;padding:0 16px 14px;"></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════
+         PANELES DATAME — Vista en tiempo real (monitor/admin)
+         ════════════════════════════════════════════════════════ -->
+    <div id="datame-panels-wrap">
+      <div style="background:var(--panel);border:1px solid rgba(45,212,191,.2);border-radius:16px;overflow:hidden;">
+
+        <!-- Header colapsable -->
+        <div onclick="toggleDatamePanels()" id="datame-panels-header"
+          style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;cursor:pointer;background:rgba(45,212,191,.06);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="dp-live-dot"></span>
+            <span style="font-weight:700;font-size:.9rem;color:#2dd4bf;">⚡ Paneles Datame</span>
+            <span id="dp-total-badge"
+              style="background:rgba(45,212,191,.15);color:#2dd4bf;padding:2px 10px;border-radius:8px;font-size:.7rem;font-weight:700;">— pts</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="dp-last-update" style="font-size:.6rem;color:#475569;">Cargando...</span>
+            <button onclick="event.stopPropagation();sincronizarDatamePaneles()" title="Forzar actualización"
+              style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:8px;padding:3px 10px;font-size:.65rem;cursor:pointer;">↻ Sync</button>
+            <span id="dp-chevron" style="color:#2dd4bf;font-size:.85rem;transition:.3s;">▼</span>
+          </div>
+        </div>
+
+        <!-- Body -->
+        <div id="datame-panels-body" style="display:none;">
+          <!-- Tabs de paneles -->
+          <div class="dp-panel-tabs" id="dp-tabs-row"></div>
+          <!-- Grid de perfiles -->
+          <div class="dp-grid" id="dp-perfiles-grid"></div>
+          <!-- Barra totales -->
+          <div class="dp-total-bar">
+            <span>Total panel activo: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong></span>
+            <span><strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -13554,6 +13631,190 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // --- RELLENO DEL BRIDGE ---
     setTimeout(() => { sincronizarDatameRelacional(); }, 3000);
     setInterval(sincronizarDatameRelacional, 300000);
+
+    // ══════════════════════════════════════════════════════════════
+    // VISTA PANELES DATAME — tiempo real desde Supabase
+    // ══════════════════════════════════════════════════════════════
+    const DP_PANELS_META = [
+      { id: 1, nombre: 'PANEL-1', color: '#f59e0b' },
+      { id: 2, nombre: 'PANEL-2', color: '#2dd4bf' },
+      { id: 3, nombre: 'PANEL-3', color: '#818cf8' },
+      { id: 4, nombre: 'PANEL-4', color: '#f472b6' },
+    ];
+    // Mapa local de perfiles (sincronizado con Supabase)
+    const DP_PERFILES_MAP = {
+      1: [{ id:'91360720', modelo:'SANDRA' }],
+      2: [
+        { id:'95956014',  modelo:'PABLO' }, { id:'91733663',  modelo:'DANIEL' },
+        { id:'153039388', modelo:'AGUSTIN FERNANDO' }, { id:'95955130',  modelo:'HECTOR' },
+        { id:'103289167', modelo:'LUIS' }, { id:'98389135',  modelo:'RAUL' },
+        { id:'98540781',  modelo:'LEANDRO' }, { id:'157067734', modelo:'VALDEMIR' },
+        { id:'103291980', modelo:'ARMANDO' }, { id:'130431310', modelo:'RAFAEL' },
+        { id:'151070498', modelo:'VALQUIMAR' }, { id:'143014129', modelo:'RENEE' },
+        { id:'156716207', modelo:'AGNALDO' },
+      ],
+      3: [
+        { id:'88243516',  modelo:'RICARDO' }, { id:'79679899',  modelo:'NORBERTO' },
+        { id:'118692242', modelo:'FRANCISCO' }, { id:'109551682', modelo:'RENATO' },
+        { id:'108018336', modelo:'LUCAS' }, { id:'118179794', modelo:'HORACIO' },
+        { id:'130338853', modelo:'IVALDO' }, { id:'137163229', modelo:'SEBASTIAN' },
+        { id:'120720195', modelo:'MARCOS' }, { id:'139247498', modelo:'DAMIAN' },
+        { id:'139245989', modelo:'ALFREDO' }, { id:'120275229', modelo:'GERMAN' },
+        { id:'156881990', modelo:'RALPH' }, { id:'130422416', modelo:'RAONI' },
+        { id:'143017065', modelo:'MARIO' }, { id:'145211163', modelo:'FERMIN' },
+        { id:'145834230', modelo:'MURILO' }, { id:'145844971', modelo:'RODRIGO' },
+        { id:'157112125', modelo:'LUIS' },
+      ],
+      4: [
+        { id:'131130713', modelo:'LUIS JOAO' }, { id:'138130329', modelo:'AGUSTIN' },
+        { id:'133085188', modelo:'MARCOS ANTONIO' }, { id:'144863124', modelo:'FERNANDO' },
+      ],
+    };
+
+    let _dpActivePanelId = 2; // Panel activo por defecto
+    let _dpPuntosData    = {}; // { id_perfil: { puntos, fecha_corte } }
+    let _dpPanelOpen     = false;
+    let _dpRealtimeSub   = null;
+
+    function toggleDatamePanels() {
+      _dpPanelOpen = !_dpPanelOpen;
+      const body = document.getElementById('datame-panels-body');
+      const chev = document.getElementById('dp-chevron');
+      if (body) body.style.display = _dpPanelOpen ? 'block' : 'none';
+      if (chev) chev.style.transform = _dpPanelOpen ? 'rotate(180deg)' : '';
+      if (_dpPanelOpen && Object.keys(_dpPuntosData).length === 0) sincronizarDatamePaneles();
+    }
+
+    function dpSetPanel(panelId) {
+      _dpActivePanelId = panelId;
+      document.querySelectorAll('.dp-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.pid) === panelId));
+      dpRenderGrid();
+    }
+
+    function dpRenderTabs() {
+      const row = document.getElementById('dp-tabs-row');
+      if (!row) return;
+      row.innerHTML = DP_PANELS_META.map(p => `
+        <button class="dp-tab ${p.id === _dpActivePanelId ? 'active' : ''}" data-pid="${p.id}"
+          onclick="dpSetPanel(${p.id})"
+          style="border-color:${p.color}33;color:${p.color};">
+          ${p.nombre}
+          <span style="font-size:.6rem;opacity:.7;margin-left:4px;">${(DP_PERFILES_MAP[p.id]||[]).length} perfiles</span>
+        </button>`).join('');
+    }
+
+    function dpRenderGrid() {
+      const grid  = document.getElementById('dp-perfiles-grid');
+      const panel = DP_PANELS_META.find(p => p.id === _dpActivePanelId);
+      const perfs = DP_PERFILES_MAP[_dpActivePanelId] || [];
+      if (!grid || !panel) return;
+
+      let totalPts = 0;
+      grid.innerHTML = perfs.map(p => {
+        const d = _dpPuntosData[p.id] || {};
+        const pts = d.puntos || 0;
+        const cop = Math.round(pts * 1400).toLocaleString('es-CO');
+        const ts  = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
+        totalPts += pts;
+        return `
+        <div class="dp-card" id="dp-card-${p.id}">
+          <div class="dp-card-name">${p.modelo}</div>
+          <div class="dp-card-id">ID: ${p.id}</div>
+          <div class="dp-card-pts">${pts > 0 ? pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
+          <div class="dp-card-cop">${pts > 0 ? '$'+cop+' COP' : ''}</div>
+          <div class="dp-card-ts">${pts > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
+        </div>`;
+      }).join('');
+
+      // Actualizar totales
+      const totalCop = Math.round(totalPts * 1400).toLocaleString('es-CO');
+      const ptsEl = document.getElementById('dp-panel-total-pts');
+      const copEl = document.getElementById('dp-panel-total-cop');
+      if (ptsEl) ptsEl.textContent = totalPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
+      if (copEl) copEl.textContent = '$' + totalCop + ' COP';
+
+      // Badge global
+      const allPts = Object.values(_dpPuntosData).reduce((s,d)=>s+(d.puntos||0),0);
+      const badge = document.getElementById('dp-total-badge');
+      if (badge) badge.textContent = allPts.toLocaleString('es-CO',{minimumFractionDigits:0}) + ' pts totales';
+    }
+
+    async function sincronizarDatamePaneles() {
+      if (typeof _sb === 'undefined') return;
+      const tsEl = document.getElementById('dp-last-update');
+      if (tsEl) tsEl.textContent = '⏳ Cargando...';
+
+      try {
+        // Obtener todos los IDs de todos los paneles
+        const allIds = Object.values(DP_PERFILES_MAP).flat().map(p => p.id);
+
+        // Fecha de inicio del mes actual
+        const mesStart = localDateStr().slice(0,7) + '-01';
+
+        const { data: ops, error } = await _sb
+          .from('operaciones')
+          .select('id_perfil, puntos, fecha_corte')
+          .in('id_perfil', allIds)
+          .gte('fecha_corte', mesStart + 'T00:00:00')
+          .order('fecha_corte', { ascending: false });
+
+        if (error) { console.error('[DP] Error Supabase:', error); return; }
+
+        // Guardar el registro más reciente por perfil
+        const nuevosDatos = {};
+        (ops || []).forEach(op => {
+          if (!nuevosDatos[op.id_perfil]) {
+            nuevosDatos[op.id_perfil] = { puntos: op.puntos, fecha_corte: op.fecha_corte };
+          }
+        });
+
+        // Detectar cambios y animar
+        Object.entries(nuevosDatos).forEach(([id, d]) => {
+          const prev = _dpPuntosData[id]?.puntos || 0;
+          if (d.puntos !== prev) {
+            const card = document.getElementById('dp-card-' + id);
+            if (card) { card.classList.add('updated'); setTimeout(()=>card.classList.remove('updated'), 3000); }
+          }
+        });
+
+        _dpPuntosData = nuevosDatos;
+        dpRenderGrid();
+
+        const now2 = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+        if (tsEl) tsEl.textContent = '🛰️ Sync: ' + now2;
+
+      } catch(e) { console.error('[DP] Excepción:', e); }
+    }
+
+    function dpIniciarRealtime() {
+      if (typeof _sb === 'undefined' || _dpRealtimeSub) return;
+      _dpRealtimeSub = _sb
+        .channel('datame-operaciones-rt')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' },
+          (payload) => {
+            console.log('[DP] 🔴 Cambio en operaciones detectado — actualizando panel...');
+            sincronizarDatamePaneles();
+          })
+        .subscribe();
+      console.log('[DP] Realtime activado en tabla operaciones');
+    }
+
+    function dpMostrarWrap() {
+      const wrap = document.getElementById('datame-panels-wrap');
+      if (wrap && (currentRole === 'monitor' || currentRole === 'admin')) {
+        wrap.style.display = 'block';
+        dpRenderTabs();
+        dpIniciarRealtime();
+        sincronizarDatamePaneles();
+      } else if (wrap) {
+        wrap.style.display = 'none';
+      }
+    }
+
+    // Inicializar después de que cargue el rol
+    const _dpOrigLoadData = typeof loadData === 'function' ? loadData : null;
+    setTimeout(dpMostrarWrap, 4000);
+    setInterval(sincronizarDatamePaneles, 300000); // Refresh cada 5 min
 
   </script>
 

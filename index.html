@@ -13295,23 +13295,15 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const loader = document.getElementById('rr-boot-msg');
       if (loader) loader.innerText = "Sincronizando (Amanecer 6 AM)...";
 
-      // --- CONFIGURACIÓN DE PANELES DATAME ---
-      const perfiles_panel_1 = [
-        '95956014', '91733663', '153039388', '95955130',
-        '103289167', '98389135', '98540781', '157067734',
-        '103291980', '130431310', '151070498', '143014129' // Se dejó lista la matriz
-      ];
-      const perfiles_panel_2 = []; // Reservado para futuro panel 2
-      const perfiles_panel_3 = []; // Reservado para futuro panel 3
-
-      // Unimos los perfiles de los tres paneles
-      const perfiles_activos = [...perfiles_panel_1, ...perfiles_panel_2, ...perfiles_panel_3];
+      // --- EXTRACCIÓN DINÁMICA DE PERFILES DATAME ---
+      // Obtenemos todos los IDs inyectados en la matriz estática operatorsData
+      const perfiles_activos = operatorsData.flatMap(op => (op.profiles || []).map(p => String(p.id)));
 
       try {
         const { data: catOperadores } = await _sb.from('operadores_v3').select('*').range(0, 1000);
         const { data: operaciones, error } = await _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
-          .filter('fecha_corte', 'gte', '2026-03-01T00:00:00')
+          .filter('fecha_corte', 'gte', '2026-02-01T00:00:00')
           .in('id_perfil', perfiles_activos)
           .order('fecha_corte', { ascending: true }) // ASC para capturar base primero
           .range(0, 5000);
@@ -13385,19 +13377,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const prevText = loader ? loader.innerText : '';
       if (loader) loader.innerText = "🤖 Corriendo Test Datame...";
       
-      // Panel 1
-      const perfiles_panel_1 = ['95956014', '91733663', '153039388', '95955130', '103289167', '98389135', '98540781', '157067734', '103291980', '130431310', '151070498', '143014129'];
-      const perfiles_panel_2 = [];
-      const perfiles_panel_3 = [];
-      
-      const perfiles_activos = [...perfiles_panel_1, ...perfiles_panel_2, ...perfiles_panel_3];
+      // --- EXTRACCIÓN DINÁMICA DE PERFILES DATAME ---
+      // Mapeamos dinámicamente los 40+ perfiles de Datame en la base
+      const perfiles_activos = operatorsData.flatMap(op => (op.profiles || []).map(p => String(p.id)));
       console.log(`[Test Datame] 📡 Perfiles activos a buscar: ${perfiles_activos.length}`);
 
       try {
-        console.log("[Test Datame] ⏳ Consultando tabla 'operaciones' en Supabase desde 2026-03-01...");
+        console.log("[Test Datame] ⏳ Consultando tabla 'operaciones' en Supabase desde 2026-02-01...");
         const { data: operaciones, error } = await _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
-          .filter('fecha_corte', 'gte', '2026-03-01T00:00:00')
+          .filter('fecha_corte', 'gte', '2026-02-01T00:00:00')
           .in('id_perfil', perfiles_activos)
           .order('fecha_corte', { ascending: true })
           .range(0, 5000);

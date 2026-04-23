@@ -14,9 +14,11 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const now = new Date();
-const START_DATE = process.env.START_DATE || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+// Por defecto: desde 2026-02-01 para capturar TODO el historial desde el inicio
+const START_DATE = process.env.START_DATE || '2026-02-01';
 const END_DATE   = process.env.END_DATE   || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-console.log(`\x1b[35m [WARP] Período: ${START_DATE} → ${END_DATE} \x1b[0m`);
+console.log(`\x1b[35m [WARP] Período: ${START_DATE} \u2192 ${END_DATE} \x1b[0m`);
+
 
 // ═══════════════════════════════════════════════════════════════
 // Función: scrape de UN panel

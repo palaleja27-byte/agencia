@@ -13745,42 +13745,47 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        // Obtener todos los IDs de todos los paneles
+        // Todos los IDs de todos los paneles
         const allIds = Object.values(DP_PERFILES_MAP).flat().map(p => p.id);
 
-        // Fecha de inicio del mes actual
-        const mesStart = localDateStr().slice(0,7) + '-01';
+        // 🗓️ Desde el inicio del año (Feb 2026) para tener historial completo
+        const FECHA_INICIO_HISTORICO = '2026-02-01T00:00:00';
 
         const { data: ops, error } = await _sb
           .from('operaciones')
-          .select('id_perfil, puntos, fecha_corte')
+          .select('id_perfil, puntos, fecha_corte, agencia')
           .in('id_perfil', allIds)
-          .gte('fecha_corte', mesStart + 'T00:00:00')
-          .order('fecha_corte', { ascending: false });
+          .gte('fecha_corte', FECHA_INICIO_HISTORICO)
+          .order('fecha_corte', { ascending: false });  // más reciente primero
 
         if (error) { console.error('[DP] Error Supabase:', error); return; }
 
-        // Guardar el registro más reciente por perfil
+        // Guardar el registro más reciente por perfil (ya viene ordenado desc)
         const nuevosDatos = {};
         (ops || []).forEach(op => {
           if (!nuevosDatos[op.id_perfil]) {
-            nuevosDatos[op.id_perfil] = { puntos: op.puntos, fecha_corte: op.fecha_corte };
+            // Primer registro = el más reciente por este perfil
+            nuevosDatos[op.id_perfil] = {
+              puntos:      op.puntos,
+              fecha_corte: op.fecha_corte,
+              agencia:     op.agencia
+            };
           }
         });
 
-        // Detectar cambios y animar
+        // Detectar cambios y animar cards
         Object.entries(nuevosDatos).forEach(([id, d]) => {
           const prev = _dpPuntosData[id]?.puntos || 0;
           if (d.puntos !== prev) {
             const card = document.getElementById('dp-card-' + id);
-            if (card) { card.classList.add('updated'); setTimeout(()=>card.classList.remove('updated'), 3000); }
+            if (card) { card.classList.add('updated'); setTimeout(() => card.classList.remove('updated'), 3000); }
           }
         });
 
         _dpPuntosData = nuevosDatos;
         dpRenderGrid();
 
-        const now2 = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+        const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
         if (tsEl) tsEl.textContent = '🛰️ Sync: ' + now2;
 
       } catch(e) { console.error('[DP] Excepción:', e); }

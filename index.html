@@ -3492,6 +3492,44 @@
     .dp-card-cop { font-size:.65rem; color:#34d399; margin-top:2px; }
     .dp-card-ts  { font-size:.58rem; color:#475569; margin-top:4px; }
     .dp-card.updated { border-color:#2dd4bf; box-shadow:0 0 16px rgba(45,212,191,.25); }
+
+    /* Cards expandibles con desglose de turnos */
+    .dp-card-header {
+      display:flex; align-items:flex-start; justify-content:space-between;
+      cursor:pointer;
+    }
+    .dp-card-expand-btn {
+      font-size:.55rem; color:#475569; background:none; border:none;
+      cursor:pointer; padding:2px 4px; margin-top:-2px;
+      transition:transform .2s;
+    }
+    .dp-card.expanded .dp-card-expand-btn { transform:rotate(180deg); }
+    .dp-card-detail {
+      display:none; margin-top:10px;
+      border-top:1px solid rgba(255,255,255,.06); padding-top:8px;
+    }
+    .dp-card.expanded .dp-card-detail { display:block; }
+    .dp-turno-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:3px 0; font-size:.62rem;
+    }
+    .dp-turno-label { color:#94a3b8; }
+    .dp-turno-pts { font-weight:700; color:#e2e8f0; }
+    .dp-turno-pts.manana { color:#fbbf24; }
+    .dp-turno-pts.tarde  { color:#f472b6; }
+    .dp-turno-pts.noche  { color:#818cf8; }
+    .dp-dias-title {
+      font-size:.58rem; color:#475569; text-transform:uppercase;
+      letter-spacing:.6px; margin:8px 0 4px;
+    }
+    .dp-dia-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:2px 0; font-size:.6rem;
+    }
+    .dp-dia-fecha { color:#475569; }
+    .dp-dia-neto  { color:#2dd4bf; font-weight:700; }
+    .dp-dia-neto.zero { color:#334155; }
+
     .dp-total-bar {
       display:flex; align-items:center; justify-content:space-between;
       padding:8px 14px; border-top:1px solid rgba(255,255,255,.05);
@@ -13671,8 +13709,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       ],
     };
 
-    let _dpActivePanelId = 2; // Panel activo por defecto
-    let _dpPuntosData    = {}; // { id_perfil: { puntos, fecha_corte } }
+    let _dpActivePanelId = 2;
+    let _dpPuntosData    = {}; // { id_perfil: { puntos, puntos_neto, fecha_corte } }
+    let _dpTurnosData    = {}; // { id_perfil: { 'Mañana': pts, 'Tarde': pts, 'Noche': pts } }
+    let _dpHistorialData = {}; // { id_perfil: [ { fecha_dia, neto_dia } ] }
     let _dpPanelOpen     = false;
     let _dpRealtimeSub   = null;
 
@@ -13711,22 +13751,58 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       let totalPts = 0;
       grid.innerHTML = perfs.map(p => {
-        const d = _dpPuntosData[p.id] || {};
-        const pts = d.puntos || 0;
-        const cop = Math.round(pts * 1400).toLocaleString('es-CO');
-        const ts  = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
-        totalPts += pts;
+        const d    = _dpPuntosData[p.id] || {};
+        const pts  = d.puntos_neto || d.puntos || 0;  // preferir neto acumulado
+        const cop  = Math.round(pts * 1400).toLocaleString('es-CO');
+        const ts   = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
+        totalPts  += pts;
+
+        // Desglose de turnos (datos del día actual)
+        const turnos   = _dpTurnosData[p.id] || {};
+        const manana   = (turnos['Mañana'] || 0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
+        const tarde    = (turnos['Tarde']  || 0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
+        const noche    = (turnos['Noche']  || 0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
+        const hayTurnos = (turnos['Mañana'] || turnos['Tarde'] || turnos['Noche']) > 0;
+
+        // Últimos 7 días
+        const historial  = (_dpHistorialData[p.id] || []).slice(0, 7);
+        const diasHtml   = historial.length > 0
+          ? historial.map(h => {
+              const f   = new Date(h.fecha_dia + 'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
+              const n   = (h.neto_dia || 0);
+              const cls = n > 0 ? '' : ' zero';
+              return `<div class="dp-dia-row">
+                <span class="dp-dia-fecha">${f}</span>
+                <span class="dp-dia-neto${cls}">${n > 0 ? '+' + n.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</span>
+              </div>`;
+            }).join('')
+          : '<div style="font-size:.58rem;color:#334155;">Sin historial aún</div>';
+
         return `
         <div class="dp-card" id="dp-card-${p.id}">
-          <div class="dp-card-name">${p.modelo}</div>
-          <div class="dp-card-id">ID: ${p.id}</div>
-          <div class="dp-card-pts">${pts > 0 ? pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
-          <div class="dp-card-cop">${pts > 0 ? '$'+cop+' COP' : ''}</div>
-          <div class="dp-card-ts">${pts > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
+          <div class="dp-card-header" onclick="dpToggleCard('${p.id}')">
+            <div>
+              <div class="dp-card-name">${p.modelo}</div>
+              <div class="dp-card-id">ID: ${p.id}</div>
+              <div class="dp-card-pts">${pts > 0 ? pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
+              <div class="dp-card-cop">${pts > 0 ? '$'+cop+' COP' : ''}</div>
+              <div class="dp-card-ts">${pts > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
+            </div>
+            <button class="dp-card-expand-btn">▼</button>
+          </div>
+          <div class="dp-card-detail">
+            ${ hayTurnos ? `
+            <div style="font-size:.58rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">🕐 Hoy por turno</div>
+            <div class="dp-turno-row"><span class="dp-turno-label">🌅 Mañana</span><span class="dp-turno-pts manana">${manana} pts</span></div>
+            <div class="dp-turno-row"><span class="dp-turno-label">🌇 Tarde</span><span class="dp-turno-pts tarde">${tarde} pts</span></div>
+            <div class="dp-turno-row"><span class="dp-turno-label">🌙 Noche</span><span class="dp-turno-pts noche">${noche} pts</span></div>` : '<div style="font-size:.58rem;color:#334155;">Sin datos de turno hoy</div>'}
+            <div class="dp-dias-title">📆 Últimos días</div>
+            ${diasHtml}
+          </div>
         </div>`;
       }).join('');
 
-      // Actualizar totales
+      // Totales del panel
       const totalCop = Math.round(totalPts * 1400).toLocaleString('es-CO');
       const ptsEl = document.getElementById('dp-panel-total-pts');
       const copEl = document.getElementById('dp-panel-total-cop');
@@ -13734,9 +13810,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (copEl) copEl.textContent = '$' + totalCop + ' COP';
 
       // Badge global
-      const allPts = Object.values(_dpPuntosData).reduce((s,d)=>s+(d.puntos||0),0);
+      const allPts = Object.values(_dpPuntosData).reduce((s,d)=>s+(d.puntos_neto||d.puntos||0),0);
       const badge = document.getElementById('dp-total-badge');
       if (badge) badge.textContent = allPts.toLocaleString('es-CO',{minimumFractionDigits:0}) + ' pts totales';
+    }
+
+    function dpToggleCard(id) {
+      const card = document.getElementById('dp-card-' + id);
+      if (card) card.classList.toggle('expanded');
     }
 
     async function sincronizarDatamePaneles() {
@@ -13745,35 +13826,60 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        // Todos los IDs de todos los paneles
         const allIds = Object.values(DP_PERFILES_MAP).flat().map(p => p.id);
-
-        // 🗓️ Desde el inicio del año (Feb 2026) para tener historial completo
         const FECHA_INICIO_HISTORICO = '2026-02-01T00:00:00';
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); // YYYY-MM-DD
 
+        // 1. Traer TODOS los registros desde Feb 2026
         const { data: ops, error } = await _sb
           .from('operaciones')
-          .select('id_perfil, puntos, fecha_corte, agencia')
+          .select('id_perfil, puntos, puntos_neto, fecha_corte, fecha_dia, jornada, agencia')
           .in('id_perfil', allIds)
           .gte('fecha_corte', FECHA_INICIO_HISTORICO)
-          .order('fecha_corte', { ascending: false });  // más reciente primero
+          .order('fecha_corte', { ascending: false });
 
         if (error) { console.error('[DP] Error Supabase:', error); return; }
 
-        // Guardar el registro más reciente por perfil (ya viene ordenado desc)
+        // 2. Procesar datos: más reciente por perfil, turnos de hoy, historial
         const nuevosDatos = {};
+        const turnosHoy   = {};
+        const historialMap= {};
+        const diasNeto    = {}; // { id_perfil: { fecha_dia: neto_acum } }
+
         (ops || []).forEach(op => {
-          if (!nuevosDatos[op.id_perfil]) {
-            // Primer registro = el más reciente por este perfil
-            nuevosDatos[op.id_perfil] = {
+          const id = op.id_perfil;
+
+          // Registro más reciente (ya viene desc)
+          if (!nuevosDatos[id]) {
+            nuevosDatos[id] = {
               puntos:      op.puntos,
+              puntos_neto: op.puntos_neto || op.puntos,
               fecha_corte: op.fecha_corte,
               agencia:     op.agencia
             };
           }
+
+          // Turnos del día de HOY
+          if (op.fecha_dia === hoy && op.jornada && op.jornada !== 'Auto') {
+            if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
+            turnosHoy[id][op.jornada] = (op.puntos_neto || 0);
+          }
+
+          // Acumular neto por día para historial
+          if (op.fecha_dia) {
+            if (!diasNeto[id]) diasNeto[id] = {};
+            diasNeto[id][op.fecha_dia] = (diasNeto[id][op.fecha_dia] || 0) + (op.puntos_neto || 0);
+          }
         });
 
-        // Detectar cambios y animar cards
+        // Convertir diasNeto a array ordenado desc para historial
+        Object.entries(diasNeto).forEach(([id, dias]) => {
+          historialMap[id] = Object.entries(dias)
+            .sort(([a],[b]) => b.localeCompare(a))
+            .map(([fecha_dia, neto_dia]) => ({ fecha_dia, neto_dia }));
+        });
+
+        // 3. Animar cards con cambios
         Object.entries(nuevosDatos).forEach(([id, d]) => {
           const prev = _dpPuntosData[id]?.puntos || 0;
           if (d.puntos !== prev) {
@@ -13782,7 +13888,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           }
         });
 
-        _dpPuntosData = nuevosDatos;
+        _dpPuntosData    = nuevosDatos;
+        _dpTurnosData    = turnosHoy;
+        _dpHistorialData = historialMap;
         dpRenderGrid();
 
         const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });

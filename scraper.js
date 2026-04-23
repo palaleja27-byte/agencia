@@ -20,9 +20,22 @@ const END_DATE   = process.env.END_DATE   || new Date(now.getFullYear(), now.get
 console.log(`\x1b[35m [WARP] Período: ${START_DATE} \u2192 ${END_DATE} \x1b[0m`);
 
 
-// ═══════════════════════════════════════════════════════════════
-// Función: scrape de UN panel
-// ═══════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// 🕐 DETECTOR DE JORNADA — Basado en hora Colombia (UTC-5)
+// ════════════════════════════════════════════════════════════
+function detectarJornada() {
+  const hora = new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' });
+  const h = parseInt(hora);
+  if (h >= 6  && h < 14) return 'Mañana';
+  if (h >= 14 && h < 22) return 'Tarde';
+  return 'Noche';
+}
+
+// Fecha de hoy en Colombia
+function fechaHoyColombia() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); // YYYY-MM-DD
+}
+
 async function scrapePanel(panel, perfiles) {
   const { nombre, email, password } = panel;
   console.log(`\n\x1b[36m ═══ ${nombre} (${email}) | ${perfiles.length} perfiles ═══ \x1b[0m`);
@@ -102,14 +115,35 @@ async function scrapePanel(panel, perfiles) {
         console.log(`\x1b[32m  [✓] ${p.modelo.padEnd(20)} ID:${p.id_datame} → ${pts} pts\x1b[0m`);
         results.push({ ...p, puntos: pts });
 
-        // Upsert en Supabase
+        // ─── Guardar en Supabase con jornada + día ───────────────
+        const jornada  = detectarJornada();
+        const fechaDia = fechaHoyColombia();
+        const tsAhora  = new Date().toISOString();
+
+        // Leer el registro anterior del mismo turno+día para calcular neto
+        const { data: prevRec } = await supabase
+          .from('operaciones')
+          .select('puntos, puntos_neto')
+          .eq('id_perfil', p.id_datame)
+          .eq('fecha_dia', fechaDia)
+          .eq('jornada', jornada)
+          .maybeSingle();
+
+        const ptsPrev  = prevRec?.puntos || 0;
+        const neto     = Math.max(0, pts - ptsPrev);
+
         const { error } = await supabase.from('operaciones').upsert({
-          id_perfil:   p.id_datame,
-          agencia:     nombre,
-          puntos:      pts,
-          fecha_corte: END_DATE + 'T23:59:00'
-        }, { onConflict: 'id_perfil,fecha_corte' });
+          id_perfil:    p.id_datame,
+          agencia:      nombre,
+          puntos:       pts,
+          puntos_neto:  prevRec ? (prevRec.puntos_neto || 0) + neto : pts,
+          fecha_corte:  tsAhora,
+          fecha_dia:    fechaDia,
+          jornada:      jornada,
+        }, { onConflict: 'id_perfil,fecha_dia,jornada' });
         if (error) console.error(`  [DB ERR] ${p.modelo}:`, error.message);
+        else console.log(`  [DB] ${p.modelo} jornada:${jornada} neto:${neto.toFixed(2)} pts`);
+
 
       } catch (err) {
         console.error(`\x1b[31m  [ERR] ${p.modelo}: ${err.message}\x1b[0m`);

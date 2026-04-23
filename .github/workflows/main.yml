@@ -1,22 +1,32 @@
-name: Datame Auto-Scraper — Multi-Panel
+name: Datame Multi-Panel — Watcher + Scraper
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # Cada 2 horas automáticamente
-  workflow_dispatch: 
+    # Watcher: corre cada 6 horas (vive 5.5h por dentro, luego muere y se reinicia)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
     inputs:
+      mode:
+        description: 'Modo: watcher (tiempo real) o scraper (histórico)'
+        required: false
+        default: 'watcher'
+        type: choice
+        options:
+          - watcher
+          - scraper
       start_date:
-        description: 'Fecha Inicio (AAAA-MM-DD)'
+        description: 'Solo para scraper — Fecha Inicio (AAAA-MM-DD)'
         required: false
         default: '2026-02-01'
       end_date:
-        description: 'Fecha Fin (AAAA-MM-DD)'
+        description: 'Solo para scraper — Fecha Fin (AAAA-MM-DD)'
         required: false
         default: ''
 
 jobs:
-  run-bot:
+  run-datame:
     runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 horas máximo por job
     steps:
       - name: Descargar Código
         uses: actions/checkout@v3
@@ -26,13 +36,29 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Instalar Playwright y Supabase
+      - name: Instalar dependencias
         run: |
           npm init -y
           npm install playwright @supabase/supabase-js
           npx playwright install --with-deps chromium
-          
-      - name: Ejecutar Extracción Multi-Panel
+
+      - name: Ejecutar en Modo Watcher (por defecto)
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.mode == 'watcher' }}
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PANEL1_USER:          ${{ secrets.PANEL1_USER }}
+          PANEL1_PASS:          ${{ secrets.PANEL1_PASS }}
+          PANEL2_USER:          ${{ secrets.PANEL2_USER }}
+          PANEL2_PASS:          ${{ secrets.PANEL2_PASS }}
+          PANEL3_USER:          ${{ secrets.PANEL3_USER }}
+          PANEL3_PASS:          ${{ secrets.PANEL3_PASS }}
+          PANEL4_USER:          ${{ secrets.PANEL4_USER }}
+          PANEL4_PASS:          ${{ secrets.PANEL4_PASS }}
+        run: node watcher.js
+
+      - name: Ejecutar en Modo Scraper (histórico manual)
+        if: ${{ github.event.inputs.mode == 'scraper' }}
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -48,10 +74,10 @@ jobs:
           END_DATE:             ${{ github.event.inputs.end_date }}
         run: node scraper.js
 
-      - name: Subir Evidencias (todos los paneles)
+      - name: Subir evidencias (siempre)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-screenshots
+          name: debug-screenshots-${{ github.run_id }}
           path: debug_*.png
           retention-days: 3

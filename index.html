@@ -13827,29 +13827,46 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       try {
         const allIds = Object.values(DP_PERFILES_MAP).flat().map(p => p.id);
-        const FECHA_INICIO_HISTORICO = '2026-02-01T00:00:00';
-        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); // YYYY-MM-DD
+        const FECHA_INICIO = '2026-02-01T00:00:00';
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 
-        // 1. Traer TODOS los registros desde Feb 2026
-        const { data: ops, error } = await _sb
+        // ── Intento 1: columnas nuevas (requiere SQL migration) ─────
+        let ops = null;
+        let modoCompleto = false;
+        const { data: opsNuevo, error: errNuevo } = await _sb
           .from('operaciones')
           .select('id_perfil, puntos, puntos_neto, fecha_corte, fecha_dia, jornada, agencia')
           .in('id_perfil', allIds)
-          .gte('fecha_corte', FECHA_INICIO_HISTORICO)
+          .gte('fecha_corte', FECHA_INICIO)
           .order('fecha_corte', { ascending: false });
 
-        if (error) { console.error('[DP] Error Supabase:', error); return; }
+        if (!errNuevo && opsNuevo) {
+          ops = opsNuevo;
+          modoCompleto = true;
+          console.log('[DP] Modo completo (con jornada/días)');
+        } else {
+          // ── Fallback: columnas básicas (siempre disponibles) ──────
+          console.warn('[DP] Fallback a columnas básicas — ejecuta update_operaciones_jornada.sql en Supabase');
+          const { data: opsFallback, error: errFallback } = await _sb
+            .from('operaciones')
+            .select('id_perfil, puntos, fecha_corte, agencia')
+            .in('id_perfil', allIds)
+            .gte('fecha_corte', FECHA_INICIO)
+            .order('fecha_corte', { ascending: false });
+          if (errFallback) { console.error('[DP] Error crítico:', errFallback); return; }
+          ops = opsFallback;
+        }
 
-        // 2. Procesar datos: más reciente por perfil, turnos de hoy, historial
+        // ── Procesar registros ───────────────────────────────────────
         const nuevosDatos = {};
         const turnosHoy   = {};
         const historialMap= {};
-        const diasNeto    = {}; // { id_perfil: { fecha_dia: neto_acum } }
+        const diasNeto    = {};
 
         (ops || []).forEach(op => {
           const id = op.id_perfil;
 
-          // Registro más reciente (ya viene desc)
+          // Registro más reciente por perfil
           if (!nuevosDatos[id]) {
             nuevosDatos[id] = {
               puntos:      op.puntos,
@@ -13859,27 +13876,38 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             };
           }
 
-          // Turnos del día de HOY
-          if (op.fecha_dia === hoy && op.jornada && op.jornada !== 'Auto') {
-            if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
-            turnosHoy[id][op.jornada] = (op.puntos_neto || 0);
-          }
-
-          // Acumular neto por día para historial
-          if (op.fecha_dia) {
-            if (!diasNeto[id]) diasNeto[id] = {};
-            diasNeto[id][op.fecha_dia] = (diasNeto[id][op.fecha_dia] || 0) + (op.puntos_neto || 0);
+          if (modoCompleto) {
+            // Turnos del día de hoy
+            if (op.fecha_dia === hoy && op.jornada && op.jornada !== 'Auto') {
+              if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
+              turnosHoy[id][op.jornada] = (op.puntos_neto || 0);
+            }
+            // Historial por día
+            if (op.fecha_dia) {
+              if (!diasNeto[id]) diasNeto[id] = {};
+              diasNeto[id][op.fecha_dia] = (diasNeto[id][op.fecha_dia] || 0) + (op.puntos_neto || 0);
+            }
+          } else {
+            // Fallback: usar fecha_corte como agrupador de día
+            const fdStr = op.fecha_corte ? op.fecha_corte.slice(0, 10) : null;
+            if (fdStr) {
+              if (!diasNeto[id]) diasNeto[id] = {};
+              // En modo fallback, el valor ya es el total — lo guardamos para mostrar cronología
+              if (!diasNeto[id][fdStr] || op.puntos > diasNeto[id][fdStr]) {
+                diasNeto[id][fdStr] = op.puntos;
+              }
+            }
           }
         });
 
-        // Convertir diasNeto a array ordenado desc para historial
+        // Convertir diasNeto a historial ordenado desc
         Object.entries(diasNeto).forEach(([id, dias]) => {
           historialMap[id] = Object.entries(dias)
             .sort(([a],[b]) => b.localeCompare(a))
             .map(([fecha_dia, neto_dia]) => ({ fecha_dia, neto_dia }));
         });
 
-        // 3. Animar cards con cambios
+        // Animar cards con cambios
         Object.entries(nuevosDatos).forEach(([id, d]) => {
           const prev = _dpPuntosData[id]?.puntos || 0;
           if (d.puntos !== prev) {
@@ -13894,12 +13922,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         dpRenderGrid();
 
         const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-        if (tsEl) tsEl.textContent = '🛰️ Sync: ' + now2;
+        const modo = modoCompleto ? '🛰️' : '⚠️';
+        if (tsEl) tsEl.textContent = `${modo} Sync: ${now2}${modoCompleto ? '' : ' (modo básico)'}`;
 
       } catch(e) { console.error('[DP] Excepción:', e); }
     }
 
     function dpIniciarRealtime() {
+
       if (typeof _sb === 'undefined' || _dpRealtimeSub) return;
       _dpRealtimeSub = _sb
         .channel('datame-operaciones-rt')

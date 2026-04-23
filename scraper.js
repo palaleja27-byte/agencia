@@ -1,201 +1,252 @@
 const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 
-// 🛡️ SECURITY CHECK: Validar que existan las llaves en los Secrets de GitHub
-const { SUPABASE_URL, SUPABASE_SERVICE_KEY, DATAME_USERNAME, DATAME_PASSWORD } = process.env;
+// ═══════════════════════════════════════════════════════════════
+// ⚡ CYBER-SCRAPE PROTOCOL 2026 — MULTI-PANEL EDITION ⚡
+// Agencia RR: 4 Paneles | Infiltración Total Activada
+// ═══════════════════════════════════════════════════════════════
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !DATAME_USERNAME || !DATAME_PASSWORD) {
-  console.error("❌ ERROR CRÍTICO: Faltan variables de entorno (Secrets).");
-  console.error("Asegúrate de configurar SUPABASE_URL, SUPABASE_SERVICE_KEY, DATAME_USERNAME y DATAME_PASSWORD en los Settings del repositorio.");
+const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  console.error('❌ ERROR CRÍTICO: Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY.');
   process.exit(1);
 }
-
-// Conexión con privilegios de administrador usando GitHub Secrets
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// 🚀 LISTA DE IDs FILTRADA (Basada en la imagen de Datame para pruebas)
-const PERFILES_AGENCIA = [
-  95956014,  // PABLO
-  91733663,  // DANIEL (DANIEL 68)
-  138130329, // AGUSTIN
-  144863124, // FERNANDO
-  95955130,  // HECTOR
-  98389135,  // RAUL
-  98540781,  // LEANDRO
-  103291980, // ARMANDO
-  130431310, // RAFAEL
-  143014129  // RENEE
-  // VALQUIMAR y LUIS DAROSA (Pendientes de ID para agregar)
-]; 
-/**
- * ⚡ CYBER-SCRAPE PROTOCOL 2026 ⚡
- * Agencia RR: Infiltración Temporal Activada
- */
-(async () => {
-  console.log("\n\x1b[36m [SYSTEM] INICIANDO SECUENCIA DE INFILTRACIÓN CYBERPUNK... \x1b[0m");
-  
+// ── Rango de fechas ──────────────────────────────────────────
+const now = new Date();
+const START_DATE = process.env.START_DATE || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+const END_DATE   = process.env.END_DATE   || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+console.log(`\x1b[35m [WARP] Período objetivo: ${START_DATE} → ${END_DATE} \x1b[0m`);
+
+// ── Definición de los 4 Paneles con sus perfiles ─────────────
+const PANELS = [
+  {
+    name: 'PANEL-1 (thinkedagency)',
+    user: process.env.PANEL1_USER,
+    pass: process.env.PANEL1_PASS,
+    perfiles: [
+      { id: '91360720', modelo: 'SANDRA' },
+    ]
+  },
+  {
+    name: 'PANEL-2 (thinkedagency2)',
+    user: process.env.PANEL2_USER,
+    pass: process.env.PANEL2_PASS,
+    perfiles: [
+      { id: '95956014',  modelo: 'PABLO' },
+      { id: '91733663',  modelo: 'DANIEL' },
+      { id: '153039388', modelo: 'AGUSTIN FERNANDO' },
+      { id: '95955130',  modelo: 'HECTOR' },
+      { id: '103289167', modelo: 'LUIS' },
+      { id: '98389135',  modelo: 'RAUL' },
+      { id: '98540781',  modelo: 'LEANDRO' },
+      { id: '157067734', modelo: 'VALDEMIR' },
+      { id: '103291980', modelo: 'ARMANDO' },
+      { id: '130431310', modelo: 'RAFAEL' },
+      { id: '151070498', modelo: 'VALQUIMAR' },
+      { id: '143014129', modelo: 'RENEE' },
+      { id: '156716207', modelo: 'AGNALDO' },
+    ]
+  },
+  {
+    name: 'PANEL-3 (Nuevopaneladmi4)',
+    user: process.env.PANEL3_USER,
+    pass: process.env.PANEL3_PASS,
+    perfiles: [
+      { id: '88243516',  modelo: 'RICARDO' },
+      { id: '79679899',  modelo: 'NORBERTO' },
+      { id: '118692242', modelo: 'FRANCISCO' },
+      { id: '109551682', modelo: 'RENATO' },
+      { id: '108018336', modelo: 'LUCAS' },
+      { id: '118179794', modelo: 'HORACIO' },
+      { id: '130338853', modelo: 'IVALDO' },
+      { id: '137163229', modelo: 'SEBASTIAN' },
+      { id: '120720195', modelo: 'MARCOS' },
+      { id: '139247498', modelo: 'DAMIAN' },
+      { id: '139245989', modelo: 'ALFREDO' },
+      { id: '120275229', modelo: 'GERMAN' },
+      { id: '156881990', modelo: 'RALPH' },
+      { id: '130422416', modelo: 'RAONI' },
+      { id: '143017065', modelo: 'MARIO' },
+      { id: '145211163', modelo: 'FERMIN' },
+      { id: '145834230', modelo: 'MURILO' },
+      { id: '145844971', modelo: 'RODRIGO' },
+      { id: '157112125', modelo: 'LUIS' },
+    ]
+  },
+  {
+    name: 'PANEL-4 (Ameliapenaloza40)',
+    user: process.env.PANEL4_USER,
+    pass: process.env.PANEL4_PASS,
+    perfiles: [
+      { id: '131130713', modelo: 'LUIS JOAO' },
+      { id: '138130329', modelo: 'AGUSTIN' },
+      { id: '133085188', modelo: 'MARCOS ANTONIO' },
+      { id: '144863124', modelo: 'FERNANDO' },
+    ]
+  }
+];
+
+// ═══════════════════════════════════════════════════════════════
+// 🔧 FUNCIÓN: Extraer puntos de UN panel completo
+// ═══════════════════════════════════════════════════════════════
+async function scrapePanel(panelDef) {
+  const { name, user, pass, perfiles } = panelDef;
+
+  if (!user || !pass) {
+    console.error(`\x1b[31m [SKIP] ${name}: Sin credenciales. Configura los Secrets en GitHub. \x1b[0m`);
+    return [];
+  }
+
+  console.log(`\n\x1b[36m ═══ INICIANDO ${name} ═══ \x1b[0m`);
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
-  const page = await context.newPage(); // 🛰️ RADAR XHR MULTI-CAPA (Radar de Red)
+  const page    = await context.newPage();
+
+  // 🛰️ Radar XHR — escuchar respuestas de la red
+  const capturedData = {}; // { id_perfil: pts_acumulado }
   page.on('response', async (response) => {
-    const resUrl = response.url();
-    if (response.request().resourceType() === 'fetch' || response.request().resourceType() === 'xhr') {
-      try {
-        const json = await response.json();
-        let dataList = Array.isArray(json) ? json : (json.data || json.result || [json]);
-        if (!Array.isArray(dataList)) dataList = [dataList];
+    const rType = response.request().resourceType();
+    if (rType !== 'fetch' && rType !== 'xhr') return;
+    try {
+      const json = await response.json();
+      let dataList = Array.isArray(json) ? json : (json.data || json.result || [json]);
+      if (!Array.isArray(dataList)) dataList = [dataList];
+      for (const item of dataList) {
+        const rawPts = item.bonuses || item.total || item.points || item.amount || 0;
+        const pts    = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
+        if (pts <= 0) continue;
 
-        for (const item of dataList) {
-          // --- LIMPIEZA DE DIVISAS ---
-          const rawPuntos = item.bonuses || item.total || item.points || item.amount || 0;
-          const cleanPuntos = String(rawPuntos).replace(/[^\d.]/g, ''); 
-          const puntos = parseFloat(cleanPuntos);
-          
-          if (puntos > 0) {
-            console.log("\x1b[35m [DEBUG] Analizando objeto con puntos. Buscando ID... \x1b[0m");
-            
-            // 🔍 ESTRATEGIA 1: Buscar ID en la URL (Muy común en Datame)
-            let id = null;
-            const urlMatch = resUrl.match(/\d{8,9}/); // Busca 8 o 9 dígitos seguidos en la URL
-            if (urlMatch) {
-              id = parseInt(urlMatch[0]);
-              console.log(`\x1b[35m [DEBUG] ID detectado en la URL: ${id} \x1b[0m`);
-            }
-
-            // 🔍 ESTRATEGIA 2: Si no hay en URL, buscar cualquier número largo en el objeto
-            if (!id || id < 10000) {
-                const fullString = JSON.stringify(item);
-                const stringMatch = fullString.match(/\d{8,9}/);
-                if (stringMatch) {
-                   id = parseInt(stringMatch[0]);
-                   console.log(`\x1b[35m [DEBUG] ID detectado en el contenido: ${id} \x1b[0m`);
-                }
-            }
-
-            // 🛡️ REFUERZO: Si fallan las anteriores, intentar los campos conocidos
-            if (!id) {
-                id = parseInt(item.member_id || item.member_profile_id || item.profile_id || item.id_profile || item.id || item.user_id);
-            }
-
-            const agencia = item.member || item.agency || 'Agencia RR';
-
-            if (id > 10000 && !isNaN(id)) {
-              console.log(`\x1b[32m [✓] MATCH: Perfil ${id} | Puntos: ${puntos} \x1b[0m`);
-              
-              await supabase.from('operaciones').upsert({
-                id_perfil: id,
-                agencia: agencia,
-                puntos: puntos,
-                fecha_corte: new Date().toISOString()
-              }, { onConflict: 'id_perfil, fecha_corte' });
-            } else {
-              console.log("\x1b[33m [WARN] Puntos detectados pero no pudimos identificar a quién pertenecen. \x1b[0m");
-            }
-          }
+        // Buscar ID en URL primero, luego en el objeto
+        let id = null;
+        const urlMatch = response.url().match(/\d{8,9}/);
+        if (urlMatch) id = urlMatch[0];
+        if (!id) {
+          const strMatch = JSON.stringify(item).match(/\d{8,9}/);
+          if (strMatch) id = strMatch[0];
         }
-      } catch (e) {} 
-    }
+        if (!id) {
+          id = String(item.member_id || item.member_profile_id || item.profile_id || item.id || '');
+        }
+        if (id && id.length >= 7) {
+          const prev = capturedData[id] || 0;
+          if (pts > prev) capturedData[id] = pts;
+          console.log(`\x1b[32m [XHR✓] ID ${id} → ${pts} pts \x1b[0m`);
+        }
+      }
+    } catch (_) {}
   });
 
+  const results = [];
   try {
-      // 1. LOGIN PROTOCOL
-      console.log("\x1b[33m [LINK] Accediendo a la Terminal Central... \x1b[0m");
-      await page.goto('https://datame.cloud/login');
+    // 1. LOGIN
+    console.log(`\x1b[33m [AUTH] Accediendo como ${user}... \x1b[0m`);
+    await page.goto('https://datame.cloud/login', { waitUntil: 'networkidle', timeout: 30000 });
+    const userSel = 'input[type="text"], input[type="email"], input[name="username"]';
+    await page.waitForSelector(userSel, { timeout: 15000 });
+    await page.fill(userSel, user);
+    await page.fill('input[type="password"]', pass);
+    await page.click('button.q-btn, button:has-text("LOG IN"), .q-btn__content')
+              .catch(() => page.press('input[type="password"]', 'Enter'));
+    await page.waitForTimeout(7000);
 
-      if (!process.env.DATAME_USERNAME || !process.env.DATAME_PASSWORD) {
-          console.error("❌ ERROR: CREDENCIALES NO ENCONTRADAS EN LA MATRIZ.");
-          process.exit(1);
+    // 2. NAVEGAR A ESTADÍSTICAS
+    console.log(`\x1b[33m [NAV] → statistics \x1b[0m`);
+    await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(5000);
+
+    // 3. INYECTAR FECHAS
+    await page.evaluate(({ start, end }) => {
+      const inputs = document.querySelectorAll('input[type="text"], input.q-field__native');
+      if (inputs.length >= 2) {
+        inputs[0].value = start; inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+        inputs[1].value = end;   inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
       }
+    }, { start: START_DATE, end: END_DATE });
+    await page.waitForTimeout(1500);
 
-      const userSelector = 'input[type="text"], input[type="email"], input[name="username"]';
-      await page.waitForSelector(userSelector, { timeout: 15000 });
-      await page.type(userSelector, process.env.DATAME_USERNAME, { delay: 50 });
-      await page.type('input[type="password"]', process.env.DATAME_PASSWORD, { delay: 50 });
-      
-      console.log("\x1b[36m [AUTH] Ejecutando Handshake... \x1b[0m");
-      await page.click('button.q-btn, button:has-text("LOG IN"), .q-btn__content', { timeout: 8000 })
-                .catch(() => page.press('input[type="password"]', 'Enter'));
-
-      await page.waitForTimeout(6000);
-
-      // 2. TIME-TRAVEL PROTOCOL (Cálculo de fechas - Soporta Históricos)
-      const now = new Date();
-      // Si existen variables de entorno, las usamos (para Febrero/Marzo), si no, mes actual.
-      const dateStart = process.env.START_DATE || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]; 
-      const dateEnd   = process.env.END_DATE || new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-      
-      console.log(`\x1b[35m [WARP] Sincronizando Período: ${dateStart} -> ${dateEnd} \x1b[0m`);
-
-      // 3. DATA EXTRACTION IN STATS
-      console.log("\x1b[33m [NAVEGACIÓN] Re-direccionando a /statistics... \x1b[0m");
-      await page.goto(`https://datame.cloud/statistics`);
-      await page.waitForTimeout(6000);
-
-      console.log("\x1b[33m [FILTRO] Inyectando Fechas de Búsqueda... \x1b[0m");
-      await page.evaluate(({start, end}) => {
-          const inputs = document.querySelectorAll('input[type="text"], input.q-field__native');
-          if (inputs.length >= 2) {
-              inputs[0].value = start;
-              inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-              inputs[1].value = end;
-              inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+    // 4. ITERAR PERFILES
+    for (const perfil of perfiles) {
+      console.log(`\n\x1b[35m [SCAN] Perfil ${perfil.modelo} (${perfil.id}) \x1b[0m`);
+      try {
+        await page.evaluate((idVal) => {
+          const allInputs = Array.from(document.querySelectorAll('input'));
+          let target = allInputs.find(i =>
+            (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
+            (i.placeholder || '').toLowerCase().includes('profile') ||
+            (i.closest('label') && i.closest('label').innerText.toLowerCase().includes('profile'))
+          );
+          if (!target && allInputs.length >= 3) target = allInputs[2];
+          if (target) {
+            target.value = idVal;
+            target.dispatchEvent(new Event('input',  { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
           }
-      }, { start: dateStart, end: dateEnd });
+        }, perfil.id);
+        await page.waitForTimeout(800);
+        await page.click('button:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 6000 }).catch(() => {});
+        await page.waitForTimeout(5000);
 
-      await page.waitForTimeout(1500);
-      
-      const perfilesABuscar = PERFILES_AGENCIA.length > 0 ? PERFILES_AGENCIA : [''];
+        // Leer puntos del DOM como fallback
+        const domPts = await page.evaluate(() => {
+          const nums = Array.from(document.querySelectorAll('[class*="total"], [class*="points"], [class*="score"], td, .text-h6, .text-h5'))
+            .map(el => parseFloat(el.innerText.replace(/[^\d.]/g, '')))
+            .filter(n => n > 0 && n < 500000);
+          return nums.length > 0 ? Math.max(...nums) : 0;
+        });
 
-      for (let i = 0; i < perfilesABuscar.length; i++) {
-        const idPerfil = String(perfilesABuscar[i]);
-        console.log(`\n\x1b[35m [SCAN] Analizando Perfil ${i+1}/${perfilesABuscar.length}: [${idPerfil}] \x1b[0m`);
+        const xhrPts  = capturedData[perfil.id] || 0;
+        const finalPts = Math.max(xhrPts, domPts);
+        console.log(`\x1b[32m [OK] ${perfil.modelo} → XHR:${xhrPts} DOM:${domPts} → FINAL: ${finalPts} \x1b[0m`);
+        results.push({ id: perfil.id, modelo: perfil.modelo, puntos: finalPts, panel: name });
 
-        if (idPerfil !== '') {
-          try {
-            await page.evaluate((idValue) => {
-              const allInputs = Array.from(document.querySelectorAll('input'));
-              let targetInput = allInputs.find(i => 
-                (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') || 
-                (i.placeholder || '').toLowerCase().includes('profile') ||
-                (i.closest('label') && i.closest('label').innerText.toLowerCase().includes('profile'))
-              );
-              
-              if (!targetInput && allInputs.length >= 3) {
-                  targetInput = allInputs[2];
-              }
+        // Persistir en Supabase
+        await supabase.from('operaciones').upsert({
+          id_perfil:   parseInt(perfil.id),
+          agencia:     name,
+          puntos:      finalPts,
+          fecha_corte: END_DATE + 'T23:59:00'
+        }, { onConflict: 'id_perfil,fecha_corte' });
 
-              if (targetInput) {
-                  targetInput.value = idValue;
-                  targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-                  targetInput.dispatchEvent(new Event('change', { bubbles: true }));
-              }
-            }, idPerfil);
-          } catch (e) {
-            console.error("\x1b[31m [WARN] No se pudo escribir en la casilla Member's profile \x1b[0m", e);
-          }
-          await page.waitForTimeout(800);
-        }
-
-        // Disparamos el clic en el botón SHOW
-        await page.click('button:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 8000 }).catch(() => {});
-        
-        // Esperamos para que la red responda el XHR de este perfil
-        await page.waitForTimeout(4000);
+      } catch (err) {
+        console.error(`\x1b[31m [ERR] ${perfil.modelo}: ${err.message} \x1b[0m`);
+        results.push({ id: perfil.id, modelo: perfil.modelo, puntos: 0, panel: name, error: err.message });
       }
+    }
 
-      console.log("\x1b[36m [ESPERA FINAL] Cierre de red... \x1b[0m");
-      await page.waitForTimeout(3000); 
-      
-      // Tomar evidencia visual final
-      await page.screenshot({ path: 'debug.png', fullPage: true });
-      console.log("\x1b[32m [SUCCESS] Transmisión de datos iterativa completada. \x1b[0m");
+    await page.screenshot({ path: `debug_${name.replace(/[^a-z0-9]/gi, '_')}.png`, fullPage: true });
+    console.log(`\x1b[36m [✓] ${name} completado. ${results.length} perfiles procesados. \x1b[0m`);
 
   } catch (err) {
-      console.error("\x1b[31m [CRITICAL ERROR] Fallo en la Matrix: " + err.message + "\x1b[0m");
-      await page.screenshot({ path: 'debug.png', fullPage: true }).catch(() => {});
-      await browser.close();
-      process.exit(1);
+    console.error(`\x1b[31m [CRITICAL] ${name}: ${err.message} \x1b[0m`);
+    await page.screenshot({ path: `debug_error_${name.replace(/[^a-z0-9]/gi, '_')}.png`, fullPage: true }).catch(() => {});
   }
 
   await browser.close();
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🚀 MAIN — Procesar todos los paneles secuencialmente
+// ═══════════════════════════════════════════════════════════════
+(async () => {
+  console.log('\n\x1b[36m ⚡ CYBER-SCRAPE PROTOCOL 2026 — MULTI-PANEL ⚡ \x1b[0m');
+  console.log(`\x1b[36m Paneles objetivo: ${PANELS.length} \x1b[0m\n`);
+
+  const allResults = [];
+  for (const panel of PANELS) {
+    const res = await scrapePanel(panel);
+    allResults.push(...res);
+  }
+
+  // Reporte final
+  console.log('\n\x1b[36m ═══ REPORTE FINAL ═══ \x1b[0m');
+  console.log(`Total perfiles procesados: ${allResults.length}`);
+  allResults.forEach(r => {
+    const icon = r.error ? '❌' : (r.puntos > 0 ? '✅' : '⚠️');
+    console.log(`${icon} ${r.modelo.padEnd(20)} ID:${r.id} → ${r.puntos} pts`);
+  });
+
+  console.log('\n\x1b[32m [SUCCESS] Infiltración Multi-Panel completada. \x1b[0m');
 })();

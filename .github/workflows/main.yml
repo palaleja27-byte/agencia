@@ -1,8 +1,8 @@
-name: Datame Auto-Scraper
+name: Datame Auto-Scraper — Multi-Panel
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # El bot correrá automáticamente cada 2 horas
+    - cron: '0 */2 * * *' # Cada 2 horas automáticamente
   workflow_dispatch: 
     inputs:
       start_date:
@@ -32,20 +32,26 @@ jobs:
           npm install playwright @supabase/supabase-js
           npx playwright install --with-deps chromium
           
-      - name: Ejecutar Extracción
+      - name: Ejecutar Extracción Multi-Panel
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          DATAME_USERNAME: ${{ secrets.DATAME_USERNAME }}
-          DATAME_PASSWORD: ${{ secrets.DATAME_PASSWORD }}
-          START_DATE: ${{ github.event.inputs.start_date }}
-          END_DATE: ${{ github.event.inputs.end_date }}
+          PANEL1_USER:          ${{ secrets.PANEL1_USER }}
+          PANEL1_PASS:          ${{ secrets.PANEL1_PASS }}
+          PANEL2_USER:          ${{ secrets.PANEL2_USER }}
+          PANEL2_PASS:          ${{ secrets.PANEL2_PASS }}
+          PANEL3_USER:          ${{ secrets.PANEL3_USER }}
+          PANEL3_PASS:          ${{ secrets.PANEL3_PASS }}
+          PANEL4_USER:          ${{ secrets.PANEL4_USER }}
+          PANEL4_PASS:          ${{ secrets.PANEL4_PASS }}
+          START_DATE:           ${{ github.event.inputs.start_date }}
+          END_DATE:             ${{ github.event.inputs.end_date }}
         run: node scraper.js
 
-      - name: Subir Evidencia
+      - name: Subir Evidencias (todos los paneles)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: bot-screenshot
-          path: debug.png
-          retention-days: 1
+          name: debug-screenshots
+          path: debug_*.png
+          retention-days: 3

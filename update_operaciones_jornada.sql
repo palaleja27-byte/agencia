@@ -1,60 +1,41 @@
 -- ═══════════════════════════════════════════════════════════════
--- AGENCIA RR: LIMPIEZA Y MIGRACIÓN COMPLETA de operaciones
+-- AGENCIA RR: Añadir puntos_total y puntos_baseline a operaciones
 -- Ejecutar en Supabase → SQL Editor → Run
 -- ═══════════════════════════════════════════════════════════════
 
--- 1. Agregar columnas nuevas (seguro si ya existen)
-ALTER TABLE operaciones ADD COLUMN IF NOT EXISTS jornada     TEXT DEFAULT 'Auto';
-ALTER TABLE operaciones ADD COLUMN IF NOT EXISTS fecha_dia   DATE;
-ALTER TABLE operaciones ADD COLUMN IF NOT EXISTS puntos_neto NUMERIC(10,2) DEFAULT 0;
+-- 1. Añadir puntos_total (total acumulado del mes desde Datame)
+ALTER TABLE operaciones ADD COLUMN IF NOT EXISTS puntos_total    NUMERIC(12,2) DEFAULT 0;
 
--- 2. Rellenar fecha_dia desde fecha_corte en registros existentes
-UPDATE operaciones SET fecha_dia = fecha_corte::DATE WHERE fecha_dia IS NULL;
+-- 2. Añadir puntos_baseline (total al INICIO del turno = punto de referencia 0)
+ALTER TABLE operaciones ADD COLUMN IF NOT EXISTS puntos_baseline NUMERIC(12,2) DEFAULT 0;
 
--- 3. LIMPIAR DUPLICADOS — conservar solo el registro con MÁS puntos
---    por combinación (id_perfil, fecha_dia, jornada)
-DELETE FROM operaciones
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id,
-           ROW_NUMBER() OVER (
-             PARTITION BY id_perfil, fecha_dia, jornada
-             ORDER BY puntos DESC, created_at DESC
-           ) AS rn
-    FROM operaciones
-  ) ranked
-  WHERE rn > 1
-);
+-- 3. Migrar: columna vieja 'puntos' era el total mensual → copiar a puntos_total
+UPDATE operaciones
+SET puntos_total = puntos
+WHERE puntos_total = 0 AND puntos > 0;
 
--- 4. Verificar que no quedan duplicados (debe devolver 0 filas)
--- SELECT id_perfil, fecha_dia, jornada, COUNT(*)
--- FROM operaciones GROUP BY id_perfil, fecha_dia, jornada HAVING COUNT(*) > 1;
+-- 4. Calcular puntos_neto real para registros históricos (donde neto era 0 o igual al total)
+-- NOTA: Para datos históricos con jornada='Auto', el neto diario se calcula con LAG
+WITH ranked AS (
+  SELECT id, id_perfil, fecha_dia, puntos_total,
+         LAG(puntos_total, 1, 0) OVER (
+           PARTITION BY id_perfil
+           ORDER BY fecha_dia ASC, jornada ASC
+         ) AS baseline_prev
+  FROM operaciones
+  WHERE jornada = 'Auto'
+)
+UPDATE operaciones o
+SET puntos_neto     = GREATEST(0, r.puntos_total - r.baseline_prev),
+    puntos_baseline = r.baseline_prev
+FROM ranked r
+WHERE o.id = r.id AND o.jornada = 'Auto';
 
--- 5. Eliminar constraint antiguo (si existe)
-ALTER TABLE operaciones DROP CONSTRAINT IF EXISTS operaciones_id_perfil_fecha_corte_key;
-
--- 6. Crear nuevo constraint único (ahora sin duplicados ya es seguro)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'uq_perfil_dia_jornada'
-  ) THEN
-    ALTER TABLE operaciones
-      ADD CONSTRAINT uq_perfil_dia_jornada
-      UNIQUE(id_perfil, fecha_dia, jornada);
-  END IF;
-END $$;
-
--- 7. Política de escritura completa para service key
-DROP POLICY IF EXISTS "write_ops" ON operaciones;
-CREATE POLICY "write_ops" ON operaciones FOR ALL USING (true);
-
--- 8. Habilitar Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE operaciones;
-
--- 9. Confirmación
+-- 5. Confirmación
 SELECT
   COUNT(*) AS total_registros,
-  COUNT(DISTINCT id_perfil) AS perfiles_unicos,
-  'OK: Migración completada sin duplicados' AS estado
+  COUNT(DISTINCT id_perfil) AS perfiles,
+  ROUND(AVG(puntos_neto), 2) AS neto_promedio,
+  MAX(puntos_total) AS total_max_perfil,
+  'OK: puntos_total y puntos_baseline listos' AS estado
 FROM operaciones;

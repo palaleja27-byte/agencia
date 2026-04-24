@@ -3,26 +3,23 @@ const { createClient } = require('@supabase/supabase-js');
 
 // ═══════════════════════════════════════════════════════════════
 // ⚡ WATCHER MODE — Agencia RR 2026
-// Mantiene sesiones vivas en los 4 paneles de Datame
-// Detecta cambios de puntos y los empuja a Supabase al instante
+// ─ Usa rango MENSUAL en Datame (para total_mes preciso)
+// ─ Rastrea baseline por turno (reset cada vez que cambia jornada)
+// ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)
 // ═══════════════════════════════════════════════════════════════
 
 const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  console.error('❌ Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY');
-  process.exit(1);
-}
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-// Tiempo máximo de vida del watcher (5.5h para que GitHub no lo mate)
-const MAX_RUNTIME_MS   = 5.5 * 60 * 60 * 1000;
-const CICLO_PAUSA_MS   = 10 * 60 * 1000;  // 10 min entre ciclos completos
-const PAUSA_PERFIL_MS  = 4000;             // 4 seg por perfil al hacer scrape
-const startTime        = Date.now();
+const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
+const CICLO_PAUSA_MS  = 10 * 60 * 1000;   // 10 min entre ciclos
+const PAUSA_PERFIL_MS = 4000;              // 4 seg por perfil
+const startTime       = Date.now();
 
-// ────────────────────────────────────────────────────────────────
-// Funciones de soporte
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// UTILIDADES
+// ─────────────────────────────────────────────────────────────────
 function detectarJornada() {
   const h = parseInt(new Date().toLocaleString('en-US', {
     timeZone: 'America/Bogota', hour12: false, hour: 'numeric'
@@ -36,15 +33,13 @@ function fechaHoyColombia() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
-// Hora de inicio del turno actual (para delimitar el rango en Datame)
-function rangoTurnoHoy() {
-  const hoy = fechaHoyColombia();
-  const h   = parseInt(new Date().toLocaleString('en-US', {
-    timeZone: 'America/Bogota', hour12: false, hour: 'numeric'
-  }));
-  // ⚠️ Clave: rango = SOLO HOY, así Datame devuelve puntos de hoy únicamente
-  // Datame suma puntos en el rango seleccionado, no es acumulado histórico
-  return { start: hoy, end: hoy };
+function rangoMesActual() {
+  // Rango MENSUAL — para obtener el total acumulado del mes desde Datame
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const ultimoDia = new Date(y, d.getMonth() + 1, 0).getDate();
+  return { start: `${y}-${m}-01`, end: `${y}-${m}-${ultimoDia}` };
 }
 
 function log(msg) {
@@ -52,64 +47,88 @@ function log(msg) {
   console.log(`[${ts}] ${msg}`);
 }
 
-// ────────────────────────────────────────────────────────────────
-// Estado en memoria: último valor conocido por perfil
-// ────────────────────────────────────────────────────────────────
-const ultimosValores = {}; // { id_datame: pts }
+// ─────────────────────────────────────────────────────────────────
+// BASELINES EN MEMORIA
+// Clave: `${id_perfil}__${fecha_dia}__${jornada}`
+// Valor: total_mensual al inicio del turno
+// ─────────────────────────────────────────────────────────────────
+const shiftBaselines = {};
 
-async function pushCambio(idPerfil, pts, modelo, panelNombre) {
+function bKey(id, fecha, jornada) { return `${id}__${fecha}__${jornada}`; }
+
+// ─────────────────────────────────────────────────────────────────
+// PERSISTIR TURNO EN SUPABASE
+// puntos_total   = acumulado del mes (lo que trae Datame con rango mensual)
+// puntos_baseline= acumulado al INICIO de este turno  (referencia del 0)
+// puntos_neto    = puntos hechos EN ESTE TURNO = total - baseline
+// ─────────────────────────────────────────────────────────────────
+async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const jornada  = detectarJornada();
   const fechaDia = fechaHoyColombia();
-  const tsAhora  = new Date().toISOString();
+  const ts       = new Date().toISOString();
+  const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // pts = puntos de HOY (rango Datame = solo hoy)
-  // → puntos_neto = pts directamente (ya es el neto real del día)
-  // Si hay registro previo y los puntos bajaron, ignorar
-  const { data: prev } = await supabase
-    .from('operaciones')
-    .select('puntos')
-    .eq('id_perfil', idPerfil)
-    .eq('fecha_dia', fechaDia)
-    .eq('jornada', jornada)
-    .maybeSingle();
+  // Si no tenemos baseline en memoria, buscar en Supabase (watcher se reinició)
+  if (shiftBaselines[key] === undefined) {
+    const { data: rec } = await supabase
+      .from('operaciones')
+      .select('puntos_total, puntos_baseline, puntos_neto')
+      .eq('id_perfil', idPerfil)
+      .eq('fecha_dia', fechaDia)
+      .eq('jornada', jornada)
+      .maybeSingle();
 
-  const ptsPrev = prev?.puntos || 0;
-  if (pts <= ptsPrev && ptsPrev > 0) {
-    // Datame a veces devuelve valores menores (lag de API) — ignorar
-    log(`  ⚠️ ${modelo}: pts (${pts}) ≤ prev (${ptsPrev}), ignorando`);
+    if (rec) {
+      // Registro ya existe: baseline = total al inicio del turno original
+      // baseline = puntos_total_del_registro - puntos_neto_del_registro
+      shiftBaselines[key] = (rec.puntos_total || 0) - (rec.puntos_neto || 0);
+    } else {
+      // Primera captura de este turno: el total actual es el baseline (neto = 0)
+      shiftBaselines[key] = monthlyTotal;
+      log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+    }
+  }
+
+  const baseline  = shiftBaselines[key];
+  const netoTurno = Math.max(0, monthlyTotal - baseline);
+
+  // Ignorar si el total bajó (lag de Datame)
+  if (monthlyTotal < baseline) {
+    log(`  ⚠️ ${modelo}: total_mes (${monthlyTotal.toFixed(1)}) < baseline (${baseline.toFixed(1)}), ignorando`);
     return;
   }
 
   const { error } = await supabase.from('operaciones').upsert({
-    id_perfil:   idPerfil,
-    agencia:     panelNombre,
-    puntos:      pts,       // total del día
-    puntos_neto: pts,       // ← igual al total porque el rango es solo HOY
-    fecha_corte: tsAhora,
-    fecha_dia:   fechaDia,
-    jornada:     jornada,
+    id_perfil:       idPerfil,
+    agencia:         panelNombre,
+    puntos:          monthlyTotal,     // col. legado — mantener para compatibilidad
+    puntos_total:    monthlyTotal,     // total acumulado del mes
+    puntos_baseline: baseline,         // total al inicio de ESTE turno
+    puntos_neto:     netoTurno,        // puntos hechos EN ESTE TURNO (empieza en 0)
+    fecha_corte:     ts,
+    fecha_dia:       fechaDia,
+    jornada:         jornada,
   }, { onConflict: 'id_perfil,fecha_dia,jornada' });
 
   if (error) {
     log(`  ❌ DB Error ${modelo}: ${error.message}`);
   } else {
-    log(`  🔴 CAMBIO → ${modelo} (${idPerfil}) | prev:${ptsPrev.toFixed(1)} → hoy:${pts.toFixed(2)} pts | ${jornada}`);
+    log(`  ✅ ${modelo} [${jornada}] mes:${monthlyTotal.toFixed(1)} baseline:${baseline.toFixed(1)} turno:+${netoTurno.toFixed(2)} pts`);
   }
 }
 
-
-// ────────────────────────────────────────────────────────────────
-// Sesión de un panel: login + ciclo de scrape perpetuo
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// SESIÓN DE UN PANEL
+// ─────────────────────────────────────────────────────────────────
 async function watchPanel(panel, perfiles) {
   const { nombre, email, password } = panel;
-  log(`🟢 Iniciando sesión watcher: ${nombre} (${email})`);
+  log(`🟢 Iniciando watcher: ${nombre} (${email})`);
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page    = await context.newPage();
 
-  // Radar XHR — detecta cambios de puntos sin necesidad de parsear DOM
+  // RADAR XHR — intercepta respuestas de Datame
   page.on('response', async (response) => {
     const rType = response.request().resourceType();
     if (rType !== 'fetch' && rType !== 'xhr') return;
@@ -120,23 +139,17 @@ async function watchPanel(panel, perfiles) {
       for (const item of list) {
         const rawPts = item.bonuses || item.total || item.points || item.amount || 0;
         const pts    = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
-        if (pts <= 0) continue;
+        if (pts <= 0 || pts > 1000000) continue;
 
         let id = (response.url().match(/\d{7,9}/) || [])[0];
         if (!id) id = (JSON.stringify(item).match(/\d{7,9}/) || [])[0];
         if (!id) id = String(item.member_id || item.profile_id || item.id || '');
         if (!id || id.length < 7) continue;
 
-        // ¿Es un perfil que nos interesa?
         const perfil = perfiles.find(p => p.id_datame === id);
         if (!perfil) continue;
 
-        const anterior = ultimosValores[id] || 0;
-        if (pts !== anterior) {
-          ultimosValores[id] = pts;
-          // Push inmediato a Supabase → Realtime notifica al dashboard
-          await pushCambio(id, pts, perfil.modelo, nombre);
-        }
+        await upsertTurno(id, pts, perfil.modelo, nombre);
       }
     } catch (_) {}
   });
@@ -152,37 +165,38 @@ async function watchPanel(panel, perfiles) {
     await page.waitForTimeout(7000);
     log(`✅ Login OK: ${nombre}`);
   } catch (err) {
-    log(`❌ Login FAILED: ${nombre}: ${err.message}`);
+    log(`❌ Login FAILED ${nombre}: ${err.message}`);
     await browser.close();
     return;
   }
 
-  const { start, end } = rangoTurnoHoy(); // 🔑 SOLO HOY — puntos reales del turno
+  const { start, end } = rangoMesActual(); // Rango mensual para total del mes
 
-  // ── CICLO PRINCIPAL ──
+  // ── CICLO PRINCIPAL ──────────────────────────────────────────
   while (Date.now() - startTime < MAX_RUNTIME_MS) {
-    log(`\n🔄 Ciclo de escaneo — ${nombre} | ${perfiles.length} perfiles | rango: ${start}`);
+    log(`\n🔄 Ciclo — ${nombre} | ${perfiles.length} perfiles | jornada: ${detectarJornada()}`);
 
     try {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
 
-      // Inyectar fechas de HOY (no del mes) → Datame muestra solo puntos de hoy
+      // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
       await page.evaluate(({ s, e }) => {
         const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
         if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
         if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
       }, { s: start, e: end });
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(1200);
 
-      // Escanear cada perfil
       for (const perfil of perfiles) {
         if (Date.now() - startTime >= MAX_RUNTIME_MS) break;
         try {
           await page.evaluate((v) => {
             const ins = Array.from(document.querySelectorAll('input'));
-            let t = ins.find(i => (i.getAttribute('aria-label')||'').toLowerCase().includes('profile')
-                                ||(i.placeholder||'').toLowerCase().includes('profile'));
+            let t = ins.find(i =>
+              (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
+              (i.placeholder || '').toLowerCase().includes('profile')
+            );
             if (!t && ins.length >= 3) t = ins[2];
             if (t) {
               t.value = v;
@@ -190,60 +204,47 @@ async function watchPanel(panel, perfiles) {
               t.dispatchEvent(new Event('change', { bubbles: true }));
             }
           }, perfil.id_datame);
-          await page.waitForTimeout(600);
+          await page.waitForTimeout(500);
           await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
-          // El XHR radar captura la respuesta automáticamente ↑
         } catch (e) {
-          log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0,60)}`);
+          log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);
         }
       }
 
-      log(`✅ Ciclo completado — ${nombre}. Pausa ${CICLO_PAUSA_MS/60000} min...`);
+      log(`✅ Ciclo completado — ${nombre}. Pausa ${CICLO_PAUSA_MS / 60000} min...`);
     } catch (err) {
-      log(`⚠️ Error en ciclo ${nombre}: ${err.message}. Reintentando en 30 seg...`);
+      log(`⚠️ Error ciclo ${nombre}: ${err.message}. Retry 30s...`);
       await page.waitForTimeout(30000);
     }
 
-    // Esperar antes del próximo ciclo
     const elapsed = Date.now() - startTime;
     if (elapsed + CICLO_PAUSA_MS < MAX_RUNTIME_MS) {
       await page.waitForTimeout(CICLO_PAUSA_MS);
-    } else {
-      break; // No hay tiempo para otro ciclo
-    }
+    } else break;
   }
 
-  log(`🏁 ${nombre} — Sesión watcher finalizada tras ${((Date.now()-startTime)/3600000).toFixed(1)}h`);
+  log(`🏁 ${nombre} — Sesión finalizada tras ${((Date.now() - startTime) / 3600000).toFixed(1)}h`);
   await browser.close();
 }
 
-// ────────────────────────────────────────────────────────────────
-// MAIN — Leer paneles desde Supabase y lanzar watchers en paralelo
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// MAIN
+// ─────────────────────────────────────────────────────────────────
 (async () => {
   log('⚡ WATCHER MODE iniciado — Agencia RR 2026');
-  log(`⏱️  Tiempo máximo: ${MAX_RUNTIME_MS / 3600000}h | Ciclo: ${CICLO_PAUSA_MS / 60000} min`);
+  log(`⏱️  Runtime máx: ${MAX_RUNTIME_MS / 3600000}h | Ciclo: ${CICLO_PAUSA_MS / 60000} min`);
+  log(`📅 Rango Datame: ${rangoMesActual().start} → ${rangoMesActual().end} (total mes)`);
 
-  const { data: panels } = await supabase
-    .from('datame_panels').select('*').eq('activo', true).order('id');
-  const { data: allPerfiles } = await supabase
-    .from('datame_perfiles').select('*').eq('activo', true).order('id');
+  const { data: panels } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
+  const { data: allPerfiles } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
 
   if (!panels?.length) { log('❌ Sin paneles en Supabase'); process.exit(1); }
-  log(`📡 ${panels.length} paneles cargados | ${allPerfiles?.length || 0} perfiles totales`);
+  log(`📡 ${panels.length} paneles | ${allPerfiles?.length || 0} perfiles`);
 
-  // Pre-cargar últimos valores conocidos de Supabase
-  const hoy = fechaHoyColombia();
-  const { data: hoyOps } = await supabase
-    .from('operaciones').select('id_perfil, puntos').eq('fecha_dia', hoy);
-  (hoyOps || []).forEach(op => { ultimosValores[op.id_perfil] = op.puntos; });
-  log(`📦 ${Object.keys(ultimosValores).length} valores previos de hoy cargados como baseline`);
-
-  // Lanzar todos los paneles en paralelo
   await Promise.all(panels.map(panel => {
     const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id);
-    if (!perfiles.length) { log(`[SKIP] ${panel.nombre}: sin perfiles`); return Promise.resolve(); }
+    if (!perfiles.length) { log(`[SKIP] ${panel.nombre}`); return Promise.resolve(); }
     return watchPanel(panel, perfiles);
   }));
 

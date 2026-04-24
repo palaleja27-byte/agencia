@@ -13749,30 +13749,43 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const perfs = DP_PERFILES_MAP[_dpActivePanelId] || [];
       if (!grid || !panel) return;
 
-      let totalPts = 0;
+      const jornadaActiva = (() => {
+        const h = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }));
+        if (h >= 6  && h < 14) return 'Mañana';
+        if (h >= 14 && h < 22) return 'Tarde';
+        return 'Noche';
+      })();
+
+      let totalMesPts = 0;
+
       grid.innerHTML = perfs.map(p => {
-        const d    = _dpPuntosData[p.id] || {};
-        const pts  = d.puntos_neto || d.puntos || 0;  // preferir neto acumulado
-        const cop  = Math.round(pts * 1400).toLocaleString('es-CO');
-        const ts   = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
-        totalPts  += pts;
+        const d         = _dpPuntosData[p.id] || {};
+        // ── CIFRA GRANDE: total acumulado del mes ────────────────
+        const totalMes  = d.puntos_total || d.puntos || 0;
+        const copMes    = Math.round(totalMes * 1400).toLocaleString('es-CO');
+        const ts        = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
+        totalMesPts    += totalMes;
 
-        // Desglose de turnos (datos del día actual)
-        const turnos   = _dpTurnosData[p.id] || {};
-        const manana   = (turnos['Mañana'] || 0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
-        const tarde    = (turnos['Tarde']  || 0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
-        const noche    = (turnos['Noche']  || 0).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
-        const hayTurnos = (turnos['Mañana'] || turnos['Tarde'] || turnos['Noche']) > 0;
+        // ── TURNOS HOY: puntos_neto (solo lo del turno, empieza en 0) ─
+        const turnos    = _dpTurnosData[p.id] || {};
+        const fmtTurno  = (t) => {
+          const v = turnos[t] || 0;
+          return { v, str: v > 0 ? v.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '0,0' };
+        };
+        const manana  = fmtTurno('Mañana');
+        const tarde   = fmtTurno('Tarde');
+        const noche   = fmtTurno('Noche');
 
-        // Últimos 7 días
-        const historial  = (_dpHistorialData[p.id] || []).slice(0, 7);
-        const diasHtml   = historial.length > 0
-          ? historial.map(h => {
+        // ── HISTORIAL DE TURNOS (últimas 14 entradas) ─────────────
+        const histTurnos = (_dpHistorialData[p.id] || []).slice(0, 14);
+        const histHtml = histTurnos.length > 0
+          ? histTurnos.map(h => {
               const f   = new Date(h.fecha_dia + 'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
-              const n   = (h.neto_dia || 0);
+              const jEm = { 'Mañana':'🌅','Tarde':'🌇','Noche':'🌙','Auto':'⚙️' }[h.jornada] || '📌';
+              const n   = h.neto_dia || 0;
               const cls = n > 0 ? '' : ' zero';
               return `<div class="dp-dia-row">
-                <span class="dp-dia-fecha">${f}</span>
+                <span class="dp-dia-fecha">${f} ${jEm}</span>
                 <span class="dp-dia-neto${cls}">${n > 0 ? '+' + n.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</span>
               </div>`;
             }).join('')
@@ -13784,33 +13797,46 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             <div>
               <div class="dp-card-name">${p.modelo}</div>
               <div class="dp-card-id">ID: ${p.id}</div>
-              <div class="dp-card-pts">${pts > 0 ? pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
-              <div class="dp-card-cop">${pts > 0 ? '$'+cop+' COP' : ''}</div>
-              <div class="dp-card-ts">${pts > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
+              <!-- CIFRA GRANDE = Total del mes -->
+              <div class="dp-card-pts">${totalMes > 0 ? totalMes.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
+              <div class="dp-card-cop">${totalMes > 0 ? '$'+copMes+' COP' : ''}</div>
+              <div class="dp-card-ts">${totalMes > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
             </div>
             <button class="dp-card-expand-btn">▼</button>
           </div>
+
           <div class="dp-card-detail">
-            ${ hayTurnos ? `
-            <div style="font-size:.58rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">🕐 Hoy por turno</div>
-            <div class="dp-turno-row"><span class="dp-turno-label">🌅 Mañana</span><span class="dp-turno-pts manana">${manana} pts</span></div>
-            <div class="dp-turno-row"><span class="dp-turno-label">🌇 Tarde</span><span class="dp-turno-pts tarde">${tarde} pts</span></div>
-            <div class="dp-turno-row"><span class="dp-turno-label">🌙 Noche</span><span class="dp-turno-pts noche">${noche} pts</span></div>` : '<div style="font-size:.58rem;color:#334155;">Sin datos de turno hoy</div>'}
-            <div class="dp-dias-title">📆 Últimos días</div>
-            ${diasHtml}
+            <!-- TURNOS HOY (puntos_neto = solo lo del turno, empieza en 0) -->
+            <div style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">🕐 Hoy por turno</div>
+            <div class="dp-turno-row">
+              <span class="dp-turno-label">🌅 Mañana${'Mañana'===jornadaActiva?' ●':''}</span>
+              <span class="dp-turno-pts manana">${manana.str} pts</span>
+            </div>
+            <div class="dp-turno-row">
+              <span class="dp-turno-label">🌇 Tarde${'Tarde'===jornadaActiva?' ●':''}</span>
+              <span class="dp-turno-pts tarde">${tarde.str} pts</span>
+            </div>
+            <div class="dp-turno-row">
+              <span class="dp-turno-label">🌙 Noche${'Noche'===jornadaActiva?' ●':''}</span>
+              <span class="dp-turno-pts noche">${noche.str} pts</span>
+            </div>
+
+            <!-- HISTORIAL POR TURNO -->
+            <div class="dp-dias-title">📆 Historial de turnos</div>
+            ${histHtml}
           </div>
         </div>`;
       }).join('');
 
-      // Totales del panel
-      const totalCop = Math.round(totalPts * 1400).toLocaleString('es-CO');
+      // ── Totales del panel ─────────────────────────────────────
+      const totalCop = Math.round(totalMesPts * 1400).toLocaleString('es-CO');
       const ptsEl = document.getElementById('dp-panel-total-pts');
       const copEl = document.getElementById('dp-panel-total-cop');
-      if (ptsEl) ptsEl.textContent = totalPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
+      if (ptsEl) ptsEl.textContent = totalMesPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
       if (copEl) copEl.textContent = '$' + totalCop + ' COP';
 
       // Badge global
-      const allPts = Object.values(_dpPuntosData).reduce((s,d)=>s+(d.puntos_neto||d.puntos||0),0);
+      const allPts = Object.values(_dpPuntosData).reduce((s,d) => s + (d.puntos_total || d.puntos || 0), 0);
       const badge = document.getElementById('dp-total-badge');
       if (badge) badge.textContent = allPts.toLocaleString('es-CO',{minimumFractionDigits:0}) + ' pts totales';
     }
@@ -13821,6 +13847,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     async function sincronizarDatamePaneles() {
+
       if (typeof _sb === 'undefined') return;
       const tsEl = document.getElementById('dp-last-update');
       if (tsEl) tsEl.textContent = '⏳ Cargando...';

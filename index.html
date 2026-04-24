@@ -11007,20 +11007,32 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         _tsEl.textContent = '🔄 Actualizado: ' + _now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       }
 
-      const _ptsDia = getPuntosHoy(op.name);
       const _hoyLabel = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
-      // Promedio diario del mes
+
+      // HOY: prioridad DELTA-SHIFT™ (Supabase) → suma de todos los turnos de hoy
+      // _opRtTurnos = { Mañana: X, Tarde: Y, Noche: Z } actualizado por _opRtSync
+      const _ptsDiaRT = (typeof _opRtTurnos !== 'undefined' && _opRtOpName?.toUpperCase() === op.name.toUpperCase())
+        ? Object.values(_opRtTurnos).reduce((s, v) => s + v, 0)
+        : 0;
+      const _ptsDia = _ptsDiaRT > 0 ? _ptsDiaRT : getPuntosHoy(op.name);
+
+      // PROM/DÍA: dias reales transcurridos en el mes actual (no el número de cortes)
+      // Si tenemos puntos reales de Supabase, los usamos; sino, los del localStorage
       const _mesStr = localDateStr().slice(0, 7);
-      const _corteMes = getCortesOp(op.name).filter(c => c.fecha && c.fecha.slice(0, 7) === _mesStr);
-      const _diasAct = new Set(_corteMes.map(c => c.fecha)).size;
-      const _promDia = _diasAct > 0 ? (pCurr / _diasAct).toFixed(1) : '—';
+      const _diaActual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const _primerDia = _mesStr + '-01';
+      const _msDesde = new Date(_primerDia).getTime();
+      const _msHasta = new Date(_diaActual).getTime();
+      const _diasMes  = Math.max(1, Math.round((_msHasta - _msDesde) / 86400000) + 1); // dias desde el 1 hasta hoy
+      const _promDia  = pCurr > 0 ? (pCurr / _diasMes).toFixed(1) : '—';
+
       document.getElementById('op-dash-metrics').innerHTML = `
     <div class="op-dash-metric"><div class="val">${pPrev.toFixed(1)}</div><div class="lbl">${prevLabel}</div></div>
-    <div class="op-dash-metric"><div class="val">${pCurr.toFixed(1)}</div><div class="lbl">${currLabel}</div></div>
+    <div class="op-dash-metric"><div class="val" id="op-dash-mes-val">${pCurr.toFixed(1)}</div><div class="lbl">${currLabel}</div></div>
     <div class="op-dash-metric"><div class="val" style="color:${growthColor}">${growthSign}${op.growth.toFixed(1)}%</div><div class="lbl">Crecimiento</div></div>
-    <div class="op-dash-metric"><div class="val" style="color:#a78bfa;">${_promDia}</div><div class="lbl">Prom/día</div></div>
+    <div class="op-dash-metric"><div class="val" style="color:#a78bfa;" id="op-dash-prom-val">${_promDia}</div><div class="lbl">Prom/día</div></div>
     <div class="op-dash-metric" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;grid-column:span 4;">
-      <div class="val" style="font-size:1.3rem;color:#34d399;">${_ptsDia.toFixed(1)} pts</div>
+      <div class="val" style="font-size:1.3rem;color:#34d399;" id="op-dash-hoy-val">${_ptsDia.toFixed(1)} pts</div>
       <div class="lbl">⚡ Hoy ${_hoyLabel}</div>
     </div>`;
 
@@ -14342,6 +14354,26 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         }
 
         _opRtRenderWidget();
+
+        // ── Actualizar métricas del dashboard en tiempo real (sin re-render completo) ──
+        // HOY: suma de todos los turnos del día desde Supabase
+        const _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
+        const _hoyEl = document.getElementById('op-dash-hoy-val');
+        if (_hoyEl && _hoyTotal > 0) _hoyEl.textContent = _hoyTotal.toFixed(1) + ' pts';
+
+        // ABRIL / PROM-DÍA: usar _opRtTotalMes (Supabase real) / días transcurridos del mes
+        if (_opRtTotalMes > 0) {
+          const _mesEl2 = document.getElementById('op-dash-mes-val');
+          const _promEl = document.getElementById('op-dash-prom-val');
+          if (_mesEl2) _mesEl2.textContent = _opRtTotalMes.toFixed(1);
+          if (_promEl) {
+            const _hoyS = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            const _d1   = new Date(_hoyS.slice(0, 7) + '-01').getTime();
+            const _d2   = new Date(_hoyS).getTime();
+            const _dias = Math.max(1, Math.round((_d2 - _d1) / 86400000) + 1);
+            _promEl.textContent = (_opRtTotalMes / _dias).toFixed(1);
+          }
+        }
 
         const ts = document.getElementById('op-rt-ts');
         if (ts) ts.textContent = '🛰️ ' + new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });

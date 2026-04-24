@@ -56,7 +56,7 @@ SELECT
     ELSE '✅ OK'
   END AS estado
 FROM operaciones
-WHERE fecha_dia = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+WHERE fecha_dia = CURRENT_DATE
   AND jornada   != 'MES'
   AND jornada   != 'Auto'
   AND puntos_total > 0
@@ -67,7 +67,7 @@ UPDATE operaciones
 SET
   puntos_neto     = ROUND((puntos_total * 0.03)::numeric, 2),
   puntos_baseline = ROUND((puntos_total * 0.97)::numeric, 2)
-WHERE fecha_dia   = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+WHERE fecha_dia   = CURRENT_DATE
   AND jornada     != 'MES'
   AND jornada     != 'Auto'
   AND puntos_total > 100
@@ -86,7 +86,7 @@ SELECT
     ELSE '✅ OK'
   END AS estado
 FROM operaciones
-WHERE fecha_dia = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+WHERE fecha_dia = CURRENT_DATE
   AND jornada   != 'MES'
   AND jornada   != 'Auto'
   AND puntos_total > 0

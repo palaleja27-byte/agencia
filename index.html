@@ -10893,72 +10893,164 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // ══════════════════════════════════════════════════════════════
     // RENDER ESTADÍSTICAS — tarjetas + gráfica 7 días
     // ══════════════════════════════════════════════════════════════
-    function renderOpStats(name) {
+    // ======================================================================
+    // renderOpStats -- DELTA-SHIFT(tm) Engine -- Datos reales de Supabase
+    // Consulta tabla operaciones desde Feb-2026 para medir crecimiento
+    // ======================================================================
+    async function renderOpStats(name) {
       const el = document.getElementById('op-stats-content');
       if (!el) return;
-      const s = getStatsOp(name);
+      if (typeof _sb === 'undefined') {
+        el.innerHTML = '<div style="color:#475569;font-size:.75rem;padding:12px;">Cargando datos...</div>';
+        return;
+      }
+
+      const ids    = typeof _opRtGetIds === 'function' ? _opRtGetIds(name) : [];
+      const hoy    = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const ayer   = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const hace7  = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const hace14 = new Date(Date.now() - 14 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const mesActual = hoy.slice(0, 7);
+
+      // Desde Febrero para medir historial de crecimiento completo
+      const INICIO = '2026-02-01';
+
+      let porDia = {};
+      let ptsHoy = 0, ptsAyer = 0, ptsSemana = 0, ptsSemPasada = 0;
+      let ptsMes = 0, ptsFeb = 0, ptsMar = 0;
+
+      try {
+        if (ids.length) {
+          const { data: ops } = await _sb
+            .from('operaciones')
+            .select('fecha_dia, puntos_neto')
+            .in('id_perfil', ids)
+            .gte('fecha_dia', INICIO)
+            .neq('jornada', 'Auto');
+          if (ops && ops.length) {
+            ops.forEach(r => {
+              const f = r.fecha_dia;
+              porDia[f] = (porDia[f] || 0) + (r.puntos_neto || 0);
+            });
+          }
+        }
+      } catch(e) { console.warn('[OP-STATS]', e); }
+
+      ptsHoy       = porDia[hoy]  || 0;
+      ptsAyer      = porDia[ayer] || 0;
+      ptsSemana    = Object.entries(porDia).filter(([d]) => d >= hace7  && d <= hoy ).reduce((s,[,v])=>s+v,0);
+      ptsSemPasada = Object.entries(porDia).filter(([d]) => d >= hace14 && d <  hace7).reduce((s,[,v])=>s+v,0);
+      ptsMes       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === mesActual).reduce((s,[,v])=>s+v,0);
+      ptsFeb       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-02').reduce((s,[,v])=>s+v,0);
+      ptsMar       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-03').reduce((s,[,v])=>s+v,0);
+
+      // HOY: priorizar datos en tiempo real del operador activo
+      if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _opRtOpName.toUpperCase() === name.toUpperCase()) {
+        const rtHoy = Object.values(_opRtTurnos).reduce((s,v)=>s+v,0);
+        if (rtHoy > 0) ptsHoy = rtHoy;
+      }
+      // ESTE MES: priorizar _opRtTotalMes (total mensual acumulado de Datame, mas preciso)
+      if (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&
+          _opRtOpName && _opRtOpName.toUpperCase() === name.toUpperCase()) {
+        ptsMes = _opRtTotalMes;
+      }
+
+      // Metricas derivadas
+      const _d1 = new Date(mesActual + '-01').getTime();
+      const _d2 = new Date(hoy).getTime();
+      const _diaNum = Math.max(1, Math.round((_d2 - _d1) / 86400000) + 1);
+      const promDia = ptsMes > 0 ? ptsMes / _diaNum : 0;
+
+      const crec = (n, v) => v > 0 ? ((n - v) / v * 100) : (n > 0 ? 100 : 0);
+      const crecDiario  = crec(ptsHoy, ptsAyer);
+      const crecSemanal = crec(ptsSemana, ptsSemPasada);
+      const mesRef      = ptsMar > 0 ? ptsMar : (ptsFeb > 0 ? ptsFeb : 1);
+      const crecMensual = crec(ptsMes, mesRef);
 
       const badge = (pct) => {
-        if (pct === 0) return `<span class="op-stat-badge flat">→ Sin cambio</span>`;
-        const sign = pct > 0 ? '+' : '';
-        const cls = pct > 0 ? 'up' : 'down';
-        const ico = pct > 0 ? '▲' : '▼';
-        return `<span class="op-stat-badge ${cls}">${ico} ${sign}${pct.toFixed(1)}%</span>`;
+        if (pct === 0) return '<span class="op-stat-badge flat">Sin cambio</span>';
+        const sign = pct > 0 ? '+' : ''; const cls = pct > 0 ? 'up' : 'down'; const ico = pct > 0 ? 'up' : 'down';
+        return '<span class="op-stat-badge ' + cls + '">' + sign + pct.toFixed(1) + '%</span>';
       };
-
-      const fmt = n => n.toLocaleString('es-CO');
+      const fmt    = n => n.toLocaleString('es-CO');
       const fmtPts = n => n.toFixed(1);
 
-      // Gráfica de barras 7 días
-      const maxPts = Math.max(...s.ultimos7.map(d => d.pts), 1);
-      const hoy = localDateStr();
-      const bars = s.ultimos7.map(d => {
+      // Grafica 7 dias
+      const ultimos7 = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i*86400000).toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+        const label = new Date(d+'T12:00:00').toLocaleDateString('es-CO',{weekday:'short'});
+        ultimos7.push({ fecha: d, pts: porDia[d] || 0, label });
+      }
+      const maxPts = Math.max(...ultimos7.map(d => d.pts), 1);
+      const bars = ultimos7.map(d => {
         const pct = Math.max(3, Math.round((d.pts / maxPts) * 100));
         const isHoy = d.fecha === hoy;
         const color = isHoy ? '#5eead4' : d.pts > 0 ? '#818cf8' : 'rgba(255,255,255,.08)';
-        return `
-          <div class="op-bar-col">
-            <div class="op-bar-pts">${d.pts > 0 ? fmtPts(d.pts) : ''}</div>
-            <div class="op-bar-fill" style="height:${pct}%;background:${color};"></div>
-            <div class="op-bar-lbl" style="color:${isHoy ? '#5eead4' : '#475569'}">${d.label}</div>
-          </div>`;
+        return '<div class="op-bar-col">' +
+          '<div class="op-bar-pts">' + (d.pts > 0 ? fmtPts(d.pts) : '') + '</div>' +
+          '<div class="op-bar-fill" style="height:' + pct + '%;background:' + color + ';"></div>' +
+          '<div class="op-bar-lbl" style="color:' + (isHoy?'#5eead4':'#475569') + '">' + d.label + '</div>' +
+          '</div>';
       }).join('');
 
-      el.innerHTML = `
-        <div class="op-stats-grid">
-          <div class="op-stat-card highlight">
-            <div class="op-stat-label">📅 Hoy</div>
-            <div class="op-stat-pts">${fmtPts(s.ptsHoy)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
-            <div class="op-stat-cop">💰 $${fmt(s.copHoy)} COP</div>
-            ${badge(s.crecDiario)}
-          </div>
-          <div class="op-stat-card">
-            <div class="op-stat-label">📆 Ayer</div>
-            <div class="op-stat-pts">${fmtPts(s.ptsAyer)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
-            <div class="op-stat-cop">💰 $${fmt(Math.round(s.ptsAyer * VALOR_COP))} COP</div>
-            <span class="op-stat-badge flat" style="opacity:.5">Referencia</span>
-          </div>
-          <div class="op-stat-card">
-            <div class="op-stat-label">📊 Esta semana</div>
-            <div class="op-stat-pts">${fmtPts(s.ptsSemana)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
-            <div class="op-stat-cop">💰 $${fmt(s.copSemana)} COP</div>
-            ${badge(s.crecSemanal)}
-          </div>
-          <div class="op-stat-card">
-            <div class="op-stat-label">🗓️ Este mes</div>
-            <div class="op-stat-pts">${fmtPts(s.ptsMes)} <small style="font-size:.7rem;color:#475569;">pts</small></div>
-            <div class="op-stat-cop">💰 $${fmt(s.copMes)} COP</div>
-            ${badge(s.crecMensual)}
-          </div>
-        </div>
-        <div class="op-barchart-wrap">
-          <div class="op-barchart-title">📈 Últimos 7 días (pts/día)</div>
-          <div class="op-barchart">${bars}</div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:.68rem;color:#475569;padding:0 2px;margin-bottom:4px;">
-          <span>📊 Prom/día este mes: <strong style="color:#a78bfa;">${fmtPts(s.promDia)} pts</strong></span>
-          <span>💵 $${fmt(Math.round(s.promDia * VALOR_COP))} COP/día</span>
-        </div>`;
+      // Panel historico Feb/Mar/Abr
+      const histPanel = (ptsFeb > 0 || ptsMar > 0) ? (
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0;font-size:.67rem;">' +
+        '<div style="background:rgba(99,102,241,.07);border-radius:8px;padding:8px;text-align:center;">' +
+          '<div style="color:#64748b;">Feb 2026</div>' +
+          '<div style="color:#a78bfa;font-weight:700;">' + fmtPts(ptsFeb) + ' pts</div>' +
+          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsFeb*VALOR_COP)) + ' COP</div>' +
+        '</div>' +
+        '<div style="background:rgba(99,102,241,.07);border-radius:8px;padding:8px;text-align:center;">' +
+          '<div style="color:#64748b;">Mar 2026</div>' +
+          '<div style="color:#a78bfa;font-weight:700;">' + fmtPts(ptsMar) + ' pts</div>' +
+          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsMar*VALOR_COP)) + ' COP</div>' +
+        '</div>' +
+        '<div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);border-radius:8px;padding:8px;text-align:center;">' +
+          '<div style="color:#64748b;">Abr 2026</div>' +
+          '<div style="color:#34d399;font-weight:700;">' + fmtPts(ptsMes) + ' pts</div>' +
+          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsMes*VALOR_COP)) + ' COP</div>' +
+        '</div>' +
+        '</div>'
+      ) : '';
+
+      el.innerHTML =
+        '<div class="op-stats-grid">' +
+          '<div class="op-stat-card highlight">' +
+            '<div class="op-stat-label">Hoy</div>' +
+            '<div class="op-stat-pts">' + fmtPts(ptsHoy) + ' <small style="font-size:.7rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop">$' + fmt(Math.round(ptsHoy*VALOR_COP)) + ' COP</div>' +
+            badge(crecDiario) +
+          '</div>' +
+          '<div class="op-stat-card">' +
+            '<div class="op-stat-label">Ayer</div>' +
+            '<div class="op-stat-pts">' + fmtPts(ptsAyer) + ' <small style="font-size:.7rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop">$' + fmt(Math.round(ptsAyer*VALOR_COP)) + ' COP</div>' +
+            '<span class="op-stat-badge flat" style="opacity:.5">Referencia</span>' +
+          '</div>' +
+          '<div class="op-stat-card">' +
+            '<div class="op-stat-label">Esta semana</div>' +
+            '<div class="op-stat-pts">' + fmtPts(ptsSemana) + ' <small style="font-size:.7rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop">$' + fmt(Math.round(ptsSemana*VALOR_COP)) + ' COP</div>' +
+            badge(crecSemanal) +
+          '</div>' +
+          '<div class="op-stat-card">' +
+            '<div class="op-stat-label">Este mes</div>' +
+            '<div class="op-stat-pts">' + fmtPts(ptsMes) + ' <small style="font-size:.7rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop">$' + fmt(Math.round(ptsMes*VALOR_COP)) + ' COP</div>' +
+            badge(crecMensual) +
+          '</div>' +
+        '</div>' +
+        histPanel +
+        '<div class="op-barchart-wrap">' +
+          '<div class="op-barchart-title">Ultimos 7 dias (pts/dia)</div>' +
+          '<div class="op-barchart">' + bars + '</div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:#475569;padding:0 2px;margin-bottom:4px;">' +
+          '<span>Prom/dia este mes: <strong style="color:#a78bfa;">' + fmtPts(promDia) + ' pts</strong></span>' +
+          '<span>$' + fmt(Math.round(promDia * VALOR_COP)) + ' COP/dia</span>' +
+        '</div>';
     }
 
     function renderOpDashboard(name) {

@@ -96,7 +96,17 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   }
 
   const baseline  = shiftBaselines[key];
-  const netoTurno = Math.max(0, monthlyTotal - baseline);
+  let netoTurno   = Math.max(0, monthlyTotal - baseline);
+
+  // ── SANIDAD: neto no puede superar el 60% del total mensual en un solo turno ──
+  // Si supera ese umbral, el baseline está mal fijado (caso RENEE: baseline=18.69 en vez de ~219)
+  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100) {
+    const netoCorregido = monthlyTotal * 0.05; // asignar 5% como estimado conservador
+    const baselineCorregido = monthlyTotal - netoCorregido;
+    log(`  ⚠️ SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total ${monthlyTotal.toFixed(1)} — baseline corregido a ${baselineCorregido.toFixed(2)}`);
+    shiftBaselines[key] = baselineCorregido;
+    netoTurno = netoCorregido;
+  }
 
   // Ignorar si el total bajó (lag de Datame)
   if (monthlyTotal < baseline) {

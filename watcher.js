@@ -85,11 +85,19 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
       .maybeSingle();
 
     if (rec) {
-      // Registro ya existe: baseline = total al inicio del turno original
-      // baseline = puntos_total_del_registro - puntos_neto_del_registro
-      shiftBaselines[key] = (rec.puntos_total || 0) - (rec.puntos_neto || 0);
+      // Usar puntos_baseline DIRECTO de la DB (campo correcto)
+      // NO recalcular como total-neto porque si neto está corrupto se propaga el error
+      const dbBaseline = rec.puntos_baseline || 0;
+      if (dbBaseline > 0) {
+        shiftBaselines[key] = dbBaseline;
+        log(`  📥 Baseline recuperado de DB: ${modelo} [${jornada}] = ${dbBaseline.toFixed(2)} pts`);
+      } else {
+        // Sin baseline en DB → el total actual es el baseline (neto = 0)
+        shiftBaselines[key] = monthlyTotal;
+        log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+      }
     } else {
-      // Primera captura de este turno: el total actual es el baseline (neto = 0)
+      // Primera captura del turno: fijar baseline ahora
       shiftBaselines[key] = monthlyTotal;
       log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
     }
@@ -98,14 +106,13 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const baseline  = shiftBaselines[key];
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
-  // ── SANIDAD: neto no puede superar el 60% del total mensual en un solo turno ──
-  // Si supera ese umbral, el baseline está mal fijado (caso RENEE: baseline=18.69 en vez de ~219)
+  // ── SANIDAD: neto no puede superar el 60% del total mensual en un turno ──
+  // Si supera ese umbral es señal de baseline corrupto en memoria.
+  // Estrategia: limpiar memoria y saltar este ciclo para que el próximo lea de DB.
   if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100) {
-    const netoCorregido = monthlyTotal * 0.05; // asignar 5% como estimado conservador
-    const baselineCorregido = monthlyTotal - netoCorregido;
-    log(`  ⚠️ SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total ${monthlyTotal.toFixed(1)} — baseline corregido a ${baselineCorregido.toFixed(2)}`);
-    shiftBaselines[key] = baselineCorregido;
-    netoTurno = netoCorregido;
+    log(`  🔴 SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total ${monthlyTotal.toFixed(1)} — baseline corrupto, limpiando memoria...`);
+    delete shiftBaselines[key];  // ← forzar re-lectura desde DB en el próximo ciclo
+    return;                       // ← NO sobrescribir DB con valor corrupto
   }
 
   // Ignorar si el total bajó (lag de Datame)

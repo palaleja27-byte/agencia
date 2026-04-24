@@ -14139,6 +14139,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     let _opRtBaseline     = null;   // total en Datame al momento del login
     let _opRtPtosSesion   = 0;      // pts ganados desde el login
     let _opRtTurnos       = {};     // historial del día { Mañana:X, Tarde:Y, Noche:Z }
+    let _opRtPerfilesNeto = [];     // [{ id, nombre, neto, total }] — desglose por perfil
+    let _opRtBaselineMap  = {};     // { id_perfil: baseline } — baseline individual por perfil
 
     function _opRtJornada() {
       const h = parseInt(new Date().toLocaleString('en-US', {
@@ -14167,11 +14169,35 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const cop          = Math.round(pts * 1400).toLocaleString('es-CO');
       const col          = jornadaColor[jornada];
 
-      // Historial: puntos de turnos anteriores HOY
+      // Historial de otros turnos hoy
       const ptsHistorial = Object.entries(_opRtTurnos)
-        .filter(([t]) => t !== jornada)
+        .filter(([t]) => t !== jornada && _opRtTurnos[t] > 0)
         .map(([t, v]) => `<div style="font-size:.62rem;color:#64748b;">${jornadaEmoji[t]} ${t}: <b style="color:#94a3b8;">${v.toFixed(1)} pts</b></div>`)
         .join('');
+
+      // Desglose por perfil — NUEVO
+      const perfilesHtml = _opRtPerfilesNeto.length > 1 ? `
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">
+          <div style="font-size:.58rem;color:#334155;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">📊 Por perfil</div>
+          ${_opRtPerfilesNeto.map(p => {
+            const pct = pts > 0 ? Math.round((p.neto / pts) * 100) : 0;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;
+              padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:.65rem;">
+              <div style="color:#94a3b8;">
+                <span style="font-weight:700;color:#e2e8f0;">${p.nombre}</span>
+                <span style="color:#334155;font-size:.58rem;"> · ${p.id}</span>
+              </div>
+              <div style="text-align:right;">
+                <span style="font-weight:800;color:${col};">${p.neto.toFixed(1)} pts</span>
+                <span style="color:#475569;font-size:.58rem;"> (${pct}%)</span>
+              </div>
+            </div>`;
+          }).join('')}
+          <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:.6rem;color:#475569;">
+            <span>Total sesión</span>
+            <span style="color:#34d399;font-weight:700;">${pts.toFixed(1)} pts · $${cop} COP</span>
+          </div>
+        </div>` : '';
 
       el.innerHTML = `
         <div style="background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.25);border-radius:14px;padding:14px 16px;margin-bottom:12px;">
@@ -14184,18 +14210,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             <span id="op-rt-ts" style="font-size:.57rem;color:#475569;">—</span>
           </div>
 
-          <!-- Cifra principal: puntos de esta sesión -->
-          <div style="text-align:center;padding:10px 0 12px;border-bottom:1px solid rgba(255,255,255,.06);">
+          <!-- Total del turno -->
+          <div style="text-align:center;padding:10px 0 ${_opRtPerfilesNeto.length > 1 ? '10' : '12'}px;border-bottom:1px solid rgba(255,255,255,.06);">
             <div id="op-rt-pts" style="font-size:2.4rem;font-weight:900;color:${col};line-height:1;transition:all .4s ease;">
               ${pts > 0 ? pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '0.0'}
             </div>
-            <div style="font-size:.68rem;color:#94a3b8;margin-top:3px;">pts en tu turno actual</div>
+            <div style="font-size:.68rem;color:#94a3b8;margin-top:3px;">pts en tu turno — ${_opRtPerfilesNeto.length} perfil${_opRtPerfilesNeto.length !== 1 ? 'es' : ''}</div>
             <div style="font-size:.63rem;color:#34d399;margin-top:2px;font-weight:600;">
               ${pts > 0 ? '$' + cop + ' COP ganados' : 'Esperando actividad...'}
             </div>
           </div>
 
-          <!-- Turnos anteriores del día -->
+          <!-- Desglose por perfil -->
+          ${perfilesHtml}
+
+          <!-- Otros turnos hoy -->
           ${ptsHistorial ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.04);">
             <div style="font-size:.55rem;color:#334155;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Otros turnos hoy</div>
             ${ptsHistorial}
@@ -14223,28 +14252,40 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (!ops?.length) return;
 
         // 2. Calcular el total mensual correcto de Datame para CADA perfil
-        //    (usamos el MAX puntos_total por perfil, ya que puede haber varios turnos)
+        //    y el neto individual (total_actual - baseline_perfil)
         const porPerfil = {};
         ops.forEach(r => {
           const pt = r.puntos_total || 0;
-          if (!porPerfil[r.id_perfil] || pt > porPerfil[r.id_perfil]) {
-            porPerfil[r.id_perfil] = pt;
+          if (!porPerfil[r.id_perfil] || pt > (porPerfil[r.id_perfil]?.total || 0)) {
+            porPerfil[r.id_perfil] = { total: pt, neto: r.puntos_neto || 0, agencia: r.agencia || r.id_perfil };
           }
         });
-        const sumaTotal = Object.values(porPerfil).reduce((s, v) => s + v, 0);
+        const sumaTotal = Object.values(porPerfil).reduce((s, v) => s + v.total, 0);
 
-        // 2b. Actualizar la métrica ABRIL en el dashboard con el total real de Datame
+        // 2b. Calcular neto por perfil usando baseline individual
+        const opData = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+          .find(o => o.name.toUpperCase() === opName?.toUpperCase());
+        _opRtPerfilesNeto = Object.entries(porPerfil).map(([id, v]) => {
+          // Baseline individual: si no existe, usar el global proporcional
+          if (_opRtBaselineMap[id] === undefined) _opRtBaselineMap[id] = v.total;
+          const neto = Math.max(0, v.total - _opRtBaselineMap[id]);
+          const nombrePerfil = opData?.profiles?.find(p => String(p.id) === String(id))?.name || v.agencia || id;
+          return { id, nombre: nombrePerfil, total: v.total, neto };
+        }).sort((a, b) => b.neto - a.neto);
+
+        // 2c. Actualizar la métrica ABRIL en el dashboard con el total real de Datame
         const mesEl = document.querySelector('#op-dash-metrics .op-dash-metric:nth-child(2) .val');
         if (mesEl && sumaTotal > 0) {
           mesEl.textContent = sumaTotal.toFixed(1);
-          // También actualizar el COP si existe
           const copEl = mesEl.closest('.op-dash-metric')?.querySelector('.op-stat-cop');
           if (copEl) copEl.textContent = '💰 $' + Math.round(sumaTotal * 1400).toLocaleString('es-CO') + ' COP';
         }
 
         if (_opRtBaseline === null) {
           _opRtBaseline = sumaTotal;
-          console.log('[OP-SESSION] Baseline fijado al login:', _opRtBaseline.toFixed(2));
+          // Fijar baseline individual por perfil al momento del login
+          Object.entries(porPerfil).forEach(([id, v]) => { _opRtBaselineMap[id] = v.total; });
+          console.log('[OP-SESSION] Baseline fijado al login:', _opRtBaseline.toFixed(2), '| Perfiles:', Object.keys(porPerfil).length);
 
           // Guardar sesión en Supabase para historial
           const jornada = _opRtJornada();
@@ -14259,8 +14300,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (ses) _opRtSessionId = ses.id;
         }
 
-        // 3. Neto de la sesión = total_actual - baseline_login
-        _opRtPtosSesion = Math.max(0, sumaTotal - _opRtBaseline);
+        // 3. Neto de la sesión = suma de netos individuales de todos los perfiles
+        _opRtPtosSesion = _opRtPerfilesNeto.reduce((s, p) => s + p.neto, 0);
 
         // 4. Actualizar historial de turnos del día (de registros ya cerrados)
         const turnos = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
@@ -14297,6 +14338,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       _opRtPtosSesion = 0;
       _opRtSessionId  = null;
       _opRtTurnos     = {};
+      _opRtPerfilesNeto = [];
+      _opRtBaselineMap  = {};
 
       const ids = _opRtGetIds(opName);
       if (!ids.length) { console.warn('[OP-SESSION] Sin IDs para', opName); return; }

@@ -14251,33 +14251,43 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         // 1. Obtener puntos_total actuales de Datame (por turno de hoy)
         const { data: ops } = await _sb
           .from('operaciones')
-          .select('id_perfil, puntos_total, puntos_neto, jornada')
+          .select('id_perfil, puntos_total, puntos_baseline, puntos_neto, jornada, agencia')
           .in('id_perfil', ids)
           .eq('fecha_dia', hoy)
+          .eq('jornada', _opRtJornada())   // solo el turno activo
           .neq('jornada', 'Auto');
 
         if (!ops?.length) return;
 
-        // 2. Calcular el total mensual correcto de Datame para CADA perfil
-        //    y el neto individual (total_actual - baseline_perfil)
+        // 2. Construir mapa por perfil con total, baseline (6am), neto del watcher
         const porPerfil = {};
         ops.forEach(r => {
           const pt = r.puntos_total || 0;
+          const bl = r.puntos_baseline || 0;   // baseline del turno (fijado a las 6am por el watcher)
           if (!porPerfil[r.id_perfil] || pt > (porPerfil[r.id_perfil]?.total || 0)) {
-            porPerfil[r.id_perfil] = { total: pt, neto: r.puntos_neto || 0, agencia: r.agencia || r.id_perfil };
+            porPerfil[r.id_perfil] = {
+              total:    pt,
+              baseline: bl,            // ← baseline del watcher (inicio del turno)
+              neto:     r.puntos_neto || 0,
+              agencia:  r.agencia || r.id_perfil
+            };
           }
         });
-        const sumaTotal = Object.values(porPerfil).reduce((s, v) => s + v.total, 0);
+        const sumaTotal    = Object.values(porPerfil).reduce((s, v) => s + v.total,    0);
+        const sumaBaseline = Object.values(porPerfil).reduce((s, v) => s + v.baseline, 0);
 
-        // 2b. Calcular neto por perfil usando baseline individual
+        // 2b. Neto por perfil usando baseline del TURNO (6am), no del momento del login
+        //     Así el operador ve sus puntos acumulados desde el inicio del turno
         const opData = (typeof operatorsData !== 'undefined' ? operatorsData : [])
           .find(o => o.name.toUpperCase() === opName?.toUpperCase());
         _opRtPerfilesNeto = Object.entries(porPerfil).map(([id, v]) => {
-          // Baseline individual: si no existe, usar el global proporcional
-          if (_opRtBaselineMap[id] === undefined) _opRtBaselineMap[id] = v.total;
+          // Usar el baseline del watcher (6am) como referencia fija del turno
+          if (_opRtBaselineMap[id] === undefined) {
+            _opRtBaselineMap[id] = v.baseline > 0 ? v.baseline : v.total;
+          }
           const neto = Math.max(0, v.total - _opRtBaselineMap[id]);
           const nombrePerfil = opData?.profiles?.find(p => String(p.id) === String(id))?.name || v.agencia || id;
-          return { id, nombre: nombrePerfil, total: v.total, neto };
+          return { id, nombre: nombrePerfil, total: v.total, baseline: _opRtBaselineMap[id], neto };
         }).sort((a, b) => b.neto - a.neto);
 
         // 2c. Guardar total mensual real como fuente de verdad global
@@ -14292,10 +14302,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         }
 
         if (_opRtBaseline === null) {
-          _opRtBaseline = sumaTotal;
-          // Fijar baseline individual por perfil al momento del login
-          Object.entries(porPerfil).forEach(([id, v]) => { _opRtBaselineMap[id] = v.total; });
-          console.log('[OP-SESSION] Baseline fijado al login:', _opRtBaseline.toFixed(2), '| Perfiles:', Object.keys(porPerfil).length);
+          // DELTA-SHIFT™: usar el baseline del TURNO (6am del watcher), no el total al login
+          // Esto garantiza que el operador ve sus pts acumulados desde el inicio del turno
+          // aunque se desloguee y vuelva a loguearse durante el mismo turno
+          _opRtBaseline = sumaBaseline > 0 ? sumaBaseline : sumaTotal;
+          console.log('[OP-SESSION] Baseline TURNO (6am):', _opRtBaseline.toFixed(2),
+                      '| Neto acumulado:', (sumaTotal - _opRtBaseline).toFixed(2), 'pts');
 
           // Guardar sesión en Supabase para historial
           const jornada = _opRtJornada();

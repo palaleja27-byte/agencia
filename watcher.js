@@ -36,12 +36,15 @@ function fechaHoyColombia() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
-function mesActual() {
-  const d = new Date();
-  return {
-    start: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`,
-    end:   new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().split('T')[0]
-  };
+// Hora de inicio del turno actual (para delimitar el rango en Datame)
+function rangoTurnoHoy() {
+  const hoy = fechaHoyColombia();
+  const h   = parseInt(new Date().toLocaleString('en-US', {
+    timeZone: 'America/Bogota', hour12: false, hour: 'numeric'
+  }));
+  // ⚠️ Clave: rango = SOLO HOY, así Datame devuelve puntos de hoy únicamente
+  // Datame suma puntos en el rango seleccionado, no es acumulado histórico
+  return { start: hoy, end: hoy };
 }
 
 function log(msg) {
@@ -59,22 +62,29 @@ async function pushCambio(idPerfil, pts, modelo, panelNombre) {
   const fechaDia = fechaHoyColombia();
   const tsAhora  = new Date().toISOString();
 
+  // pts = puntos de HOY (rango Datame = solo hoy)
+  // → puntos_neto = pts directamente (ya es el neto real del día)
+  // Si hay registro previo y los puntos bajaron, ignorar
   const { data: prev } = await supabase
     .from('operaciones')
-    .select('puntos, puntos_neto')
+    .select('puntos')
     .eq('id_perfil', idPerfil)
     .eq('fecha_dia', fechaDia)
     .eq('jornada', jornada)
     .maybeSingle();
 
   const ptsPrev = prev?.puntos || 0;
-  const neto    = Math.max(0, pts - ptsPrev);
+  if (pts <= ptsPrev && ptsPrev > 0) {
+    // Datame a veces devuelve valores menores (lag de API) — ignorar
+    log(`  ⚠️ ${modelo}: pts (${pts}) ≤ prev (${ptsPrev}), ignorando`);
+    return;
+  }
 
   const { error } = await supabase.from('operaciones').upsert({
     id_perfil:   idPerfil,
     agencia:     panelNombre,
-    puntos:      pts,
-    puntos_neto: prev ? (prev.puntos_neto || 0) + neto : pts,
+    puntos:      pts,       // total del día
+    puntos_neto: pts,       // ← igual al total porque el rango es solo HOY
     fecha_corte: tsAhora,
     fecha_dia:   fechaDia,
     jornada:     jornada,
@@ -83,9 +93,10 @@ async function pushCambio(idPerfil, pts, modelo, panelNombre) {
   if (error) {
     log(`  ❌ DB Error ${modelo}: ${error.message}`);
   } else {
-    log(`  🔴 CAMBIO DETECTADO → ${modelo} (${idPerfil}) | ${ptsPrev} → ${pts} pts | neto: +${neto.toFixed(2)} | ${jornada}`);
+    log(`  🔴 CAMBIO → ${modelo} (${idPerfil}) | prev:${ptsPrev.toFixed(1)} → hoy:${pts.toFixed(2)} pts | ${jornada}`);
   }
 }
+
 
 // ────────────────────────────────────────────────────────────────
 // Sesión de un panel: login + ciclo de scrape perpetuo
@@ -146,17 +157,17 @@ async function watchPanel(panel, perfiles) {
     return;
   }
 
-  const { start, end } = mesActual();
+  const { start, end } = rangoTurnoHoy(); // 🔑 SOLO HOY — puntos reales del turno
 
-  // ── CICLO PRINCIPAL — itera perfiles hasta que expire el tiempo ──
+  // ── CICLO PRINCIPAL ──
   while (Date.now() - startTime < MAX_RUNTIME_MS) {
-    log(`\n🔄 Ciclo de escaneo — ${nombre} | ${perfiles.length} perfiles`);
+    log(`\n🔄 Ciclo de escaneo — ${nombre} | ${perfiles.length} perfiles | rango: ${start}`);
 
     try {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
 
-      // Inyectar fechas del mes actual
+      // Inyectar fechas de HOY (no del mes) → Datame muestra solo puntos de hoy
       await page.evaluate(({ s, e }) => {
         const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
         if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }

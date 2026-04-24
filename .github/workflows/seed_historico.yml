@@ -1,0 +1,49 @@
+name: 🗄️ Seed Histórico — Una sola vez
+
+# ── Triggers ──────────────────────────────────────────────────────
+# Se puede lanzar manualmente desde GitHub → Actions → "Run workflow"
+# También puedes dejarlo con 'push' solo si lo necesitas una vez más.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe "SEED" para confirmar'
+        required: true
+        default: ''
+
+jobs:
+  seed:
+    name: Sembrar datos históricos Feb/Mar/Abr 1-23
+    runs-on: ubuntu-latest
+    timeout-minutes: 120          # máximo 2 horas (el scraping es lento)
+
+    steps:
+      - name: ✅ Validar confirmación
+        if: github.event.inputs.confirm != 'SEED'
+        run: |
+          echo "❌ Debes escribir 'SEED' en el campo de confirmación."
+          exit 1
+
+      - name: 📦 Checkout código
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📥 Instalar dependencias
+        run: npm ci
+
+      - name: 🎭 Instalar Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: 🗄️ Ejecutar seed histórico
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          echo "📅 Sembrando datos de Feb-2026, Mar-2026 y Abr 1-23..."
+          node seed_historico.js
+          echo "✅ Seed completado."

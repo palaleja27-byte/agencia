@@ -1,10 +1,48 @@
 -- ═══════════════════════════════════════════════════════════════
--- SANITIZACIÓN QUIRÚRGICA — 24-Abr-2026 13:27
--- Corrige baselines corruptos donde neto > 60% del total mensual
--- EJECUTAR EN SUPABASE → SQL Editor → Run
+-- MIGRACIÓN — Seed Histórico AgenciaRR
+-- Ejecutar ANTES de correr seed_historico.js en GitHub Actions
+-- SUPABASE → SQL Editor → Run (solo una vez)
 -- ═══════════════════════════════════════════════════════════════
 
--- ── PASO 1: Diagnóstico — ver todos los perfiles con sus valores ──
+-- ── PASO 0: Verificar que la constraint UNIQUE existe ───────────
+-- Si no existe, crearla para que el upsert funcione correctamente.
+-- El seed_historico.js usa onConflict: 'id_perfil,fecha_dia,jornada'
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'operaciones_id_perfil_fecha_dia_jornada_key'
+  ) THEN
+    ALTER TABLE operaciones
+      ADD CONSTRAINT operaciones_id_perfil_fecha_dia_jornada_key
+      UNIQUE (id_perfil, fecha_dia, jornada);
+    RAISE NOTICE 'Constraint UNIQUE creada correctamente';
+  ELSE
+    RAISE NOTICE 'Constraint UNIQUE ya existia';
+  END IF;
+END;
+$$;
+
+-- ── PASO 1: Ver qué datos históricos ya existen (jornada='MES') ─
+SELECT
+  agencia,
+  id_perfil,
+  fecha_dia,
+  jornada,
+  ROUND(puntos_neto::numeric, 1) AS puntos_neto
+FROM operaciones
+WHERE jornada = 'MES'
+ORDER BY fecha_dia, agencia;
+
+-- ── PASO 2: (OPCIONAL) Borrar registros MES previos para re-sembrar limpio
+-- Descomentar si quieres empezar de cero con el seed
+-- DELETE FROM operaciones WHERE jornada = 'MES';
+
+-- ═══════════════════════════════════════════════════════════════
+-- SANITIZACIÓN QUIRÚRGICA — 24-Abr-2026
+-- ═══════════════════════════════════════════════════════════════
+
+-- ── PASO 3: Diagnóstico de baselines del día actual ─────────────
 SELECT
   agencia                                     AS nombre,
   id_perfil,
@@ -18,35 +56,24 @@ SELECT
     ELSE '✅ OK'
   END AS estado
 FROM operaciones
-WHERE fecha_dia = '2026-04-24'
-  AND jornada   = 'Mañana'
+WHERE fecha_dia = CURRENT_DATE::text
+  AND jornada   != 'MES'
+  AND jornada   != 'Auto'
   AND puntos_total > 0
 ORDER BY pct_del_total DESC NULLS LAST;
 
--- ── PASO 2: Corrección quirúrgica de RENEE (143014129) ──
--- Su baseline fue fijado en 18.69 por error (confundida con otro perfil)
--- Total actual: 220.4 → La producción real de mañana es ≈ 1.8 pts
-UPDATE operaciones
-SET
-  puntos_baseline = 218.60,
-  puntos_neto     = 1.80
-WHERE id_perfil = 143014129
-  AND fecha_dia = '2026-04-24'
-  AND jornada   = 'Mañana';
-
--- ── PASO 3: Sanitización masiva de TODOS los baselines corruptos ──
--- Para perfiles con neto > 60% del total: el baseline estaba muy bajo
--- Se corrige fijando el baseline como total * 0.97 (neto = 3% del total ≈ producción conservadora)
+-- ── PASO 4: Sanitización masiva de baselines corruptos ──────────
 UPDATE operaciones
 SET
   puntos_neto     = ROUND((puntos_total * 0.03)::numeric, 2),
   puntos_baseline = ROUND((puntos_total * 0.97)::numeric, 2)
-WHERE fecha_dia   = '2026-04-24'
-  AND jornada     = 'Mañana'
+WHERE fecha_dia   = CURRENT_DATE::text
+  AND jornada     != 'MES'
+  AND jornada     != 'Auto'
   AND puntos_total > 100
   AND puntos_neto  > puntos_total * 0.60;
 
--- ── PASO 4: Verificación final ──
+-- ── PASO 5: Verificación final ──────────────────────────────────
 SELECT
   agencia                                     AS nombre,
   id_perfil,
@@ -59,7 +86,8 @@ SELECT
     ELSE '✅ OK'
   END AS estado
 FROM operaciones
-WHERE fecha_dia = '2026-04-24'
-  AND jornada   = 'Mañana'
+WHERE fecha_dia = CURRENT_DATE::text
+  AND jornada   != 'MES'
+  AND jornada   != 'Auto'
   AND puntos_total > 0
 ORDER BY puntos_neto DESC;

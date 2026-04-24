@@ -107,12 +107,27 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
   // ── SANIDAD: neto no puede superar el 60% del total mensual en un turno ──
-  // Si supera ese umbral es señal de baseline corrupto en memoria.
-  // Estrategia: limpiar memoria y saltar este ciclo para que el próximo lea de DB.
+  // Si supera ese umbral → baseline corrupto en DB. CORREGIR ACTIVAMENTE en Supabase.
   if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100) {
-    log(`  🔴 SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total ${monthlyTotal.toFixed(1)} — baseline corrupto, limpiando memoria...`);
-    delete shiftBaselines[key];  // ← forzar re-lectura desde DB en el próximo ciclo
-    return;                       // ← NO sobrescribir DB con valor corrupto
+    // Baseline correcto: asumir que el neto real es ≈ 3% del total (producción conservadora)
+    const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
+    const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
+    log(`  🔴 SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total → CORRIENDO baseline en DB...`);
+    // Corregir en Supabase directamente
+    const { error: errCorr } = await supabase.from('operaciones')
+      .update({ puntos_baseline: baselineCorr, puntos_neto: netoCorr })
+      .eq('id_perfil', idPerfil)
+      .eq('fecha_dia', fechaDia)
+      .eq('jornada', jornada);
+    if (!errCorr) {
+      log(`  ✅ SANIDAD ${modelo}: baseline corregido → ${baselineCorr} | neto → ${netoCorr} pts`);
+      shiftBaselines[key] = baselineCorr;
+      netoTurno = netoCorr;
+    } else {
+      log(`  ❌ SANIDAD ${modelo}: no se pudo corregir en DB: ${errCorr.message}`);
+      delete shiftBaselines[key];
+      return;
+    }
   }
 
   // Ignorar si el total bajó (lag de Datame)

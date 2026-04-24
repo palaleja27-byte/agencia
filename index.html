@@ -7694,10 +7694,123 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
 
 
+
     // ══════════════════════════════════════════════════════════════
-    // PANEL CAJÓN — Puntos Sin Asignar
+    // PSA SMART — Asignación inteligente de puntos desde Supabase
+    // Cruza watcher (operaciones) con asistencia del turno activo
     // ══════════════════════════════════════════════════════════════
+    let _psaSmartData = [];
+
+    function _psaJornadaActual() {
+      const h = parseInt(new Date().toLocaleString('en-US',{timeZone:'America/Bogota',hour12:false,hour:'numeric'}));
+      if (h >= 6 && h < 14) return 'Mañana'; if (h >= 14 && h < 22) return 'Tarde'; return 'Noche';
+    }
+
+    async function psaCargarDesdeSupabase() {
+      if (typeof _sb === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const jornada = _psaJornadaActual();
+      try {
+        const { data: ops } = await _sb
+          .from('operaciones')
+          .select('id_perfil, agencia, puntos_neto, puntos_total, jornada')
+          .eq('fecha_dia', hoy)
+          .eq('jornada', jornada)
+          .gt('puntos_neto', 0);
+        if (!ops?.length) return;
+        // Construir mapa perfil → operador desde asistencia del localStorage
+        const shiftKey = jornada === 'Mañana' ? 'manana' : jornada === 'Tarde' ? 'tarde' : 'noche';
+        const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + shiftKey;
+        const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        const perfilAOp = {};
+        Object.entries(draft).forEach(([k, v]) => {
+          if (v.estado === 'P' && Array.isArray(v.perfiles)) {
+            const opName = k.split('||')[0];
+            v.perfiles.forEach(p => { perfilAOp[String(p.id || p)] = opName; });
+          }
+        });
+        _psaSmartData = ops.map(r => ({
+          id_perfil: r.id_perfil, modelo: r.agencia || r.id_perfil,
+          puntos_neto: r.puntos_neto || 0, jornada: r.jornada,
+          operador: perfilAOp[String(r.id_perfil)] || null,
+        }));
+        renderPSASmartPanel();
+      } catch(e) { console.warn('[PSA-SMART]', e); }
+    }
+
+    function psaAsignarManual(idPerfil, opName) {
+      if (!opName || !idPerfil) return;
+      const item = _psaSmartData.find(d => String(d.id_perfil) === String(idPerfil));
+      if (item) item.operador = opName;
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const jornada = _psaJornadaActual();
+      const shiftKey = jornada === 'Mañana' ? 'manana' : jornada === 'Tarde' ? 'tarde' : 'noche';
+      const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + shiftKey;
+      const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+      const k = opName + '||operador';
+      if (!draft[k]) draft[k] = { estado: 'P', perfiles: [] };
+      if (!Array.isArray(draft[k].perfiles)) draft[k].perfiles = [];
+      if (!draft[k].perfiles.some(p => String(p.id || p) === String(idPerfil))) {
+        draft[k].perfiles.push({ id: idPerfil, name: String(idPerfil) });
+      }
+      localStorage.setItem(draftKey, JSON.stringify(draft));
+      renderPSASmartPanel();
+    }
+
+    function renderPSASmartPanel() {
+      const body = document.getElementById('rk-psa-body');
+      const titleEl = document.getElementById('rk-psa-title');
+      const badgeEl = document.getElementById('rk-psa-badge');
+      const panel   = document.getElementById('rk-psa-panel');
+      if (!body || !panel || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+      if (!_psaSmartData.length) return;
+      panel.style.display = 'block';
+      const sinAsignar = _psaSmartData.filter(d => !d.operador);
+      const conAsignar = _psaSmartData.filter(d =>  d.operador);
+      const totalNeto  = _psaSmartData.reduce((s,d) => s + d.puntos_neto, 0);
+      const totalSA    = sinAsignar.reduce((s,d) => s + d.puntos_neto, 0);
+      if (titleEl) titleEl.textContent = `Puntos sin asignar · ${totalSA.toFixed(1)} pts · $${Math.round(totalSA*1400).toLocaleString('es-CO')} COP`;
+      if (badgeEl) badgeEl.textContent = `${sinAsignar.length} perfiles`;
+      const opsList = (typeof operatorsData !== 'undefined' ? operatorsData : []).map(o => o.name);
+      const optsHtml = opsList.map(n => `<option value="${n}">${n}</option>`).join('');
+      const rowsSA = sinAsignar.map(d => `
+        <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;align-items:center;
+          padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.73rem;">
+          <div>
+            <div style="font-weight:700;color:#e2e8f0;">${d.modelo}</div>
+            <div style="color:#64748b;font-size:.6rem;">ID: ${d.id_perfil} · ${d.jornada}</div>
+          </div>
+          <div style="font-weight:700;color:#fbbf24;text-align:center;">${d.puntos_neto.toFixed(1)} pts</div>
+          <select onchange="psaAsignarManual('${d.id_perfil}',this.value)"
+            style="padding:3px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.12);
+                   background:#1e293b;color:#cbd5e1;font-size:.62rem;cursor:pointer;">
+            <option value="">→ Asignar operador...</option>${optsHtml}
+          </select>
+        </div>`).join('');
+      const rowsCA = conAsignar.length ? `
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">
+          <div style="font-size:.6rem;color:#334155;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">✅ Asignados (${conAsignar.length})</div>
+          ${conAsignar.map(d=>`<div style="display:flex;justify-content:space-between;font-size:.67rem;padding:3px 0;color:#64748b;">
+            <span>${d.modelo} <span style="color:#334155">(${d.id_perfil})</span></span>
+            <span style="color:#34d399;font-weight:700;">${d.puntos_neto.toFixed(1)} pts → ${d.operador}</span>
+          </div>`).join('')}
+        </div>` : '';
+      body.innerHTML = `<div style="padding:10px 0;">
+        ${sinAsignar.length ? rowsSA : '<div style="font-size:.72rem;color:#334155;padding:8px 0;">✅ Todos los perfiles asignados al turno</div>'}
+        ${rowsCA}
+        <div style="margin-top:10px;font-size:.68rem;color:#475569;text-align:right;">
+          Total turno: <strong style="color:#fbbf24;">${totalNeto.toFixed(1)} pts</strong>
+          · Sin asignar: <strong style="color:#f87171;">${totalSA.toFixed(1)} pts</strong>
+          · <strong style="color:#34d399;">$${Math.round(totalNeto*1400).toLocaleString('es-CO')} COP</strong>
+        </div></div>`;
+    }
+
+    setTimeout(() => { if (currentRole === 'monitor' || currentRole === 'admin') psaCargarDesdeSupabase(); }, 6000);
+    setInterval(() => { if (currentRole === 'monitor' || currentRole === 'admin') psaCargarDesdeSupabase(); }, 600000);
+
     let _psaPanelOpen = false;
+
+
 
     function togglePSAPanel() {
       _psaPanelOpen = !_psaPanelOpen;
@@ -10479,17 +10592,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                <input type="text" id="login-nuevo-perfil-id" placeholder="ID del perfil (ej: 95956014)"
                  style="flex:1;padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
                         background:rgba(0,0,0,.3);color:#cbd5e1;font-size:.65rem;outline:none;">
-               <button onclick="
-                 const idVal = document.getElementById('login-nuevo-perfil-id').value.trim();
-                 if(!idVal) return;
-                 const lista = document.getElementById('login-perfiles-list');
-                 if(lista.querySelector('[value=\"'+idVal+'\"]')) return;
-                 const lbl = document.createElement('label');
-                 lbl.style.cssText='display:flex;align-items:center;gap:5px;background:rgba(94,234,212,.08);padding:4px 8px;border-radius:6px;font-size:.65rem;cursor:pointer;border:1px solid rgba(94,234,212,.3);';
-                 lbl.innerHTML='<input type=checkbox class=login-perfil-chk value='+idVal+' checked style=accent-color:#5eead4><span>'+idVal+'</span>';
-                 lista.appendChild(lbl);
-                 document.getElementById('login-nuevo-perfil-id').value='';
-               "
+               <button onclick="_agregarPerfilLogin()"
                  style="padding:5px 10px;border-radius:8px;border:none;background:#5eead4;color:#000;font-size:.65rem;font-weight:700;cursor:pointer;">+ Agregar</button>
              </div>
           </div>
@@ -10598,6 +10701,25 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       localStorage.setItem('rr_sanar_abril_2026', 'true');
       console.log(`[Sanity Check] Se purgaron ${count} registros. Forzando re-sync...`);
       if (typeof sincronizarDatameRelacional === 'function') sincronizarDatameRelacional();
+    }
+
+    // Agregar un perfil extra desde el modal Meta del Día
+    function _agregarPerfilLogin() {
+      const input = document.getElementById('login-nuevo-perfil-id');
+      const lista  = document.getElementById('login-perfiles-list');
+      if (!input || !lista) return;
+      const idVal = input.value.trim();
+      if (!idVal) return;
+      if (lista.querySelector('[value="' + idVal + '"]')) { input.value = ''; return; }
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex;align-items:center;gap:5px;background:rgba(94,234,212,.08);padding:4px 8px;border-radius:6px;font-size:.65rem;cursor:pointer;border:1px solid rgba(94,234,212,.3);';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.className = 'login-perfil-chk'; chk.value = idVal; chk.checked = true;
+      chk.style.accentColor = '#5eead4';
+      const sp = document.createElement('span'); sp.textContent = idVal;
+      lbl.appendChild(chk); lbl.appendChild(sp);
+      lista.appendChild(lbl);
+      input.value = '';
     }
 
     function finalizarLoginOperador(opName) {

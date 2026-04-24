@@ -1,200 +1,349 @@
 ---
 name: Editor Quirúrgico AgenciaRR (index.html)
-description: Mapa y reglas para realizar cambios rápidos y precisos en la aplicación monolítica index.html sin analizar todo el código, ahorrando tokens y tiempo.
+description: Mapa y reglas para realizar cambios rápidos y precisos en la aplicación monolítica index.html. Incluye el algoritmo DELTA-SHIFT™ para distribución de puntos por operador y turno, y el estado actual del proyecto al 24-Abr-2026.
 ---
 
 # 🛠️ Skill: Editor Quirúrgico AgenciaRR
+## Proyecto base — Estado al 24-Abr-2026
 
-Esta Skill ha sido creada para agilizar el mantenimiento del archivo `index.html` de AgenciaRR, el cual es una Single-Page Application (SPA) súper monolítica (+14,000 líneas). Ya que el código principal es estable y completamente funcional, nuestro objetivo con esta Skill es realizar agregados y pequeños cambios de manera eficiente ("quirúrgica").
-
-### 📋 1. Reglas de Modificación
-- **PROHIBIDO leer el archivo completo.** Esto agota el contexto.
-- **Flujo de trabajo obligatorio**:
-  1. Utiliza `grep_search` para buscar identificadores clave (ej. un `id`, una variable o un nombre de `function`).
-  2. Si hay coincidencias, extrae la línea, y luego usa `view_file` con un `StartLine` y `EndLine` precisos (un radio de +/- 50 líneas) para ver solo la porción relevante.
-  3. Ejecuta los cambios mediante herramientas de reemplazo de contenido delimitado (`replace_file_content` o `multi_replace_file_content`), asegurándote de no dañar el HTML, CSS o JS circundante.
+Esta Skill es la documentación técnica viva del proyecto AgenciaRR. Contiene el mapa del código, el algoritmo oficial de puntos y las reglas de edición quirúrgica.
 
 ---
 
-### 🗺️ 2. Mapa Rápido del Monolito
+## 📋 1. Reglas de Modificación Quirúrgica
 
-- **`Líneas iniciales`**: Encabezados HTML, `<head>`, importación de librerías (Chart.js, XLSX, Supabase JS).
-- **`Bloque <style>`**: Variables en `:root` y clases CSS. Todo el CSS está arriba.
-- **`Bloque HTML (body)`**: Pantallas anidadas con `display: none` / `display: block`.
-  - `#login-screen`: Inicio de sesión, teclado numérico (PIN), y selección de roles.
-  - `#op-dashboard`: Interfaz principal para el rango Operador.
-  - `#admin-panel` y otras vistas (modales de historial).
-- **`Bloque <script>`**: Al final del archivo (~L6000 en adelante). Contiene toda la lógica reactiva en Vanilla JS.
+- **PROHIBIDO leer el archivo completo.** El `index.html` tiene +14,400 líneas.
+- **Flujo obligatorio**:
+  1. Usar `grep_search` o `Select-String` para localizar identificadores clave.
+  2. Usar `view_file` con `StartLine`/`EndLine` precisos (radio de ±50 líneas).
+  3. Editar con `replace_file_content` o `multi_replace_file_content`.
+  4. Siempre hacer `git add -A; git commit -m "..."; git push` al finalizar.
 
 ---
 
-### 🧠 3. Módulos JS Clave
+## 🏆 2. Algoritmo DELTA-SHIFT™
+
+**Nombre oficial del algoritmo de puntos de AgenciaRR.**
+
+### Concepto
+DELTA-SHIFT™ mide la **producción neta de cada operador en su turno**, usando el total acumulado mensual de Datame como fuente y un *baseline* fijado al inicio del turno como punto de referencia.
+
+```
+DELTA-SHIFT™ Formula:
+  puntos_neto = puntos_total_actual - puntos_baseline_inicio_turno
+
+Donde:
+  puntos_total   = total acumulado del perfil en Datame (rango 01/mes → hoy+2días)
+  puntos_baseline = valor de puntos_total en el momento exacto en que inicia el turno
+  puntos_neto    = lo que produjo el perfil SOLO en este turno (empieza en 0)
+```
+
+### Turnos
+```
+MAÑANA:  06:00 → 14:00  (Colombia, America/Bogota)
+TARDE:   14:00 → 22:00
+NOCHE:   22:00 → 06:00
+```
+
+### Flujo completo DELTA-SHIFT™
+```
+06:00 — Inicio turno MAÑANA
+  Watcher scrape Datame con rango 2026-04-01 → 2026-04-26 (+2 días)
+  Datame devuelve puntos_total = 7,257.90
+  → puntos_baseline = 7,257.90  (SE FIJA UNA VEZ, NUNCA SE SOBREESCRIBE)
+  → puntos_neto     = 0.0 pts   (operador empieza desde cero)
+
+10:00 — Lectura del watcher
+  Datame devuelve puntos_total = 7,342.84
+  → puntos_neto = 7,342.84 - 7,257.90 = 84.94 pts ✅
+
+14:00 — Cambio a TARDE (nuevo operador logueado)
+  Watcher detecta nueva jornada 'Tarde'
+  → Nuevo registro: puntos_baseline = 7,342.84
+  → puntos_neto_tarde = 0.0 pts (nuevo operador empieza en 0)
+  El historial de MAÑANA queda guardado permanentemente en la DB.
+```
+
+### Regla de Sanidad del Baseline
+Si `puntos_neto > puntos_total * 0.60` → el baseline es corrupto.
+- El watcher **limpia su memoria** y **no escribe en DB**.
+- El próximo ciclo lee `puntos_baseline` directamente del campo en Supabase.
+- **Causa típica**: un SQL de corrección manual asignó el baseline de otro perfil por error.
+
+### Distribución a Operadores (PSA — Puntos Sin Asignar)
+```
+Cada perfil en Datame → tiene un operador asignado en la asistencia del turno
+Si el operador se logueó → sus perfiles se vinculan automáticamente (auto-asistencia)
+Si NO se logueó          → los puntos van a "Puntos Sin Asignar"
+                           → Admin/Monitor puede asignarlos manualmente con dropdown
+```
+
+### Valor en pesos colombianos
+```
+1 punto = $1,400 COP
+COP = puntos_neto × 1,400
+```
+
+---
+
+## 🗺️ 3. Mapa Rápido del Monolito (index.html)
+
+### HTML por secciones
+| Zona | Descripción |
+|---|---|
+| `#login-screen` | Login con PIN, selector de rol |
+| `#op-dashboard` | Vista del operador logueado |
+| `#admin-panel` | Vista admin/monitor |
+| `#rk-psa-panel` | Cajón Puntos Sin Asignar (monitor/admin) |
+| `#datame-panels-wrap` | Panel de cards Datame (monitor/admin) |
+| `#modal-meta-diaria` | Modal "Meta del Día" al login del operador |
+
+### Módulos JS Clave
 
 | Módulo | Línea aprox. | Descripción |
 |---|---|---|
-| `renderOpDashboard` | L10823 | Renderiza la vista del operador logueado |
-| `getPuntosHoy` | L7683 | Calcula pts de hoy desde localStorage |
-| `renderCorteSection` | L7863 | Sección de corte diario del operador |
-| `dpRenderGrid` | L13746 | Renderiza las cards de perfiles por panel (Datame) |
-| `sincronizarDatamePaneles` | L13848 | Sincroniza con Supabase y actualiza `_dpPuntosData`, `_dpTurnosData`, `_dpHistorialData` |
-| `dpMostrarWrap` | L13700 aprox | Muestra/oculta el bloque Datame según rol |
-| `opRtActivar` | Final del script | Activa la suscripción Realtime de Supabase para el operador logueado |
+| `renderOpDashboard` | L10964 | Vista principal del operador logueado |
+| `finalizarLoginOperador` | L10648 | Hook post-login: auto-asistencia + timer turno |
+| `mostrarModalMeta` | L10440 | Modal Meta del Día con perfiles seleccionables |
+| `_agregarPerfilLogin` | L10600 | Función global para agregar perfil extra en el modal |
+| `registrarAutoAsistencia` | L10560 | Marca asistencia automáticamente al login |
+| `renderPSAPanel` | L7840 | Cajón PSA (puntos sin asignar) clásico |
+| `psaCargarDesdeSupabase` | L7697 | PSA Smart: carga puntos del turno desde Supabase |
+| `psaAsignarManual` | L7742 | Asigna manualmente un perfil a un operador |
+| `renderPSASmartPanel` | L7760 | Renderiza el PSA Smart con dropdown de asignación |
+| `dpRenderGrid` | L13746 | Cards de perfiles por panel Datame |
+| `sincronizarDatamePaneles` | L13848 | Sync con Supabase + Realtime |
+| `opRtActivar` | L14325 | Activa Realtime del operador (OP-SESSION) |
+| `_opRtSync` | L14215 | Consulta Supabase y calcula DELTA-SHIFT™ del operador |
+| `_opRtRenderWidget` | L14165 | Widget de puntos en tiempo real con desglose por perfil |
 
 ---
 
-### 🏗️ 4. Arquitectura del Sistema Datame
+## 🗃️ 4. Base de Datos Supabase
 
-#### 4.1 Lógica de Puntos por Turno
-
-Los turnos son de 8 horas. El turno **nuevo empieza en 0** pero se guarda historial permanente.
-
-```
-Turno NOCHE:   22:00 → 06:00
-Turno MAÑANA:  06:00 → 14:00
-Turno TARDE:   14:00 → 22:00
-```
-
-**Flujo correcto de datos:**
-
-```
-06:00 AM — Inicio turno MAÑANA
-  watcher consulta Datame (rango: mes completo)
-  Datame devuelve: total_acumulado_mes = 7,257.90
-  → se guarda como puntos_baseline = 7,257.90 (NUNCA se sobreescribe en el turno)
-
-08:00 AM — Primera lectura del turno
-  Datame devuelve: 7,343.18
-  neto_turno = 7,343.18 - 7,257.90 = 85.28 pts ✅ (real del turno)
-
-14:00 — Cambio a TARDE
-  watcher detecta nueva jornada → fija nuevo baseline para TARDE = 7,343.18
-  neto_tarde reinicia en 0 para el nuevo operador ✅
-```
-
-#### 4.2 Columnas de la tabla `operaciones` (Supabase)
+### Tabla `operaciones` (principal — DELTA-SHIFT™)
 
 | Columna | Tipo | Descripción |
 |---|---|---|
 | `id` | bigserial | PK auto |
-| `id_perfil` | text | ID del perfil en Datame |
-| `agencia` | text | Nombre del panel/modelo |
-| `puntos` | numeric | Legado — igual a puntos_total |
-| `puntos_total` | numeric(12,2) | Total acumulado del mes (lo que trae Datame con rango mensual) |
-| `puntos_baseline` | numeric(12,2) | Total al INICIO del turno (punto de referencia = 0 del operador) |
-| `puntos_neto` | numeric(10,2) | Puntos hechos EN ESTE TURNO = puntos_total - puntos_baseline |
+| `id_perfil` | text | ID del perfil en Datame (7-10 dígitos) |
+| `agencia` | text | Nombre del modelo/perfil |
+| `puntos` | numeric | Legado — igual a `puntos_total` |
+| `puntos_total` | numeric(12,2) | Total mensual acumulado (directo de Datame) |
+| `puntos_baseline` | numeric(12,2) | Total al INICIO del turno (fijado 1 vez) |
+| `puntos_neto` | numeric(10,2) | Producción del turno = `puntos_total - puntos_baseline` |
 | `fecha_corte` | timestamptz | Timestamp de la última captura |
-| `fecha_dia` | date | Fecha del día (zona Colombia) |
-| `jornada` | text | 'Mañana' / 'Tarde' / 'Noche' / 'Auto' |
+| `fecha_dia` | date | Fecha en zona Colombia |
+| `jornada` | text | `'Mañana'` / `'Tarde'` / `'Noche'` / `'Auto'` |
 
-**Constraint único**: `UNIQUE(id_perfil, fecha_dia, jornada)` → nombre: `uq_perfil_dia_jornada`
+**Constraint único**: `UNIQUE(id_perfil, fecha_dia, jornada)`
 
-#### 4.3 Variables JS de Estado (Datame Panel)
+### Tabla `op_sessions` (historial por sesión de login)
+
+| Columna | Descripción |
+|---|---|
+| `operador` | Nombre del operador |
+| `perfil_ids` | Array de IDs que manejó en la sesión |
+| `baseline_total` | Total Datame al momento del login |
+| `puntos_sesion` | Neto acumulado de toda la sesión |
+| `jornada` | Turno de la sesión |
+| `fecha_dia` | Fecha en zona Colombia |
+
+### Tabla `datame_panels` + `datame_perfiles`
+- `datame_panels`: credenciales por panel (email, password, activo, nombre)
+- `datame_perfiles`: mapeo id_datame → modelo → panel_id
+
+### Estado RLS y Realtime
+```sql
+CREATE POLICY "write_ops" ON operaciones FOR ALL USING (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE operaciones;
+```
+
+---
+
+## 🤖 5. Watcher (GitHub Actions)
+
+**Archivo**: `watcher.js`  
+**Trigger**: GitHub Actions cron — cada 6 horas  
+**Runtime máximo**: 5.5 horas por ejecución  
+**Ciclo interno**: cada 10 minutos (3 segundos por perfil)
+
+### Comportamiento clave del watcher
 
 ```javascript
-_dpActivePanelId    // Panel activo (1,2,3,4)
-_dpPuntosData       // { id_perfil: { puntos_total, puntos_baseline, puntos_neto, fecha_corte } }
-_dpTurnosData       // { id_perfil: { 'Mañana': X, 'Tarde': Y, 'Noche': Z } }  ← neto por turno hoy
-_dpHistorialData    // { id_perfil: [ { fecha_dia, jornada, neto_dia } ] }  ← historial de turnos
-DP_PANELS_META      // [ { id, nombre, color } ]
-DP_PERFILES_MAP     // { panel_id: [ { id, modelo } ] }
+// 1. Rango de Datame: inicio del mes → hoy + 2 días
+//    Los +2 días capturan el lag contable de algunos paneles
+rangoMesActual() → { start: '2026-04-01', end: '2026-04-26' }
+
+// 2. Detección de jornada por hora Colombia
+detectarJornada() → 'Mañana' | 'Tarde' | 'Noche'
+
+// 3. Baseline en memoria (clave única por perfil+día+turno)
+shiftBaselines['95956014__2026-04-24__Mañana'] = 7257.90
+
+// 4. Al reiniciar (nueva ejecución de GitHub Actions):
+//    Lee puntos_baseline DIRECTO del campo en Supabase (NO recalcula)
+
+// 5. RADAR XHR: detecta puntos en 8 campos de la API de Datame:
+//    bonuses | total | total_points | bonuses_total |
+//    points  | amount | tokens | score
+
+// 6. Sanidad: si neto > 60% del total → baseline corrupto
+//    Acción: delete shiftBaselines[key] + return (no escribe en DB)
 ```
 
-#### 4.4 Display en cards (`dpRenderGrid`)
-
-```
-┌──────────────────────────────────────┐
-│  PABLO (ID: 95956014)                │
-│  [CIFRA GRANDE] 1,371.3 pts ← puntos_total (total mes) │
-│  $1,919,820 COP                      │
-│  📅 24/4                             │
-│────────────────────────────────────── │
-│  🕐 HOY POR TURNO                    │
-│  🌅 Mañana ●  4.9 pts  ← puntos_neto │
-│  🌇 Tarde     0.0 pts               │
-│  🌙 Noche     0.0 pts               │
-│──────────────────────────────────────│
-│  📆 HISTORIAL DE TURNOS              │
-│  24/4 🌅  +4.9                       │
-│  23/4 🌙  +182.1                     │
-└──────────────────────────────────────┘
-```
+### Tablas usadas
+- Lee: `datame_panels`, `datame_perfiles`
+- Escribe: `operaciones` (upsert con conflict en id_perfil+fecha_dia+jornada)
 
 ---
 
-### 🤖 5. Watcher (GitHub Actions)
+## 📱 6. Vista del Operador (OP-SESSION)
 
-**Archivo**: `watcher.js`
-**Estrategia**: Rango MENSUAL en Datame → obtiene total acumulado del mes → calcula neto por turno usando baseline.
-
+### Variables de estado
 ```javascript
-// LÓGICA BASELINE:
-// 1. Al inicio de un turno nuevo: baseline = puntos_total_actual
-// 2. En cada ciclo: neto = puntos_total_actual - baseline
-// 3. Al cambiar de turno: nuevo baseline, neto reinicia en 0
-
-// ON CONFLICT en Supabase:
-// puntos_baseline = CASE WHEN existente = 0 THEN nuevo ELSE existente END
-// → NUNCA sobreescribir el baseline original del turno
+_opRtOpName       // Nombre del operador logueado
+_opRtBaseline     // Total Datame al momento del login (null = no fijado aún)
+_opRtTotalMes     // Total mensual real de Datame (fuente de verdad para métrica ABRIL)
+_opRtPtosSesion   // Suma de netos individuales de todos sus perfiles
+_opRtPerfilesNeto // [{ id, nombre, neto, total }] — desglose por perfil
+_opRtBaselineMap  // { id_perfil: baseline } — baseline individual por perfil
+_opRtTurnos       // { Mañana: X, Tarde: Y, Noche: Z } — historial del día
+_opRtSessionId    // ID del registro en op_sessions
 ```
 
-**Tablas Supabase usadas:**
-- `datame_panels`: credenciales de cada panel (email, password, activo)
-- `datame_perfiles`: perfiles por panel (id_datame, modelo, panel_id, activo)
-- `operaciones`: datos capturados por turno
+### Widget de tiempo real
+```
+⚡ TIEMPO REAL — MAÑANA 🌅          🛰️ 13:45
+           87.4 pts en tu turno — 3 perfiles
+           $122,360 COP ganados
 
-**Ciclo de vida:**
-- GitHub Actions cron: cada 6 horas (reinicia el watcher)
-- Watcher: dura 5.5h máximo por ejecución
-- Ciclo interno: cada 10 minutos escanea todos los perfiles
+📊 Por perfil:
+  DANIEL 68   91733663  │  75.1 pts (86%)
+  NORBERTO    79679899  │  10.3 pts (12%)
+  AGUSTIN     153039388 │   2.0 pts ( 2%)
+  ─────────────────────────────────────────
+  Total sesión  87.4 pts · $122,360 COP
 
----
+🌅 Mañana: 87.4 pts (turno actual)
+```
 
-### 🗃️ 6. Base de datos Supabase
+### Métrica ABRIL en el dashboard
+- **Prioridad 1**: `_opRtTotalMes` (Supabase real, se actualiza cada sync)
+- **Prioridad 2**: Cortes de localStorage filtrados (solo si puntos < 50,000)
+- **Prioridad 3**: `op[curr]` del array estático `operatorsData`
 
-**Otras tablas importantes:**
-- `kv_store`: backup genérico clave-valor para sincronización
-- `operaciones_v2`: alias/vista para datos enriquecidos (si existe)
-- RLS: `CREATE POLICY "write_ops" ON operaciones FOR ALL USING (true)`
-- Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE operaciones`
-
----
-
-### ⚡ 7. Cómo inyectar nuevo código ("Add-ons")
-
-- **Nuevas Funciones UI**: Localiza el final del bloque de HTML específico y añade los nuevos elementos.
-- **Nuevos Estilos**: Añádelos justo antes de la etiqueta de cierre `</style>`.
-- **Nueva Lógica JS**: Añadir cerca del final del `<script>` (antes de `</script>`), o ubicar el módulo semántico e inyectar cuidando de no colisionar con variables de scope global.
-
----
-
-### 📌 8. Datos de Referencia — Corte Manual 24-Abr-2026 8:00 AM
-
-El usuario hace cortes manuales cada 2 horas con esta estructura:
-- **Comienza**: total acumulado al inicio del turno (= `puntos_baseline`)
-- **En curso**: total acumulado en el momento del corte (= `puntos_total`)
-- **Total/Diferencia**: puntos hechos en el turno hasta el corte (= `puntos_neto`)
-
-Valores de referencia (turno Mañana 24-Abr): 
-- Total 41 perfiles → 240.18 pts en 2 horas de turno
-- Promedio: ~5.9 pts/perfil en 2 horas
-- Un turno completo de 8h: ~300 pts por perfil activo (valor normal)
-
-**El file `update_operaciones_jornada.sql` siempre contiene el último SQL de mantenimiento ejecutado.**
+### Flujo de login del operador
+```
+1. Operador ingresa PIN → loginSuccess('operador', 'ANAZARED')
+2. mostrarModalMeta() → muestra Meta del Día + lista de perfiles con checkboxes
+3. Operador puede agregar perfil extra → _agregarPerfilLogin()
+4. Al confirmar → registrarAutoAsistencia(opName, perfilesElegidos)
+5. finalizarLoginOperador(opName)
+6. opRtActivar(opName) → fija _opRtBaseline + suscribe Realtime
+7. Cada 10 min → _opRtSync() → actualiza widget con neto real
+```
 
 ---
 
-### 🔧 9. Comandos de Diagnóstico Rápido
+## 📊 7. Panel Datame (Admin/Monitor)
+
+### Datos visualizados por card
+- **Cifra grande**: `puntos_total` (total mensual de Datame)
+- **HOY POR TURNO**: `puntos_neto` de cada jornada del día
+- **Historial**: turnos anteriores del perfil
+
+### Sync y Realtime
+```javascript
+sincronizarDatamePaneles()  // consulta operaciones desde 6am hoy
+dpIniciarRealtime()         // suscribe a postgres_changes en tabla operaciones
+// Se actualiza también cuando el watcher escribe cada 10 minutos
+```
+
+### PSA Smart (Puntos Sin Asignar)
+```
+psaCargarDesdeSupabase()
+  → consulta operaciones WHERE fecha_dia = hoy AND jornada = actual AND puntos_neto > 0
+  → cruza con draft de asistencia del turno (localStorage)
+  → perfiles con operador → asignados (verde)
+  → perfiles sin operador → sin asignar (rojo) + dropdown de asignación manual
+```
+
+---
+
+## 🔧 8. Comandos de Diagnóstico Rápido
+
+### SQL Supabase
 
 ```sql
--- Ver datos de hoy por turno
-SELECT id_perfil, agencia, jornada, puntos_baseline, puntos_total, puntos_neto
+-- 1. Ver todos los perfiles de hoy con estado DELTA-SHIFT™
+SELECT agencia, id_perfil, jornada,
+  ROUND(puntos_baseline::numeric, 2) AS baseline,
+  ROUND(puntos_total::numeric, 2)    AS total,
+  ROUND(puntos_neto::numeric, 2)     AS neto,
+  CASE WHEN puntos_neto > puntos_total * 0.60 THEN '🔴 BASELINE CORRUPTO' ELSE '✅ OK' END AS estado
 FROM operaciones WHERE fecha_dia = CURRENT_DATE ORDER BY puntos_neto DESC;
 
--- Ver historial de un perfil
-SELECT fecha_dia, jornada, puntos_baseline, puntos_total, puntos_neto
-FROM operaciones WHERE id_perfil = '95956014' ORDER BY fecha_dia DESC, jornada;
+-- 2. Sanitizar baselines corruptos (neto > 60% del total)
+UPDATE operaciones
+SET puntos_neto = ROUND((puntos_total * 0.03)::numeric, 2),
+    puntos_baseline = ROUND((puntos_total * 0.97)::numeric, 2)
+WHERE fecha_dia = CURRENT_DATE AND jornada = 'Mañana'
+  AND puntos_total > 100 AND puntos_neto > puntos_total * 0.60;
 
--- Ver duplicados (debe ser 0)
-SELECT id_perfil, fecha_dia, jornada, COUNT(*) FROM operaciones
-GROUP BY id_perfil, fecha_dia, jornada HAVING COUNT(*) > 1;
+-- 3. Recalcular todos los netos del turno con el baseline correcto
+UPDATE operaciones
+SET puntos_neto = GREATEST(0, puntos_total - puntos_baseline)
+WHERE fecha_dia = CURRENT_DATE AND jornada = 'Mañana'
+  AND puntos_baseline > 0 AND puntos_total > 0;
+
+-- 4. Ver historial de un perfil específico
+SELECT fecha_dia, jornada, puntos_baseline, puntos_total, puntos_neto
+FROM operaciones WHERE id_perfil = '91733663' ORDER BY fecha_dia DESC, jornada;
 ```
+
+### JS en consola del navegador (vista operador)
+
+```javascript
+// Ver estado OP-SESSION del operador logueado
+console.table(_opRtPerfilesNeto);
+console.log('Baseline:', _opRtBaseline, '| Neto:', _opRtPtosSesion, '| Total mes:', _opRtTotalMes);
+
+// Forzar re-sync manual
+_opRtSync(_opRtOpName);
+
+// Ver baselines en memoria del módulo PSA
+console.log('PSA Data:', _psaSmartData);
+```
+
+---
+
+## 📁 9. Archivos del Proyecto
+
+| Archivo | Descripción |
+|---|---|
+| `index.html` | SPA monolítica (+14,400 líneas) — toda la lógica frontend |
+| `watcher.js` | Scraper de Datame — GitHub Actions — DELTA-SHIFT™ engine |
+| `scraper.js` | Script de carga inicial de datos históricos (Excel → Supabase) |
+| `update_operaciones_jornada.sql` | SQL de mantenimiento de emergencia (siempre actualizado) |
+| `.agent/skills/agencia-dashboard/SKILL.md` | Este archivo — documentación técnica viva |
+
+---
+
+## ⚠️ 10. Errores Conocidos y sus Fixes
+
+### Error: Baseline corrupto (como RENEE 24-Abr-2026)
+**Síntoma**: Un perfil muestra neto > 90% de su total mensual (ej: 201.8 de 220.4 pts).  
+**Causa**: El SQL de corrección manual asignó el `puntos_total` de otro perfil como baseline.  
+**Fix**:
+1. Identificar el perfil y su total real actual
+2. `UPDATE operaciones SET puntos_baseline = total_real - neto_estimado, puntos_neto = neto_estimado WHERE id_perfil = X AND fecha_dia = hoy AND jornada = 'Mañana'`
+3. El watcher leerá el `puntos_baseline` correcto en el próximo ciclo
+
+### Error: ABRIL muestra valor inflado (218,230.7)
+**Causa**: `renderOpDashboard` leía `getCortesOp` del localStorage con datos viejos.  
+**Fix aplicado**: Ahora usa `_opRtTotalMes` (Supabase) con máxima prioridad. Filtro adicional: cortes localStorage > 50,000 pts se ignoran.
+
+### Error: JS visible en el botón "+ Agregar" del modal
+**Causa**: Código JS inline en template literal con conflicto de comillas.  
+**Fix**: Se extrajo a función global `_agregarPerfilLogin()`.

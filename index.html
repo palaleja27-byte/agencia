@@ -10474,7 +10474,26 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                   </label>
                 `).join('')}
              </div>
+             <!-- Agregar perfil extra -->
+             <div style="display:flex;gap:6px;margin-top:10px;">
+               <input type="text" id="login-nuevo-perfil-id" placeholder="ID del perfil (ej: 95956014)"
+                 style="flex:1;padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
+                        background:rgba(0,0,0,.3);color:#cbd5e1;font-size:.65rem;outline:none;">
+               <button onclick="
+                 const idVal = document.getElementById('login-nuevo-perfil-id').value.trim();
+                 if(!idVal) return;
+                 const lista = document.getElementById('login-perfiles-list');
+                 if(lista.querySelector('[value=\"'+idVal+'\"]')) return;
+                 const lbl = document.createElement('label');
+                 lbl.style.cssText='display:flex;align-items:center;gap:5px;background:rgba(94,234,212,.08);padding:4px 8px;border-radius:6px;font-size:.65rem;cursor:pointer;border:1px solid rgba(94,234,212,.3);';
+                 lbl.innerHTML='<input type=checkbox class=login-perfil-chk value='+idVal+' checked style=accent-color:#5eead4><span>'+idVal+'</span>';
+                 lista.appendChild(lbl);
+                 document.getElementById('login-nuevo-perfil-id').value='';
+               "
+                 style="padding:5px 10px;border-radius:8px;border:none;background:#5eead4;color:#000;font-size:.65rem;font-weight:700;cursor:pointer;">+ Agregar</button>
+             </div>
           </div>
+
           <button
             style="width:100%;padding:10px;background:none;color:#64748b;font-size:.75rem;
                    border:none;cursor:pointer;margin-top:8px;"
@@ -14081,9 +14100,25 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
         if (!ops?.length) return;
 
-        // 2. Si no tenemos baseline aún (primer sync de la sesión)
-        //    → la suma de puntos_total ahora es el baseline
-        const sumaTotal = ops.reduce((s, r) => s + (r.puntos_total || r.puntos || 0), 0);
+        // 2. Calcular el total mensual correcto de Datame para CADA perfil
+        //    (usamos el MAX puntos_total por perfil, ya que puede haber varios turnos)
+        const porPerfil = {};
+        ops.forEach(r => {
+          const pt = r.puntos_total || 0;
+          if (!porPerfil[r.id_perfil] || pt > porPerfil[r.id_perfil]) {
+            porPerfil[r.id_perfil] = pt;
+          }
+        });
+        const sumaTotal = Object.values(porPerfil).reduce((s, v) => s + v, 0);
+
+        // 2b. Actualizar la métrica ABRIL en el dashboard con el total real de Datame
+        const mesEl = document.querySelector('#op-dash-metrics .op-dash-metric:nth-child(2) .val');
+        if (mesEl && sumaTotal > 0) {
+          mesEl.textContent = sumaTotal.toFixed(1);
+          // También actualizar el COP si existe
+          const copEl = mesEl.closest('.op-dash-metric')?.querySelector('.op-stat-cop');
+          if (copEl) copEl.textContent = '💰 $' + Math.round(sumaTotal * 1400).toLocaleString('es-CO') + ' COP';
+        }
 
         if (_opRtBaseline === null) {
           _opRtBaseline = sumaTotal;

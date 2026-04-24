@@ -10972,12 +10972,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)];
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
       const pPrev = op[prev] || 0;
-      // pCurr: usar cortes reales del mes si existen (más actualizado que op[curr])
+      // pCurr: PRIORIDAD → datos reales de Supabase (_opRtTotalMes)
+      //        FALLBACK  → cortes del mes en localStorage (puede tener datos inflados)
       const _mesActDash = localDateStr().slice(0, 7);
       const _cortesTotDash = getCortesOp(op.name)
-        .filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActDash)
+        .filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActDash && (c.puntos || 0) < 50000)
         .reduce((s, c) => s + (c.puntos || 0), 0);
-      const pCurr = _cortesTotDash > 0 ? _cortesTotDash : (op[curr] || 0);
+      // _opRtTotalMes = total mensual real de Datame (Supabase), se actualiza cada sync
+      const _pCurrSupabase = (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&
+        _opRtOpName?.toUpperCase() === name?.toUpperCase()) ? _opRtTotalMes : 0;
+      const pCurr = _pCurrSupabase > 0 ? _pCurrSupabase
+                  : _cortesTotDash > 0  ? _cortesTotDash
+                  : (op[curr] || 0);
       const growthSign = op.growth > 0 ? '+' : '';
       const growthColor = op.growth > 0 ? '#34d399' : '#f87171';
 
@@ -14135,12 +14141,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     // ══════════════════════════════════════════════════════════════
     let _opRtSub          = null;
     let _opRtOpName       = null;
-    let _opRtSessionId    = null;   // ID del registro en op_sessions
-    let _opRtBaseline     = null;   // total en Datame al momento del login
-    let _opRtPtosSesion   = 0;      // pts ganados desde el login
-    let _opRtTurnos       = {};     // historial del día { Mañana:X, Tarde:Y, Noche:Z }
-    let _opRtPerfilesNeto = [];     // [{ id, nombre, neto, total }] — desglose por perfil
-    let _opRtBaselineMap  = {};     // { id_perfil: baseline } — baseline individual por perfil
+    let _opRtSessionId    = null;
+    let _opRtBaseline     = null;
+    let _opRtPtosSesion   = 0;
+    let _opRtTurnos       = {};
+    let _opRtPerfilesNeto = [];
+    let _opRtBaselineMap  = {};
+    let _opRtTotalMes     = 0;      // total mensual real de Datame (Supabase) — fuente de verdad
 
     function _opRtJornada() {
       const h = parseInt(new Date().toLocaleString('en-US', {
@@ -14273,7 +14280,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           return { id, nombre: nombrePerfil, total: v.total, neto };
         }).sort((a, b) => b.neto - a.neto);
 
-        // 2c. Actualizar la métrica ABRIL en el dashboard con el total real de Datame
+        // 2c. Guardar total mensual real como fuente de verdad global
+        _opRtTotalMes = sumaTotal;
+
+        // 2d. Actualizar la métrica del mes actual en el dashboard
         const mesEl = document.querySelector('#op-dash-metrics .op-dash-metric:nth-child(2) .val');
         if (mesEl && sumaTotal > 0) {
           mesEl.textContent = sumaTotal.toFixed(1);
@@ -14334,12 +14344,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // Limpiar sesión anterior
       if (_opRtSub) { _sb.removeChannel(_opRtSub); _opRtSub = null; }
       _opRtOpName     = opName;
-      _opRtBaseline   = null;   // ← se fijará en el primer sync (= momento de login)
+      _opRtBaseline   = null;
       _opRtPtosSesion = 0;
       _opRtSessionId  = null;
       _opRtTurnos     = {};
       _opRtPerfilesNeto = [];
       _opRtBaselineMap  = {};
+      _opRtTotalMes     = 0;   // se llenará en el primer sync
 
       const ids = _opRtGetIds(opName);
       if (!ids.length) { console.warn('[OP-SESSION] Sin IDs para', opName); return; }

@@ -14,7 +14,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
 const CICLO_PAUSA_MS  = 10 * 60 * 1000;   // 10 min entre ciclos
-const PAUSA_PERFIL_MS = 4000;              // 4 seg por perfil
+const PAUSA_PERFIL_MS = 3000;              // 3 seg por perfil (más rápido)
 const startTime       = Date.now();
 
 // ─────────────────────────────────────────────────────────────────
@@ -34,12 +34,18 @@ function fechaHoyColombia() {
 }
 
 function rangoMesActual() {
-  // Rango MENSUAL — para obtener el total acumulado del mes desde Datame
+  // Rango: inicio del mes → hoy + 2 días al futuro
+  // Los 2 días extra garantizan que Datame incluya TODOS los datos actuales
+  // (algunos paneles tienen lag de 24-48h en su cierre contable)
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
-  const ultimoDia = new Date(y, d.getMonth() + 1, 0).getDate();
-  return { start: `${y}-${m}-01`, end: `${y}-${m}-${ultimoDia}` };
+  const endDate = new Date(d);
+  endDate.setDate(endDate.getDate() + 2);  // ← +2 días al futuro
+  const eY = endDate.getFullYear();
+  const eM = String(endDate.getMonth() + 1).padStart(2, '0');
+  const eD = String(endDate.getDate()).padStart(2, '0');
+  return { start: `${y}-${m}-01`, end: `${eY}-${eM}-${eD}` };
 }
 
 function log(msg) {
@@ -128,22 +134,31 @@ async function watchPanel(panel, perfiles) {
   const context = await browser.newContext();
   const page    = await context.newPage();
 
-  // RADAR XHR — intercepta respuestas de Datame
+  // RADAR XHR — intercepta respuestas de Datame con mayor cobertura de campos
   page.on('response', async (response) => {
     const rType = response.request().resourceType();
     if (rType !== 'fetch' && rType !== 'xhr') return;
     try {
       const json = await response.json();
-      let list = Array.isArray(json) ? json : (json.data || json.result || [json]);
+      let list = Array.isArray(json) ? json : (json.data || json.result || json.items || [json]);
       if (!Array.isArray(list)) list = [list];
       for (const item of list) {
-        const rawPts = item.bonuses || item.total || item.points || item.amount || 0;
-        const pts    = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
+        // Buscar el valor de puntos en todos los campos conocidos de Datame
+        const rawPts = item.bonuses        ||
+                       item.total          ||
+                       item.total_points   ||
+                       item.bonuses_total  ||
+                       item.points         ||
+                       item.amount         ||
+                       item.tokens         ||
+                       item.score          || 0;
+        const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
         if (pts <= 0 || pts > 1000000) continue;
 
-        let id = (response.url().match(/\d{7,9}/) || [])[0];
-        if (!id) id = (JSON.stringify(item).match(/\d{7,9}/) || [])[0];
-        if (!id) id = String(item.member_id || item.profile_id || item.id || '');
+        // Extraer ID del perfil de la URL o del cuerpo del JSON
+        let id = (response.url().match(/\d{7,10}/) || [])[0];
+        if (!id) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
+        if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
         if (!id || id.length < 7) continue;
 
         const perfil = perfiles.find(p => p.id_datame === id);

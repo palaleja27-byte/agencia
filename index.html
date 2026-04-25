@@ -7832,11 +7832,19 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (badgeEl) badgeEl.textContent = `${sinAsignar.length} perfiles`;
       const opsList = (typeof operatorsData !== 'undefined' ? operatorsData : []).map(o => o.name);
       const optsHtml = opsList.map(n => `<option value="${n}">${n}</option>`).join('');
-      const rowsSA = sinAsignar.map(d => `
+      const _psaNombrePerfil = (idP) => {
+        const arr = Object.values(window.DP_PERFILES_MAP || {}).flat();
+        const found = arr.find(p => String(p.id) === String(idP));
+        return found ? found.modelo : null;
+      };
+      const rowsSA = sinAsignar.map(d => {
+        const nombrePerfil = _psaNombrePerfil(d.id_perfil);
+        return `
         <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;align-items:center;
           padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.73rem;">
           <div>
             <div style="font-weight:700;color:#e2e8f0;">${d.modelo}</div>
+            ${nombrePerfil ? `<div style="font-weight:600;color:#2dd4bf;font-size:.67rem;margin-top:1px;">👤 ${nombrePerfil}</div>` : ''}
             <div style="color:#64748b;font-size:.6rem;">ID: ${d.id_perfil} · ${d.jornada}</div>
           </div>
           <div style="font-weight:700;color:#fbbf24;text-align:center;">${d.puntos_neto.toFixed(1)} pts</div>
@@ -7845,7 +7853,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                    background:#1e293b;color:#cbd5e1;font-size:.62rem;cursor:pointer;">
             <option value="">→ Asignar operador...</option>${optsHtml}
           </select>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       const rowsCA = conAsignar.length ? `
         <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">
           <div style="font-size:.6rem;color:#334155;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">✅ Asignados (${conAsignar.length})</div>

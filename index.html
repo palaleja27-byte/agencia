@@ -5060,20 +5060,43 @@
         return matchSearch && matchGrp && matchTurno && matchPlataforma && matchAsistencia;
       });
 
-      // Calcular pts del día para cada op (solo en modo día o siempre para sort)
+      // Calcular pts del día para cada op (Datame + LocalStorage)
       const _hoy = localDateStr();
       const _ptsHoyMap = {};
       const _horaMap = {};
+      
+      const opsEnTurnoDraft = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
+      const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
+
       rkDataFiltered.forEach(op => {
+        // --- 1. Lógica Datame Realtime (Supabase) ---
+        let datamePts = 0;
+        const estaLogueado = opsEnTurnoDraft.has(op.name.toUpperCase());
+        // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
+        const jornadaALeer = estaLogueado ? jornadaActual : op.turno;
+
+        if (typeof _dpTurnosData !== 'undefined' && op.profiles && Array.isArray(op.profiles)) {
+           op.profiles.forEach(p => {
+              const turnosPerfil = _dpTurnosData[p.id];
+              if (turnosPerfil && jornadaALeer) {
+                 datamePts += (turnosPerfil[jornadaALeer] || 0);
+              }
+           });
+        }
+
+        // --- 2. Lógica Legacy (localStorage) ---
         const cortes = getCortesOp(op.name);
         const hoyCortes = cortes.filter(c => c.fecha === _hoy);
-        // Filtrar cortes que parezcan acumulados (mayores a 800 en un solo registro de hoy es sospechoso para un turno promedio de 180)
-        _ptsHoyMap[op.name] = hoyCortes.reduce((s, c) => {
+        let legacyPts = hoyCortes.reduce((s, c) => {
           const val = (Number(c.puntos) || 0);
-          return s + (val > 1500 ? 0 : val); // Proteccin contra el bug de acumulados
+          return s + (val > 1500 ? 0 : val); 
         }, 0);
+
+        // Usamos Datame Realtime si tiene puntos, sino el legacy
+        _ptsHoyMap[op.name] = datamePts > 0 ? datamePts : legacyPts;
+
         const last = hoyCortes[hoyCortes.length - 1];
-        _horaMap[op.name] = last ? (last.hora || null) : null;
+        _horaMap[op.name] = datamePts > 0 ? '🛰️ Datame Sync' : (last ? (last.hora || null) : null);
       });
 
       // Sort using dynamic month keys + col 7 = pts hoy

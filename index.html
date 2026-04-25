@@ -6422,10 +6422,36 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     let _autoLogoutInterval = null;
     let _opDashInterval = null;   // refresh en tiempo real para operador
 
+    function calcularMsRestantesJornada(horas) {
+      const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+      const h = d.getHours();
+      let endH = 0;
+      
+      if (horas === 8 || !horas) {
+        if (h >= 6 && h < 14) endH = 14;
+        else if (h >= 14 && h < 22) endH = 22;
+        else endH = 30; // 06:00 del día siguiente
+      } else if (horas === 12) {
+        if (h >= 6 && h < 18) endH = 18;
+        else endH = 30; // 06:00 del día siguiente
+      } else {
+        return horas * 60 * 60 * 1000;
+      }
+
+      const endD = new Date(d);
+      endD.setHours(endH % 24, 0, 0, 0);
+      if (endH >= 24 && h >= (endH - 24)) {
+        endD.setDate(endD.getDate() + 1);
+      }
+      
+      const diff = endD.getTime() - d.getTime();
+      return diff > 0 ? diff : (horas * 60 * 60 * 1000);
+    }
+
     function iniciarAutoLogout(horas, loginTime) {
       clearAutoLogoutTimers();
 
-      const msTotal = horas * 60 * 60 * 1000;
+      const msTotal = calcularMsRestantesJornada(horas);
       const msWarning = msTotal - (5 * 60 * 1000); // aviso 5 min antes
 
       // Warning 5 min antes

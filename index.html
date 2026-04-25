@@ -14242,6 +14242,42 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       // ── UI: estado loading ────────────────────────────────────────
       if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; btn.style.opacity = '.6'; }
 
+      // ── PASO 0: Disparar GitHub Actions (Extracción Profunda) ──────
+      if (confirm("¿Deseas forzar una extracción profunda desde Datame (tardará ~2 minutos en procesar)?\n\nSi cancelas, solo se refrescará la pantalla con los datos actuales ya extraídos.")) {
+         let pat = localStorage.getItem('github_pat_sync');
+         if (!pat) {
+             pat = prompt("Por única vez, ingresa tu GitHub PAT (Personal Access Token con permisos actions:write) para autorizar la conexión:");
+             if (pat) localStorage.setItem('github_pat_sync', pat);
+         }
+         
+         if (pat) {
+            try {
+               const res = await fetch('https://api.github.com/repos/palaleja27-byte/agencia/actions/workflows/main.yml/dispatches', {
+                 method: 'POST',
+                 headers: {
+                   'Authorization': 'Bearer ' + pat,
+                   'Accept': 'application/vnd.github.v3+json',
+                   'Content-Type': 'application/json'
+                 },
+                 body: JSON.stringify({ ref: 'main' })
+               });
+               if (res.ok) {
+                   alert('🚀 Extracción forzada iniciada con éxito.\nEl servidor remoto (GitHub) está leyendo los perfiles. La pantalla se actualizará automáticamente cuando termine (aprox. 2 min).');
+               } else {
+                   if (res.status === 401 || res.status === 404) {
+                       alert('❌ Token inválido o sin permisos. Se borrará el token guardado. Intenta de nuevo.');
+                       localStorage.removeItem('github_pat_sync');
+                   } else {
+                       alert('❌ Error de Github: ' + res.status);
+                   }
+               }
+            } catch (err) {
+               console.error('Error disparando Github Actions:', err);
+               alert('❌ Error de red al contactar Github Actions.');
+            }
+         }
+      }
+
       // ── PASO 1: Datame → Supabase ─────────────────────────────────
       console.log('📡 [SYNC] Paso 1 — Consultando Datame/Supabase...');
       await sincronizarDatamePaneles();

@@ -14224,12 +14224,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       await sincronizarDatamePaneles();
       console.log('✅ [SYNC] Paso 1 OK — Paneles Datame actualizados');
 
-      // ── PASO 2: loadData → refresca localStorage + operatorsData ──
-      console.log('💾 [SYNC] Paso 2 — Recargando datos locales (loadData)...');
-      try {
-        if (typeof loadData === 'function') { await loadData(); console.log('✅ [SYNC] Paso 2 OK — loadData completado'); }
-        else { console.warn('⚠️ [SYNC] loadData no disponible'); }
-      } catch(e) { console.error('❌ [SYNC] Error en loadData:', e); }
+      // ── PASO 2: loadData omitido del cascade ──
+      // loadData() maneja datos de operadores/asistencia, no de Datame.
+      // Llamarlo aquí sobreescribía _dpPuntosData con valores incorrectos.
+      console.log('ℹ️ [SYNC] Paso 2 — loadData omitido (no necesario para Datame)');
 
       // ── PASO 3: Ranking (vista monitor/admin) ─────────────────────
       console.log('🏆 [SYNC] Paso 3 — Actualizando Ranking...');
@@ -14320,14 +14318,24 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         (ops || []).forEach(op => {
           const id = op.id_perfil;
 
-          // Registro más reciente por perfil
+          // Registro más reciente por perfil (solo metadata: fecha, agencia)
           if (!nuevosDatos[id]) {
             nuevosDatos[id] = {
-              puntos:      op.puntos,
-              puntos_neto: op.puntos_neto || op.puntos,
-              fecha_corte: op.fecha_corte,
-              agencia:     op.agencia
+              puntos_total: 0,       // se acumula abajo con los netos del mes
+              puntos_neto:  op.puntos_neto || 0,
+              fecha_corte:  op.fecha_corte,
+              agencia:      op.agencia
             };
+          }
+
+          // ── Cifra grande = SUMA de puntos_neto del mes activo ────────
+          // Se excluyen jornada='Auto' y valores anómalos > 5000 (datos de migración)
+          const mesActual = hoy.slice(0, 7);
+          if (op.fecha_dia && op.fecha_dia.startsWith(mesActual) && op.jornada !== 'Auto') {
+            const neto = op.puntos_neto || 0;
+            if (neto > 0 && neto < 5000) { // sanidad: ignora acumulados históricos
+              nuevosDatos[id].puntos_total += neto;
+            }
           }
 
           if (modoCompleto) {

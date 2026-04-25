@@ -14213,9 +14213,64 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
     async function dpSyncConFeedback() {
       const btn = document.getElementById('dp-sync-btn');
+      const t0  = Date.now();
+      console.log('🔄 [SYNC] ========== INICIO SYNC GLOBAL ===========');
+
+      // ── UI: estado loading ────────────────────────────────────────
       if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; btn.style.opacity = '.6'; }
+
+      // ── PASO 1: Datame → Supabase ─────────────────────────────────
+      console.log('📡 [SYNC] Paso 1 — Consultando Datame/Supabase...');
       await sincronizarDatamePaneles();
-      if (btn) { btn.textContent = '✅ Sync'; btn.disabled = false; btn.style.opacity = '1'; setTimeout(() => { btn.textContent = '↻ Sync'; }, 2500); }
+      console.log('✅ [SYNC] Paso 1 OK — Paneles Datame actualizados');
+
+      // ── PASO 2: loadData → refresca localStorage + operatorsData ──
+      console.log('💾 [SYNC] Paso 2 — Recargando datos locales (loadData)...');
+      try {
+        if (typeof loadData === 'function') { await loadData(); console.log('✅ [SYNC] Paso 2 OK — loadData completado'); }
+        else { console.warn('⚠️ [SYNC] loadData no disponible'); }
+      } catch(e) { console.error('❌ [SYNC] Error en loadData:', e); }
+
+      // ── PASO 3: Ranking (vista monitor/admin) ─────────────────────
+      console.log('🏆 [SYNC] Paso 3 — Actualizando Ranking...');
+      try {
+        if (typeof renderRanking === 'function') { renderRanking(); console.log('✅ [SYNC] Paso 3 OK — Ranking actualizado'); }
+        if (typeof rkFetchSupabaseTotals === 'function') { await rkFetchSupabaseTotals(); console.log('✅ [SYNC] Paso 3b OK — Totales globales actualizados'); }
+      } catch(e) { console.error('❌ [SYNC] Error en Ranking:', e); }
+
+      // ── PASO 4: Dashboard Operador (si hay sesión activa) ─────────
+      console.log('👤 [SYNC] Paso 4 — Actualizando dashboard operador...');
+      try {
+        if (currentRole === 'operador' && currentOpName && typeof renderOpDashboard === 'function') {
+          renderOpDashboard(currentOpName);
+          console.log('✅ [SYNC] Paso 4 OK — Dashboard operador «' + currentOpName + '» actualizado');
+        } else {
+          console.log('ℹ️ [SYNC] Paso 4 — No hay operador activo, se omite');
+        }
+      } catch(e) { console.error('❌ [SYNC] Error en dashboard operador:', e); }
+
+      // ── PASO 5: PSA — Puntos Sin Asignar ─────────────────────────
+      console.log('🎯 [SYNC] Paso 5 — Actualizando Puntos Sin Asignar...');
+      try {
+        if (typeof psaCargarDesdeSupabase === 'function') { await psaCargarDesdeSupabase(); console.log('✅ [SYNC] Paso 5 OK — PSA actualizado'); }
+        else { console.warn('⚠️ [SYNC] psaCargarDesdeSupabase no disponible'); }
+      } catch(e) { console.error('❌ [SYNC] Error en PSA:', e); }
+
+      // ── PASO 6: Perfiles Ranking ───────────────────────────────────
+      console.log('📊 [SYNC] Paso 6 — Actualizando Ranking de Perfiles...');
+      try {
+        if (typeof renderPerfilesRanking === 'function') { renderPerfilesRanking(); console.log('✅ [SYNC] Paso 6 OK — Ranking perfiles actualizado'); }
+      } catch(e) { console.error('❌ [SYNC] Error en Ranking Perfiles:', e); }
+
+      // ── UI: estado ok ─────────────────────────────────────────────
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      console.log('🎉 [SYNC] ========== SYNC COMPLETADO en ' + elapsed + 's ===========');
+      if (btn) {
+        btn.textContent = '✅ Sync';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        setTimeout(() => { btn.textContent = '↻ Sync'; }, 2500);
+      }
     }
 
     async function sincronizarDatamePaneles() {

@@ -14339,15 +14339,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           }
 
           if (modoCompleto) {
+            const netoSano = op.puntos_neto || 0;
+            // Filtro de sanidad: netos > 10000 son registros corruptos (baseline erróneo del scraper)
+            const netoOk = netoSano >= 0 && netoSano <= 10000;
             // Turnos del día de hoy
             if (op.fecha_dia === hoy && op.jornada && op.jornada !== 'Auto') {
               if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
-              turnosHoy[id][op.jornada] = (op.puntos_neto || 0);
+              if (netoOk) turnosHoy[id][op.jornada] = netoSano;
             }
             // Historial por día
-            if (op.fecha_dia) {
+            if (op.fecha_dia && netoOk) {
               if (!diasNeto[id]) diasNeto[id] = {};
-              diasNeto[id][op.fecha_dia] = (diasNeto[id][op.fecha_dia] || 0) + (op.puntos_neto || 0);
+              diasNeto[id][op.fecha_dia] = (diasNeto[id][op.fecha_dia] || 0) + netoSano;
             }
           } else {
             // Fallback: usar fecha_corte como agrupador de día

@@ -129,20 +129,23 @@ async function scrapePanel(panel, perfiles) {
           .eq('jornada', jornada)
           .maybeSingle();
 
-        const ptsPrev  = prevRec?.puntos || 0;
-        const neto     = Math.max(0, pts - ptsPrev);
+        const ptsPrev  = prevRec?.puntos ?? null;  // null = primer scrape del turno
+        // neto del turno: diferencia desde el inicio del turno.
+        // Si es el primer scrape (no hay prevRec), neto = 0 (baseline).
+        // Si ya existe registro, neto acumulado = pts_actuales - pts_al_inicio_del_turno.
+        const netoTurno = ptsPrev !== null ? Math.max(0, pts - ptsPrev) : 0;
 
         const { error } = await supabase.from('operaciones').upsert({
           id_perfil:    p.id_datame,
           agencia:      nombre,
           puntos:       pts,
-          puntos_neto:  prevRec ? (prevRec.puntos_neto || 0) + neto : pts,
+          puntos_neto:  netoTurno,   // neto limpio de este turno (0 en primer scrape)
           fecha_corte:  tsAhora,
           fecha_dia:    fechaDia,
           jornada:      jornada,
         }, { onConflict: 'id_perfil,fecha_dia,jornada' });
         if (error) console.error(`  [DB ERR] ${p.modelo}:`, error.message);
-        else console.log(`  [DB] ${p.modelo} jornada:${jornada} neto:${neto.toFixed(2)} pts`);
+        else console.log(`  [DB] ${p.modelo} jornada:${jornada} pts:${pts} neto:${netoTurno.toFixed(2)} pts ${ptsPrev === null ? '(baseline)' : ''}`);
 
 
       } catch (err) {

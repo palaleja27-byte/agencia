@@ -3998,8 +3998,8 @@
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
             <span id="dp-last-update" style="font-size:.6rem;color:#475569;">Cargando...</span>
-            <button onclick="event.stopPropagation();sincronizarDatamePaneles()" title="Forzar actualización"
-              style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:8px;padding:3px 10px;font-size:.65rem;cursor:pointer;">↻ Sync</button>
+            <button id="dp-sync-btn" onclick="event.stopPropagation();dpSyncConFeedback()" title="Forzar actualización"
+              style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:8px;padding:3px 10px;font-size:.65rem;cursor:pointer;transition:.2s;">↻ Sync</button>
             <span id="dp-chevron" style="color:#2dd4bf;font-size:.85rem;transition:.3s;">▼</span>
           </div>
         </div>
@@ -4937,6 +4937,56 @@
       if (totalEntries === 0) return null;
       return presentes;
     }
+    // ════════════════════════════════════════════════════════════════════════
+    // rkFetchSupabaseTotals -- DELTA-SHIFT(tm) Dashboard Engine
+    // Actualiza Global Total, Promedio y Crecimiento con datos REALES de Supabase
+    // ════════════════════════════════════════════════════════════════════════
+    async function rkFetchSupabaseTotals() {
+      if (typeof _sb === 'undefined') return;
+      const mesActual = localDateStr().slice(0, 7);
+      const mesMarzo  = '2026-03';
+      const mesFeb    = '2026-02';
+
+      try {
+        const { data: ops } = await _sb
+          .from('operaciones')
+          .select('fecha_dia, puntos_neto, jornada')
+          .gte('fecha_dia', '2026-02-01')
+          .neq('jornada', 'Auto');
+
+        if (!ops || !ops.length) return;
+
+        let febT = 0, marT = 0, abrT = 0;
+        ops.forEach(r => {
+          const m = r.fecha_dia.slice(0, 7);
+          const val = r.puntos_neto || 0;
+          if (m === mesFeb) febT += val;
+          else if (m === mesMarzo) marT += val;
+          else if (m === mesActual) abrT += val;
+        });
+
+        // Crecimiento Real (Abr vs Mar)
+        const crecOp = marT > 0 ? ((abrT - marT) / marT * 100) : 0;
+        const sign = crecOp >= 0 ? '+' : '';
+        const color = crecOp >= 0 ? '#34d399' : '#f87171';
+        const icon = crecOp >= 0 ? '📈' : '📉';
+
+        const elTotal = document.getElementById('rk-val-total');
+        const elCop   = document.getElementById('rk-val-cop');
+        const elAvg   = document.getElementById('rk-val-avg');
+        const elCrec  = document.getElementById('rk-val-growth');
+        const elRange = document.getElementById('rk-val-range');
+
+        if (elTotal) elTotal.textContent = abrT.toLocaleString('es-CO', {minimumFractionDigits: 1});
+        if (elCop) elCop.textContent = '💰 $' + Math.round(abrT * 1400).toLocaleString('es-CO') + ' COP';
+        const numOps = operatorsData.length || 1;
+        if (elAvg) elAvg.textContent = (abrT / numOps).toFixed(1);
+        if (elCrec) { elCrec.style.color = color; elCrec.textContent = icon + ' ' + sign + crecOp.toFixed(1) + '%'; }
+        if (elRange) { elRange.textContent = 'Marzo: ' + marT.toFixed(0) + ' pts → Abril: ' + abrT.toFixed(0) + ' pts'; }
+
+        window._rkHistorial = { feb: febT, mar: marT, abr: abrT, crec: crecOp };
+      } catch(e) { console.warn('[RK-SUPABASE]', e); }
+    }
 
     function renderRanking() {
       const { prev, curr } = getActivePair();
@@ -5095,18 +5145,18 @@
       <button onclick="showDailyHistory()" style="margin-top:8px;padding:4px 8px;font-size:0.6rem;background:rgba(147,197,253,0.1);border:1px solid rgba(147,197,253,0.3);color:#93c5fd;border-radius:4px;cursor:pointer;">🕰️ Historial Días</button>
     </div>
     <div class="rk-stat-card" style="border: 2px solid rgba(94, 234, 212, 0.4); background: rgba(94, 234, 212, 0.05); transform: scale(1.05); z-index: 10;">
-      <div class="stat-val" style="font-size:1.8rem; letter-spacing: -1px; text-shadow: 0 0 15px rgba(94, 234, 212, 0.6); color: #5eead4;">${totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 2})}</div>
+      <div class="stat-val" id="rk-val-total" style="font-size:1.8rem; letter-spacing: -1px; text-shadow: 0 0 15px rgba(94, 234, 212, 0.6); color: #5eead4;">${totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 2})}</div>
       <div class="stat-lbl" style="color:#5eead4; font-weight: 800;">🛰️ GLOBAL TOTAL ${currLabel.toUpperCase()}</div>
-      <div style="font-size:.75rem;color:#34d399;margin-top:4px; font-weight: 700;">💰 $${copTotal} COP</div>
+      <div id="rk-val-cop" style="font-size:.75rem;color:#34d399;margin-top:4px; font-weight: 700;">💰 $${copTotal} COP</div>
     </div>
     <div class="rk-stat-card">
-      <div class="stat-val">${avgPts.toFixed(1)}</div>
+      <div class="stat-val" id="rk-val-avg">${avgPts.toFixed(1)}</div>
       <div class="stat-lbl">Promedio / op ${currLabel}</div>
     </div>
     <div class="rk-stat-card" style="position:relative;">
-      <div class="stat-val" style="color:${crecOpColor};">${crecOpIcon} ${crecOpSign}${crecOp.toFixed(1)}%</div>
+      <div class="stat-val" id="rk-val-growth" style="color:${crecOpColor};">${crecOpIcon} ${crecOpSign}${crecOp.toFixed(1)}%</div>
       <div class="stat-lbl">Crecimiento operación</div>
-      <div style="font-size:.6rem;color:#475569;margin-top:3px;">
+      <div id="rk-val-range" style="font-size:.6rem;color:#475569;margin-top:3px;">
         ${prevLabel}: ${totalPtsAnt.toFixed(0)} pts → ${currLabel}: ${totalPtsCurr.toFixed(0)} pts
       </div>
       <button id="btn-crec-info" onclick="toggleCrecTooltip(event)"
@@ -5144,6 +5194,8 @@
       // Máx pts hoy y mes para barra relativa
       const maxHoy = Math.max(...Object.values(_ptsHoyMap), 1);
       const maxCurr = Math.max(...rkDataFiltered.map(o => (o[curr] || 0)), 1);
+
+      rkFetchSupabaseTotals(); // Disparar actualización de Supabase
 
       tbody.innerHTML = rkDataFiltered.map((op, i) => {
         const globalIndex = operatorsData.indexOf(op);
@@ -8319,6 +8371,31 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         `;
       }
 
+      // --- TABLA HISTORICA DELTA-SHIFT (tm) ---
+      const h = window._rkHistorial || { feb: 0, mar: 0, abr: 0, crec: 0 };
+      const tablaHist = `
+        <div style="margin: 15px 0; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size: 0.7rem; color: #475569; margin-bottom: 8px; text-transform: uppercase; font-weight: 800;">📅 Historial de Operación 2026</div>
+          <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 6px 0; color: #94a3b8;">Febrero</td>
+              <td style="text-align: right; font-weight: 700; color: #a78bfa;">${h.feb.toLocaleString()} pts</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 6px 0; color: #94a3b8;">Marzo</td>
+              <td style="text-align: right; font-weight: 700; color: #a78bfa;">${h.mar.toLocaleString()} pts</td>
+            </tr>
+            <tr style="background: rgba(52,211,153,0.05);">
+              <td style="padding: 6px 0; color: #34d399; font-weight: 800;">Abril (Actual)</td>
+              <td style="text-align: right; font-weight: 800; color: #34d399;">${h.abr.toLocaleString()} pts</td>
+            </tr>
+          </table>
+          <div style="margin-top: 10px; font-size: 0.65rem; color: ${h.crec >= 0 ? '#34d399' : '#f87171'}; text-align: center; font-weight: 700;">
+            ${h.crec >= 0 ? '🚀 +'+h.crec.toFixed(1)+'%' : '🔻 '+h.crec.toFixed(1)+'%'} vs Mes Anterior
+          </div>
+        </div>
+      `;
+
       // Líderes
       const opsConPts = operatorsData
         .filter(o => o.group !== 'SP')
@@ -8366,6 +8443,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           </div>
 
           ${warningSanidad}
+
+          ${tablaHist}
 
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
             <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
@@ -14072,6 +14151,15 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               <span class="dp-turno-pts noche">${noche.str} pts</span>
             </div>
 
+            <!-- TOTAL HOY (suma de todos los turnos) -->
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(45,212,191,.15);">
+              <div style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">⚡ Total Hoy</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:1rem;font-weight:800;color:#2dd4bf;">${(manana.v+tarde.v+noche.v).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</span>
+                <span style="font-size:.72rem;font-weight:700;color:#34d399;">$${Math.round((manana.v+tarde.v+noche.v)*1400).toLocaleString('es-CO')} COP</span>
+              </div>
+            </div>
+
             <!-- HISTORIAL POR TURNO -->
             <div class="dp-dias-title">📆 Historial de turnos</div>
             ${histHtml}
@@ -14095,6 +14183,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function dpToggleCard(id) {
       const card = document.getElementById('dp-card-' + id);
       if (card) card.classList.toggle('expanded');
+    }
+
+    async function dpSyncConFeedback() {
+      const btn = document.getElementById('dp-sync-btn');
+      if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; btn.style.opacity = '.6'; }
+      await sincronizarDatamePaneles();
+      if (btn) { btn.textContent = '✅ Sync'; btn.disabled = false; btn.style.opacity = '1'; setTimeout(() => { btn.textContent = '↻ Sync'; }, 2500); }
     }
 
     async function sincronizarDatamePaneles() {

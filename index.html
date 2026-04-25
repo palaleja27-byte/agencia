@@ -4011,9 +4011,16 @@
           <!-- Grid de perfiles -->
           <div class="dp-grid" id="dp-perfiles-grid"></div>
           <!-- Barra totales -->
-          <div class="dp-total-bar">
-            <span>Total panel activo: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong></span>
-            <span><strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
+          <div class="dp-total-bar" style="flex-wrap:wrap;gap:6px 16px;padding:10px 18px;">
+            <span style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">HOY POR TURNO</span>
+            <span>🌅 <strong id="dp-t-man-pts" style="color:#fbbf24;">0,0</strong> pts <span id="dp-t-man-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
+            <span style="color:#334155;">|</span>
+            <span>🌇 <strong id="dp-t-tar-pts" style="color:#818cf8;">0,0</strong> pts <span id="dp-t-tar-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
+            <span style="color:#334155;">|</span>
+            <span>🌙 <strong id="dp-t-noc-pts" style="color:#7dd3fc;">0,0</strong> pts <span id="dp-t-noc-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
+            <span style="color:#334155;margin:0 6px;">▪</span>
+            <span>⚡ <strong id="dp-t-hoy-pts" style="color:#34d399;">0,0</strong> pts <span id="dp-t-hoy-cop" style="font-size:.62rem;color:#34d399;">$0 COP</span></span>
+            <span style="margin-left:auto;">📅 Total panel: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong> <strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
           </div>
         </div>
       </div>
@@ -14087,6 +14094,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       })();
 
       let totalMesPts = 0;
+      let acumMan = 0, acumTar = 0, acumNoc = 0;
 
       grid.innerHTML = perfs.map(p => {
         const d         = _dpPuntosData[p.id] || {};
@@ -14095,6 +14103,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         const copMes    = Math.round(totalMes * 1400).toLocaleString('es-CO');
         const ts        = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
         totalMesPts    += totalMes;
+        // Acumular netos de HOY por turno para la barra inferior
+        const _t = _dpTurnosData[p.id] || {};
+        acumMan += _t['Mañana'] || 0;
+        acumTar += _t['Tarde']  || 0;
+        acumNoc += _t['Noche']  || 0;
 
         // ── TURNOS HOY: puntos_neto (solo lo del turno, empieza en 0) ─
         const turnos    = _dpTurnosData[p.id] || {};
@@ -14168,6 +14181,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       }).join('');
 
       // ── Totales del panel ─────────────────────────────────────
+      const _fmt = v => v.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
+      const _cop = v => '$' + Math.round(v*1400).toLocaleString('es-CO') + ' COP';
+      const acumHoy = acumMan + acumTar + acumNoc;
+      const _g = id => document.getElementById(id);
+      if (_g('dp-t-man-pts')) _g('dp-t-man-pts').textContent = _fmt(acumMan);
+      if (_g('dp-t-man-cop')) _g('dp-t-man-cop').textContent = _cop(acumMan);
+      if (_g('dp-t-tar-pts')) _g('dp-t-tar-pts').textContent = _fmt(acumTar);
+      if (_g('dp-t-tar-cop')) _g('dp-t-tar-cop').textContent = _cop(acumTar);
+      if (_g('dp-t-noc-pts')) _g('dp-t-noc-pts').textContent = _fmt(acumNoc);
+      if (_g('dp-t-noc-cop')) _g('dp-t-noc-cop').textContent = _cop(acumNoc);
+      if (_g('dp-t-hoy-pts')) _g('dp-t-hoy-pts').textContent = _fmt(acumHoy);
+      if (_g('dp-t-hoy-cop')) _g('dp-t-hoy-cop').textContent = _cop(acumHoy);
       const totalCop = Math.round(totalMesPts * 1400).toLocaleString('es-CO');
       const ptsEl = document.getElementById('dp-panel-total-pts');
       const copEl = document.getElementById('dp-panel-total-cop');

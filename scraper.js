@@ -146,7 +146,7 @@ async function scrapePanel(panel, perfiles) {
           jornada:         jornada,
         }, { onConflict: 'id_perfil,fecha_dia,jornada' });
         if (error) console.error(`  [DB ERR] ${p.modelo}:`, error.message);
-        else console.log(`  [DB] ${p.modelo} jornada:${jornada} pts:${pts} neto:${netoTurno.toFixed(2)} pts ${ptsPrev === null ? '(baseline)' : ''}`);
+        else console.log(`  [DB] ${p.modelo} jornada:${jornada} pts:${pts} neto:${netoTurno.toFixed(2)} pts ${!dbBaseline ? '(baseline)' : ''}`);
 
 
       } catch (err) {

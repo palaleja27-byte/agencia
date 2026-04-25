@@ -120,29 +120,30 @@ async function scrapePanel(panel, perfiles) {
         const fechaDia = fechaHoyColombia();
         const tsAhora  = new Date().toISOString();
 
-        // Leer el registro anterior del mismo turno+día para calcular neto
+        // Leer el registro anterior del mismo turno para mantener el baseline
         const { data: prevRec } = await supabase
           .from('operaciones')
-          .select('puntos, puntos_neto')
+          .select('puntos_total, puntos_baseline')
           .eq('id_perfil', p.id_datame)
           .eq('fecha_dia', fechaDia)
           .eq('jornada', jornada)
           .maybeSingle();
 
-        const ptsPrev  = prevRec?.puntos ?? null;  // null = primer scrape del turno
-        // neto del turno: diferencia desde el inicio del turno.
-        // Si es el primer scrape (no hay prevRec), neto = 0 (baseline).
-        // Si ya existe registro, neto acumulado = pts_actuales - pts_al_inicio_del_turno.
-        const netoTurno = ptsPrev !== null ? Math.max(0, pts - ptsPrev) : 0;
+        // Si hay un baseline previo > 0, lo respetamos. Si no, este scrape FIJA el baseline.
+        const dbBaseline = prevRec?.puntos_baseline;
+        const baseline   = (dbBaseline > 0) ? dbBaseline : pts;
+        const netoTurno  = Math.max(0, pts - baseline);
 
         const { error } = await supabase.from('operaciones').upsert({
-          id_perfil:    p.id_datame,
-          agencia:      nombre,
-          puntos:       pts,
-          puntos_neto:  netoTurno,   // neto limpio de este turno (0 en primer scrape)
-          fecha_corte:  tsAhora,
-          fecha_dia:    fechaDia,
-          jornada:      jornada,
+          id_perfil:       p.id_datame,
+          agencia:         nombre,
+          puntos:          pts,               // legado
+          puntos_total:    pts,               // total mensual acumulado
+          puntos_baseline: baseline,          // total al inicio del turno
+          puntos_neto:     netoTurno,         // neto de este turno
+          fecha_corte:     tsAhora,
+          fecha_dia:       fechaDia,
+          jornada:         jornada,
         }, { onConflict: 'id_perfil,fecha_dia,jornada' });
         if (error) console.error(`  [DB ERR] ${p.modelo}:`, error.message);
         else console.log(`  [DB] ${p.modelo} jornada:${jornada} pts:${pts} neto:${netoTurno.toFixed(2)} pts ${ptsPrev === null ? '(baseline)' : ''}`);

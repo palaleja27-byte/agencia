@@ -13,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenci
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
-const CICLO_PAUSA_MS  = 20 * 60 * 1000;    // 20 min entre ciclos
+const CICLO_PAUSA_MS  = 30 * 60 * 1000;    // 30 min entre ciclos
 const PAUSA_PERFIL_MS = 3000;              // 3 seg por perfil (más rápido)
 const startTime       = Date.now();
 
@@ -219,56 +219,46 @@ async function watchPanel(panel, perfiles) {
 
   const { start, end } = rangoMesActual(); // Rango mensual para total del mes
 
-  // ── CICLO PRINCIPAL ──────────────────────────────────────────
-  while (Date.now() - startTime < MAX_RUNTIME_MS) {
-    log(`\n🔄 Ciclo — ${nombre} | ${perfiles.length} perfiles | jornada: ${detectarJornada()}`);
+  // ── EJECUCIÓN ÚNICA (30 min manejados por GitHub Actions) ──
+  log(`\n🔄 Ciclo Único — ${nombre} | ${perfiles.length} perfiles | jornada: ${detectarJornada()}`);
 
-    try {
-      await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForTimeout(4000);
+  try {
+    await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.waitForTimeout(4000);
 
-      // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
-      await page.evaluate(({ s, e }) => {
-        const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
-        if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
-        if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
-      }, { s: start, e: end });
-      await page.waitForTimeout(1200);
+    // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
+    await page.evaluate(({ s, e }) => {
+      const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
+      if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
+      if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
+    }, { s: start, e: end });
+    await page.waitForTimeout(1200);
 
-      for (const perfil of perfiles) {
-        if (Date.now() - startTime >= MAX_RUNTIME_MS) break;
-        try {
-          await page.evaluate((v) => {
-            const ins = Array.from(document.querySelectorAll('input'));
-            let t = ins.find(i =>
-              (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
-              (i.placeholder || '').toLowerCase().includes('profile')
-            );
-            if (!t && ins.length >= 3) t = ins[2];
-            if (t) {
-              t.value = v;
-              t.dispatchEvent(new Event('input',  { bubbles: true }));
-              t.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          }, perfil.id_datame);
-          await page.waitForTimeout(500);
-          await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
-          await page.waitForTimeout(PAUSA_PERFIL_MS);
-        } catch (e) {
-          log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);
-        }
+    for (const perfil of perfiles) {
+      try {
+        await page.evaluate((v) => {
+          const ins = Array.from(document.querySelectorAll('input'));
+          let t = ins.find(i =>
+            (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
+            (i.placeholder || '').toLowerCase().includes('profile')
+          );
+          if (!t && ins.length >= 3) t = ins[2];
+          if (t) {
+            t.value = v;
+            t.dispatchEvent(new Event('input',  { bubbles: true }));
+            t.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }, perfil.id_datame);
+        await page.waitForTimeout(500);
+        await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(PAUSA_PERFIL_MS);
+      } catch (e) {
+        log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);
       }
-
-      log(`✅ Ciclo completado — ${nombre}. Pausa ${CICLO_PAUSA_MS / 60000} min...`);
-    } catch (err) {
-      log(`⚠️ Error ciclo ${nombre}: ${err.message}. Retry 30s...`);
-      await page.waitForTimeout(30000);
     }
-
-    const elapsed = Date.now() - startTime;
-    if (elapsed + CICLO_PAUSA_MS < MAX_RUNTIME_MS) {
-      await page.waitForTimeout(CICLO_PAUSA_MS);
-    } else break;
+    log(`✅ Ciclo completado — ${nombre}.`);
+  } catch (err) {
+    log(`❌ Error crítico ${nombre}: ${err.message}`);
   }
 
   log(`🏁 ${nombre} — Sesión finalizada tras ${((Date.now() - startTime) / 3600000).toFixed(1)}h`);

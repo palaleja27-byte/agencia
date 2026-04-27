@@ -5067,6 +5067,8 @@
       
       const opsEnTurnoDraft = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
       const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
+      const _shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
+      const _draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoy + '_' + _shKey) || '{}');
 
       rkDataFiltered.forEach(op => {
         // --- 1. Lógica Datame Realtime (Supabase) ---
@@ -5075,8 +5077,19 @@
         // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
         const jornadaALeer = estaLogueado ? jornadaActual : op.turno;
 
-        if (typeof _dpTurnosData !== 'undefined' && op.profiles && Array.isArray(op.profiles)) {
-           op.profiles.forEach(p => {
+        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA
+        let combinedProfiles = [...(op.profiles || [])];
+        const draftEntry = _draftFull[op.name + '||operador'];
+        if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+          draftEntry.perfiles.forEach(dp => {
+            if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
+              combinedProfiles.push(dp);
+            }
+          });
+        }
+
+        if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
+           combinedProfiles.forEach(p => {
               const turnosPerfil = _dpTurnosData[p.id];
               if (turnosPerfil && jornadaALeer) {
                  datamePts += (turnosPerfil[jornadaALeer] || 0);

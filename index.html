@@ -13281,10 +13281,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
       const now = Date.now();
       let changed = false;
+      const dateStr = typeof localDateStr === 'function' ? localDateStr() : '';
 
       for (const name in allHoras) {
         const info = allHoras[name];
-        // Verificar si hay una salida programada y si ya pas la hora
+        // Verificar si hay una salida programada y si ya paso la hora
         if (info.salidaTS && now > info.salidaTS) {
           const op = operatorsData.find(o => _normName(o.name) === _normName(name));
           if (op && op.profiles && op.profiles.length > 0) {
@@ -13292,13 +13293,29 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             op.profiles = []; // Liberar perfiles para el relevo
             changed = true;
           }
-          // Tambin desmarcar el estado de "Presente" si estaba activo
-          const k = asiKey(name, 'operador');
-          if (asiEstados[k] && asiEstados[k].estado === 'P') {
+          
+          const k = (typeof asiKey === 'function') ? asiKey(name, 'operador') : name + '||operador';
+          
+          // Limpiar en memoria si existe
+          if (typeof asiEstados !== 'undefined' && asiEstados[k] && asiEstados[k].estado === 'P') {
             asiEstados[k].estado = '';
             changed = true;
           }
-          // Limpiar el timer para que no se repita en este operador hoy
+
+          // Limpiar directamente en los drafts de localStorage para asegurar efecto global
+          if (typeof ASI_KEY !== 'undefined' && dateStr) {
+            ['manana', 'tarde', 'noche'].forEach(sh => {
+              const draftKey = ASI_KEY + '_draft_' + dateStr + '_' + sh;
+              const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+              if (draft[k] && (draft[k].estado === 'P' || draft[k].estado === 'T')) {
+                draft[k].estado = '';
+                localStorage.setItem(draftKey, JSON.stringify(draft));
+                changed = true;
+              }
+            });
+          }
+
+          // Limpiar el timer para que no se repita
           delete info.salidaTS;
           allHoras[name] = info;
           localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
@@ -13307,7 +13324,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       if (changed) {
         saveData();
-        asiSaveDraft();
+        // Si estamos en la pestaña de Asistencia, re-renderizar para reflejar los cambios visualmente
+        const asiTab = document.getElementById('tab-asistencia');
+        if (asiTab && asiTab.classList.contains('active') && typeof asiRender === 'function') {
+           asiRender();
+        }
       }
     }
 

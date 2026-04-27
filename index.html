@@ -13134,7 +13134,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
       // Hora de ingreso automática
       let horaIngresoHTML = '';
-      if (role === 'operador' && cur.horaIngreso) {
+      if ((role === 'operador' || role === 'monitor') && cur.horaIngreso) {
         const autoTag = cur.autoMarcado ? ' <span style="font-size:.55rem;color:#475569;">(auto)</span>' : '';
         const horasReg = asiGetHoras(name);
         let salidaStr = '';
@@ -13145,14 +13145,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         horaIngresoHTML = `<div style="font-size:.62rem;color:#34d399;margin-top:2px;">🕐 Ingresó: ${cur.horaIngreso}${autoTag}${salidaStr}</div>`;
       }
 
-      // Horas de turno: solo operadores
+      // Horas de turno: operadores y monitores
       let horasHTML = '';
-      if (role === 'operador') {
-        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === name) : null;
+      if (role === 'operador' || role === 'monitor') {
+        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
         const horasReg = asiGetHoras(name);
         const horasActual = horasReg?.horas || op?.turno_horas || 8;
         const esCambio = horasReg?.cambioTurno;
-        const turnoActual = op?.turno || '—';
+        const turnoActual = op?.turno || 'Todos';
         const turnoIcon = turnoActual === 'Mañana' ? '☀️' : turnoActual === 'Tarde' ? '🌆' : turnoActual === 'Noche' ? '🌙' : '🔄';
         horasHTML = `
         <div style="display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap;">
@@ -13177,9 +13177,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         </div>`;
       }
 
-      // ── Módulo completo de perfiles (solo para rol operador) ──
+      // ── Módulo completo de perfiles (operadores y monitores) ──
       let perfilesHTML = '';
-      if (role === 'operador') {
+      if (role === 'operador' || role === 'monitor') {
         const opData = (typeof operatorsData !== 'undefined')
           ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
         const perfs = opData?.profiles || [];
@@ -13277,6 +13277,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <button class="asi-estado-btn${est === 'P' ? ' sel-P' : ''}" title="Presente" onclick="asiSetEstado('${sn}','${role}','P')">✅</button>
       <button class="asi-estado-btn${est === 'T' ? ' sel-T' : ''}" title="Tardanza" onclick="asiSetEstado('${sn}','${role}','T')">⏰</button>
       <button class="asi-estado-btn${est === 'A' ? ' sel-A' : ''}" title="Ausente"  onclick="asiSetEstado('${sn}','${role}','A')">❌</button>
+      ${role === 'monitor' ? `<button class="asi-estado-btn" title="Eliminar Monitor" onclick="asiDeleteMonitor('${sn}')" style="margin-left:4px; filter:grayscale(1); opacity:0.6;">🗑️</button>` : ''}
     </div>
   </div>`;
     }
@@ -13301,7 +13302,8 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             }
           }
           
-          const k = (typeof asiKey === 'function') ? asiKey(name, 'operador') : name + '||operador';
+          const isMon = loadMonitores().includes(name);
+          const k = (typeof asiKey === 'function') ? asiKey(name, isMon ? 'monitor' : 'operador') : name + '||' + (isMon ? 'monitor' : 'operador');
           
           // Limpiar en memoria si existe
           if (typeof asiEstados !== 'undefined' && asiEstados[k] && asiEstados[k].estado === 'P') {
@@ -13342,7 +13344,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function asiRender() {
       asiAutoRelease(); // Verificar expiraciones antes de pintar
       const _allOps = (typeof operatorsData !== 'undefined')
-        ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : [];
+        ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A' && o.group !== 'MONITOR') : [];
 
       // Filtro de turno visual restaurado
       let ops = _asiTurnoFilter === 'Todos'
@@ -13480,8 +13482,34 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const name = inp.value.trim().toUpperCase();
       if (!name) return;
       const arr = loadMonitores();
-      if (!arr.includes(name)) { arr.push(name); saveMonitores(arr); }
+      if (!arr.includes(name)) { 
+        arr.push(name); 
+        saveMonitores(arr); 
+        // Asegurar que exista en operatorsData para manejar perfiles/puntos
+        if (typeof operatorsData !== 'undefined') {
+          if (!operatorsData.find(o => _normName(o.name) === _normName(name))) {
+            operatorsData.push({ name, group: 'MONITOR', profiles: [], turno: 'Todos', plataforma: 'Monitor' });
+            saveData();
+          }
+        }
+      }
       inp.value = ''; asiRender();
+    }
+
+    function asiDeleteMonitor(name) {
+      if (confirm(`Eliminar al monitor ${name}?`)) {
+        let mons = loadMonitores();
+        mons = mons.filter(m => m !== name);
+        saveMonitores(mons);
+        if (typeof operatorsData !== 'undefined') {
+          const idx = operatorsData.findIndex(o => _normName(o.name) === _normName(name) && o.group === 'MONITOR');
+          if (idx >= 0) {
+            operatorsData.splice(idx, 1);
+            saveData();
+          }
+        }
+        asiRender();
+      }
     }
 
     function asiGuardar() {

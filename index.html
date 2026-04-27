@@ -13289,9 +13289,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (info.salidaTS && now > info.salidaTS) {
           const op = operatorsData.find(o => _normName(o.name) === _normName(name));
           if (op && op.profiles && op.profiles.length > 0) {
-            console.warn(`[AutoRelease] Turno expirado para ${name}. Liberando perfiles.`);
-            op.profiles = []; // Liberar perfiles para el relevo
-            changed = true;
+            const hasCobertura = op.profiles.some(p => p.tipo === 'cobertura');
+            if (hasCobertura) {
+              console.warn(`[AutoRelease] Turno expirado para ${name}. Liberando perfiles de cobertura.`);
+              op.profiles = op.profiles.filter(p => p.tipo !== 'cobertura');
+              changed = true;
+            }
           }
           
           const k = (typeof asiKey === 'function') ? asiKey(name, 'operador') : name + '||operador';

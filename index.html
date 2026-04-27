@@ -5446,249 +5446,8 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    // RANKING DE PERFILES
+    // RANKING DE PERFILES (Lógica migrada directamente a las cards de Reporte Operadores)
     // ══════════════════════════════════════════════════════════════
-    function renderPerfilesRanking() {
-      const search = (document.getElementById('pf-search')?.value || '').toLowerCase().trim();
-      const filterOp = document.getElementById('pf-filter-op')?.value || '';
-      const sortBy = document.getElementById('pf-filter-sort')?.value || 'perfiles';
-      const { curr } = getActivePair();
-      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
-      const hoy = localDateStr();
-      const hace7 = localDateStr(new Date(Date.now() - 7 * 864e5));
-      const mesActual = hoy.slice(0, 7);
-      const perfilMetrics = getPerfilMetrics();
-
-      // ── Build flat profile list ──
-      const allProfiles = [];
-      operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').forEach(op => {
-        const profiles = op.profiles || [];
-        profiles.forEach(p => {
-          const key = op.name + '::' + String(p.id).trim();
-          const meta = perfilMetrics[key];
-          const hist = (meta && meta.historial) ? meta.historial : [];
-
-          const entryHoy = hist.find(function (h) { return h.fecha === hoy; });
-          const ptsDia = entryHoy ? (entryHoy.puntos || 0) : 0;
-          const ptsSem = hist.filter(function (h) { return h.fecha >= hace7; })
-            .reduce(function (s, h) { return s + (h.puntos || 0); }, 0);
-          const ptsMes = hist.filter(function (h) { return h.fecha && h.fecha.slice(0, 7) === mesActual; })
-            .reduce(function (s, h) { return s + (h.puntos || 0); }, 0);
-          const diasAct = hist.filter(function (h) { return h.fecha && h.fecha.slice(0, 7) === mesActual && h.puntos > 0; });
-          const promDia = diasAct.length ? (ptsMes / diasAct.length) : 0;
-          const diasTotal = hist.length;
-
-          // Últimos 7 días para mini-barra
-          var spark = [];
-          for (var d = 6; d >= 0; d--) {
-            var fd = localDateStr(new Date(Date.now() - d * 864e5));
-            var e = hist.find(function (h) { return h.fecha === fd; });
-            spark.push(e ? (e.puntos || 0) : 0);
-          }
-
-          allProfiles.push({
-            id: String(p.id).trim(),
-            model: p.model || (meta && meta.modelo) || '—',
-            operator: op.name,
-            group: op.group,
-            tipo: p.tipo || (meta && meta.tipo) || 'activo',
-            cubreA: p.cubreA || null,
-            ptsDia: ptsDia, ptsSem: ptsSem, ptsMes: ptsMes,
-            promDia: promDia, diasTotal: diasTotal,
-            spark: spark,
-            totalPerfilesOp: profiles.length
-          });
-        });
-      });
-
-      // ── Populate operator filter once ──
-      var opSel = document.getElementById('pf-filter-op');
-      if (opSel && opSel.options.length <= 1) {
-        var ops = [];
-        allProfiles.forEach(function (p) { if (ops.indexOf(p.operator) === -1) ops.push(p.operator); });
-        ops.sort().forEach(function (op) {
-          var opt = document.createElement('option');
-          opt.value = op; opt.textContent = op;
-          opSel.appendChild(opt);
-        });
-      }
-
-      // ── Filter ──
-      var filtered = allProfiles.filter(function (p) {
-        var ms = !search || p.id.toLowerCase().indexOf(search) >= 0 ||
-          p.model.toLowerCase().indexOf(search) >= 0 ||
-          p.operator.toLowerCase().indexOf(search) >= 0;
-        var mo = !filterOp || p.operator === filterOp;
-        return ms && mo;
-      });
-
-      // ── Sort ──
-      if (sortBy === 'puntos') filtered.sort(function (a, b) { return b.ptsMes - a.ptsMes; });
-      else if (sortBy === 'alfa') filtered.sort(function (a, b) { return a.model.localeCompare(b.model); });
-      else filtered.sort(function (a, b) { return (b.totalPerfilesOp - a.totalPerfilesOp) || (b.ptsMes - a.ptsMes); });
-
-      // ── Stats row ──
-      var statsEl = document.getElementById('pf-stats-row');
-      if (statsEl) {
-        var totalPtsFilt = filtered.reduce(function (s, p) { return s + p.ptsMes; }, 0);
-        var nOps = [];
-        allProfiles.forEach(function (p) { if (nOps.indexOf(p.operator) === -1) nOps.push(p.operator); });
-        var topPerfil = filtered.slice().sort(function (a, b) { return b.ptsMes - a.ptsMes; })[0];
-        var stats = [
-          { val: allProfiles.length, lbl: 'Total perfiles' },
-          { val: filtered.length, lbl: 'Mostrando' },
-          { val: nOps.length, lbl: 'Operadores' },
-          { val: totalPtsFilt.toFixed(1), lbl: 'Pts ' + currLabel },
-          { val: topPerfil ? topPerfil.promDia.toFixed(1) : '—', lbl: '🏆 Mejor prom/día' }
-        ];
-        var sh = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;">';
-        stats.forEach(function (s) {
-          sh += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);' +
-            'border-radius:12px;padding:10px 16px;min-width:110px;">' +
-            '<div style="font-size:1.1rem;font-weight:800;color:var(--accent);">' + s.val + '</div>' +
-            '<div style="font-size:.67rem;color:#64748b;text-transform:uppercase;letter-spacing:.6px;margin-top:2px;">' + s.lbl + '</div>' +
-            '</div>';
-        });
-        sh += '</div>';
-        statsEl.innerHTML = sh;
-      }
-
-      // ── Render cards ──
-      var listEl = document.getElementById('pf-list');
-      if (!listEl) return;
-      if (!filtered.length) {
-        listEl.innerHTML = '<div style="text-align:center;color:#475569;padding:40px;">Sin perfiles que coincidan.</div>';
-        return;
-      }
-
-      // Group by operator
-      var byOp = {};
-      filtered.forEach(function (p) {
-        if (!byOp[p.operator]) byOp[p.operator] = [];
-        byOp[p.operator].push(p);
-      });
-      var opsSorted = Object.keys(byOp).sort(function (a, b) {
-        return byOp[b].length - byOp[a].length;
-      });
-
-      var medals = ['🥇', '🥈', '🥉'];
-      var html = '';
-
-      opsSorted.forEach(function (opName, opIdx) {
-        var profiles = byOp[opName];
-        // ptsMes del operador = suma real de perfiles del mes (no op[curr])
-        var opPtsMes = profiles.reduce(function (s, p) { return s + p.ptsMes; }, 0);
-        var opPromDia = profiles.reduce(function (s, p) { return s + p.promDia; }, 0) / (profiles.length || 1);
-        var medal = medals[opIdx] || ('#' + (opIdx + 1));
-
-        html += '<div style="margin-bottom:24px;">';
-
-        // Operator header
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;' +
-          'background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);' +
-          'border-radius:14px 14px 0 0;padding:12px 18px;">';
-        html += '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<span style="font-size:1.2rem;">' + medal + '</span>' +
-          '<div>' +
-          '<div style="font-weight:700;font-size:.95rem;color:#a5b4fc;">' + opName + '</div>' +
-          '<div style="font-size:.7rem;color:#64748b;margin-top:2px;">' +
-          profiles.length + ' perfil' + (profiles.length !== 1 ? 'es' : '') +
-          ' &nbsp;·&nbsp; Prom agencia: <span style="color:#fbbf24;">' + opPromDia.toFixed(1) + ' pts/día</span>' +
-          '</div></div></div>';
-        html += '<div style="text-align:right;">' +
-          '<div style="font-size:1rem;font-weight:800;color:#f59e0b;">' + opPtsMes.toFixed(1) + ' pts</div>' +
-          '<div style="font-size:.68rem;color:#64748b;">' + currLabel + ' (por perfiles)</div>' +
-          '</div></div>';
-
-        // Column headers
-        html += '<div style="display:grid;grid-template-columns:95px 1fr 65px 65px 72px 72px 90px;' +
-          'background:rgba(255,255,255,0.03);padding:7px 14px;' +
-          'border:1px solid rgba(99,102,241,0.15);border-top:none;' +
-          'font-size:.63rem;color:#475569;text-transform:uppercase;letter-spacing:.7px;font-weight:700;">' +
-          '<span>ID</span><span>Modelo</span>' +
-          '<span style="text-align:right;">Hoy</span>' +
-          '<span style="text-align:right;">7 días</span>' +
-          '<span style="text-align:right;">Mes</span>' +
-          '<span style="text-align:right;">Prom/día</span>' +
-          '<span style="text-align:center;">Semáforo</span>' +
-          '</div>';
-
-        // Profile rows
-        html += '<div style="border:1px solid rgba(99,102,241,0.15);border-top:none;border-radius:0 0 14px 14px;overflow:hidden;">';
-
-        profiles.forEach(function (p, pi) {
-          var bgRow = pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)';
-          // Semáforo + decisión
-          var sem, dec, decColor;
-          if (p.promDia >= 40) {
-            sem = '🟢'; dec = 'Mantener'; decColor = '#34d399';
-          } else if (p.promDia >= 20) {
-            sem = '🟡'; dec = 'Revisar'; decColor = '#fbbf24';
-          } else if (p.diasTotal === 0) {
-            sem = '⚪'; dec = 'Sin datos'; decColor = '#475569';
-          } else {
-            sem = '🔴'; dec = 'Cambiar'; decColor = '#f87171';
-          }
-
-          // Mini sparkline last 7 days
-          var maxSpark = Math.max.apply(null, p.spark.concat([1]));
-          var sparkHtml = '<div style="display:flex;align-items:flex-end;gap:1px;height:14px;margin-top:2px;">';
-          p.spark.forEach(function (v) {
-            var h = Math.max(2, Math.round((v / maxSpark) * 14));
-            var bc = v > 0 ? '#6366f1' : '#1e293b';
-            sparkHtml += '<div style="width:6px;height:' + h + 'px;background:' + bc + ';border-radius:1px;"></div>';
-          });
-          sparkHtml += '</div>';
-
-          html += '<div style="display:grid;grid-template-columns:95px 1fr 65px 65px 72px 72px 90px;' +
-            'padding:10px 14px;border-top:1px solid rgba(255,255,255,0.04);background:' + bgRow + ';">';
-
-          // ID
-          html += '<span style="font-size:.7rem;color:#94a3b8;font-family:monospace;align-self:center;">' + p.id + '</span>';
-
-          // Modelo + tipo + sparkline
-          html += '<div style="align-self:center;">' +
-            '<div style="font-size:.82rem;font-weight:600;color:var(--text);">' +
-            (p.tipo === 'cobertura' ? '🔴 ' : '🟢 ') + p.model +
-            (p.cubreA ? ' <span style="font-size:.63rem;color:#f87171;">(cubre:' + p.cubreA + ')</span>' : '') +
-            '</div>' + sparkHtml + '</div>';
-
-          // Hoy
-          html += '<div style="text-align:right;align-self:center;">' +
-            '<span style="font-size:.8rem;font-weight:700;color:' + (p.ptsDia > 0 ? '#34d399' : '#334155') + ';">' +
-            p.ptsDia.toFixed(1) + '</span></div>';
-
-          // 7 días
-          html += '<div style="text-align:right;align-self:center;">' +
-            '<span style="font-size:.8rem;color:' + (p.ptsSem > 0 ? '#a5b4fc' : '#334155') + ';">' +
-            p.ptsSem.toFixed(1) + '</span></div>';
-
-          // Mes
-          html += '<div style="text-align:right;align-self:center;">' +
-            '<span style="font-size:.8rem;font-weight:700;color:#f59e0b;">' +
-            p.ptsMes.toFixed(1) + '</span></div>';
-
-          // Prom/día
-          html += '<div style="text-align:right;align-self:center;">' +
-            '<span style="font-size:.8rem;font-weight:800;color:' + decColor + ';">' +
-            p.promDia.toFixed(1) + '</span>' +
-            (p.diasTotal > 0 ? '<div style="font-size:.6rem;color:#475569;">' + p.diasTotal + 'd reg</div>' : '') +
-            '</div>';
-
-          // Semáforo + decisión
-          html += '<div style="text-align:center;align-self:center;">' +
-            '<div style="font-size:.85rem;">' + sem + '</div>' +
-            '<div style="font-size:.62rem;font-weight:700;color:' + decColor + ';margin-top:2px;">' + dec + '</div>' +
-            '</div>';
-
-          html += '</div>';
-        });
-
-        html += '</div></div>';
-      });
-
-      listEl.innerHTML = html;
-    }
 
 
 
@@ -9362,116 +9121,100 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function savePerfilMetrics(obj) { localStorage.setItem(PERFIL_KEY, JSON.stringify(obj)); }
 
     // Active filter per operator card: opName -> 'diario'|'semanal'|'mensual'|'corte'
-    const _perfilFiltros = {};
-
-    function renderPerfilMetrics(opName, filtro) {
+    function renderPerfilMetrics(opName) {
+      const { curr } = getActivePair();
+      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
+      const hoy = localDateStr();
+      const hace7 = localDateStr(new Date(Date.now() - 7 * 864e5));
+      const mesActual = hoy.slice(0, 7);
       const metrics = getPerfilMetrics();
       const op = operatorsData.find(o => o.name === opName);
-      const opProfileIds = op ? (op.profiles || []).map(p => String(p.id).trim()) : [];
+      if (!op) return '';
+      const profiles = op.profiles || [];
+      if (!profiles.length) return '<div style="color:#475569;font-size:.82rem;padding:12px;text-align:center;">Sin perfiles asignados.</div>';
 
-      const perfiles = Object.values(metrics).filter(m => {
-        if (m.opName === opName) return true;
-        if (opProfileIds.length > 0 && opProfileIds.includes(m.idPerfil)) {
-          m.opName = opName;
-          return true;
+      const allProfiles = [];
+      profiles.forEach(p => {
+        const key = opName + '::' + String(p.id).trim();
+        const meta = metrics[key];
+        const hist = (meta && meta.historial) ? meta.historial : [];
+
+        const entryHoy = hist.find(h => h.fecha === hoy);
+        const ptsDia = entryHoy ? (entryHoy.puntos || 0) : 0;
+        const ptsSem = hist.filter(h => h.fecha >= hace7).reduce((s, h) => s + (h.puntos || 0), 0);
+        const ptsMes = hist.filter(h => h.fecha && h.fecha.slice(0, 7) === mesActual).reduce((s, h) => s + (h.puntos || 0), 0);
+        const diasAct = hist.filter(h => h.fecha && h.fecha.slice(0, 7) === mesActual && h.puntos > 0);
+        const promDia = diasAct.length ? (ptsMes / diasAct.length) : 0;
+        const diasTotal = hist.length;
+
+        const spark = [];
+        for (let d = 6; d >= 0; d--) {
+          const fd = localDateStr(new Date(Date.now() - d * 864e5));
+          const e = hist.find(h => h.fecha === fd);
+          spark.push(e ? (e.puntos || 0) : 0);
         }
-        return false;
-      });
-      if (perfiles.length === 0) return '';
 
-      // Determine active filter
-      const activeFiltro = filtro || _perfilFiltros[opName] || 'mensual';
-      _perfilFiltros[opName] = activeFiltro;
-
-      // Date range filter
-      const now = new Date();
-      const today = localDateStr(now);
-      const weekAgo = localDateStr(new Date(now - 7 * 24 * 3600 * 1000));
-      const monthStart = localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
-
-      const filterHist = (hist) => {
-        if (activeFiltro === 'diario') return hist.filter(h => h.fecha === today);
-        if (activeFiltro === 'semanal') return hist.filter(h => h.fecha >= weekAgo);
-        if (activeFiltro === 'mensual') return hist.filter(h => h.fecha >= monthStart);
-        if (activeFiltro === 'corte') return hist.length > 0 ? [hist[0]] : []; // último corte
-        return hist;
-      };
-
-      const calcTrend = (hist) => {
-        if (hist.length < 2) return { icon: '⚪', color: '#64748b', pct: 0 };
-        const last = hist[0].puntos, prev = hist[1].puntos;
-        if (prev === 0) return { icon: '🆕', color: '#94a3b8', pct: 0 };
-        const pct = ((last - prev) / prev) * 100;
-        if (pct >= 10) return { icon: '📈', color: '#34d399', pct };
-        if (pct <= -10) return { icon: '📉', color: '#f87171', pct };
-        return { icon: '➡️', color: '#fbbf24', pct };
-      };
-
-      const withFiltered = perfiles.map(p => ({
-        ...p,
-        filteredHist: filterHist(p.historial)
-      })).filter(p => p.filteredHist.length > 0);
-
-      const sorted = [...withFiltered].sort((a, b) => {
-        const aSum = a.filteredHist.reduce((s, h) => s + h.puntos, 0);
-        const bSum = b.filteredHist.reduce((s, h) => s + h.puntos, 0);
-        return bSum - aSum;
+        allProfiles.push({
+          id: String(p.id).trim(),
+          model: p.model || (meta && meta.modelo) || '—',
+          tipo: p.tipo || (meta && meta.tipo) || 'activo',
+          cubreA: p.cubreA || null,
+          ptsDia, ptsSem, ptsMes, promDia, diasTotal, spark
+        });
       });
 
-      const opId = opName.replace(/\s+/g, '_').toLowerCase();
+      allProfiles.sort((a, b) => b.ptsMes - a.ptsMes);
 
-      const rows = sorted.length === 0
-        ? `<div style="color:#475569;font-size:.75rem;padding:6px 0;">Sin datos para este período.</div>`
-        : sorted.map((p, i) => {
-          const fh = p.filteredHist;
-          const total = fh.reduce((s, h) => s + h.puntos, 0);
-          const trend = calcTrend(fh);
-          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`;
-          const lastPts = fh[0]?.puntos || 0;
-          const displayPts = activeFiltro === 'corte' ? lastPts : total;
-          const ptsLabel = activeFiltro === 'corte' ? 'último corte' : 'total período';
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;margin-bottom:4px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);">
-          <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-            <span style="font-size:.8rem;">${medal}</span>
-            <div style="min-width:0;">
-              <div style="font-size:.75rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.modelo || p.idPerfil}</div>
-              <div style="font-size:.63rem;color:#475569;">ID: ${p.idPerfil} · ${fh.length} corte${fh.length !== 1 ? 's' : ''}</div>
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;">
-            <div style="font-size:.8rem;font-weight:700;color:var(--accent);">${displayPts.toFixed(1)} pts</div>
-            <div style="font-size:.63rem;color:${trend.color};">${trend.icon} ${trend.pct !== 0 ? (trend.pct > 0 ? '+' : '') + trend.pct.toFixed(1) + '%' : 'estable'}</div>
-          </div>
-        </div>`;
-        }).join('');
+      let html = '<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;">';
+      html += '<div style="font-size:.7rem;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📊 Rendimiento de Perfiles ('+allProfiles.length+')</div>';
 
-      const btnStyle = (f) => {
-        const active = f === activeFiltro;
-        return `padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid ${active ? 'rgba(94,234,212,.4)' : 'var(--border)'};background:${active ? 'rgba(94,234,212,.15)' : 'rgba(255,255,255,.03)'};color:${active ? 'var(--accent)' : '#64748b'};`;
-      };
+      html += '<div style="display:grid;grid-template-columns:75px 1fr 45px 45px 50px 48px 45px;' +
+        'background:rgba(255,255,255,0.03);padding:6px 8px;' +
+        'border:1px solid rgba(99,102,241,0.15);border-top:none;border-radius:8px 8px 0 0;' +
+        'font-size:.55rem;color:#475569;text-transform:uppercase;letter-spacing:.5px;font-weight:700;">' +
+        '<span>ID</span><span>Modelo</span>' +
+        '<span style="text-align:right;">Hoy</span>' +
+        '<span style="text-align:right;">7d</span>' +
+        '<span style="text-align:right;">Mes</span>' +
+        '<span style="text-align:right;">Prom</span>' +
+        '<span style="text-align:center;">Est</span>' +
+        '</div>';
 
-      return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);" id="perfil-metrics-${opId}">
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-      <span style="font-size:.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;">📊 Rendimiento</span>
-      <span style="background:rgba(94,234,212,.1);color:var(--accent);padding:1px 7px;border-radius:6px;font-size:.65rem;font-weight:700;">${perfiles.length} perfiles</span>
-      <div style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap;">
-        <button style="${btnStyle('diario')}"  onclick="switchPerfilFiltro('${opName}','diario')">Hoy</button>
-        <button style="${btnStyle('semanal')}" onclick="switchPerfilFiltro('${opName}','semanal')">Semana</button>
-        <button style="${btnStyle('mensual')}" onclick="switchPerfilFiltro('${opName}','mensual')">Mes</button>
-        <button style="${btnStyle('corte')}"   onclick="switchPerfilFiltro('${opName}','corte')">Último corte</button>
-      </div>
-      <span title="Rendimiento filtrado por período. Puntos = suma de cortes en el rango. Tendencia = último vs anterior corte del período."
-        style="background:rgba(99,102,241,.15);color:#818cf8;padding:2px 8px;border-radius:6px;font-size:.65rem;cursor:help;border:1px solid rgba(99,102,241,.2);">ℹ️</span>
-    </div>
-    ${rows}
-  </div>`;
-    }
+      html += '<div style="border:1px solid rgba(99,102,241,0.15);border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">';
 
-    function switchPerfilFiltro(opName, filtro) {
-      _perfilFiltros[opName] = filtro;
-      const opId = opName.replace(/\s+/g, '_').toLowerCase();
-      const container = document.getElementById('perfil-metrics-' + opId);
-      if (container) container.outerHTML = renderPerfilMetrics(opName, filtro);
+      allProfiles.forEach((p, pi) => {
+        const bgRow = pi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)';
+        let sem, decColor;
+        if (p.promDia >= 40) { sem = '🟢'; decColor = '#34d399'; }
+        else if (p.promDia >= 20) { sem = '🟡'; decColor = '#fbbf24'; }
+        else if (p.diasTotal === 0) { sem = '⚪'; decColor = '#475569'; }
+        else { sem = '🔴'; decColor = '#f87171'; }
+
+        const maxSpark = Math.max(...p.spark, 1);
+        let sparkHtml = '<div style="display:flex;align-items:flex-end;gap:1px;height:12px;margin-top:3px;">';
+        p.spark.forEach(v => {
+          const h = Math.max(2, Math.round((v / maxSpark) * 12));
+          const bc = v > 0 ? '#6366f1' : '#1e293b';
+          sparkHtml += `<div style="width:4px;height:${h}px;background:${bc};border-radius:1px;"></div>`;
+        });
+        sparkHtml += '</div>';
+
+        html += `<div style="display:grid;grid-template-columns:75px 1fr 45px 45px 50px 48px 45px;padding:6px 8px;border-top:1px solid rgba(255,255,255,0.04);background:${bgRow};">`;
+        html += `<span style="font-size:.65rem;color:#94a3b8;font-family:monospace;align-self:center;">${p.id}</span>`;
+        html += `<div style="align-self:center;min-width:0;">
+          <div style="font-size:.7rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${p.tipo === 'cobertura' ? '🔴' : '🟢'} ${p.model}
+          </div>${sparkHtml}</div>`;
+        html += `<div style="text-align:right;align-self:center;font-size:.7rem;font-weight:700;color:${p.ptsDia > 0 ? '#34d399' : '#334155'};">${p.ptsDia.toFixed(1)}</div>`;
+        html += `<div style="text-align:right;align-self:center;font-size:.7rem;color:${p.ptsSem > 0 ? '#a5b4fc' : '#334155'};">${p.ptsSem.toFixed(1)}</div>`;
+        html += `<div style="text-align:right;align-self:center;font-size:.7rem;font-weight:700;color:#f59e0b;">${p.ptsMes.toFixed(1)}</div>`;
+        html += `<div style="text-align:right;align-self:center;font-size:.7rem;font-weight:800;color:${decColor};">${p.promDia.toFixed(1)}</div>`;
+        html += `<div style="text-align:center;align-self:center;font-size:.85rem;">${sem}</div>`;
+        html += `</div>`;
+      });
+
+      html += '</div></div>';
+      return html;
     }
 
 
@@ -9840,42 +9583,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           });
         }
         // Render profiles
-        const pList = card.querySelector('.profiles-lazy');
-        if (pList) {
-          const otherOps = operatorsData
-            .filter((o, i) => i !== idx)
-            .map(o => `<option value="${o.name}">${o.name} (Grp ${o.group})</option>`).join('');
-          let profilesHTML = op.profiles.map((p, pIndex) => {
-            const esCobertura = p.tipo === 'cobertura';
-            const badge = esCobertura
-              ? `<span class="profile-badge badge-cobertura">🔴 Cobertura</span>`
-              : `<span class="profile-badge badge-propio">🟢 Propio</span>`;
-            const cubreTag = esCobertura && p.cubreA
-              ? `<div class="profile-cubre-tag">↳ Cubriendo a: <strong>${p.cubreA}</strong></div>` : '';
-            return `<div class="profile-item ${esCobertura ? 'cobertura' : ''}">
-          <div class="profile-item-row">
-            <span>ID: ${p.id} — ${p.model} ${badge}</span>
-            <span class="delete-profile" onclick="removeProfile(${idx},${pIndex})">✕</span>
-          </div>${cubreTag}</div>`;
-          }).join('');
-          pList.innerHTML = profilesHTML || '<div style="color:#475569;font-size:.82rem;">Sin perfiles asignados.</div>';
-          // Inject profile performance metrics
-          const metricsHTML = renderPerfilMetrics(op.name);
-          if (metricsHTML) pList.insertAdjacentHTML('afterend', metricsHTML);
-          const addForm = card.querySelector('.add-form-lazy');
-          if (addForm) {
-            addForm.innerHTML = `
-          <input type="text" id="new-id-${idx}" placeholder="ID del perfil"/>
-          <input type="text" id="new-model-${idx}" placeholder="Nombre del modelo"/>
-          <select id="new-tipo-${idx}" onchange="toggleCubreField(${idx})">
-            <option value="propio">🟢 Perfil Propio</option>
-            <option value="cobertura">🔴 Cubriendo otro grupo</option>
-          </select>
-          <select id="new-cubre-${idx}" style="display:none;">
-            <option value="">— ¿A quién cubre? —</option>${otherOps}
-          </select>
-          <button onclick="addProfile(${idx})" style="background:#34d399;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;">Guardar</button>`;
-          }
+        const pListContainer = card.querySelector('.profiles-container');
+        if (pListContainer) {
+          pListContainer.innerHTML = renderPerfilMetrics(op.name);
         }
       });
     }, { rootMargin: '100px', threshold: 0.01 });
@@ -10010,17 +9720,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       </div>
 
       <div class="chart-container" style="margin-top:15px;"><canvas></canvas></div>
-      <div class="profiles-section" style="margin-top:12px;">
-        <div class="profiles-title" style="font-size:.72rem;">
-          🗂️ Perfiles asignados
-        </div>
-        <div id="profiles-list-${globalIndex}" class="profiles-lazy">
-          <div style="color:#334155;font-size:.75rem;padding:6px 0;">Cargando perfiles...</div>
-        </div>
-        <div style="margin-top:6px;font-size:.62rem;color:#334155;font-style:italic;text-align:center;">
-          ✏️ Edita perfiles desde la pestaña <strong style="color:#a78bfa;">✅ Asistencia</strong>
-        </div>
-      </div>`;
+      <div class="profiles-container" id="profiles-list-${globalIndex}">
+         <div style="color:#334155;font-size:.75rem;padding:6px 0;text-align:center;">Cargando perfiles...</div>
+      </div>
+      <div style="margin-top:12px;font-size:.62rem;color:#334155;font-style:italic;text-align:center;">
+        ✏️ Edita los perfiles desde la pestaña <strong style="color:#a78bfa;">✅ Asistencia</strong>
+      </div>\`;
         fragment.appendChild(div);
         _opChartObserver.observe(div);
       });
@@ -11523,30 +11228,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
   </script>
 
 
-  <!-- TAB 2: RANKING PERFILES -->
-  <div id="tab-perfiles" class="tab-content">
-    <div class="rk-topbar" style="margin-bottom:16px;">
-      <div class="rk-search-wrap">
-        <span class="rk-search-icon">🔍</span>
-        <input class="rk-search" id="pf-search" placeholder="Buscar perfil o modelo..."
-          oninput="renderPerfilesRanking()">
-      </div>
-      <select id="pf-filter-op" class="rk-filter-select" onchange="renderPerfilesRanking()" style="margin-left:8px;">
-        <option value="">Todos los operadores</option>
-      </select>
-      <select id="pf-filter-sort" class="rk-filter-select" onchange="renderPerfilesRanking()" style="margin-left:8px;">
-        <option value="perfiles">Por cantidad de perfiles</option>
-        <option value="puntos">Por puntos del mes</option>
-        <option value="alfa">Alfabético</option>
-      </select>
-    </div>
-
-    <!-- Stats row -->
-    <div id="pf-stats-row" class="rk-stats-row" style="margin-bottom:20px;"></div>
-
-    <!-- Table -->
-    <div id="pf-list"></div>
-  </div>
+  <!-- TAB 2: RANKING PERFILES fue eliminado y fusionado en Reporte Operadores -->
 
   <div id="tab-plantrabajo" class="tab-content">
     <style>
@@ -14419,11 +14101,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         else { console.warn('⚠️ [SYNC] psaCargarDesdeSupabase no disponible'); }
       } catch(e) { console.error('❌ [SYNC] Error en PSA:', e); }
 
-      // ── PASO 6: Perfiles Ranking ───────────────────────────────────
-      console.log('📊 [SYNC] Paso 6 — Actualizando Ranking de Perfiles...');
-      try {
-        if (typeof renderPerfilesRanking === 'function') { renderPerfilesRanking(); console.log('✅ [SYNC] Paso 6 OK — Ranking perfiles actualizado'); }
-      } catch(e) { console.error('❌ [SYNC] Error en Ranking Perfiles:', e); }
+      // ── PASO 6: (Ranking Perfiles Migrado a Reporte Operadores) ───
 
       // ── UI: estado ok ─────────────────────────────────────────────
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);

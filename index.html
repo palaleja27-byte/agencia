@@ -13058,10 +13058,40 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         saveData();
       }
 
-      // Calcular ventana de tiempo real
+      // Calcular ventana de tiempo real (Turnos Fijos AgenciaRR)
       const k = asiKey(name, 'operador');
       const entTS = asiEstados[k]?.entradaTS || Date.now();
-      const salTS = horasNum ? entTS + (horasNum * 3600000) : null;
+      
+      let salTS = null;
+      if (horasNum) {
+        const now = new Date();
+        const currentHour = now.getHours();
+        const out = new Date(now);
+        
+        let endHour = 14;
+        let isNextDay = false;
+        const tFijo = op ? (op.turno || 'Mañana') : 'Mañana';
+
+        if (tFijo === 'Mañana') {
+          endHour = horasNum === 12 ? 18 : 14;
+        } else if (tFijo === 'Tarde') {
+          endHour = horasNum === 12 ? 2 : 22;
+          if (horasNum === 12) isNextDay = true;
+        } else if (tFijo === 'Noche') {
+          endHour = horasNum === 12 ? 10 : 6;
+          isNextDay = true;
+        }
+
+        // Ajuste de madrugada para turnos cruzados
+        if (isNextDay && currentHour >= 0 && currentHour < 12) {
+            isNextDay = false; 
+        }
+        
+        out.setHours(endHour, 0, 0, 0);
+        if (isNextDay) out.setDate(out.getDate() + 1);
+
+        salTS = out.getTime();
+      }
 
       all[name] = { 
         fecha, 

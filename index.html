@@ -13155,25 +13155,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           <button class="asi-shift-btn" id="asibtn-noche" onclick="asiSetShift('noche')">🌙 Noche</button>
         </div>
       </div>
-      <!-- Filtro de turno de operadores en asistencia -->
+      <!-- Buscador de operadores en lugar de filtro de turno visual -->
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span
-          style="font-size:.68rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;">Ver
-          turno:</span>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;">
-          <button id="asi-turno-Todos" onclick="asiSetTurnoFilter('Todos')" style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(94,234,212,.4);background:rgba(94,234,212,.15);color:#5eead4;">👥
-            Todos</button>
-          <button id="asi-turno-Mañana" onclick="asiSetTurnoFilter('Mañana')" style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">☀️
-            Mañana</button>
-          <button id="asi-turno-Tarde" onclick="asiSetTurnoFilter('Tarde')" style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">🌆
-            Tarde</button>
-          <button id="asi-turno-Noche" onclick="asiSetTurnoFilter('Noche')" style="padding:4px 11px;border-radius:7px;font-size:.7rem;font-weight:700;cursor:pointer;transition:.15s;
-                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#64748b;">🌙
-            Noche</button>
-        </div>
+        <input type="text" id="asi-search-op" placeholder="🔍 Buscar operador..." oninput="asiRender()"
+               style="padding:8px 12px;border-radius:10px;font-size:.8rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#e2e8f0;width:250px;box-sizing:border-box;">
       </div>
       <div class="asi-action-btns">
         <button class="btn-asi-save" onclick="asiGuardar()">💾 Guardar Asistencia</button>
@@ -13260,21 +13245,6 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     const ASI_KEY = 'rr_prime_asistencia';
     const ASI_MON_KEY = 'rr_prime_monitores';
     let asiShift = 'todos'; // por defecto ver todos los turnos
-    let _asiTurnoFilter = 'Todos'; // filtro de turno para grid de operadores
-
-    function asiSetTurnoFilter(turno) {
-      _asiTurnoFilter = turno;
-      // Actualizar estilos botones
-      ['Todos', 'Mañana', 'Tarde', 'Noche'].forEach(t => {
-        const btn = document.getElementById('asi-turno-' + t);
-        if (!btn) return;
-        const active = t === turno;
-        btn.style.borderColor = active ? 'rgba(94,234,212,.4)' : 'rgba(255,255,255,.1)';
-        btn.style.background = active ? 'rgba(94,234,212,.15)' : 'rgba(255,255,255,.04)';
-        btn.style.color = active ? '#5eead4' : '#64748b';
-      });
-      asiRender();
-    }
     let asiEstados = {};
 
     function loadMonitores() {
@@ -13603,15 +13573,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const _allOps = (typeof operatorsData !== 'undefined')
         ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : [];
 
-      // Filtro de turno: si no es 'Todos', filtrar por turno del operador.
-      // Si el operador no tiene turno definido, se muestra siempre (para no ocultarlo accidentalmente).
-      const ops = _asiTurnoFilter === 'Todos'
-        ? _allOps
-        : _allOps.filter(o => {
-          const t = (o.turno || '').trim();
-          if (!t) return true; // sin turno asignado → siempre visible
-          return t === _asiTurnoFilter;
-        });
+      let ops = _allOps;
+      const searchQ = (document.getElementById('asi-search-op')?.value || '').toLowerCase().trim();
+      if (searchQ) {
+         ops = ops.filter(o => o.name.toLowerCase().includes(searchQ) || String(o.group).includes(searchQ));
+      }
       const mons = loadMonitores();
 
       const plataformas = ['Prime', 'AmoLatina', 'Camilo'];

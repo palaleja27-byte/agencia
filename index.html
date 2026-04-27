@@ -6942,6 +6942,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             }
           });
       }
+    localStorage.removeItem = function (key) {
+      if (!_sbShouldExclude(key)) delete _sbMemCache[key];
+      _origRemoveItem(key);
+      if (_sb && !_sbShouldExclude(key)) {
+        _sb.from('kv_store').delete().eq('key', key)
+          .then(({ error }) => { if (error) console.warn('[Supabase] del error:', error.message); });
+      }
     };
 
     // Cola de escrituras pendientes para reintentar si Supabase falla
@@ -12097,15 +12104,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         </div>
       </div>
 
-      <!-- ── MODAL BITÁCORA ── -->
-      <div class="modal-overlay" id="pt-modal-bitacora">
-        <div class="modal-box">
-          <h3>📋 BITÁCORA — <span id="pt-modal-op-name"></span></h3>
-          <div id="pt-modal-log-body"></div>
-          <button class="log-clear" onclick="PT.clearBitacora()">🗑️ Limpiar historial</button>
-          <button class="modal-close" onclick="PT.cerrarModal()">✕ Cerrar</button>
-        </div>
-      </div>
+      <!-- Modal movido al final del body -->
 
       <script>
         // ══ PLAN DE TRABAJO — PT Namespace (evita colisiones globales) ══
@@ -15070,6 +15069,16 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <div id="modal-historial-produccion-body" style="max-height:70vh; overflow-y:auto; padding-right:5px;">
         <!-- Inyectado por JS -->
       </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL BITÁCORA (Global) ── -->
+  <div class="modal-overlay" id="pt-modal-bitacora">
+    <div class="modal-box">
+      <h3>📋 BITÁCORA — <span id="pt-modal-op-name"></span></h3>
+      <div id="pt-modal-log-body"></div>
+      <button class="log-clear" onclick="PT.clearBitacora()">🗑️ Limpiar historial</button>
+      <button class="modal-close" onclick="PT.cerrarModal()">✕ Cerrar</button>
     </div>
   </div>
 

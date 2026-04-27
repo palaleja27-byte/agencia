@@ -11559,10 +11559,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       }
 
       .progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #6366f1, #5eead4);
+        height: 100% !important;
+        background: linear-gradient(90deg, #6366f1, #5eead4) !important;
         transition: width 0.6s ease;
-        width: 0%;
         box-shadow: 0 0 10px rgba(94,234,212,0.3);
       }
 
@@ -12245,7 +12244,7 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               name: name,
               puntos: getPuntosHoy(name),
               meta: 100,
-              fecha: localDateStr(),
+              cycle: localDateStr() + "_" + shift, // Identificador unico del turno-dia
               inicioTurno: new Date().getTime(),
               tareasEstado: Array(PT.TAREAS_MASTER.length).fill(false),
               historialSemanal: [0, 0, 0, 0, 0, 0, 0]
@@ -12255,10 +12254,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           }
           
           const op = data[opIdx];
+          const currentCycle = localDateStr() + "_" + shift;
           
-          // Auto-limpieza si es un dia nuevo
-          if (op.fecha !== localDateStr()) {
-             op.fecha = localDateStr();
+          // Auto-limpieza si es un TURNO nuevo (ej: ayer tarde vs hoy tarde)
+          if (op.cycle !== currentCycle) {
+             op.cycle = currentCycle;
              op.tareasEstado = Array(PT.TAREAS_MASTER.length).fill(false);
              localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
           }
@@ -12296,12 +12296,12 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
 
         PT.toggleTaskOp = function(name, tIdx) {
            const shift = detectarTurno().toLowerCase();
+           // LEER DATOS FRESCOS (Sincronizados via Supabase)
            let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
            let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
            if (opIdx === -1) return;
            
-           // Asegurar fecha actual al interactuar
-           data[opIdx].fecha = localDateStr();
+           data[opIdx].cycle = localDateStr() + "_" + shift;
            data[opIdx].tareasEstado[tIdx] = !data[opIdx].tareasEstado[tIdx];
            localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
            PT.renderOperatorTasks(name);
@@ -12447,10 +12447,18 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           });
         };
 
-        PT.verBitacora = function (idx) {
+        PT.verBitacora = async function (idx) {
           const op = PT.baseDatos[PT.shiftActual][idx];
           PT.modalOpIdx = idx;
-          const historial = JSON.parse(localStorage.getItem(PT._logKey(op.name)) || '[]');
+          const key = PT._logKey(op.name);
+          
+          // Sincronizar log desde Supabase bajo demanda para el Admin
+          if (typeof _sb !== 'undefined' && _sb) {
+             const { data: logData } = await _sb.from('kv_store').select('value').eq('key', key).single();
+             if (logData) localStorage.setItem(key, logData.value);
+          }
+
+          const historial = JSON.parse(localStorage.getItem(key) || '[]');
           const nameEl = document.getElementById('pt-modal-op-name');
           const body = document.getElementById('pt-modal-log-body');
           if (nameEl) nameEl.textContent = op.name;

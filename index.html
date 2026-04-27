@@ -6884,10 +6884,13 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
                 }
               }
               // PT realtime: re-render Plan de Trabajo cuando otro PC cambia el turno
-              if (ptKeys.includes(row.key) && typeof PT !== 'undefined') {
+              if (row.key.startsWith('rr_prime_v15_') && typeof PT !== 'undefined') {
                 const shift = row.key.replace('rr_prime_v15_', '');
                 PT.baseDatos[shift] = JSON.parse(row.value || '[]');
-                if (PT.shiftActual === shift) PT.renderAll();
+                if (PT.shiftActual === shift) {
+                   PT.renderAll();
+                   _toastSync('📋 Plan de Trabajo actualizado');
+                }
                 // También actualizar barra competitiva en op-dashboard
                 if (currentRole === 'operador' && typeof renderCompetitiveBar === 'function') {
                   renderCompetitiveBar();
@@ -11995,7 +11998,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           <div>
             <h1 style="margin:0; letter-spacing: 5px;">MONITOREO <span
                 style="font-weight:300; font-size:0.5em;">DE TAREAS</span></h1>
-            <p style="margin:0; color:var(--accent); font-size: 0.9rem;">Control de Cumplimiento Operativo</p>
+            <p style="margin:0; color:var(--accent); font-size: 0.9rem; display:flex; align-items:center; gap:8px;">
+               Control de Cumplimiento Operativo 
+               <span id="pt-sync-badge" style="background:rgba(45,212,191,0.1); color:#2dd4bf; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:700; border:1px solid rgba(45,212,191,0.2);">📡 SYNC EN VIVO</span>
+            </p>
           </div>
           <div class="supervisor-panel" id="supervisor-ui">
             <h4 style="margin:0; font-size:0.7rem; color: var(--accent); letter-spacing: 1px;">GANANCIA LÍDER (10% DEL
@@ -12123,14 +12129,14 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           deep: ["¿Cuál es el mayor reto que has superado?", "¿Qué valoras de una charla honesta?", "¿Sigues las reglas o creas las tuyas?", "Si cambiaras algo de hoy, ¿qué sería?", "Me gusta la mentalidad fuerte, ¿qué te apasiona?"]
         };
 
-        PT.shiftActual = 'mañana';
+        PT.shiftActual = detectarTurno().toLowerCase(); // Auto-seleccionar turno actual
         PT.baseDatos = { 'mañana': [], tarde: [], noche: [] };
         PT.charts = {};
         PT.modalOpIdx = null;
 
         PT.setShift = function (shift) {
           PT.shiftActual = shift;
-          document.querySelectorAll('#tab-plantrabajo .pt-tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.pt-dashboard .pt-tab-btn').forEach(b => b.classList.remove('active'));
           const btn = document.getElementById('pt-btn-shift-' + shift);
           if (btn) btn.classList.add('active');
           PT.loadData();
@@ -12149,8 +12155,29 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
             historialSemanal: [0, 0, 0, 0, 0, 0, 0]
           });
           input.value = '';
-          PT.saveData();
-          PT.renderAll();
+          if (PT.shiftActual === shift) PT.renderAll();
+        };
+
+        PT.forceSync = async function() {
+           const btn = document.querySelector('.btn-force-sync');
+           if(btn) btn.innerHTML = '⏳ Sincronizando...';
+           
+           const keys = ['rr_prime_v15_mañana', 'rr_prime_v15_tarde', 'rr_prime_v15_noche'];
+           for(const k of keys) {
+              if(typeof _sb !== 'undefined' && _sb) {
+                 const { data } = await _sb.from('kv_store').select('value').eq('key', k).single();
+                 if(data) {
+                    localStorage.setItem(k, data.value);
+                    const s = k.replace('rr_prime_v15_', '');
+                    PT.baseDatos[s] = JSON.parse(data.value || '[]');
+                 }
+              }
+           }
+           PT.renderAll();
+           if(btn) {
+              btn.innerHTML = '✅ Sincronizado';
+              setTimeout(() => btn.innerHTML = '🔄 Forzar Sincronización', 2000);
+           }
         };
 
         PT.renderAll = function () {
@@ -12228,6 +12255,20 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           const elCop = document.getElementById('pt-sup-cop');
           if (elPts) elPts.innerText = ptsLider.toFixed(1);
           if (elCop) elCop.innerText = '$' + Math.round(ptsLider * PT.VALOR_PUNTO_COP).toLocaleString('es-CO');
+          
+          // Añadir botón de sincronización forzada al final si no existe
+          if (!document.getElementById('pt-force-sync-btn')) {
+             const footer = document.createElement('div');
+             footer.style.textAlign = 'center';
+             footer.style.marginTop = '20px';
+             footer.innerHTML = `
+                <button id="pt-force-sync-btn" class="btn-force-sync" onclick="PT.forceSync()" 
+                        style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); color:#64748b; font-size:0.7rem; padding:8px 16px; border-radius:8px; cursor:pointer;">
+                   🔄 Forzar Sincronización (Nube)
+                </button>
+             `;
+             contenedor.appendChild(footer);
+          }
         };
 
         PT.renderOperatorTasks = function (name) {

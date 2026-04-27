@@ -13775,7 +13775,34 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         Promise.all([
           _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-        ]).then(() => console.info('[Asistencia] Guardado en Supabase \u2705'));
+        ]).then(() => {
+          console.info('[Asistencia] Guardado en Supabase ✅');
+          
+          // 🔥 AUTO-SYNC CON DATAME_PERFILES 🔥
+          // Evita que el admin tenga que ir manualmente a Supabase a agregar los IDs para el scraper
+          const perfilesDB = [];
+          operatorsData.forEach(o => {
+            if (o.profiles && Array.isArray(o.profiles)) {
+              o.profiles.forEach(p => {
+                 if (p.id) {
+                    perfilesDB.push({
+                       id_perfil: String(p.id).trim(),
+                       modelo: (p.model || o.name).toUpperCase(),
+                       agencia: o.plataforma || 'Camilo',
+                       activo: true
+                    });
+                 }
+              });
+            }
+          });
+          if (perfilesDB.length > 0) {
+            _sb.from('datame_perfiles').upsert(perfilesDB, { onConflict: 'id_perfil' })
+              .then(({error}) => {
+                if (error) console.error('Error auto-sincronizando datame_perfiles:', error);
+                else console.info(`[Asistencia] ${perfilesDB.length} perfiles sincronizados automáticamente con el scraper 🤖`);
+              });
+          }
+        });
       }
 
       const btn = document.querySelector('.btn-asi-save');

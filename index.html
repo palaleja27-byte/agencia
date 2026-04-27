@@ -5109,13 +5109,26 @@
            }
            combinedProfiles.forEach(p => {
               const turnosPerfil = _dpTurnosData[p.id];
-              if (turnosPerfil && jornadaALeer) {
-                 const pts = (turnosPerfil[jornadaALeer] || 0);
+              if (turnosPerfil) {
+                 // 🌟 SOPORTE TURNOS DE 12 HORAS 🌟
+                 // Si el operador está en un turno de 12 horas, sus puntos producidos en este día
+                 // abarcan múltiples jornadas. Sumamos todas las jornadas del día para no perder datos.
+                 const horasReg = (typeof asiGetHoras === 'function') ? asiGetHoras(op.name) : null;
+                 const es12h = op.turno_horas === 12 || (horasReg && horasReg.horas === 12);
+                 let pts = 0;
+                 
+                 if (es12h) {
+                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                    if (op.name.includes('GUILLERMO') && pts > 0) dpLog(`⏱️ Modo 12h: sumando M+T+N = ${pts.toFixed(1)} pts`, 'success');
+                 } else if (jornadaALeer) {
+                    pts = (turnosPerfil[jornadaALeer] || 0);
+                    if (op.name.includes('GUILLERMO') && pts > 0) dpLog(`✅ ID ${p.id} en ${jornadaALeer}: ${pts.toFixed(1)} pts`, 'success');
+                 }
+                 
                  datamePts += pts;
-                 if (op.name.includes('GUILLERMO')) dpLog(`✅ ID ${p.id} en ${jornadaALeer}: ${pts} pts`, pts > 0 ? 'success' : 'warn');
               } else if (op.name.includes('GUILLERMO')) {
                  const estaEnDB = p.id in _dpTurnosData;
-                 dpLog(`❌ Sin datos: ID ${p.id}. ¿Raspado hoy? ${estaEnDB ? 'Sí, pero sin datos en '+jornadaALeer : 'NO. El ID no tiene puntos hoy o no está en datame_perfiles.'}`, 'error');
+                 dpLog(`❌ Sin datos: ID ${p.id}. ¿Raspado hoy? ${estaEnDB ? 'Sí, pero sin datos' : 'NO. El ID no tiene puntos hoy o no está en datame_perfiles.'}`, 'error');
               }
            });
         }

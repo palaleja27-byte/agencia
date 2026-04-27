@@ -12357,6 +12357,30 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
            PT.shiftActual = shift;
            PT.baseDatos[shift] = data;
            PT.guardarBitacora(opIdx);
+           
+           // Enviar notificación al monitor/admin
+           PT.enviarAlertaMonitor(name);
+        };
+
+        PT.enviarAlertaMonitor = function(name) {
+           const nuevaAlerta = {
+              id: Date.now(),
+              from: '📝 ' + name,
+              dest: 'todos',
+              pri: 'info',
+              msg: `✅ [PLAN DE TRABAJO] El operador ha completado y guardado sus tareas del turno.`,
+              jornada: detectarTurno(),
+              timestamp: new Date().getTime(),
+              readBy: []
+           };
+           
+           let alertas = JSON.parse(localStorage.getItem('rr_prime_consejos_2026') || '[]');
+           alertas.unshift(nuevaAlerta);
+           if (alertas.length > 100) alertas = alertas.slice(0, 100);
+           localStorage.setItem('rr_prime_consejos_2026', JSON.stringify(alertas));
+           
+           // El override de localStorage.setItem se encarga de subirlo a Supabase 
+           // y disparar el Realtime para los monitores/admins.
         };
 
         PT.verBitacoraOp = function(name) {

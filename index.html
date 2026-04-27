@@ -3872,10 +3872,10 @@
       <div class="op-dash-metrics" id="op-dash-metrics"></div>
     </div>
 
-    <!-- CORTE DIARIO -->
-    <div class="op-section" id="op-corte-section">
-      <div class="op-section-title">⚡ Tu progreso hoy</div>
-      <div id="op-corte-content"></div>
+    <!-- PLAN DE TRABAJO (MIS TAREAS) -->
+    <div class="op-section" id="op-tasks-section">
+      <div class="op-section-title">📝 Tu Plan de Trabajo</div>
+      <div id="op-tasks-content"></div>
     </div>
 
     <!-- STATS DIARIO / SEMANAL / MENSUAL -->
@@ -3921,7 +3921,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab(0)">🏆 OP Real-Time</button>
     <button class="tab-btn" onclick="switchTab(1)">📋 Reporte Operadores</button>
-    <button class="tab-btn" onclick="switchTab(2)">📅 Plan de Trabajo</button>
+    <button class="tab-btn" onclick="switchTab(2)">📊 Monitoreo de Tareas</button>
     <button class="tab-btn" onclick="switchTab(3)">✅ Asistencia</button>
   </div>
 
@@ -11027,6 +11027,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <div class="lbl">⚡ Hoy ${_hoyLabel}</div>
     </div>`;
 
+      // Renderizar Plan de Trabajo del Operador
+      if (typeof PT !== 'undefined' && PT.renderOperatorTasks) {
+         PT.renderOperatorTasks(name);
+      }
+
       // Ranking position — usa puntos reales del mes (cortes reales, no op[curr] hardcoded)
       const _mesRank = localDateStr().slice(0, 7);
       const _hoyRank = localDateStr();
@@ -11984,9 +11989,9 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <div class="pt-dashboard">
         <div class="header-flex">
           <div>
-            <h1 style="margin:0; letter-spacing: 5px;">RR PRIME <span
-                style="font-weight:300; font-size:0.5em;">v15.0</span></h1>
-            <p style="margin:0; color:var(--accent); font-size: 0.9rem;">Elite Operations Control Center</p>
+            <h1 style="margin:0; letter-spacing: 5px;">MONITOREO <span
+                style="font-weight:300; font-size:0.5em;">DE TAREAS</span></h1>
+            <p style="margin:0; color:var(--accent); font-size: 0.9rem;">Control de Cumplimiento Operativo</p>
           </div>
           <div class="supervisor-panel" id="supervisor-ui">
             <h4 style="margin:0; font-size:0.7rem; color: var(--accent); letter-spacing: 1px;">GANANCIA LÍDER (10% DEL
@@ -12010,14 +12015,22 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         </div>
 
         <div id="pt-tab-ops" class="pt-content active">
-          <div class="input-group" style="display:flex; gap:10px; margin-bottom:20px;">
-            <input type="text" id="pt-new-op-name" placeholder="Nombre completo del operador..." style="flex:1;">
-            <button onclick="PT.addOperator()" class="pt-tab-btn"
-              style="background:var(--success);white-space:nowrap;">+ REGISTRAR EN TURNO</button>
+          <!-- Monitoreo General del Turno -->
+          <div id="pt-monitoring-summary" style="margin-bottom:20px; padding:20px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.15); border-radius:15px; display:flex; justify-content:space-between; align-items:center;">
+             <div>
+                <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Cumplimiento Global</div>
+                <div id="pt-global-pct" style="font-size:2.5rem; font-weight:900; color:var(--accent);">0%</div>
+             </div>
+             <div style="text-align:right;">
+                <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Operadores en Turno</div>
+                <div id="pt-active-count" style="font-size:2rem; font-weight:700; color:#fff;">0</div>
+             </div>
           </div>
+          
           <div id="pt-ops-list"></div>
-          <button class="btn-delete" onclick="PT.clearCurrentShiftData()">🗑️ CERRAR JORNADA Y BORRAR COOKIES (TURNO
-            SELECCIONADO)</button>
+          <div style="margin-top:20px; text-align:center;">
+             <button class="btn-delete" onclick="PT.clearCurrentShiftData()" style="width:auto; padding:10px 30px; font-size:0.75rem; opacity:0.6;">⚠️ Reiniciar Datos del Turno (Cerrar Jornada)</button>
+          </div>
         </div>
 
         <div id="pt-tab-ice" class="pt-content">
@@ -12143,66 +12156,165 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           if (!contenedor) return;
           contenedor.innerHTML = '';
           let sumaPuntos = 0;
+          let totalTasks = 0;
+          let doneTasks = 0;
 
-          PT.baseDatos[PT.shiftActual].forEach((op, idx) => {
-            // SINCRO v19.1: Buscar puntos reales en el Ranking Global
+          const data = PT.baseDatos[PT.shiftActual];
+          if (data.length === 0) {
+            contenedor.innerHTML = '<div style="text-align:center; padding:40px; color:#475569;">No hay operadores activos en este turno aún.</div>';
+            return;
+          }
+
+          data.forEach((op, idx) => {
             const globalOp = (typeof operatorsData !== 'undefined' && operatorsData) 
-              ? operatorsData.find(o => o.name.toLowerCase().includes(op.name.toLowerCase()))
-              : null;
+              ? operatorsData.find(o => _normName(o.name) === _normName(op.name)) : null;
             
-            // Si el globalOp tiene puntos (del día), los priorizamos para el visor
-            const realPts = globalOp ? (globalOp.pHoy || op.puntos) : op.puntos;
+            const realPts = globalOp ? (getPuntosHoy(op.name) || op.puntos) : op.puntos;
             sumaPuntos += realPts;
             
-            const pct = Math.min((realPts / op.meta) * 100, 100);
-            const alerta = PT.obtenerAlerta({ ...op, puntos: realPts });
+            const taskCount = PT.TAREAS_MASTER.length;
+            const tasksDone = op.tareasEstado.filter(t => t).length;
+            totalTasks += taskCount;
+            doneTasks += tasksDone;
+            const taskPct = taskCount > 0 ? (tasksDone / taskCount) * 100 : 0;
+            const ptsPct = Math.min((realPts / op.meta) * 100, 100);
+
             const tarjeta = document.createElement('div');
             tarjeta.className = 'op-card';
+            tarjeta.style.borderLeft = `4px solid ${taskPct >= 100 ? '#10b981' : taskPct >= 50 ? '#fbbf24' : '#ef4444'}`;
             tarjeta.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <h2 style="margin:0;color:var(--accent);">${op.name} <span style="font-size:0.6rem;opacity:0.5;">LIVE</span></h2>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <div>
+                       <h2 style="margin:0;color:var(--accent);font-size:1.1rem;">${op.name}</h2>
+                       <div style="font-size:0.6rem; color:#64748b; margin-top:2px;">
+                          Último corte: ${realPts.toFixed(1)} pts / Meta: ${op.meta}
+                       </div>
+                    </div>
                     <div style="text-align:right;">
-                        <input type="number" value="${realPts.toFixed(1)}" readonly style="width:70px;font-weight:bold;color:#34d399;border:1px solid #34d399;"> /
-                        <input type="number" value="${op.meta}" onchange="PT.updateVal(${idx},'meta',this.value)" style="width:70px;">
+                        <div style="font-size:1.1rem; font-weight:900; color:#fff;">${taskPct.toFixed(0)}%</div>
+                        <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase;">Tareas hechas</div>
                     </div>
                 </div>
-                <div class="alert-box ${alerta.class}">${alerta.msg}</div>
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div style="color:var(--gold);font-weight:bold;">$${(realPts * PT.VALOR_PUNTO_COP).toLocaleString('es-CO')} COP</div>
-                    <div style="font-size:0.7rem;color:#94a3b8;">Avance: ${pct.toFixed(0)}%</div>
+                
+                <div class="progress-container" style="height:6px; margin:5px 0 15px;">
+                    <div class="progress-bar" style="width:${taskPct}%; background:#10b981;"></div>
                 </div>
-                <div class="progress-container" style="height:12px;background:rgba(255,255,255,0.05);border-radius:10px;margin-top:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);">
-                    <div class="progress-bar" style="width:${pct}%;height:100%;transition:width 1s ease;background:linear-gradient(90deg, #6366f1, #5eead4);box-shadow:0 0 10px #5eead4;"></div>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; margin-bottom:15px;">
+                   ${PT.TAREAS_MASTER.map((t, ti) => `
+                      <div style="font-size:0.65rem; color:${op.tareasEstado[ti] ? '#10b981' : '#475569'}; display:flex; align-items:center; gap:5px;">
+                         ${op.tareasEstado[ti] ? '✅' : '⚪'} ${t}
+                      </div>
+                   `).join('')}
                 </div>
-                <div class="task-grid">
-                    <div class="task-col">
-                        <div class="task-col-header">
-                            <h4>✅ HECHAS</h4>
-                            <div style="display:flex;gap:5px;">
-                                <button class="btn-bitacora btn-save-tasks" onclick="PT.guardarBitacora(${idx})">💾 Guardar</button>
-                                <button class="btn-bitacora btn-view-log"   onclick="PT.verBitacora(${idx})">📋 Bitácora</button>
-                            </div>
-                        </div>
-                        ${PT.TAREAS_MASTER.map((t, ti) => op.tareasEstado[ti] ? `<div class="task-item t-done" onclick="PT.toggleTask(${idx},${ti})">✔ ${t}</div>` : '').join('')}
-                    </div>
-                    <div class="task-col">
-                        <div class="task-col-header"><h4>⏳ PENDIENTES</h4></div>
-                        ${PT.TAREAS_MASTER.map((t, ti) => !op.tareasEstado[ti] ? `<div class="task-item t-pending" onclick="PT.toggleTask(${idx},${ti})">○ ${t}</div>` : '').join('')}
-                    </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
+                   <div style="font-size:0.65rem; color:#64748b;">Avance Producción: <b>${ptsPct.toFixed(0)}%</b></div>
+                   <button class="btn-bitacora btn-view-log" onclick="PT.verBitacora(${idx})">📋 Ver Bitácora</button>
                 </div>
-                <div class="chart-container"><canvas id="pt-chart-${idx}"></canvas></div>
-                <div style="text-align:right;margin-top:10px;">
-                    <button onclick="PT.delOp(${idx})" style="background:none;border:none;color:var(--danger);cursor:pointer;">Eliminar</button>
-                </div>`;
+            `;
             contenedor.appendChild(tarjeta);
-            setTimeout(() => PT.initChart(idx, op), 10);
           });
 
+          // Actualizar Header
+          const globalPct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
+          document.getElementById('pt-global-pct').innerText = globalPct.toFixed(0) + '%';
+          document.getElementById('pt-active-count').innerText = data.length;
+          
           const ptsLider = sumaPuntos * PT.COMISION_SUPERVISOR;
           const elPts = document.getElementById('pt-sup-pts');
           const elCop = document.getElementById('pt-sup-cop');
           if (elPts) elPts.innerText = ptsLider.toFixed(1);
           if (elCop) elCop.innerText = '$' + Math.round(ptsLider * PT.VALOR_PUNTO_COP).toLocaleString('es-CO');
+        };
+
+        PT.renderOperatorTasks = function (name) {
+          const container = document.getElementById('op-tasks-content');
+          if (!container) return;
+          
+          const shift = detectarTurno().toLowerCase();
+          let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+          let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+          
+          if (opIdx === -1) {
+            // Auto-integrar operador al plan de trabajo del turno
+            data.push({
+              name: name,
+              puntos: 0,
+              meta: 100,
+              inicioTurno: new Date().getTime(),
+              tareasEstado: Array(PT.TAREAS_MASTER.length).fill(false),
+              historialSemanal: [0, 0, 0, 0, 0, 0, 0]
+            });
+            opIdx = data.length - 1;
+            localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
+          }
+          
+          const op = data[opIdx];
+          const tasksDone = op.tareasEstado.filter(t => t).length;
+          const pct = (tasksDone / PT.TAREAS_MASTER.length) * 100;
+
+          container.innerHTML = `
+            <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:15px; padding:15px;">
+               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                  <div style="font-size:0.9rem; font-weight:700; color:#a5b4fc;">Progreso: ${pct.toFixed(0)}%</div>
+                  <div style="display:flex; gap:8px;">
+                     <button class="btn-bitacora btn-save-tasks" onclick="PT.guardarBitacoraOp('${name}')" style="padding:6px 12px; font-size:0.7rem;">💾 Guardar Hoy</button>
+                     <button class="btn-bitacora btn-view-log" onclick="PT.verBitacoraOp('${name}')" style="padding:6px 12px; font-size:0.7rem;">📋 Mi Historial</button>
+                  </div>
+               </div>
+               
+               <div class="progress-container" style="height:10px; background:rgba(0,0,0,0.2); margin-bottom:20px;">
+                  <div class="progress-bar" style="width:${pct}%; background:linear-gradient(90deg, #6366f1, #5eead4);"></div>
+               </div>
+
+               <div style="display:grid; grid-template-columns:1fr; gap:10px;">
+                  ${PT.TAREAS_MASTER.map((t, ti) => `
+                     <div class="task-item ${op.tareasEstado[ti] ? 't-done' : 't-pending'}" 
+                          onclick="PT.toggleTaskOp('${name}', ${ti})"
+                          style="padding:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:10px; font-size:0.8rem;">
+                        <span>${op.tareasEstado[ti] ? '✅' : '⚪'}</span>
+                        <span style="flex:1;">${t}</span>
+                        ${op.tareasEstado[ti] ? '<span style="font-size:0.6rem; opacity:0.6;">(Completada)</span>' : ''}
+                     </div>
+                  `).join('')}
+               </div>
+            </div>
+          `;
+        };
+
+        PT.toggleTaskOp = function(name, tIdx) {
+           const shift = detectarTurno().toLowerCase();
+           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+           if (opIdx === -1) return;
+           
+           data[opIdx].tareasEstado[tIdx] = !data[opIdx].tareasEstado[tIdx];
+           localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
+           PT.renderOperatorTasks(name);
+           // Si el admin está viendo su pestaña, se actualizará al cambiar de pestaña o refrescar
+        };
+
+        PT.guardarBitacoraOp = function(name) {
+           const shift = detectarTurno().toLowerCase();
+           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+           if (opIdx === -1) return;
+           
+           PT.shiftActual = shift;
+           PT.baseDatos[shift] = data;
+           PT.guardarBitacora(opIdx);
+        };
+
+        PT.verBitacoraOp = function(name) {
+           const shift = detectarTurno().toLowerCase();
+           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+           if (opIdx === -1) return;
+           
+           PT.shiftActual = shift;
+           PT.baseDatos[shift] = data;
+           PT.verBitacora(opIdx);
         };
 
         PT.initChart = function (idx, op) {

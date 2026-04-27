@@ -14687,10 +14687,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         if (op.group === 'SP' || op.group === 'N/A') return;
         const cortes = (typeof getCortesOp === 'function') ? getCortesOp(op.name) : [];
         cortes.forEach(c => {
+          let j = c.jornada;
+          if (!j && c.hora) {
+             const h = parseInt(c.hora.split(':')[0]);
+             if (h >= 6 && h < 14) j = 'Mañana';
+             else if (h >= 14 && h < 22) j = 'Tarde';
+             else j = 'Noche';
+          }
           rows.push({
             op: op.name,
             fecha: c.fecha,
-            jornada: c.jornada || 'N/D',
+            jornada: j || 'N/D',
             horas: c.horas || 8,
             puntos: c.puntos || 0
           });
@@ -14703,17 +14710,26 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       rows.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.op.localeCompare(b.op));
 
       let html = `
-        <div style="margin-bottom:15px; display:flex; gap:10px;">
-          <input type="text" id="historial-search" placeholder="🔍 Buscar operador..." onkeyup="filterHistorialTable()" style="flex:1; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); padding:8px 12px; border-radius:8px; color:#fff; font-size:.75rem;">
+        <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:200px; position:relative;">
+            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#64748b; font-size:.8rem;">👤</span>
+            <input type="text" id="historial-search-name" placeholder="Buscar por nombre..." onkeyup="filterHistorialTable()" 
+              style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); padding:10px 12px 10px 35px; border-radius:10px; color:#fff; font-size:.75rem; box-sizing:border-box; outline:none; transition:.2s focus;" onfocus="this.style.borderColor='#a855f7'">
+          </div>
+          <div style="width:160px; position:relative;">
+            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#64748b; font-size:.8rem;">📅</span>
+            <input type="text" id="historial-search-date" placeholder="AAAA-MM-DD" onkeyup="filterHistorialTable()" 
+              style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); padding:10px 12px 10px 35px; border-radius:10px; color:#fff; font-size:.75rem; box-sizing:border-box; outline:none;" onfocus="this.style.borderColor='#a855f7'">
+          </div>
         </div>
         <table id="table-historial-gral" style="width:100%; border-collapse:collapse; color:#cbd5e1; font-size:.75rem;">
         <thead>
           <tr style="background:rgba(255,255,255,.05); text-align:left; color:#a5b4fc;">
-            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Operador</th>
-            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Fecha</th>
-            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Turno</th>
-            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Horas</th>
-            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1); text-align:right;">Puntos Prod.</th>
+            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Operador</th>
+            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Fecha</th>
+            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Turno</th>
+            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Horas</th>
+            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1); text-align:right;">Puntos Prod.</th>
           </tr>
         </thead>
         <tbody>`;
@@ -14739,15 +14755,22 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     }
 
     function filterHistorialTable() {
-      const input = document.getElementById('historial-search');
-      const filter = input.value.toUpperCase();
+      const nameInput = document.getElementById('historial-search-name');
+      const dateInput = document.getElementById('historial-search-date');
+      const nameFilter = nameInput.value.toUpperCase();
+      const dateFilter = dateInput.value.toUpperCase();
       const table = document.getElementById('table-historial-gral');
       const tr = table.getElementsByTagName('tr');
+      
       for (let i = 1; i < tr.length; i++) {
-        const td = tr[i].getElementsByTagName('td')[0];
-        if (td) {
-          const txtValue = td.textContent || td.innerText;
-          tr[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
+        const tdName = tr[i].getElementsByTagName('td')[0];
+        const tdDate = tr[i].getElementsByTagName('td')[1];
+        if (tdName && tdDate) {
+          const nameVal = (tdName.textContent || tdName.innerText).toUpperCase();
+          const dateVal = (tdDate.textContent || tdDate.innerText).toUpperCase();
+          const matchName = nameVal.indexOf(nameFilter) > -1;
+          const matchDate = dateVal.indexOf(dateFilter) > -1;
+          tr[i].style.display = (matchName && matchDate) ? "" : "none";
         }
       }
     }

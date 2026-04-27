@@ -13,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenci
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
-const CICLO_PAUSA_MS  = 5 * 60 * 1000;    // 5 min entre ciclos
+const CICLO_PAUSA_MS  = 20 * 60 * 1000;    // 20 min entre ciclos
 const PAUSA_PERFIL_MS = 3000;              // 3 seg por perfil (más rápido)
 const startTime       = Date.now();
 

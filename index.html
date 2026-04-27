@@ -11479,6 +11479,25 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
           height: 3px;
         }
 
+        .log-entry {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 12px;
+          padding: 15px;
+          margin-bottom: 12px;
+        }
+        .log-date {
+          font-size: 0.75rem;
+          color: #94a3b8;
+          margin-bottom: 8px;
+          font-weight: 600;
+        }
+        .log-task {
+          font-size: 0.8rem;
+          color: #e2e8f0;
+          margin-left: 10px;
+        }
+
         #tab-plantrabajo .pt-tab-btn {
           padding: 8px 12px;
           font-size: 0.75rem;
@@ -11765,25 +11784,21 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         color: #fff;
       }
 
-      #tab-plantrabajo
-
       /* ── MODAL BITÁCORA ── */
       .modal-overlay {
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 999;
-        background: rgba(0, 0, 0, 0.75);
-        backdrop-filter: blur(4px);
+        z-index: 12000;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
         align-items: center;
         justify-content: center;
       }
-
-      #tab-plantrabajo .modal-overlay.open {
+      .modal-overlay.open {
         display: flex;
       }
-
-      #tab-plantrabajo .modal-box {
+      .modal-box {
         background: #0f172a;
         border: 1px solid #6366f1;
         border-radius: 20px;
@@ -11793,13 +11808,15 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         max-height: 80vh;
         overflow-y: auto;
         box-shadow: 0 0 40px rgba(99, 102, 241, 0.35);
+        position: relative;
       }
-
-      #tab-plantrabajo .modal-box h3 {
+      .modal-box h3 {
         margin: 0 0 18px;
         color: var(--accent);
-        font-size: 1rem;
-        letter-spacing: 1px;
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
       #tab-plantrabajo .log-entry {
@@ -12384,14 +12401,34 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         };
 
         PT.verBitacoraOp = function(name) {
-           const shift = detectarTurno().toLowerCase();
-           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
-           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
-           if (opIdx === -1) return;
+           const shifts = ['mañana', 'tarde', 'noche'];
+           let opData = null;
+           let foundShift = '';
            
-           PT.shiftActual = shift;
-           PT.baseDatos[shift] = data;
-           PT.verBitacora(opIdx);
+           // Buscar al operador en cualquier turno
+           for (const s of shifts) {
+              const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + s) || '[]');
+              const idx = data.findIndex(o => _normName(o.name) === _normName(name));
+              if (idx !== -1) {
+                 opData = data;
+                 foundShift = s;
+                 PT.shiftActual = s;
+                 PT.baseDatos[s] = data;
+                 PT.verBitacora(idx);
+                 return;
+              }
+           }
+           
+           // Si no esta en ningun turno pero existe como login, intentar ver su log directo
+           const key = PT._logKey(name);
+           if (localStorage.getItem(key)) {
+              // Mock para verBitacora
+              PT.shiftActual = detectarTurno().toLowerCase();
+              PT.baseDatos[PT.shiftActual] = [{ name: name }];
+              PT.verBitacora(0);
+           } else {
+              _toastSync('No hay historial registrado para este perfil', true);
+           }
         };
 
         PT.initChart = function (idx, op) {

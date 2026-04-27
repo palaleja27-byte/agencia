@@ -7981,9 +7981,11 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (existIdx >= 0) {
         if (fechaOverride) {
           // Día pasado del Excel: actualizar si tiene más puntos (corte más reciente del mes)
-          if (nuevoPts > cortes[existIdx].puntos) {
+          if (nuevoPts > (cortes[existIdx].puntos || 0)) {
             cortes[existIdx].puntos = nuevoPts;
             cortes[existIdx].fromExcel = true;
+            if (!cortes[existIdx].hora) cortes[existIdx].hora = hora;
+            if (!cortes[existIdx].ts) cortes[existIdx].ts = now.getTime();
           }
           saveCortesOp(opName, cortes);
           return;
@@ -14681,33 +14683,71 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function abrirModalHistorial() {
       const rows = [];
       const ops = (typeof operatorsData !== 'undefined') ? operatorsData : [];
-      console.log("[DEBUG] Abriendo historial. Operadores encontrados:", ops.length);
       
+      // Cache de asistencia para no leer mil veces el localStorage
+      const asiCache = {}; 
+
       ops.forEach(op => {
         if (op.group === 'SP' || op.group === 'N/A') return;
         const cortes = (typeof getCortesOp === 'function') ? getCortesOp(op.name) : [];
+        
         cortes.forEach(c => {
           let j = c.jornada;
-          const hReal = c.hora || (c.ts ? new Date(c.ts).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', hour12:true}) : '--:--');
+          let hEntrada = '--:--';
+          let hSalida = '--:--';
+
+          // Intentar traer info de asistencia real para esa fecha/turno
+          const f = c.fecha;
+          const turnosPosibles = j ? [j] : ['Mañana', 'Tarde', 'Noche'];
           
+          for(const t of turnosPosibles) {
+            const cacheKey = `${f}_${t}`;
+            if (!asiCache[cacheKey]) {
+              const draftKey = (typeof ASI_KEY !== 'undefined') ? ASI_KEY + '_draft_' + f + '_' + t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+              asiCache[cacheKey] = JSON.parse(localStorage.getItem(draftKey) || '{}');
+            }
+            const draft = asiCache[cacheKey];
+            const k = (typeof asiKey === 'function') ? asiKey(op.name, 'operador') : op.name + '||operador';
+            const kMon = (typeof asiKey === 'function') ? asiKey(op.name, 'monitor') : op.name + '||monitor';
+            const dataAsi = draft[k] || draft[kMon];
+
+            if (dataAsi && dataAsi.estado === 'P') {
+               if (!j) j = t; 
+               hEntrada = dataAsi.horaIngreso || hEntrada;
+               break; 
+            }
+          }
+
+          // Si sigue sin jornada, inferir por timestamp
           if (!j && c.ts) {
              const hh = new Date(c.ts).getHours();
              if (hh >= 6 && hh < 14) j = 'Mañana';
              else if (hh >= 14 && hh < 22) j = 'Tarde';
              else j = 'Noche';
           }
+
+          // Calcular salida estimada si hay entrada
+          if (hEntrada !== '--:--') {
+             const [h, m] = hEntrada.split(':').map(x => parseInt(x));
+             const duration = c.horas || 8;
+             let sH = (h + duration) % 24;
+             let ampm = sH >= 12 ? 'PM' : 'AM';
+             let sH12 = sH % 12 || 12;
+             hSalida = `${sH12}:${m < 10 ? '0' + m : m} ${ampm}`;
+          }
+
           rows.push({
             op: op.name,
             fecha: c.fecha,
-            hora: hReal,
+            horaCorte: c.hora || (c.ts ? new Date(c.ts).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) : '--:--'),
+            ingreso: hEntrada,
+            salida: hSalida,
             jornada: j || 'N/D',
             horas: c.horas || 8,
             puntos: c.puntos || 0
           });
         });
       });
-
-      console.log("[DEBUG] Registros totales en historial:", rows.length);
 
       // Ordenar por fecha descendente
       rows.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.op.localeCompare(b.op));
@@ -14725,31 +14765,31 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
               style="width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); padding:10px 12px 10px 35px; border-radius:10px; color:#fff; font-size:.75rem; box-sizing:border-box; outline:none;" onfocus="this.style.borderColor='#a855f7'">
           </div>
         </div>
-        <table id="table-historial-gral" style="width:100%; border-collapse:collapse; color:#cbd5e1; font-size:.75rem;">
+        <table id="table-historial-gral" style="width:100%; border-collapse:collapse; color:#cbd5e1; font-size:.7rem;">
         <thead>
           <tr style="background:rgba(255,255,255,.05); text-align:left; color:#a5b4fc;">
-            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Operador</th>
-            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Fecha</th>
-            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Hora</th>
-            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Turno</th>
-            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1);">Horas</th>
-            <th style="padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.1); text-align:right;">Puntos Prod.</th>
+            <th style="padding:12px 8px; border-bottom:1px solid rgba(255,255,255,.1);">Operador</th>
+            <th style="padding:12px 8px; border-bottom:1px solid rgba(255,255,255,.1);">Fecha</th>
+            <th style="padding:12px 8px; border-bottom:1px solid rgba(255,255,255,.1); color:#34d399;">Ingreso</th>
+            <th style="padding:12px 8px; border-bottom:1px solid rgba(255,255,255,.1); color:#fb7185;">Salida</th>
+            <th style="padding:12px 8px; border-bottom:1px solid rgba(255,255,255,.1);">Turno</th>
+            <th style="padding:12px 8px; border-bottom:1px solid rgba(255,255,255,.1); text-align:right;">Puntos</th>
           </tr>
         </thead>
         <tbody>`;
 
       if (rows.length === 0) {
-        html += `<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">No hay registros consolidados aún. Registra cortes en el Ranking para verlos aquí.</td></tr>`;
+        html += `<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">No hay registros consolidados aún.</td></tr>`;
       } else {
         rows.forEach((r, i) => {
           const bg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.02)';
           html += `<tr style="border-bottom:1px solid rgba(255,255,255,.03); background:${bg};">
-            <td style="padding:10px; font-weight:600;">${r.op}</td>
-            <td style="padding:10px; color:#94a3b8;">${r.fecha}</td>
-            <td style="padding:10px; color:#60a5fa;">${r.hora}</td>
-            <td style="padding:10px; color:#34d399;">${r.jornada}</td>
-            <td style="padding:10px; color:#fbbf24;">${r.horas}h</td>
-            <td style="padding:10px; text-align:right; font-weight:800; color:#f8fafc; font-size:.8rem;">${r.puntos.toFixed(1)} pts</td>
+            <td style="padding:8px; font-weight:600; font-size:.65rem;">${r.op}</td>
+            <td style="padding:8px; color:#94a3b8;">${r.fecha}</td>
+            <td style="padding:8px; color:#34d399; font-weight:700;">${r.ingreso}</td>
+            <td style="padding:8px; color:#fb7185; font-weight:700;">${r.salida}</td>
+            <td style="padding:8px; color:#a5b4fc;">${r.jornada} (${r.horas}h)</td>
+            <td style="padding:8px; text-align:right; font-weight:800; color:#f8fafc;">${r.puntos.toFixed(1)}</td>
           </tr>`;
         });
       }

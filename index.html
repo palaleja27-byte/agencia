@@ -5095,20 +5095,24 @@
           draftEntry.perfiles.forEach(dp => {
             if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
               combinedProfiles.push(dp);
-              if (op.name.includes('GUILLERMO')) dpLog(`Asignación dinámica: ${op.name} -> Perfil ${dp.id}`, 'success');
+              if (op.name.includes('GUILLERMO')) dpLog(`🔍 Guillermo tiene perfil en asistencia: ID ${dp.id}`, 'info');
             }
           });
         }
 
         if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
+           if (op.name.includes('GUILLERMO')) {
+               dpLog(`⚙️ Evaluando Guillermo: logueado=${estaLogueado}, jornada a leer=${jornadaALeer}`, 'info');
+           }
            combinedProfiles.forEach(p => {
               const turnosPerfil = _dpTurnosData[p.id];
               if (turnosPerfil && jornadaALeer) {
                  const pts = (turnosPerfil[jornadaALeer] || 0);
                  datamePts += pts;
-                 if (op.name.includes('GUILLERMO') && pts > 0) dpLog(`Sumando: ${op.name} | ID ${p.id} | ${jornadaALeer}: ${pts} pts`, 'info');
+                 if (op.name.includes('GUILLERMO')) dpLog(`✅ ID ${p.id} en ${jornadaALeer}: ${pts} pts`, pts > 0 ? 'success' : 'warn');
               } else if (op.name.includes('GUILLERMO')) {
-                 dpLog(`Sin datos: ${op.name} | ID ${p.id} | jornada: ${jornadaALeer}`, 'warn');
+                 const estaEnDB = p.id in _dpTurnosData;
+                 dpLog(`❌ Sin datos: ID ${p.id}. ¿Raspado hoy? ${estaEnDB ? 'Sí, pero sin datos en '+jornadaALeer : 'NO. El ID no tiene puntos hoy o no está en datame_perfiles.'}`, 'error');
               }
            });
         }
@@ -14528,12 +14532,17 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
     function dpIniciarRealtime() {
 
       if (typeof _sb === 'undefined' || _dpRealtimeSub) return;
+      let _dpDebounceTimer = null;
       _dpRealtimeSub = _sb
         .channel('datame-operaciones-rt')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' },
           (payload) => {
-            console.log('[DP] 🔴 Cambio en operaciones detectado — actualizando panel...');
-            sincronizarDatamePaneles();
+            clearTimeout(_dpDebounceTimer);
+            _dpDebounceTimer = setTimeout(() => {
+              console.log('[DP] 🔴 Cambio en operaciones detectado — actualizando panel...');
+              dpLog('Datos recibidos del Watcher. Sincronizando...', 'info');
+              sincronizarDatamePaneles();
+            }, 4000); // Esperar 4s a que el watcher termine el bloque de inserts
           })
         .subscribe();
       console.log('[DP] Realtime activado en tabla operaciones');

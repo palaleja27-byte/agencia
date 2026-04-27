@@ -5086,12 +5086,15 @@
         let datamePts = 0;
         const estaLogueado = opsEnTurnoDraft.has(op.name.toUpperCase());
         // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
-        const jornadaALeer = estaLogueado ? jornadaActual : op.turno;
+        let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
 
         // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA
         let combinedProfiles = [...(op.profiles || [])];
         const draftEntry = _draftFull[op.name + '||operador'];
-        if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+        
+        if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
+          // 🔥 Si tiene perfiles asignados dinámicamente en ESTA jornada, asumimos que está trabajando en ella
+          jornadaALeer = jornadaActual; 
           draftEntry.perfiles.forEach(dp => {
             if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
               combinedProfiles.push(dp);

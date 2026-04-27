@@ -4022,6 +4022,17 @@
             <span>⚡ <strong id="dp-t-hoy-pts" style="color:#34d399;">0,0</strong> pts <span id="dp-t-hoy-cop" style="font-size:.62rem;color:#34d399;">$0 COP</span></span>
             <span style="margin-left:auto;">📅 Total panel: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong> <strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
           </div>
+          
+          <!-- Consola de Logs (Debug) -->
+          <div id="dp-logs-container" style="background:#020617; border-top:1px solid rgba(45,212,191,.1); padding:8px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-size:.6rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:1px;">🛰️ Consola de Sincronización</span>
+              <button onclick="document.getElementById('dp-logs-console').innerHTML=''" style="background:none; border:none; color:#475569; font-size:.6rem; cursor:pointer;">Limpiar</button>
+            </div>
+            <div id="dp-logs-console" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:.65rem; color:#94a3b8; line-height:1.4;">
+              <div style="color:#475569; font-style:italic;">Esperando sincronización...</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -4615,7 +4626,7 @@
       { name: "EDUARD JOSUE RICO ZAMBRANO", group: "", plataforma: "Prime", ene: 0, feb: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-21" },
       { name: "EDUARDO JUNIOR BARROS BRITO", group: "", plataforma: "AmoLatina", ene: 0, feb: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2023-02-19" },
       { name: "ELISABETH RODRÍGUEZ GARZON", group: "", plataforma: "AmoLatina", ene: 0, feb: 0, profiles: [], turno: "Completo", cargo: "Gerente general", area: "Administrativa", fecha_ingreso: "2013-04-26" },
-      { name: "GUILLERMO ANDRES MARQUEZ  HERNANDEZ", group: "", plataforma: "Camilo", ene: 0, feb: 0, profiles: [], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-19" },
+      { name: "GUILLERMO ANDRES MARQUEZ HERNANDEZ", group: "", plataforma: "Camilo", ene: 0, feb: 0, profiles: [], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-19" },
       { name: "HAROLD STEBEN CASAS TORRES", group: "", plataforma: "Camilo", ene: 0, feb: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-08-23" },
       { name: "JEAN KLIVER OCANDO MENDOZA", group: "", plataforma: "Camilo", ene: 0, feb: 0, profiles: [], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-06-23" },
       { name: "JHEFFERSON JESUS CORZO ARTEAGA", group: "", plataforma: "AmoLatina", ene: 0, feb: 0, profiles: [], turno: "Completo", cargo: "Supervisor", area: "Administrativa", fecha_ingreso: "2022-08-01" },
@@ -5084,6 +5095,7 @@
           draftEntry.perfiles.forEach(dp => {
             if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
               combinedProfiles.push(dp);
+              if (op.name.includes('GUILLERMO')) dpLog(`Asignación dinámica: ${op.name} -> Perfil ${dp.id}`, 'success');
             }
           });
         }
@@ -5092,7 +5104,11 @@
            combinedProfiles.forEach(p => {
               const turnosPerfil = _dpTurnosData[p.id];
               if (turnosPerfil && jornadaALeer) {
-                 datamePts += (turnosPerfil[jornadaALeer] || 0);
+                 const pts = (turnosPerfil[jornadaALeer] || 0);
+                 datamePts += pts;
+                 if (op.name.includes('GUILLERMO') && pts > 0) dpLog(`Sumando: ${op.name} | ID ${p.id} | ${jornadaALeer}: ${pts} pts`, 'info');
+              } else if (op.name.includes('GUILLERMO')) {
+                 dpLog(`Sin datos: ${op.name} | ID ${p.id} | jornada: ${jornadaALeer}`, 'warn');
               }
            });
         }
@@ -14369,6 +14385,19 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       }
     }
 
+    // ── SISTEMA DE LOGS DATAME ──
+    function dpLog(msg, type = 'info') {
+      const consoleEl = document.getElementById('dp-logs-console');
+      if (!consoleEl) return;
+      const time = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const colors = { error:'#f87171', warn:'#fbbf24', success:'#34d399', info:'#94a3b8' };
+      const div = document.createElement('div');
+      div.style.marginBottom = '2px';
+      div.innerHTML = `<span style="color:#475569;">[${time}]</span> <span style="color:${colors[type] || colors.info};">${msg}</span>`;
+      consoleEl.prepend(div);
+      if (consoleEl.children.length > 50) consoleEl.lastElementChild.remove();
+    }
+
     async function sincronizarDatamePaneles() {
 
       if (typeof _sb === 'undefined') return;
@@ -14376,34 +14405,35 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        const allIds = Object.values(DP_PERFILES_MAP).flat().map(p => p.id);
         const FECHA_INICIO = '2026-02-01T00:00:00';
         const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        dpLog('Iniciando sincronización dinámica...', 'info');
 
-        // ── Intento 1: columnas nuevas (requiere SQL migration) ─────
+        // ── Intento 1: columnas nuevas (Buscamos TODOS los perfiles activos del mes) ─────
         let ops = null;
         let modoCompleto = false;
         const { data: opsNuevo, error: errNuevo } = await _sb
           .from('operaciones')
           .select('id_perfil, puntos, puntos_neto, fecha_corte, fecha_dia, jornada, agencia')
-          .in('id_perfil', allIds)
           .gte('fecha_corte', FECHA_INICIO)
           .order('fecha_corte', { ascending: false });
 
         if (!errNuevo && opsNuevo) {
           ops = opsNuevo;
           modoCompleto = true;
-          console.log('[DP] Modo completo (con jornada/días)');
+          dpLog(`Recuperados ${ops.length} registros (Modo Completo)`, 'success');
         } else {
-          // ── Fallback: columnas básicas (siempre disponibles) ──────
-          console.warn('[DP] Fallback a columnas básicas — ejecuta update_operaciones_jornada.sql en Supabase');
+          // ── Fallback ──────
+          dpLog('Error en modo completo, intentando fallback...', 'warn');
           const { data: opsFallback, error: errFallback } = await _sb
             .from('operaciones')
             .select('id_perfil, puntos, fecha_corte, agencia')
-            .in('id_perfil', allIds)
             .gte('fecha_corte', FECHA_INICIO)
             .order('fecha_corte', { ascending: false });
-          if (errFallback) { console.error('[DP] Error crítico:', errFallback); return; }
+          if (errFallback) { 
+            dpLog('Error crítico Supabase: ' + errFallback.message, 'error');
+            return; 
+          }
           ops = opsFallback;
         }
 
@@ -14482,6 +14512,10 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
         _dpPuntosData    = nuevosDatos;
         _dpTurnosData    = turnosHoy;
         _dpHistorialData = historialMap;
+        
+        const count = Object.keys(nuevosDatos).length;
+        dpLog(`Procesados ${count} perfiles. Hoy: ${Object.keys(turnosHoy).length} activos.`, 'info');
+        
         dpRenderGrid();
 
         const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });

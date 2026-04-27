@@ -3739,8 +3739,11 @@
 
       <!-- Operator PINs -->
       <div>
-        <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px;">PINs
-          por Operador</div>
+        <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span>PINs por Operador</span>
+          <input type="text" id="pin-search-op" placeholder="🔍 Buscar operador..." oninput="renderOpPinsList()"
+                 style="padding:6px 10px;border-radius:8px;font-size:.75rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#e2e8f0;width:160px;box-sizing:border-box;">
+        </div>
         <div class="op-pin-list" id="op-pin-list"></div>
       </div>
 
@@ -11416,12 +11419,23 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       document.getElementById('pin-new-monitor').value = '';
       document.getElementById('pin-new-admin').value = '';
 
-      // Build operator PIN list
+      // Limpiar buscador si existe
+      const searchInp = document.getElementById('pin-search-op');
+      if (searchInp) searchInp.value = '';
+
+      renderOpPinsList();
+      document.getElementById('modal-pin-change').classList.add('open');
+    }
+
+    function renderOpPinsList() {
       const ops = (typeof operatorsData !== 'undefined')
         ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A')
         : [];
       const opPins = loginGetOpPins();
-      document.getElementById('op-pin-list').innerHTML = ops.map(op => {
+      const searchQ = (document.getElementById('pin-search-op')?.value || '').toLowerCase().trim();
+      const filteredOps = searchQ ? ops.filter(o => o.name.toLowerCase().includes(searchQ)) : ops;
+
+      document.getElementById('op-pin-list').innerHTML = filteredOps.map(op => {
         const hasPin = opPins[op.name] ? '✅' : '⬜';
         return `<div class="op-pin-row">
       <span class="op-pin-name">${hasPin} ${op.name}<br><small style="color:#475569">Grupo ${op.group}</small></span>
@@ -11431,8 +11445,6 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       <button class="op-pin-save-btn" onclick="loginSaveOpPin(${operatorsData.indexOf(op)},'${op.name.replace(/'/g, "\\'")}')">Guardar</button>
     </div>`;
       }).join('');
-
-      document.getElementById('modal-pin-change').classList.add('open');
     }
 
     async function loginSaveOpPin(idx, name) {

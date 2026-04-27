@@ -8206,22 +8206,23 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       const currLabel = MONTH_LABELS_MAP[curr] || curr;
       const mesActual = localDateStr().slice(0, 7);
 
-      const mesAntCrecStr = getMesAnteriorStr();
-      const totalCurr = getTotalMesPts(mesActual);
-      const totalAnt = getTotalMesPts(mesAntCrecStr);
+      // Usar directamente la info 100% real de Supabase (guardada en el Dashboard)
+      const h = window._rkHistorial || { feb: 0, mar: 0, abr: 0, crec: 0 };
+      const totalCurr = h.abr;
+      const totalAnt = h.mar;
       
       const hoy = new Date();
       const diaHoy = hoy.getDate();
       const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
       
-      // --- PROYECCIN LINEAL ---
+      // --- PROYECCIÓN LINEAL ---
       const promDia = diaHoy > 0 ? totalCurr / diaHoy : 0;
       const proyecc = Math.round(promDia * diasMes);
 
-      // El crecimiento ahora se basa en la PROYECCIN vs Mes Pasado
-      const crec = totalAnt > 0 ? ((proyecc - totalAnt) / totalAnt * 100) : 0;
-      const totalCurrConPSA = totalCurr; // Ya incluye PSA desde getTotalMesPts
+      // El crecimiento principal DEBE concordar exactamente con el de la card
+      const crec = h.crec;
       const psaTotal = getPSATotalMes(mesActual);
+      const totalCurrConPSA = totalCurr;
 
       // --- DECORACIONES VISUALES ---
       const crecColor = crec >= 0 ? '#10b981' : '#f87171';

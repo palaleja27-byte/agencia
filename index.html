@@ -3953,6 +3953,7 @@
         <select id="rankingPlataformaFilter" onchange="filterRanking()" style="display:none;"></select>
       </div>
       <div class="rk-actions-wrap">
+        <button onclick="abrirModalHistorial()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#c084fc;margin-right:6px;" title="Ver Historial Completo de Producción">📜 Historial</button>
         <button onclick="testDatameExtraction()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#3b82f6;margin-right:6px;" id="btn-test-datame" title="Probar Extracción Datame">🧪 Prueba Datame</button>
         <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes" title="Reseteo Total de Memoria y Sincronización Láser">⚡️ Consolidar Bridge</button>
         <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
@@ -5008,6 +5009,7 @@
     }
 
     function renderRanking() {
+      if (typeof asiAutoRelease === 'function') asiAutoRelease(); // Validar cierre automático de 8h/12h
       const { prev, curr } = getActivePair();
       const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
@@ -14589,6 +14591,72 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       };
     }
 
+    // ── Abrir Historial de Producción Completo ────────────────────
+    function abrirModalHistorial() {
+      const metrics = typeof getPerfilMetrics === 'function' ? getPerfilMetrics() : {};
+      const opStats = {};
+
+      Object.values(metrics).forEach(m => {
+        if (!m.historial) return;
+        m.historial.forEach(h => {
+          if (!h.fecha) return;
+          if (!opStats[m.opName]) opStats[m.opName] = {};
+          if (!opStats[m.opName][h.fecha]) opStats[m.opName][h.fecha] = { puntos: 0, jornadas: new Set() };
+          
+          opStats[m.opName][h.fecha].puntos += h.puntos;
+          if (h.jornada) opStats[m.opName][h.fecha].jornadas.add(h.jornada);
+        });
+      });
+
+      let html = `<table style="width:100%; border-collapse:collapse; color:#cbd5e1; font-size:.75rem; margin-top:10px;">
+        <thead>
+          <tr style="background:rgba(255,255,255,.05); text-align:left; color:#a5b4fc;">
+            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Operador</th>
+            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Fecha</th>
+            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Turno(s)</th>
+            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1);">Horas trabajadas</th>
+            <th style="padding:10px; border-bottom:1px solid rgba(255,255,255,.1); text-align:right;">Puntos Prod.</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      const rows = [];
+      Object.keys(opStats).forEach(op => {
+        Object.keys(opStats[op]).forEach(fecha => {
+          rows.push({ op, fecha, data: opStats[op][fecha] });
+        });
+      });
+
+      rows.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.op.localeCompare(b.op));
+
+      if (rows.length === 0) {
+        html += `<tr><td colspan="5" style="text-align:center; padding:20px; color:#64748b;">No hay registros en el historial general.</td></tr>`;
+      } else {
+        rows.forEach((r, i) => {
+          const bg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.02)';
+          const jArray = Array.from(r.data.jornadas);
+          const jStr = jArray.length > 0 ? jArray.join(', ') : 'N/D';
+          const horas = jArray.length > 1 ? '12h' : '8h';
+          html += `<tr style="border-bottom:1px solid rgba(255,255,255,.03); background:${bg};">
+            <td style="padding:10px; font-weight:600;">${r.op}</td>
+            <td style="padding:10px; color:#94a3b8;">${r.fecha}</td>
+            <td style="padding:10px; color:#34d399;">${jStr}</td>
+            <td style="padding:10px; color:#fbbf24;">${horas} (est.)</td>
+            <td style="padding:10px; text-align:right; font-weight:800; color:#f8fafc; font-size:.8rem;">${r.data.puntos.toFixed(1)} pts</td>
+          </tr>`;
+        });
+      }
+
+      html += `</tbody></table>`;
+
+      document.getElementById('modal-historial-produccion-body').innerHTML = html;
+      document.getElementById('modal-historial-produccion').style.display = 'flex';
+    }
+
+    function cerrarModalHistorial() {
+      document.getElementById('modal-historial-produccion').style.display = 'none';
+    }
+
   </script>
 
 
@@ -14607,6 +14675,22 @@ Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores
       </div>
       <div style="margin-top:15px; font-size:0.6rem; color:#475569; text-align:center; font-style:italic;">
         Los datos se graban automáticamente al cierre de cada jornada.
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL HISTORIAL COMPLETO DE PRODUCCIÓN -->
+  <div id="modal-historial-produccion" class="modal">
+    <div class="modal-content" style="max-width:850px; background:#0f172a; border: 1px solid rgba(168, 85, 247, 0.3);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px; border-bottom: 1px solid rgba(168, 85, 247, 0.2); padding-bottom: 10px;">
+        <div>
+          <h2 style="margin:0;color:#c084fc;font-size:1.2rem; letter-spacing: 1px;">📜 HISTORIAL COMPLETO DE PRODUCCIÓN</h2>
+          <div style="font-size:0.7rem; color:#94a3b8; margin-top:4px;">Registro histórico de todos los puntos por operador, turno y horas trabajadas.</div>
+        </div>
+        <button class="close-btn" onclick="cerrarModalHistorial()">✕</button>
+      </div>
+      <div id="modal-historial-produccion-body" style="max-height:70vh; overflow-y:auto; padding-right:5px;">
+        <!-- Inyectado por JS -->
       </div>
     </div>
   </div>

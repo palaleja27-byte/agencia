@@ -4325,7 +4325,7 @@
       <div class="modal-ai-header">
         <div style="display:flex; align-items:center; gap:12px;">
            <span class="ai-icon">🤖</span>
-           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">REPORTE INTELIGENTE <small style="font-size:0.6rem; opacity:0.5;">v8.0</small></h3>
+           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">REPORTE INTELIGENTE <small style="font-size:0.6rem; opacity:0.5;">v8.1</small></h3>
         </div>
         <button onclick="cerrarAnalisisIA()" style="background:none; border:none; color:#64748b; font-size:1.2rem; cursor:pointer;">✕</button>
       </div>
@@ -4615,7 +4615,7 @@
       if (!body) return;
 
       const stats = _getStatsForAI();
-      console.log("[AI] Iniciando análisis con motor principal: Gemini 1.5 Flash", stats);
+      console.log("[AI] Iniciando análisis v8.1 con motor Gemini 1.5 Flash", stats);
       
       const prompt = `Actúa como un Consultor Senior de Operaciones para una agencia de modelos. Analiza estos datos reales:
       - Puntos Mes Actual: ${stats.ptsMes}
@@ -4623,17 +4623,13 @@
       - Proyección Cierre: ${stats.proyeccion} pts
       - Día del mes: ${stats.diaActual}/${stats.diasMes}
       
-      Genera un reporte profesional pero coloquial. 
-      Incluye:
-      1. Diagnóstico breve.
-      2. Estimado de cierre.
-      3. 3 consejos tácticos para subir producción.
-      Responde en español, sé directo y motivador.`;
+      Genera un reporte profesional pero coloquial en español. 
+      Incluye diagnóstico, cierre estimado y 3 consejos tácticos.`;
 
-      // --- INTENTO 1: GOOGLE GEMINI (1.5 Flash) - AHORA PRIMARIO ---
+      // --- INTENTO 1: GOOGLE GEMINI (v1 Estable) ---
       try {
-        console.log("[AI] Intentando motor principal: Google Gemini...");
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_G_KEY}`, {
+        console.log("[AI] Intentando Google Gemini v1...");
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${_G_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4641,46 +4637,45 @@
           })
         });
 
-        if (response.ok) {
-           const data = await response.json();
-           if (data.candidates && data.candidates[0]) {
-             const text = data.candidates[0].content.parts[0].text;
-             body.innerHTML = _formatAIResponse(text, stats, "Google Gemini 1.5");
-             return;
-           }
-        }
-        throw new Error("Gemini fuera de servicio");
-      } catch (err) {
-        console.warn("[AI] Gemini falló, intentando motor de respaldo Anthropic...", err.message);
-      }
-
-      // --- INTENTO 2: ANTHROPIC (Claude 3.5) - AHORA FALLBACK ---
-      try {
-        console.log("[AI] Intentando motor de respaldo: Anthropic...");
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': _AI_STK,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-          },
-          body: JSON.stringify({
-            model: "claude-3-5-sonnet-20240620",
-            max_tokens: 1024,
-            messages: [{ role: "user", content: prompt }]
-          })
-        });
-
-        if (response.ok) {
-           const data = await response.json();
-           body.innerHTML = _formatAIResponse(data.content[0].text, stats, "Claude 3.5 Sonnet");
+        const data = await response.json();
+        if (response.ok && data.candidates && data.candidates[0]) {
+           const text = data.candidates[0].content.parts[0].text;
+           body.innerHTML = _formatAIResponse(text, stats, "Google Gemini 1.5");
            return;
+        } else {
+           const errMsg = data.error?.message || "Error en respuesta de Gemini";
+           throw new Error(errMsg);
         }
-        throw new Error("Anthropic Indisponible");
       } catch (err) {
-        console.error("[AI] Falla crítica en todos los motores cloud:", err.message);
-        body.innerHTML = _generateSmartReportLocal(stats, "Motores Cloud (Gemini/Anthropic) no disponibles.");
+        console.warn("[AI] Gemini falló:", err.message);
+        // --- FALLBACK: ANTHROPIC ---
+        try {
+          console.log("[AI] Intentando motor de respaldo: Anthropic...");
+          const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': _AI_STK,
+              'anthropic-version': '2023-06-01',
+              'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+              model: "claude-3-5-sonnet-20240620",
+              max_tokens: 1024,
+              messages: [{ role: "user", content: prompt }]
+            })
+          });
+
+          if (response.ok) {
+             const data = await response.json();
+             body.innerHTML = _formatAIResponse(data.content[0].text, stats, "Claude 3.5 Sonnet");
+             return;
+          }
+          throw new Error("Anthropic también falló");
+        } catch (err2) {
+          console.error("[AI] Falla total:", err.message);
+          body.innerHTML = _generateSmartReportLocal(stats, `Error Gemini: ${err.message}`);
+        }
       }
     }
 

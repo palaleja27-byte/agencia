@@ -4657,12 +4657,12 @@
     }
 
     function _getStatsForAI() {
-       const ptsMes = typeof getTotalMesPts === 'function' ? getTotalMesPts() : 0;
+       const mesActualKey = new Date().toISOString().slice(0, 7);
+       const ptsMes = typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0;
        const diaActual = new Date().getDate();
        const diasMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
        const proyeccion = Math.round((ptsMes / Math.max(1, diaActual)) * diasMes);
        
-       // Obtener crecimiento real desde window._rkHistorial o calcular
        const h = window._rkHistorial || { crec: 0 };
        const crecimiento = h.crec || 0;
        
@@ -7320,6 +7320,7 @@
 
     // ── Suma total de cortes reales de toda la operación en un mes ──
     function getTotalMesPts(mesStr) {
+      if (!mesStr) mesStr = localDateStr().slice(0, 7);
       // 🏥 Saneamiento de emergencia para Abril 2026 (solo una vez)
       const yaSaneado = localStorage.getItem('rr_sanar_abril_2026');
       if (!yaSaneado && mesStr === '2026-04') {

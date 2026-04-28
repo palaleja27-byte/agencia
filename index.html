@@ -593,10 +593,10 @@
 
     #op-dashboard.visible {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       grid-auto-rows: min-content;
-      gap: 16px;
-      padding: 30px;
+      gap: 12px;
+      padding: 20px;
       align-content: start;
     }
 
@@ -605,32 +605,56 @@
       background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8));
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 24px;
-      padding: 30px;
+      border-radius: 16px;
+      padding: 14px 20px;
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       align-items: center;
-      justify-content: center;
-      margin-bottom: 10px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+      gap: 16px;
+      margin-bottom: 0;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
 
     .op-section {
       background: rgba(30, 41, 59, 0.3);
       border: 1px solid rgba(255, 255, 255, 0.04);
       border-radius: 16px;
-      padding: 12px 15px;
-      height: 100%;
+      padding: 12px;
+      height: auto;
+      max-height: 480px;
       box-sizing: border-box;
       transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
       backdrop-filter: blur(8px);
       display: flex;
       flex-direction: column;
+      overflow-y: auto;
     }
+    .op-section::-webkit-scrollbar { width: 4px; }
+    .op-section::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
 
-    /* Windows 8 Mosaic Style Sizes */
+    .op-logout-btn {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      z-index: 9999;
+      background: #f43f5e;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(244, 63, 94, 0.3);
+      display: none;
+      transition: all 0.2s;
+    }
+    .op-logout-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+    .op-logout-btn:active { transform: scale(0.95); }
+
+    /* Windows 8 Mosaic Style Sizes - Compact mode */
     @media (min-width: 1024px) {
-      #op-tasks-section { grid-row: span 2; }
+      #op-tasks-section { grid-column: span 1; }
       #op-stats-section { grid-column: span 2; }
       #op-noticias-section { grid-column: span 2; }
       #op-ice-section { grid-column: span 1; }
@@ -6342,7 +6366,7 @@
       _autoLogoutTimer = setTimeout(() => {
         ejecutarAutoLogout();
       }, msTotal);
-
+      
       // Guardar en sessionStorage para rehydrate si recarga (nunca en localStorage compartido)
       sessionStorage.setItem('rr_autologout_timer', JSON.stringify({
         loginTs: loginTime.getTime(),
@@ -11112,6 +11136,10 @@
           '<span>Prom/dia este mes: <strong style="color:#a78bfa;">' + fmtPts(promDia) + ' pts</strong></span>' +
           '<span>$' + fmt(Math.round(promDia * VALOR_COP)) + ' COP/dia</span>' +
         '</div>';
+      
+      // Mostrar botón logout global
+      const btnLogout = document.getElementById('op-global-logout');
+      if (btnLogout) { btnLogout.style.display = 'flex'; }
     }
 
     function renderOpDashboard(name) {
@@ -11173,20 +11201,20 @@
       const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       
       document.getElementById('op-dash-avatar-wrap').innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; gap:15px; margin-bottom:20px;">
-          <div style="position:relative; width:120px; height:120px;">
-            ${av ? `<img src="${av}" class="op-dash-avatar" style="width:100%; height:100%; object-fit:cover; border:4px solid var(--accent); box-shadow:0 0 30px rgba(94,234,212,0.3); border-radius:50%;">` 
-                 : `<div class="op-dash-avatar-ph" style="width:100%; height:100%; font-size:3.5rem; background:rgba(255,255,255,0.05); border:4px solid rgba(255,255,255,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>`}
-            <div style="position:absolute; bottom:5px; right:5px; width:28px; height:28px; background:#34d399; border:4px solid #0f1a35; border-radius:50%; box-shadow: 0 0 10px #34d399;" title="Operador en línea"></div>
+        <div style="display:flex; align-items:center; gap:12px; flex:1;">
+          <div style="position:relative; flex-shrink:0; width:52px; height:52px;">
+            ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border:3px solid var(--accent); border-radius:50%; box-shadow:0 0 15px rgba(94,234,212,0.3);">` 
+                 : `<div style="width:100%; height:100%; font-size:1.5rem; background:rgba(255,255,255,0.05); border:3px solid rgba(255,255,255,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>`}
+            <div style="position:absolute; bottom:1px; right:1px; width:12px; height:12px; background:#34d399; border:2px solid #0f1a35; border-radius:50%;" title="En línea"></div>
           </div>
-          <div style="text-align:center;">
-            <div style="font-size:0.75rem; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:3px; margin-bottom:8px; opacity:0.9;">${saludo}</div>
-            <div style="font-size:2.8rem; font-weight:900; letter-spacing:-1.5px; color:white; line-height:1;">${op.name}</div>
-            <div style="font-size:1.1rem; color:#94a3b8; font-weight:500; margin-top:10px;">
-              <span style="background:rgba(255,255,255,0.05); padding:4px 12px; border-radius:20px;">Grupo ${op.group}</span>
-              <span style="margin:0 10px; opacity:0.3;">|</span>
-              <span style="color:white; font-weight:700;">${timeStr}</span>
-            </div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:0.55rem; color:var(--accent); font-weight:700; text-transform:uppercase; letter-spacing:2px; opacity:0.8;">${saludo}</div>
+            <div style="font-size:1.2rem; font-weight:900; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${op.name}</div>
+            <div style="font-size:0.65rem; color:#64748b; margin-top:1px;">Grupo ${op.group} · <span style="color:#94a3b8;">${timeStr}</span></div>
+          </div>
+          <div style="flex-shrink:0; text-align:right;">
+            <div id="op-dash-hero-clock" style="font-size:1.4rem; font-weight:800; color:var(--accent); letter-spacing:2px; line-height:1;">${timeStr}</div>
+            <div style="font-size:0.55rem; color:#475569; text-transform:uppercase; letter-spacing:1px; margin-top:2px;">Colombia</div>
           </div>
         </div>`;
 
@@ -11332,6 +11360,8 @@
       _opDashInterval = null;
       const alertasBtnL = document.getElementById('btn-alertas-monitor');
       if (alertasBtnL) alertasBtnL.style.display = 'none';
+      const btnLogoutGlobal = document.getElementById('op-global-logout');
+      if (btnLogoutGlobal) btnLogoutGlobal.style.display = 'none';
       currentRole = null;
       currentOpName = null;
       loginBuffer = '';
@@ -15360,5 +15390,6 @@
     </div>
   </div>
 
+  <button class="op-logout-btn" id="op-global-logout" onclick="loginLogout()">CERRAR SESIÓN 🚪</button>
 </body>
 </html>

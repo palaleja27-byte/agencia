@@ -3954,11 +3954,11 @@
       </div>
       <div class="rk-actions-wrap">
         <div style="display:flex;gap:10px;align-items:center;">
-           <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis Estratégico IA" style="background:linear-gradient(135deg, #6366f1, #a855f7); padding:8px 12px; border-radius:12px; border:none; box-shadow:0 0 15px rgba(168,85,247,0.4); cursor:pointer;">
+           <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Reporte Inteligente" style="background:linear-gradient(135deg, #6366f1, #a855f7); padding:8px 12px; border-radius:12px; border:none; box-shadow:0 0 15px rgba(168,85,247,0.4); cursor:pointer;">
               <span style="font-size:1.2rem;">🤖</span>
            </button>
         </div>
-        <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes" title="Reseteo Total de Memoria y Sincronización Láser">⚡️ Consolidar Bridge</button>
+        <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes">⚡️ Consolidar Bridge</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
       </div>
     </div>
@@ -4319,18 +4319,18 @@
     </div>
   </div>
 
-  <!-- MODAL ANÁLISIS IA -->
+  <!-- MODAL REPORTE INTELIGENTE -->
   <div class="modal-ai-ov" id="modal-ai">
     <div class="modal-ai-box">
       <div class="modal-ai-header">
         <div style="display:flex; align-items:center; gap:12px;">
            <span class="ai-icon">🤖</span>
-           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">CLAUDE INTELLIGENCE</h3>
+           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">REPORTE INTELIGENTE</h3>
         </div>
         <button onclick="cerrarAnalisisIA()" style="background:none; border:none; color:#64748b; font-size:1.2rem; cursor:pointer;">✕</button>
       </div>
       <div id="ai-report-content" style="padding:20px;">
-         <!-- Inyectado por JS -->
+         <div style="text-align:center; padding:40px; color:#64748b;">Iniciando análisis...</div>
       </div>
     </div>
   </div>
@@ -5595,352 +5595,7 @@
       renderRanking();
     }
 
-    // ==================== ANÁLISIS IA ====================
-    function abrirAnalisisIA() {
-      document.getElementById('modal-ai').classList.add('open');
-      document.getElementById('ai-body').innerHTML = `
-    <div class="ai-loading">
-      <div class="ai-spinner"></div>
-      <div class="ai-loading-txt">Analizando datos de la operación...</div>
-    </div>`;
-      ejecutarAnalisisIA();
-    }
 
-    function cerrarAnalisisIA() {
-      document.getElementById('modal-ai').classList.remove('open');
-    }
-
-
-    async function ejecutarAnalisisIA() {
-      // Obtener API Key dinámicamente
-      const apiKey = localStorage.getItem('rr_anthropic_api_key') || '';
-
-      // Verificar que hay API key configurada
-      if (!apiKey) {
-        document.getElementById('ai-body').innerHTML = `
-      <div class="ai-error">⚠️ No hay API Key configurada para el análisis IA.<br>
-        <small>Configura tu API key de Anthropic en localStorage con la clave <code>rr_anthropic_api_key</code>.</small>
-      </div>
-      <div style="margin-top:14px;text-align:center;">
-        <input type="text" id="ai-key-input" placeholder="sk-ant-..." style="padding:8px 14px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:8px;color:var(--text);width:70%;font-size:.85rem;">
-        <button onclick="localStorage.setItem('rr_anthropic_api_key',document.getElementById('ai-key-input').value.trim());location.reload();"
-          style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;margin-left:8px;">Guardar</button>
-      </div>`;
-        return;
-      }
-
-      const { prev, curr } = getActivePair();
-      const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
-      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
-      const VALOR_COP = 1400;
-
-      // ── SNAPSHOT EN TIEMPO REAL ──────────────────────────────────────────
-      const ahora = new Date();
-      const horaActual = ahora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-      const fechaActual = ahora.toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-      const hoy = localDateStr(ahora);
-      const mesActual = hoy.slice(0, 7);
-      const mesPrevStr = localDateStr(new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1)).slice(0, 7);
-
-      const base = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
-      const perfilMetrics = getPerfilMetrics();
-
-      const dataset = base.map(o => {
-        const cortes = getCortesOp(o.name);
-
-        // Puntos de HOY (corte más reciente del día)
-        const cortesHoy = cortes.filter(c => c.fecha === hoy);
-        const ptsHoy = cortesHoy.reduce((s, c) => s + (c.puntos || 0), 0);
-        const ultimoCorte = cortesHoy.length ? cortesHoy[cortesHoy.length - 1].hora : null;
-
-        // Puntos del mes actual desde cortes reales
-        const ptsMesReal = cortes
-          .filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)
-          .reduce((s, c) => s + (c.puntos || 0), 0);
-
-        // Puntos mes anterior
-        const ptsMesAnterior = cortes
-          .filter(c => c.fecha && c.fecha.slice(0, 7) === mesPrevStr)
-          .reduce((s, c) => s + (c.puntos || 0), 0);
-
-        // Días activos este mes
-        const diasActivos = [...new Set(
-          cortes.filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual).map(c => c.fecha)
-        )].length;
-
-        const ptsMes = ptsMesReal > 0 ? ptsMesReal : (o[curr] || 0);
-        const ptsPrev = ptsMesAnterior > 0 ? ptsMesAnterior : (o[prev] || 0);
-        const crec = ptsPrev > 0 ? +(((ptsMes - ptsPrev) / ptsPrev) * 100).toFixed(1) : null;
-        const promDia = diasActivos > 0 ? +(ptsMes / diasActivos).toFixed(1) : 0;
-
-        // Perfiles del operador con rendimiento
-        const misPerfiles = Object.entries(perfilMetrics)
-          .filter(([k]) => k.startsWith(o.name + '::'))
-          .map(([, v]) => {
-            const hist = v.historial || [];
-            const ptsPerfHoy = hist.find(h => h.fecha === hoy)?.puntos || 0;
-            const ptsPerfMes = hist
-              .filter(h => h.fecha && h.fecha.slice(0, 7) === mesActual)
-              .reduce((s, h) => s + (h.puntos || 0), 0);
-            return { id: v.idPerfil, modelo: v.modelo, hoy: ptsPerfHoy, mes: ptsPerfMes };
-          })
-          .filter(p => p.mes > 0)
-          .sort((a, b) => b.mes - a.mes);
-
-        return {
-          nombre: o.name,
-          grupo: o.group || '—',
-          pts_hoy: +ptsHoy.toFixed(1),
-          ultimo_corte: ultimoCorte || 'sin corte hoy',
-          pts_mes: +ptsMes.toFixed(1),
-          pts_mes_ant: +ptsPrev.toFixed(1),
-          crecimiento_pct: crec,
-          dias_activos: diasActivos,
-          prom_dia: promDia,
-          ganancia_hoy_cop: Math.round(ptsHoy * VALOR_COP),
-          ganancia_mes_cop: Math.round(ptsMes * VALOR_COP),
-          perfiles_activos: misPerfiles.length,
-          top_perfil: misPerfiles[0] ? `${misPerfiles[0].id}(${misPerfiles[0].pts_hoy}pts hoy)` : '—'
-        };
-      });
-
-      // Totales globales
-      const totalHoy = dataset.reduce((s, o) => s + o.pts_hoy, 0);
-      const totalMes = dataset.reduce((s, o) => s + o.pts_mes, 0);
-      const totalMesAnt = dataset.reduce((s, o) => s + o.pts_mes_ant, 0);
-      const crecGlobal = totalMesAnt > 0 ? (((totalMes - totalMesAnt) / totalMesAnt) * 100).toFixed(1) : 'N/A';
-      const sinCorteHoy = dataset.filter(o => o.pts_hoy === 0).map(o => o.nombre);
-      const mejoresHoy = [...dataset].sort((a, b) => b.pts_hoy - a.pts_hoy).slice(0, 5);
-
-      const prompt = `Eres el analista de rendimiento de una agencia de operadores digitales. Genera un informe ejecutivo AHORA MISMO con los datos reales del momento.
-
-━━━ SNAPSHOT: ${fechaActual} · ${horaActual} ━━━
-Valor punto: $${VALOR_COP} COP | Mes actual: ${currLabel} | Mes anterior: ${prevLabel}
-
-📊 RESUMEN GLOBAL HOY:
-- Operadores activos: ${dataset.length}
-- Puntos generados HOY: ${totalHoy.toFixed(1)} pts = $${Math.round(totalHoy * VALOR_COP).toLocaleString('es-CO')} COP
-- Sin corte registrado hoy (${sinCorteHoy.length}): ${sinCorteHoy.slice(0, 5).join(', ')}${sinCorteHoy.length > 5 ? '...' : ''}
-- Puntos acumulados ${currLabel}: ${totalMes.toFixed(1)} pts = $${Math.round(totalMes * VALOR_COP).toLocaleString('es-CO')} COP
-- Puntos ${prevLabel}: ${totalMesAnt.toFixed(1)} pts
-- Crecimiento global: ${crecGlobal}%
-
-🏆 TOP 5 HOY (en este momento):
-${mejoresHoy.map((o, i) => `${i + 1}. ${o.nombre}: ${o.pts_hoy} pts ($${o.ganancia_hoy_cop.toLocaleString('es-CO')} COP) | último corte: ${o.ultimo_corte}`).join('\n')}
-
-📋 DATOS COMPLETOS POR OPERADOR:
-${JSON.stringify(dataset, null, 0)}
-
-Genera el informe con ESTAS 7 SECCIONES EXACTAS, en este orden:
-
-[RESUMEN COLOQUIAL]
-En 3-4 líneas, explica cómo va la operación hoy en lenguaje informal y cercano, como si le hablaras a un compañero de trabajo. Menciona si va bien o mal, quién está jalando y quién no. Nada de tecnicismos.
-
-[RESUMEN EJECUTIVO]
-Estado formal de la operación a las ${horaActual}. Puntos y pesos de hoy y del mes.
-
-[TOP 5 HOY]
-Los 5 mejores de HOY con pts, COP y hora de su último corte.
-
-[TOP 5 MES ${currLabel.toUpperCase()}]
-Los 5 con más puntos acumulados en el mes con ganancia en COP.
-
-[OPERADORES SIN ACTIVIDAD HOY]
-Lista quiénes no tienen corte registrado hoy y su rendimiento del mes.
-
-[ALERTAS DE RENDIMIENTO]
-Operadores que bajaron vs mes anterior. Cuánto bajaron en pts y COP. Sé específico.
-
-[PLAN DE ACCIÓN INMEDIATO]
-3 acciones concretas que el monitor debe ejecutar HOY. Usa nombres reales y cifras exactas.
-
-REGLA CRÍTICA DE FORMATO: Cada header debe aparecer EXACTAMENTE como se muestra (con corchetes, en su propia línea, sin asteriscos ** ni ## antes ni después). Correcto: [TOP 5 HOY] sola en su línea. Incorrecto: **[TOP 5 HOY]** o ## [TOP 5 HOY].
-Tono del informe: directo, sin adornos. Usa los nombres reales de los operadores.`;
-
-      const _aibody = document.getElementById('ai-body');
-      const _reqBody = JSON.stringify({
-        model: 'claude-3-5-sonnet-20240620',
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }]
-      });
-
-      // Helper — intenta una URL y devuelve {ok, data}
-      async function _aiCall(url, extraHeaders = {}) {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json', 'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01', ...extraHeaders
-          },
-          body: _reqBody
-        });
-        const data = await res.json();
-        return { ok: res.ok, status: res.status, data };
-      }
-
-      try {
-        let result;
-
-        // 1️⃣ Intentar proxy Vercel /api/analyze
-        try {
-          const r = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-            body: _reqBody
-          });
-          if (r.ok) {
-            const d = await r.json();
-            result = { ok: true, data: d };
-          }
-        } catch (_) { /* proxy no disponible */ }
-
-        // 2️⃣ Fallback directo con header de acceso browser
-        if (!result) {
-          result = await _aiCall('https://api.anthropic.com/v1/messages', {
-            'anthropic-dangerous-direct-browser-access': 'true'
-          });
-        }
-
-        if (!result.ok) {
-          const msg = result.data?.error?.message || 'Error ' + result.status;
-          throw new Error(msg);
-        }
-
-        const text = result.data.content?.map(b => b.text || '').join('') || '';
-        renderAnalisisIA(text, prevLabel, currLabel);
-
-      } catch (err) {
-        _aibody.innerHTML = `
-      <div class="ai-error">❌ No se pudo conectar con el análisis IA.<br><small>${err.message}</small></div>
-      <div style="margin-top:12px;font-size:.8rem;color:#64748b;line-height:1.6;">
-        Verifica que la API key sea correcta y tenga créditos disponibles.<br>
-        <a href="https://console.anthropic.com" target="_blank" style="color:#6366f1;">Abrir consola Anthropic →</a>
-      </div>
-      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-        <button onclick="localStorage.removeItem('rr_anthropic_api_key');ejecutarAnalisisIA();"
-          style="padding:7px 14px;background:rgba(255,255,255,.07);color:#f87171;border:1px solid #f87171;border-radius:8px;cursor:pointer;font-size:.8rem;">
-          🗑 Cambiar API key
-        </button>
-        <button onclick="ejecutarAnalisisIA()"
-          style="padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.8rem;">
-          🔄 Reintentar
-        </button>
-      </div>`;
-      }
-    }
-
-    function renderAnalisisIA(text, prevLabel, currLabel) {
-      const sectionMap = {
-        '[RESUMEN COLOQUIAL]': { icon: '💬', color: '#a78bfa', bg: 'rgba(167,139,250,.08)', border: 'rgba(167,139,250,.25)', badge: 'RESUMEN RÁPIDO' },
-        '[RESUMEN EJECUTIVO]': { icon: '📊', color: '#6366f1', bg: 'rgba(99,102,241,.06)', border: 'rgba(99,102,241,.2)', badge: 'EJECUTIVO' },
-        '[TOP 5 HOY]': { icon: '⚡', color: '#34d399', bg: 'rgba(52,211,153,.06)', border: 'rgba(52,211,153,.2)', badge: 'HOY' },
-        '[TOP 5 MES]': { icon: '🏆', color: '#fbbf24', bg: 'rgba(251,191,36,.06)', border: 'rgba(251,191,36,.2)', badge: 'MES' },
-        '[OPERADORES SIN ACTIVIDAD HOY]': { icon: '😴', color: '#f87171', bg: 'rgba(248,113,113,.06)', border: 'rgba(248,113,113,.2)', badge: 'INACTIVOS' },
-        '[ALERTAS DE RENDIMIENTO]': { icon: '⚠️', color: '#fb923c', bg: 'rgba(251,146,60,.06)', border: 'rgba(251,146,60,.2)', badge: 'ALERTAS' },
-        '[PLAN DE ACCIÓN INMEDIATO]': { icon: '🎯', color: '#22d3ee', bg: 'rgba(34,211,238,.06)', border: 'rgba(34,211,238,.2)', badge: 'ACCIÓN' },
-      };
-
-      // Normaliza headers
-      function matchSection(line) {
-        const t = line.trim().replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
-        for (const key of Object.keys(sectionMap)) {
-          const bare = key.replace(/[\[\]]/g, '').toUpperCase();
-          const tUp = t.toUpperCase();
-          if (t === key || tUp === bare ||
-            t.startsWith(key.replace(']', '')) ||
-            tUp.startsWith(bare)) return key;
-        }
-        return null;
-      }
-
-      // Format content: bold numbers, highlight COP, bullet lines
-      function formatContent(raw) {
-        return raw
-          .split('\n')
-          .map(line => {
-            const t = line.trim();
-            if (!t) return '';
-            // Numbered list lines
-            const numMatch = t.match(/^(\d+\.\s+)(.+)/);
-            if (numMatch) {
-              return '<div class="ai-line ai-numbered"><span class="ai-num">' + numMatch[1] + '</span><span>' + highlightText(numMatch[2]) + '</span></div>';
-            }
-            // Dash/bullet lines
-            if (t.startsWith('- ') || t.startsWith('• ')) {
-              return '<div class="ai-line ai-bullet"><span class="ai-dot">▸</span><span>' + highlightText(t.slice(2)) + '</span></div>';
-            }
-            return '<div class="ai-line">' + highlightText(t) + '</div>';
-          })
-          .filter(Boolean)
-          .join('');
-      }
-
-      function highlightText(t) {
-        return t
-          .replace(/\*\*(.*?)\*\*/g, (_, inner) => '<strong>' + inner + '</strong>')
-          .replace(/\*+/g, '')                    // limpiar asteriscos sueltos sobrantes
-          .replace(/\$[\d,.]+\s*COP/g, m => '<span class="ai-cop">' + m + '</span>')
-          .replace(/(\d+\.?\d*\s*pts?)/gi, m => '<span class="ai-pts">' + m + '</span>')
-          .replace(/(\+\d+\.?\d*%)/g, m => '<span class="ai-up">' + m + '</span>')
-          .replace(/(-\d+\.?\d*%)/g, m => '<span class="ai-dn">' + m + '</span>');
-      }
-
-      let html = '';
-      let current = null;
-      let buffer = [];
-      let isFirst = true;
-
-      const flush = () => {
-        if (!current) return;
-        const cfg = sectionMap[current];
-        const title = current.replace(/\[|\]/g, '');
-        const isColoquial = current === '[RESUMEN COLOQUIAL]';
-        html += '<div class="ai-sec' + (isColoquial ? ' ai-sec-coloquial' : '') + '" style="background:' + cfg.bg + ';border-color:' + cfg.border + ';">'
-          + '<div class="ai-sec-head">'
-          + '<span class="ai-sec-icon">' + cfg.icon + '</span>'
-          + '<span class="ai-sec-title" style="color:' + cfg.color + '">' + title + '</span>'
-          + '<span class="ai-badge" style="background:' + cfg.border + ';color:' + cfg.color + '">' + cfg.badge + '</span>'
-          + '</div>'
-          + '<div class="ai-sec-body' + (isColoquial ? ' ai-coloquial-body' : '') + '">'
-          + formatContent(buffer.join('\n').trim())
-          + '</div></div>';
-        buffer = [];
-        isFirst = false;
-      };
-
-      text.split('\n').forEach(line => {
-        const matched = matchSection(line);
-        if (matched) { flush(); current = matched; }
-        else { buffer.push(line); }
-      });
-      flush();
-
-      // Timestamp footer
-      const now = new Date();
-      const stamp = now.toLocaleString('es-CO', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-      // Si no se parseó ninguna sección, mostrar texto raw con formato limpio
-      if (!html || html === '<div class="ai-footer">Análisis generado · ' + stamp + '</div>') {
-        const rawLines = text.split('\n').map(l => {
-          const t = l.trim();
-          if (!t) return '';
-          if (/^#{1,3}\s/.test(t) || (/^\[/.test(t) && /\]$/.test(t)))
-            return '<div class="ai-line" style="font-weight:800;color:#a78bfa;margin-top:12px;font-size:.9rem;">' + t.replace(/^#+\s*/, '') + '</div>';
-          if (t.startsWith('- ') || t.startsWith('• '))
-            return '<div class="ai-line ai-bullet"><span class="ai-dot">▸</span><span>' + highlightText(t.slice(2)) + '</span></div>';
-          if (/^\d+\./.test(t))
-            return '<div class="ai-line ai-numbered"><span class="ai-num">' + t.match(/^(\d+\.)/)[1] + ' </span><span>' + highlightText(t.replace(/^\d+\.\s*/, '')) + '</span></div>';
-          return '<div class="ai-line">' + highlightText(t) + '</div>';
-        }).filter(Boolean).join('');
-        html = '<div class="ai-sec" style="background:rgba(99,102,241,.06);border-color:rgba(99,102,241,.2);">'
-          + '<div class="ai-sec-head"><span class="ai-sec-icon">🤖</span>'
-          + '<span class="ai-sec-title" style="color:#a78bfa">Análisis de la Operación</span></div>'
-          + '<div class="ai-sec-body">' + rawLines + '</div></div>';
-      }
-
-      html += '<div class="ai-footer">Análisis generado · ' + stamp + '</div>';
-      document.getElementById('ai-body').innerHTML = html;
-    }
 
     // Keep Plan de Trabajo iframe always full size
     window.addEventListener('resize', () => {

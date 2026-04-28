@@ -4332,7 +4332,7 @@
            <button onclick="cerrarAnalisisIA()" style="background:none; border:none; color:#64748b; font-size:1.2rem; cursor:pointer;">✕</button>
         </div>
       </div>
-      <div id="ai-report-content" style="padding:20px;">
+      <div id="ai-report-content" style="padding:20px; overflow-y:auto; flex:1;">
          <div style="text-align:center; padding:40px; color:#64748b;">Iniciando análisis...</div>
       </div>
     </div>
@@ -4759,24 +4759,101 @@
     }
 
     function _getStatsForAI() {
+       const h = window._rkHistorial || { feb: 0, mar: 0, abr: 0, crec: 0 };
        const mesActualKey = new Date().toISOString().slice(0, 7);
-       const ptsMes = typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0;
+       
+       // Fuente Única de Verdad: Usar el historial sincronizado de Supabase
+       let ptsMes = 0;
+       if (mesActualKey === '2026-04') {
+         ptsMes = h.abr || (typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0);
+       } else {
+         ptsMes = typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0;
+       }
+       
        const diaActual = new Date().getDate();
        const diasMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
        const proyeccion = Math.round((ptsMes / Math.max(1, diaActual)) * diasMes);
        
-       const h = window._rkHistorial || { crec: 0 };
        const crecimiento = h.crec || 0;
        
        return { ptsMes, diaActual, diasMes, proyeccion, crecimiento };
     }
 
     function _formatAIResponse(text, stats, engineName = "Claude 3.5 Sonnet") {
+       const growthVal = Number(stats.crecimiento || 0).toFixed(2);
+       const ptsVal = Number(stats.ptsMes || 0).toLocaleString('es-CO');
        let statusColor = stats.crecimiento >= 0 ? '#10b981' : '#ef4444';
+       
        return `
           <div style="padding:10px;">
              <div style="background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.1); border-radius:16px; padding:20px; margin-bottom:20px;">
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                   <div>
+                      <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px;">Producción Real</div>
+                      <div style="font-size:1.4rem; font-weight:800; color:#fff;">${ptsVal} <span style="font-size:0.6rem; color:#64748b;">PTS</span></div>
+                   </div>
+                   <div>
+                      <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px;">Crecimiento</div>
+                      <div style="font-size:1.4rem; font-weight:800; color:${statusColor};">${growthVal}%</div>
+                   </div>
+                </div>
+             </div>
+             
+             <div style="margin-bottom:20px;">
+                <button onclick="leerReporteIA()" id="btn-tts" style="width:100%; padding:12px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.2); border-radius:12px; color:#a5b4fc; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; font-weight:700; font-size:0.8rem; transition:all 0.3s;">
+                   <span id="tts-icon">🔊</span> LEER REPORTE EN VOZ ALTA
+                </button>
+             </div>
+
+             <div id="ai-text-body" style="font-size:0.95rem; line-height:1.7; color:#cbd5e1; white-space:pre-wrap; padding-right:12px; font-family:'Outfit', sans-serif;">${text}</div>
+             
+             <div style="margin-top:25px; text-align:right; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
+                <span style="font-size:0.6rem; color:#475569; letter-spacing:1px; font-weight:700; text-transform:uppercase;">- Inteligencia Artificial: ${engineName} -</span>
+             </div>
+          </div>
+       `;
+    }
+
+    // --- FUNCIÓN TTS (LEER EN VOZ ALTA) v8.6 ---
+    let _ttsUtterance = null;
+    function leerReporteIA() {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        document.getElementById('tts-icon').textContent = "🔊";
+        document.getElementById('btn-tts').style.background = "rgba(99,102,241,0.1)";
+        return;
+      }
+      
+      const text = document.getElementById('ai-text-body')?.innerText;
+      if (!text) return;
+      
+      _ttsUtterance = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+      
+      // Intentar encontrar una voz de mujer en español para que sea "cálida"
+      const bestVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Google') || v.name.includes('Natural')))
+                     || voices.find(v => v.lang.includes('es') && (v.name.includes('Helena') || v.name.includes('Lucia') || v.name.includes('Monica')))
+                     || voices.find(v => v.lang.includes('es'))
+                     || voices[0];
+      
+      if (bestVoice) _ttsUtterance.voice = bestVoice;
+      _ttsUtterance.rate = 0.95; // Un poco más lento para que sea más profesional
+      _ttsUtterance.pitch = 1.0;
+      
+      _ttsUtterance.onstart = () => { 
+        document.getElementById('tts-icon').textContent = "⏹️"; 
+        document.getElementById('btn-tts').style.background = "rgba(239,68,68,0.1)";
+        document.getElementById('btn-tts').style.color = "#f87171";
+      };
+      _ttsUtterance.onend = () => { 
+        document.getElementById('tts-icon').textContent = "🔊"; 
+        document.getElementById('btn-tts').style.background = "rgba(99,102,241,0.1)";
+        document.getElementById('btn-tts').style.color = "#a5b4fc";
+      };
+      
+      window.speechSynthesis.speak(_ttsUtterance);
+    }
+grid-template-columns:1fr 1fr; gap:15px;">
                    <div>
                       <div style="font-size:0.7rem; color:#64748b;">Producción Real</div>
                       <div style="font-size:1.4rem; font-weight:700; color:#fff;">${stats.ptsMes.toLocaleString()} <span style="font-size:0.6rem; color:#64748b;">PTS</span></div>
@@ -9615,6 +9692,26 @@
       </div>
       <div class="metric-big">${ptsCurr.toFixed(2)} pts</div>
       <div class="sub-metric">${prevLabel}: ${ptsPrev.toFixed(2)} pts • Δ ${growthSign}${growth.toFixed(1)}%</div>
+      
+      <!-- BARRA DE PROGRESO DE META (Real) -->
+      ${(() => {
+        const metaVal = Number(op.meta) || 0;
+        const pct = metaVal > 0 ? Math.min((ptsCurr / metaVal) * 100, 100) : 0;
+        const barColor = pct >= 100 ? '#10b981' : pct >= 70 ? '#fbbf24' : '#6366f1';
+        return `
+          <div style="margin:8px 0;">
+            <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:#94a3b8; margin-bottom:3px;">
+              <span>Cumplimiento Meta</span>
+              <span style="font-weight:bold; color:${barColor};">${pct.toFixed(1)}%</span>
+            </div>
+            <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.02);">
+              <div style="width:${pct}%; height:100%; background:${barColor}; box-shadow: 0 0 10px ${barColor}44; transition: width 0.8s ease;"></div>
+            </div>
+            <div style="font-size:0.55rem; color:#475569; margin-top:2px;">Meta Mensual: ${metaVal} pts</div>
+          </div>
+        `;
+      })()}
+
       <div style="font-size:15px;color:#5eead4;margin:4px 0 2px;">$${copCurr} COP · ${currLabel}</div>
       ${ptsHoy > 0
             ? `<div style="font-size:12px;color:#34d399;margin-bottom:4px;">⚡ Hoy: ${ptsHoy.toFixed(1)} pts · $${copHoy} COP${horaUltimo ? ' · ⏱ ' + horaUltimo : ''}</div>`

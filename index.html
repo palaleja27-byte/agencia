@@ -579,14 +579,68 @@
 
     /* ══ OPERATOR DASHBOARD ══ */
     #op-dashboard {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      z-index: 9000;
       display: none;
       padding: 20px;
-      max-width: 600px;
-      margin: 0 auto;
+      overflow-y: auto;
+      box-sizing: border-box;
     }
 
     #op-dashboard.visible {
-      display: block;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-auto-rows: min-content;
+      gap: 16px;
+      padding: 30px;
+      align-content: start;
+    }
+
+    .op-dash-hero {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8));
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 24px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    }
+
+    .op-section {
+      background: rgba(30, 41, 59, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 20px;
+      padding: 24px;
+      height: 100%;
+      box-sizing: border-box;
+      transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Windows 8 Mosaic Style Sizes */
+    @media (min-width: 1024px) {
+      #op-tasks-section { grid-row: span 2; }
+      #op-stats-section { grid-column: span 2; }
+      #op-noticias-section { grid-column: span 2; }
+      #op-ice-section { grid-column: span 1; }
+    }
+
+    .op-section:hover {
+      background: rgba(30, 41, 59, 0.5);
+      border-color: var(--accent);
+      transform: translateY(-5px) scale(1.01);
+      box-shadow: 0 15px 35px rgba(0,0,0,0.4);
     }
 
     @keyframes pulse {
@@ -716,12 +770,43 @@
     }
 
     .op-section-title {
-      font-size: .7rem;
+      font-size: .72rem;
+      font-weight: 900;
+      color: var(--text);
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0.8;
+    }
+
+    /* Tile accents */
+    #op-tasks-section { border-top: 4px solid #6366f1; }
+    #op-stats-section { border-top: 4px solid #10b981; }
+    #op-noticias-section { border-top: 4px solid #3b82f6; }
+    #op-ice-section { border-top: 4px solid #f43f5e; }
+    
+    .op-section:nth-of-type(4) { border-top: 4px solid #f59e0b; } /* Ranking */
+    .op-section:nth-of-type(5) { border-top: 4px solid #06b6d4; } /* Competitive */
+    .op-section:nth-of-type(6) { border-top: 4px solid #8b5cf6; } /* Profiles */
+
+    .ice-btn {
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
       text-transform: uppercase;
       letter-spacing: 1px;
-      color: #64748b;
-      margin-bottom: 12px;
     }
+    .ice-btn.real { background: #6366f1; box-shadow: 0 4px 10px rgba(99,102,241,0.3); }
+    .ice-btn.hot { background: #f43f5e; box-shadow: 0 4px 10px rgba(244,63,94,0.3); }
+    .ice-btn.deep { background: #8b5cf6; box-shadow: 0 4px 10px rgba(139,92,246,0.3); }
+    .ice-btn:hover { transform: scale(1.05); filter: brightness(1.2); }
+    .ice-btn:active { transform: scale(0.95); }
 
     .op-ranking-pos {
       font-size: 2.5rem;
@@ -3921,6 +4006,19 @@
       </div>
       <div id="op-news-acordeon"></div>
     </div>
+    <div class="op-section" id="op-ice-section" style="grid-column: span 1;">
+      <div class="op-section-title">🔥 Icebreakers TalkyTimes</div>
+      <div class="ice-generator-box" style="padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.2);">
+        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+          <button class="ice-btn real" onclick="PT.generateIce('real')" style="padding: 8px 12px; font-size: 0.7rem; flex: 1;">❤️ Real</button>
+          <button class="ice-btn hot" onclick="PT.generateIce('hot')" style="padding: 8px 12px; font-size: 0.7rem; flex: 1;">🌶️ Hot</button>
+          <button class="ice-btn deep" onclick="PT.generateIce('deep')" style="padding: 8px 12px; font-size: 0.7rem; flex: 1;">🧠 Deep</button>
+        </div>
+        <div id="pt-ice-output" class="ice-display" style="font-size: 0.85rem; min-height: 60px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); color: var(--accent); font-style: italic; display: flex; align-items: center; justify-content: center; text-align: center;">
+          Selecciona una temática para generar un abridor...
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="tab-bar">
@@ -3958,6 +4056,12 @@
         <select id="rankingPlataformaFilter" onchange="filterRanking()" style="display:none;"></select>
       </div>
       <div class="rk-actions-wrap">
+        <div id="supervisor-ui" style="background: rgba(99, 102, 241, 0.1); padding: 8px 15px; border-radius: 12px; border: 1px solid var(--primary); text-align: right; margin-right: 15px; display: none;">
+          <h4 style="margin:0; font-size:0.55rem; color: var(--accent); letter-spacing: 1px; text-transform: uppercase;">GANANCIA LÍDER (10%)</h4>
+          <div style="font-size: 0.9rem; font-weight: 700; white-space: nowrap;">
+            <span id="pt-sup-pts">0</span> <small style="font-size:0.6rem;">Pts</small> | <span id="pt-sup-cop" style="color:var(--gold); font-size:0.8rem;">$0</span> <small style="font-size:0.6rem;">COP</small>
+          </div>
+        </div>
         <div style="display:flex;gap:10px;align-items:center;">
            <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Reporte Inteligente" style="background:linear-gradient(135deg, #6366f1, #a855f7); padding:8px 12px; border-radius:12px; border:none; box-shadow:0 0 15px rgba(168,85,247,0.4); cursor:pointer;">
               <span style="font-size:1.2rem;">🤖</span>
@@ -10164,19 +10268,9 @@
         });
       }
 
-      // Paneles de acceso y metas
-      const accesosWrap = document.getElementById('rk-accesos-wrap');
-      if (accesosWrap) accesosWrap.style.display = (role === 'monitor' || role === 'admin') ? 'block' : 'none';
-      const metasWrap = document.getElementById('rk-metas-wrap');
-      if (metasWrap) metasWrap.style.display = (role === 'monitor' || role === 'admin') ? 'block' : 'none';
-      const alertasBtn = document.getElementById('btn-alertas-monitor');
-      if (alertasBtn) alertasBtn.style.display = (role === 'monitor' || role === 'admin') ? 'inline-flex' : 'none';
-      // Btn grupos: solo admin puede crear/borrar grupos
-      const btnGrupos = document.getElementById('btn-grupo-manager');
-      if (btnGrupos) btnGrupos.style.display = role === 'admin' ? 'inline-block' : 'none';
-      // Btn purgar mes: solo admin
-      const btnPurgar = document.getElementById('btn-purgar-mes');
-      if (btnPurgar) btnPurgar.style.display = role === 'admin' ? 'inline-block' : 'none';
+      // Ganancia Líder
+      const supUi = document.getElementById('supervisor-ui');
+      if (supUi) supUi.style.display = (role === 'monitor' || role === 'admin') ? 'block' : 'none';
     }
 
     // ==================== INICIO ====================
@@ -10533,7 +10627,8 @@
         nota: chosenProfiles.length ? 'Perfiles auto-seleccionados' : '', 
         horaIngreso: hora, 
         autoMarcado: true,
-        perfiles: finalProfiles 
+        perfiles: finalProfiles,
+        salidaManual: false
       };
 
       // 1. Guardar localmente
@@ -10577,11 +10672,73 @@
            });
            count += (initialCount - allCortes[opName].length);
         }
-      });
       localStorage.setItem('rr_prime_cortes', JSON.stringify(allCortes));
       localStorage.setItem('rr_sanar_abril_2026', 'true');
       console.log(`[Sanity Check] Se purgaron ${count} registros. Forzando re-sync...`);
       if (typeof sincronizarDatameRelacional === 'function') sincronizarDatameRelacional();
+    }
+
+    function renderCompetitiveBar() {
+      const el = document.getElementById('op-competitive-bar');
+      if (!el) return;
+
+      const h = new Date().getHours();
+      let turnoActivo = h >= 6 && h < 14 ? 'Mañana' : h >= 14 && h < 22 ? 'Tarde' : 'Noche';
+      const turnoLabel = { 'Mañana': '☀️ Mañana', 'Tarde': '🌆 Tarde', 'Noche': '🌙 Noche' };
+
+      // Obtener todos los operadores del turno actual de operatorsData
+      const operatorsInShift = operatorsData.filter(o => o.turno === turnoActivo && o.group !== 'SP' && o.group !== 'N/A');
+      
+      if (!operatorsInShift.length) {
+        el.innerHTML = `<div style="color:#475569;font-size:.82rem;text-align:center;padding:10px;">Sin operadores registrados en ${turnoLabel[turnoActivo]} actualmente.</div>`;
+        return;
+      }
+
+      // Mapear con sus puntos actuales (de Supabase o LocalStorage)
+      const rankedData = operatorsInShift.map(op => {
+        return {
+          name: op.name,
+          puntos: getPuntosHoy(op.name),
+          meta: op.meta_diaria || 100
+        };
+      }).sort((a, b) => b.puntos - a.puntos);
+
+      const maxPts = Math.max(...rankedData.map(o => o.puntos), 1);
+      const myName = currentOpName?.toUpperCase();
+
+      el.innerHTML = `
+        <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">
+          Clasificación ${turnoLabel[turnoActivo]} (En vivo)
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+        ${rankedData.map((op, i) => {
+          const isMe = op.name.toUpperCase() === myName;
+          const ptsActuales = op.puntos;
+          const pct = Math.round((ptsActuales / maxPts) * 100);
+          const metaPct = op.meta > 0 ? Math.min(Math.round((ptsActuales / op.meta) * 100), 100) : 0;
+          const medals = ['🥇', '🥈', '🥉'];
+          const rankColor = i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#cd7f32' : 'rgba(255,255,255,0.4)';
+          
+          return `
+            <div style="position: relative; background: ${isMe ? 'rgba(94, 234, 212, 0.08)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${isMe ? 'rgba(94, 234, 212, 0.3)' : 'rgba(255,255,255,0.05)'}; border-radius: 10px; padding: 10px; transition: all 0.5s ease;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size: 0.9rem; font-weight: 900; color: ${rankColor}; min-width: 20px;">${medals[i] || '#' + (i + 1)}</span>
+                  <span style="font-size:.85rem;font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">
+                    ${op.name}${isMe ? ' <small>(tú)</small>' : ''}
+                  </span>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-size:.8rem;color:var(--gold);font-weight:700;">${ptsActuales.toFixed(1)} <small style="font-size:0.6rem;">pts</small></span>
+                  <div style="font-size: 0.6rem; color: #64748b;">${metaPct}% de meta</div>
+                </div>
+              </div>
+              <div style="background:rgba(255,255,255,0.05);border-radius:4px;height:6px;overflow:hidden; position: relative;">
+                <div style="height:100%;width:${pct}%;background:${isMe ? 'var(--accent)' : 'var(--primary)'}; opacity: ${isMe ? '1' : '0.4'}; border-radius:4px; transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+              </div>
+            </div>`;
+        }).join('')}
+        </div>`;
     }
 
     // Agregar un perfil extra desde el modal Meta del Día
@@ -10730,44 +10887,65 @@
       const el = document.getElementById('op-competitive-bar');
       if (!el) return;
 
-      // Detectar turno activo por hora
       const h = new Date().getHours();
-      let turnoActivo = h >= 6 && h < 14 ? 'mañana' : h >= 14 && h < 22 ? 'tarde' : 'noche';
-      const turnoLabel = { 'mañana': '☀️ Mañana', 'tarde': '🌆 Tarde', 'noche': '🌙 Noche' };
+      let turnoActivo = h >= 6 && h < 14 ? 'Mañana' : h >= 14 && h < 22 ? 'Tarde' : 'Noche';
+      const turnoLabel = { 'Mañana': '☀️ Mañana', 'Tarde': '🌆 Tarde', 'Noche': '🌙 Noche' };
 
-      const turnoData = JSON.parse(localStorage.getItem('rr_prime_v15_' + turnoActivo) || '[]');
-      if (!turnoData.length) {
-        el.innerHTML = `<div style="color:#475569;font-size:.82rem;text-align:center;padding:10px;">Sin operadores en turno ${turnoLabel[turnoActivo]} actualmente.</div>`;
+      // Obtener todos los operadores del turno actual de operatorsData
+      const operatorsInShift = operatorsData.filter(o => o.turno === turnoActivo && o.group !== 'SP' && o.group !== 'N/A');
+      
+      if (!operatorsInShift.length) {
+        el.innerHTML = `<div style="color:#475569;font-size:.82rem;text-align:center;padding:10px;">Sin operadores registrados en ${turnoLabel[turnoActivo]} actualmente.</div>`;
         return;
       }
 
-      const maxPts = Math.max(...turnoData.map(o => o.puntos || 0), 1);
+      // Mapear con sus puntos actuales
+      const rankedData = operatorsInShift.map(op => {
+        return {
+          name: op.name,
+          puntos: getPuntosHoy(op.name) || 0,
+          meta: op.meta_diaria || 100
+        };
+      }).sort((a, b) => b.puntos - a.puntos);
+
+      const maxPts = Math.max(...rankedData.map(o => o.puntos), 1);
       const myName = currentOpName?.toUpperCase();
 
       el.innerHTML = `
         <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">
-          Turno activo: ${turnoLabel[turnoActivo]}
+          Rendimiento ${turnoLabel[turnoActivo]} (En vivo)
         </div>
-        ${turnoData.map(op => ({ ...op, puntos: getPuntosHoy(op.name) }))
-          .sort((a, b) => (b.puntos || 0) - (a.puntos || 0)).map((op, i) => {
-        const isMe = op.name.toUpperCase() === myName;
-        const ptsActuales = op.puntos || 0;
-        const pct = Math.round((ptsActuales / maxPts) * 100);
-        const metaPct = op.meta > 0 ? Math.min(Math.round((ptsActuales / op.meta) * 100), 100) : 0;
-        const medals = ['🥇', '🥈', '🥉'];
-        return `
-            <div style="margin-bottom:10px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                <span style="font-size:.82rem;font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">
-                  ${medals[i] || '·'} ${op.name}${isMe ? ' (tú)' : ''}
-                </span>
-                <span style="font-size:.78rem;color:var(--gold);font-weight:700;">${ptsActuales} pts · ${metaPct}% meta</span>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${rankedData.map((op, i) => {
+          const isMe = op.name.toUpperCase() === myName;
+          const ptsActuales = op.puntos;
+          const pct = Math.round((ptsActuales / maxPts) * 100);
+          const metaPct = op.meta > 0 ? Math.min(Math.round((ptsActuales / op.meta) * 100), 100) : 0;
+          const medals = ['🥇', '🥈', '🥉'];
+          
+          return `
+            <div style="background: ${isMe ? 'rgba(94, 234, 212, 0.08)' : 'rgba(255,255,255,0.02)'}; border: 1px solid ${isMe ? 'rgba(94, 234, 212, 0.3)' : 'rgba(255,255,255,0.04)'}; border-radius: 12px; padding: 12px; transition: all 0.4s ease;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size: 0.85rem; font-weight: 900; width: 22px;">${medals[i] || (i + 1)}</span>
+                  <span style="font-size:.82rem;font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">
+                    ${op.name}${isMe ? ' (tú)' : ''}
+                  </span>
+                </div>
+                <div style="text-align: right;">
+                  <span style="font-size:.8rem;color:var(--gold);font-weight:700;">${ptsActuales.toFixed(1)} pts</span>
+                </div>
               </div>
-              <div style="background:rgba(255,255,255,0.08);border-radius:8px;height:10px;overflow:hidden;">
-                <div style="height:100%;width:${pct}%;background:${isMe ? 'linear-gradient(90deg,var(--accent),#6366f1)' : 'rgba(255,255,255,0.2)'};border-radius:8px;transition:.5s;"></div>
+              <div style="background:rgba(255,255,255,0.05);border-radius:6px;height:8px;overflow:hidden; position: relative; margin-bottom: 4px;">
+                <div style="height:100%;width:${pct}%;background:${isMe ? 'linear-gradient(90deg, #2dd4bf, #06b6d4)' : 'rgba(255,255,255,0.15)'}; border-radius:6px; transition: width 1s ease-out;"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.6rem; color: #64748b;">
+                <span>Progreso Meta: ${metaPct}%</span>
+                <span>Max: ${maxPts.toFixed(1)}</span>
               </div>
             </div>`;
-      }).join('')}`;
+        }).join('')}
+        </div>`;
     }
 
 
@@ -10941,6 +11119,28 @@
         return;
       }
 
+      // 🔥 VERIFICAR ESTADO DE ASISTENCIA (Logout forzado si terminó turno) 🔥
+      if (typeof asiEstados !== 'undefined') {
+        const k = (typeof asiKey === 'function') ? asiKey(name, 'operador') : name + '||operador';
+        const curAsi = asiEstados[k];
+        const horasReg = (typeof asiGetHoras === 'function') ? asiGetHoras(name) : null;
+        
+        // Si no está presente o tiene salida registrada, y estamos en modo operador -> Logout
+        if (curAsi && curAsi.estado !== 'P' && curAsi.salidaManual) {
+           console.warn("[OP-DASH] Turno finalizado por monitor. Cerrando sesión...");
+           alert("Tu turno ha sido finalizado por el monitor. Se cerrará la sesión.");
+           loginLogout();
+           return;
+        }
+        
+        if (horasReg && horasReg.salidaTS && Date.now() > horasReg.salidaTS) {
+           console.warn("[OP-DASH] Jornada completada (Auto-Release). Cerrando sesión...");
+           alert("Has completado tu jornada laboral. ¡Excelente trabajo! La sesión se cerrará.");
+           loginLogout();
+           return;
+        }
+      }
+
       const { prev, curr } = getActivePair();
       const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)];
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
@@ -10964,14 +11164,33 @@
       renderCorteSection(name);
       renderOpStats(name);
 
-      // Avatar
+      // Avatar y Saludo Premium (Estilo Metro/Mosaic)
       const av = typeof getAvatar === 'function' ? getAvatar(op.name) : null;
-      document.getElementById('op-dash-avatar-wrap').innerHTML = av
-        ? `<img src="${av}" class="op-dash-avatar">`
-        : `<div class="op-dash-avatar-ph">👤</div>`;
+      const hours = new Date().getHours();
+      const saludo = hours < 12 ? '¡Buenos días!' : hours < 18 ? '¡Buenas tardes!' : '¡Buenas noches!';
+      const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+      
+      document.getElementById('op-dash-avatar-wrap').innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; gap:15px; margin-bottom:20px;">
+          <div style="position:relative; width:120px; height:120px;">
+            ${av ? `<img src="${av}" class="op-dash-avatar" style="width:100%; height:100%; object-fit:cover; border:4px solid var(--accent); box-shadow:0 0 30px rgba(94,234,212,0.3); border-radius:50%;">` 
+                 : `<div class="op-dash-avatar-ph" style="width:100%; height:100%; font-size:3.5rem; background:rgba(255,255,255,0.05); border:4px solid rgba(255,255,255,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>`}
+            <div style="position:absolute; bottom:5px; right:5px; width:28px; height:28px; background:#34d399; border:4px solid #0f1a35; border-radius:50%; box-shadow: 0 0 10px #34d399;" title="Operador en línea"></div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:0.75rem; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:3px; margin-bottom:8px; opacity:0.9;">${saludo}</div>
+            <div style="font-size:2.8rem; font-weight:900; letter-spacing:-1.5px; color:white; line-height:1;">${op.name}</div>
+            <div style="font-size:1.1rem; color:#94a3b8; font-weight:500; margin-top:10px;">
+              <span style="background:rgba(255,255,255,0.05); padding:4px 12px; border-radius:20px;">Grupo ${op.group}</span>
+              <span style="margin:0 10px; opacity:0.3;">|</span>
+              <span style="color:white; font-weight:700;">${timeStr}</span>
+            </div>
+          </div>
+        </div>`;
 
-      document.getElementById('op-dash-name').textContent = op.name;
-      document.getElementById('op-dash-group').textContent = `Grupo ${op.group}`;
+      // Limpiar textos viejos si existen
+      if (document.getElementById('op-dash-name')) document.getElementById('op-dash-name').textContent = '';
+      if (document.getElementById('op-dash-group')) document.getElementById('op-dash-group').textContent = '';
 
       // ── Timestamp de última actualización ──
       const _tsEl = document.getElementById('op-dash-last-update');
@@ -11032,8 +11251,32 @@
       });
       const pos = base.findIndex(o => o.name === op.name) + 1;
       const medals = ['', '🥇', '🥈', '🥉'];
-      document.getElementById('op-rank-pos').textContent = (medals[pos] || '') + ' #' + pos;
-      document.getElementById('op-rank-sub').textContent = `de ${base.length} operadores · ${currLabel}`;
+      
+      // Ranking section refactored to be more dynamic
+      const top3 = base.slice(0, 3).map((o, i) => {
+        const isMe = o.name.toUpperCase() === op.name.toUpperCase();
+        return `
+          <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:${isMe ? 'rgba(94, 234, 212, 0.1)' : 'rgba(255,255,255,0.03)'}; border-radius:8px; margin-bottom:4px; border:1px solid ${isMe ? 'rgba(94, 234, 212, 0.2)' : 'transparent'};">
+            <span style="font-size:1rem;">${medals[i+1]}</span>
+            <span style="font-size:0.8rem; color:${isMe ? 'var(--accent)' : 'white'}; font-weight:${isMe?'700':'500'};">${o.name}</span>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('op-rank-pos').innerHTML = `
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px;">
+          <div style="font-size:3.5rem; font-weight:900; color:var(--accent); line-height:1;">#${pos}</div>
+          <div style="text-align:left;">
+            <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px;">Posición Global</div>
+            <div style="font-size:0.9rem; font-weight:700;">${medals[pos] || ''} de ${base.length}</div>
+          </div>
+        </div>
+        <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+          <div style="font-size:0.65rem; color:#64748b; margin-bottom:10px; text-transform:uppercase;">Top 3 Global del Mes</div>
+          ${top3}
+        </div>
+      `;
+      document.getElementById('op-rank-sub').textContent = `Actualizado: ${currLabel}`;
 
       // Barra competitiva
       renderCompetitiveBar();
@@ -11995,13 +12238,6 @@
                <span id="pt-sync-badge" style="background:rgba(45,212,191,0.1); color:#2dd4bf; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:700; border:1px solid rgba(45,212,191,0.2);">📡 SYNC EN VIVO</span>
             </p>
           </div>
-          <div class="supervisor-panel" id="supervisor-ui">
-            <h4 style="margin:0; font-size:0.7rem; color: var(--accent); letter-spacing: 1px;">GANANCIA LÍDER (10% DEL
-              TURNO)</h4>
-            <div style="font-size: 1.4rem; font-weight: 700;">
-              <span id="pt-sup-pts">0</span> Pts | <span id="pt-sup-cop" style="color:var(--gold);">$0</span> COP
-            </div>
-          </div>
         </div>
 
         <div style="display:flex; justify-content:center; gap:10px; margin-bottom:30px;">
@@ -12010,11 +12246,7 @@
           <button class="pt-tab-btn" id="pt-btn-shift-noche" onclick="PT.setShift('noche')">🌙 NOCHE (22-06)</button>
         </div>
 
-        <div class="pt-tabs">
-          <button class="pt-tab-btn active" id="pt-tab-ops-btn" onclick="PT.showTab('ops')">👥 OPERADORES</button>
-          <button class="pt-tab-btn" id="pt-tab-ice-btn" onclick="PT.showTab('ice')">🔥 GENERADOR ICEBREAKERS</button>
-          <button class="pt-tab-btn" id="pt-tab-manual-btn" onclick="PT.showTab('manual')">📚 MANUAL OPERATIVO</button>
-        </div>
+
 
         <div id="pt-tab-ops" class="pt-content active">
           <!-- Monitoreo General del Turno -->
@@ -12032,61 +12264,7 @@
           <div id="pt-ops-list"></div>
         </div>
 
-        <div id="pt-tab-ice" class="pt-content">
-          <div class="ice-generator-box">
-            <h2 style="margin-top:0;">Generador de Aperturas TalkyTimes</h2>
-            <div class="ice-btn-group">
-              <button class="ice-btn real" onclick="PT.generateIce('real')">❤️ Conexión Real</button>
-              <button class="ice-btn hot" onclick="PT.generateIce('hot')">🌶️ Seducción / Hot</button>
-              <button class="ice-btn deep" onclick="PT.generateIce('deep')">🧠 Mentalidad / Deep</button>
-            </div>
-            <div id="pt-ice-output" class="ice-display">Selecciona una temática...</div>
-          </div>
-        </div>
 
-        <div id="pt-tab-manual" class="pt-content">
-          <div class="manual-container">
-            <div class="manual-section">
-              <h3>1. Misión y Objetivos</h3>
-              <ul>
-                <li><span class="rule-important">Misión:</span> Máxima productividad y calidad optimizando interacciones
-                  con usuarios reales.</li>
-              </ul>
-            </div>
-            <div class="manual-section">
-              <h3>2. Estructura y Roles</h3>
-              <ul>
-                <li><strong>Líderes:</strong> Supervisión y feedback. <strong>Operadores:</strong> Ejecución y reportes.
-                </li>
-              </ul>
-            </div>
-            <div class="manual-section">
-              <h3>3. Protocolo de Ejecución</h3>
-              <ul>
-                <li><span class="rule-important">Tráfico VIP:</span> Páginas 1-10 cada hora. 5 converses nuevas mín.
-                </li>
-              </ul>
-            </div>
-            <div class="manual-section">
-              <h3>4. Código de Conducta</h3>
-              <ul>
-                <li><span class="rule-danger">IA PROHIBIDA:</span> No Chat GPT. No copiar/pegar sin adaptar.</li>
-              </ul>
-            </div>
-            <div class="manual-section">
-              <h3>5. Sistema de Bonos</h3>
-              <ul>
-                <li><span class="rule-important">Bonos:</span> Por cumplimiento de promedio diario y constancia.</li>
-              </ul>
-            </div>
-            <div class="manual-section">
-              <h3>6. Disciplina Operativa</h3>
-              <ul>
-                <li>Puntualidad y veracidad en los datos de los reportes.</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Modal movido al final del body -->
@@ -12108,9 +12286,27 @@
         ];
 
         PT.ICEBREAKERS_BANK = {
-          real: ["¿Crees que en estos sitios se puede encontrar una conexión real?", "¿Qué te hace sonreír un lunes?", "Busco charla honesta, ¿eres tú?", "Tu perfil se siente auténtico, ¿qué buscas aquí?", "¿Qué meta no le cuentas a nadie?"],
-          hot: ["La mente seduce más que la piel, ¿qué tan peligroso eres?", "Secretos en voz baja... ¿sabes guardarlos?", "A esta hora mi mente vuela, ¿me distraes?", "Me gusta la gente que sabe lo que quiere.", "¿Cuál es tu mayor tentación?"],
-          deep: ["¿Cuál es el mayor reto que has superado?", "¿Qué valoras de una charla honesta?", "¿Sigues las reglas o creas las tuyas?", "Si cambiaras algo de hoy, ¿qué sería?", "Me gusta la mentalidad fuerte, ¿qué te apasiona?"]
+          real: [
+            "Vi tu perfil en TalkyTimes y me llamó la atención tu vibra. ¿Qué es lo más auténtico que te ha pasado hoy?",
+            "No soy de muchos rodeos, me gusta la gente real. ¿Qué te hace sonreír cuando nadie te ve?",
+            "Busco una conexión que vaya más allá de un simple hola. ¿Qué valoras más en una conversación?",
+            "Tienes algo en tu mirada que dice mucho... ¿Me equivoco o eres de los que piensan profundo?",
+            "Si pudiéramos escapar de la rutina ahora mismo, ¿a qué rincón del mundo me llevarías?"
+          ],
+          hot: [
+            "A veces la mente seduce mucho más que la piel... ¿Qué tan peligroso eres con tus palabras?",
+            "Me gusta la gente que sabe lo que quiere y no tiene miedo a pedirlo. ¿Eres de esos?",
+            "Dicen que los mejores secretos se cuentan en voz baja. ¿Tienes alguno que te atrevas a compartir conmigo?",
+            "Mi imaginación vuela muy rápido hoy... ¿Me ayudas a aterrizar o prefieres volar conmigo?",
+            "Me encantan los desafíos, y siento que tú podrías ser uno muy interesante. ¿Me pones a prueba?"
+          ],
+          deep: [
+            "¿Cuál es ese sueño que te da miedo contar porque suena demasiado grande?",
+            "Creo que todos tenemos una historia que nadie conoce. ¿Cuál es el capítulo más valiente de la tuya?",
+            "¿Qué es lo que más te apasiona en esta vida? Me gusta la gente con fuego en el alma.",
+            "Si pudieras cambiar una sola regla del mundo, ¿cuál sería?",
+            "Valoro la honestidad brutal. ¿Qué es lo más real que puedes decirme de ti ahora mismo?"
+          ]
         };
 
         PT.shiftActual = detectarTurno().toLowerCase(); // Auto-seleccionar turno actual
@@ -12858,6 +13054,15 @@
         background: rgba(52, 211, 153, .25);
         border-color: #34d399;
       }
+      .asi-saved .asi-estado-btn.sel-P {
+        background: rgba(255, 255, 255, .05);
+        border-color: rgba(255,255,255,.1);
+        color: #94a3b8;
+      }
+      .asi-saved .asi-card.estado-P {
+        border-left: 4px solid #475569;
+        box-shadow: none !important;
+      }
 
       .asi-estado-btn.sel-A {
         background: rgba(248, 113, 113, .25);
@@ -13329,8 +13534,47 @@
     function asiSetEstado(name, role, estado) {
       const k = asiKey(name, role);
       if (!asiEstados[k]) asiEstados[k] = { estado: '', nota: '' };
-      asiEstados[k].estado = asiEstados[k].estado === estado ? '' : estado;
+      
+      const prevEst = asiEstados[k].estado;
+      asiEstados[k].estado = prevEst === estado ? '' : estado;
+      
+      // Si estamos marcando algo nuevo, quitar el modo "guardado"
+      const grid = document.getElementById('asi-ops-grid');
+      if (grid) grid.classList.remove('asi-saved');
+      
+      // Si volvemos a marcar Presente, quitar flag de salida manual
+      if (asiEstados[k].estado === 'P') {
+        asiEstados[k].salidaManual = false;
+      }
+      
       asiSaveDraft(); asiRender();
+    }
+
+    function asiTerminarTurnoManual(name, role) {
+      if (!confirm(`¿Seguro que deseas terminar el turno de ${name}?`)) return;
+      const k = asiKey(name, role);
+      
+      // 1. Quitar "Presente"
+      if (asiEstados[k]) {
+        asiEstados[k].estado = ''; 
+        asiEstados[k].salidaManual = true; // Flag para que el dispositivo del op sepa que debe cerrar
+      }
+      
+      // 2. Registrar salida en horas
+      const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
+      if (allHoras[name]) {
+         allHoras[name].salidaTS = Date.now(); 
+         localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+      }
+      
+      // 3. Persistir cambios
+      asiSaveDraft(); 
+      asiRender();
+      
+      // 4. Si es posible, notificar a Supabase de inmediato para que el op se entere
+      if (typeof asiGuardar === 'function') {
+         setTimeout(asiGuardar, 100);
+      }
     }
 
     function asiSetNota(name, role, nota) {
@@ -13494,7 +13738,8 @@
       <button class="asi-estado-btn${est === 'P' ? ' sel-P' : ''}" title="Presente" onclick="asiSetEstado('${sn}','${role}','P')">✅</button>
       <button class="asi-estado-btn${est === 'T' ? ' sel-T' : ''}" title="Tardanza" onclick="asiSetEstado('${sn}','${role}','T')">⏰</button>
       <button class="asi-estado-btn${est === 'A' ? ' sel-A' : ''}" title="Ausente"  onclick="asiSetEstado('${sn}','${role}','A')">❌</button>
-      ${role === 'monitor' ? `<button class="asi-estado-btn" title="Eliminar Monitor" onclick="asiDeleteMonitor('${sn}')" style="margin-left:4px; filter:grayscale(1); opacity:0.6;">🗑️</button>` : ''}
+      ${est === 'P' ? `<button class="asi-estado-btn" title="Terminar Turno" onclick="asiTerminarTurnoManual('${sn}','${role}')" style="margin-left:8px; filter:grayscale(0); opacity:0.8;">🛑</button>` : ''}
+      ${role === 'monitor' ? `<button class="asi-estado-btn" title="Eliminar Monitor" onclick="asiDeleteMonitor('${sn}')" style="margin-left:8px; filter:grayscale(1); opacity:0.6;">🗑️</button>` : ''}
     </div>
   </div>`;
     }
@@ -13753,6 +13998,11 @@
       localStorage.setItem(ASI_KEY, JSON.stringify(all));
 
       saveData();
+      
+      // Lógica solicitada: quitar la selección visual verde al guardar
+      const grid = document.getElementById('asi-ops-grid');
+      if(grid) grid.classList.add('asi-saved');
+
       if (typeof _sb !== 'undefined' && _sb) {
         Promise.all([
           _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
@@ -14310,6 +14560,19 @@
       const copEl = document.getElementById('dp-panel-total-cop');
       if (ptsEl) ptsEl.textContent = totalMesPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
       if (copEl) copEl.textContent = '$' + totalCop + ' COP';
+      
+      // ── Ganancia Líder Real-Time (10% del turno activo) ───────────
+      const tAct = detectarTurno();
+      let ptsActShift = 0;
+      if (tAct === 'Mañana') ptsActShift = acumMan;
+      else if (tAct === 'Tarde') ptsActShift = acumTar;
+      else ptsActShift = acumNoc;
+      
+      const ptsLider = ptsActShift * 0.10;
+      const supPts = document.getElementById('pt-sup-pts');
+      const supCop = document.getElementById('pt-sup-cop');
+      if (supPts) supPts.textContent = ptsLider.toFixed(1);
+      if (supCop) supCop.textContent = '$' + Math.round(ptsLider * 1400).toLocaleString('es-CO');
 
       // Badge global
       const allPts = Object.values(_dpPuntosData).reduce((s,d) => s + (d.puntos_total || d.puntos || 0), 0);
@@ -14699,6 +14962,17 @@
     // ── Consulta Supabase y calcula neto de la sesión ─────────────
     async function _opRtSync(opName) {
       if (typeof _sb === 'undefined' || !opName) return;
+      
+      // 🔥 BLOQUEO POR CIERRE DE TURNO 🔥
+      if (typeof asiEstados !== 'undefined') {
+        const k = (typeof asiKey === 'function') ? asiKey(opName, 'operador') : opName + '||operador';
+        const curAsi = asiEstados[k];
+        if (curAsi && curAsi.salidaManual && curAsi.estado !== 'P') {
+           console.log("[OP-SYNC] Turno finalizado. Suspendiendo actualización de puntos.");
+           return; 
+        }
+      }
+
       const ids = _opRtGetIds(opName);
       if (!ids.length) return;
 

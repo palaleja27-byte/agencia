@@ -4325,13 +4325,37 @@
       <div class="modal-ai-header">
         <div style="display:flex; align-items:center; gap:12px;">
            <span class="ai-icon">🤖</span>
-           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">REPORTE INTELIGENTE <small style="font-size:0.6rem; opacity:0.5;">v8.5</small></h3>
+           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">REPORTE INTELIGENTE <small style="font-size:0.6rem; opacity:0.5;">v8.6</small></h3>
         </div>
-        <button onclick="cerrarAnalisisIA()" style="background:none; border:none; color:#64748b; font-size:1.2rem; cursor:pointer;">✕</button>
+        <div style="display:flex; align-items:center; gap:10px;">
+           <button onclick="abrirConfigAI()" style="background:none; border:none; color:#64748b; font-size:1.1rem; cursor:pointer;" title="Configurar Llaves API">⚙️</button>
+           <button onclick="cerrarAnalisisIA()" style="background:none; border:none; color:#64748b; font-size:1.2rem; cursor:pointer;">✕</button>
+        </div>
       </div>
       <div id="ai-report-content" style="padding:20px;">
          <div style="text-align:center; padding:40px; color:#64748b;">Iniciando análisis...</div>
       </div>
+    </div>
+  </div>
+  
+  <!-- MODAL CONFIGURACIÓN LLAVES AI (v8.6) -->
+  <div class="modal-ai-ov" id="modal-ai-config" style="z-index:20000;">
+    <div class="modal-ai-box" style="max-width:400px; padding:25px;">
+       <h3 style="margin:0 0 15px; font-size:1rem; color:var(--accent);">⚙️ CONFIGURACIÓN DE LLAVES AI</h3>
+       <p style="font-size:0.7rem; color:#64748b; margin-bottom:15px;">Las llaves se guardarán de forma permanente en este dispositivo.</p>
+       
+       <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:5px;">GOOGLE GEMINI KEY (Principal)</label>
+       <input type="password" id="cfg-g-key" placeholder="AIzaSy..." 
+              style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:10px; color:#fff; font-size:0.8rem; margin-bottom:15px;">
+       
+       <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:5px;">ANTHROPIC CLAUDE KEY (Respaldo)</label>
+       <input type="password" id="cfg-ai-stk" placeholder="sk-ant-..." 
+              style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:10px; color:#fff; font-size:0.8rem; margin-bottom:20px;">
+       
+       <div style="display:flex; gap:10px;">
+          <button onclick="guardarConfigAI()" style="flex:1; background:var(--accent); color:#000; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer;">Guardar Llaves</button>
+          <button onclick="cerrarConfigAI()" style="flex:1; background:rgba(255,255,255,0.05); color:#fff; border:none; padding:12px; border-radius:10px; cursor:pointer;">Cancelar</button>
+       </div>
     </div>
   </div>
 
@@ -4581,11 +4605,8 @@
   </div>
 
   <script>
-    // ── CONFIGURACIÓN IA (Anthropic) ──
-    const _p1 = "sk-ant-api03-dMkONOj1B2GIDUKGyEWQPGHmhpdBcjznxw";
-    const _p2 = "VwcJsqZfJ0rQzwpzwlav694IER1zkIzXpXkFdp2gkxuHM";
-    const _p3 = "gIJa9gw-SA7stgAA";
-    const _AI_STK = _p1 + _p2 + _p3;
+    // ── CONFIGURACIÓN IA (Anthropic) - VACÍO PARA CONFIG MANUAL ──
+    const _AI_STK = "";
     
     function abrirAnalisisIA() {
       const modal = document.getElementById('modal-ai');
@@ -4596,8 +4617,8 @@
         body.innerHTML = `
           <div style="text-align:center; padding:60px 20px;">
              <div class="ai-pulse" style="font-size:4rem; margin-bottom:24px;">🤖</div>
-             <h3 style="color:var(--accent); margin-bottom:8px;">CONECTANDO CON CLAUDE 3.5</h3>
-             <p style="color:#64748b; font-size:0.8rem;">Sincronizando métricas globales y generando diagnóstico estratégico...</p>
+             <h3 style="color:var(--accent); margin-bottom:8px;">INICIANDO ANÁLISIS ESTRATÉGICO</h3>
+             <p style="color:#64748b; font-size:0.8rem;">Sincronizando métricas globales y consultando inteligencia artificial...</p>
           </div>
         `;
       }
@@ -4605,17 +4626,35 @@
       ejecutarAnalisisAvanzado();
     }
 
-    // ── CONFIGURACIÓN IA (Google Gemini) ──
-    const _gp1 = "AIzaSyC-NoEGfRhi";
-    const _gp2 = "KCbmvDrUG1qjTTWXwrW9aVQ";
-    const _G_KEY = _gp1 + _gp2;
+    // --- NUEVAS FUNCIONES CONFIGURACIÓN AI (v8.6) ---
+    function abrirConfigAI() {
+      const m = document.getElementById('modal-ai-config');
+      if (!m) return;
+      document.getElementById('cfg-g-key').value = localStorage.getItem('rr_g_key_manual') || '';
+      document.getElementById('cfg-ai-stk').value = localStorage.getItem('rr_ai_stk_manual') || '';
+      m.classList.add('open');
+    }
+    function cerrarConfigAI() {
+      document.getElementById('modal-ai-config').classList.remove('open');
+    }
+    function guardarConfigAI() {
+      const g = document.getElementById('cfg-g-key').value.trim();
+      const a = document.getElementById('cfg-ai-stk').value.trim();
+      if (g) localStorage.setItem('rr_g_key_manual', g);
+      if (a) localStorage.setItem('rr_ai_stk_manual', a);
+      alert('✅ Llaves guardadas correctamente. Se usarán para el próximo análisis.');
+      cerrarConfigAI();
+    }
+
+    // ── CONFIGURACIÓN IA (Google Gemini) - VACÍO PARA CONFIG MANUAL ──
+    const _G_KEY = "";
 
     async function ejecutarAnalisisAvanzado() {
       const body = document.getElementById('ai-report-content');
       if (!body) return;
 
       const stats = _getStatsForAI();
-      console.log("[AI] Iniciando análisis v8.1 con motor Gemini 1.5 Flash", stats);
+      console.log("[AI] Iniciando análisis v8.6 con motor Gemini 3 Flash", stats);
       
       const prompt = `Actúa como un Consultor Senior de Operaciones para una agencia de modelos. Analiza estos datos reales:
       - Puntos Mes Actual: ${stats.ptsMes}
@@ -4626,10 +4665,28 @@
       Genera un reporte profesional pero coloquial en español. 
       Incluye diagnóstico, cierre estimado y 3 consejos tácticos.`;
 
+      const gKey = localStorage.getItem('rr_g_key_manual') || _G_KEY;
+      const aKey = localStorage.getItem('rr_ai_stk_manual') || _AI_STK;
+
+      if (!gKey && !aKey) {
+        body.innerHTML = `
+          <div style="text-align:center; padding:30px 10px;">
+            <div style="font-size:2.5rem; margin-bottom:15px;">🔑</div>
+            <h4 style="color:var(--accent); margin-bottom:10px;">LLAVES NO CONFIGURADAS</h4>
+            <p style="font-size:0.75rem; color:#64748b; margin-bottom:20px;">Para usar el análisis IA, debes ingresar tus llaves de Google o Anthropic.</p>
+            <button onclick="abrirConfigAI()" style="padding:10px 20px; background:var(--accent); color:#000; border:none; border-radius:8px; font-weight:700; cursor:pointer;">
+              Configurar Llaves Ahora
+            </button>
+          </div>
+        `;
+        abrirConfigAI();
+        return;
+      }
+
       // --- INTENTO 1: GOOGLE GEMINI (v1beta Flash) ---
       try {
-        console.log("[AI] Intentando Google Gemini v1beta...");
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_G_KEY}`, {
+        console.log("[AI v8.6] Intentando Google Gemini 3 Flash...");
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${gKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -4638,9 +4695,13 @@
         });
 
         const data = await response.json();
+        if (response.status === 429 || response.status === 402) {
+           throw new Error("CRÉDITOS AGOTADOS en Gemini. Por favor actualiza la llave API.");
+        }
+        
         if (response.ok && data.candidates && data.candidates[0]) {
            const text = data.candidates[0].content.parts[0].text;
-           body.innerHTML = _formatAIResponse(text, stats, "Google Gemini 1.5");
+           body.innerHTML = _formatAIResponse(text, stats, "Google Gemini 3 Flash");
            return;
         } else {
            const errMsg = data.error?.message || "Error en respuesta de Gemini";
@@ -4648,6 +4709,7 @@
         }
       } catch (err) {
         console.warn("[AI] Gemini falló:", err.message);
+        
         // --- FALLBACK: ANTHROPIC ---
         try {
           console.log("[AI] Intentando motor de respaldo: Anthropic...");
@@ -4655,7 +4717,7 @@
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-api-key': _AI_STK,
+              'x-api-key': aKey,
               'anthropic-version': '2023-06-01',
               'anthropic-dangerous-direct-browser-access': 'true'
             },
@@ -4666,15 +4728,32 @@
             })
           });
 
-          if (response.ok) {
-             const data = await response.json();
-             body.innerHTML = _formatAIResponse(data.content[0].text, stats, "Claude 3.5 Sonnet");
-             return;
+          const data = await response.json();
+          if (response.status === 429 || response.status === 402 || (data.error?.message && data.error.message.includes("credit balance is too low"))) {
+             throw new Error("CRÉDITOS AGOTADOS en Anthropic. Por favor actualiza la llave API.");
           }
-          throw new Error("Anthropic también falló");
+
+          if (response.ok && data.content && data.content[0]) {
+            body.innerHTML = _formatAIResponse(data.content[0].text, stats, "Anthropic Claude 3.5");
+          } else {
+            const msg = data.error?.message || "Error desconocido";
+            throw new Error(msg);
+          }
         } catch (err2) {
-          console.error("[AI] Falla total:", err.message);
-          body.innerHTML = _generateSmartReportLocal(stats, `Error Gemini: ${err.message}`);
+          console.error("[AI] Error Total:", err2.message);
+          body.innerHTML = `
+            <div style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.3); border-radius:15px; padding:20px; color:#f87171;">
+              <div style="font-size:1.1rem; font-weight:800; margin-bottom:10px;">⚠️ ERROR DE CONEXIÓN AI</div>
+              <p style="font-size:0.75rem; color:#94a3b8; margin-bottom:15px;">No se pudo conectar con los motores analíticos (Gemini/Claude). Verifica tus llaves API o el saldo disponible.</p>
+              <div style="font-size:0.65rem; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; font-family:monospace; margin-bottom:15px; color:#f87171; border:1px dashed rgba(248,113,113,0.2);">
+                 DETALLE: ${err2.message}
+              </div>
+              <button onclick="abrirConfigAI()" 
+                      style="width:100%; padding:12px; background:var(--accent); color:#000; border:none; border-radius:10px; font-weight:800; cursor:pointer; font-size:0.75rem;">
+                ⚙️ CONFIGURAR / ACTUALIZAR LLAVES
+              </button>
+            </div>
+          `;
         }
       }
     }
@@ -9483,18 +9562,29 @@
         const ptsHoy = _sumNet(cortesHoy);
         const horaUltimo = cortesHoy.length ? cortesHoy[cortesHoy.length - 1].hora : null;
         const copHoy = Math.round(ptsHoy * 1400).toLocaleString('es-CO');
-        const turnoIcon = op.turno === 'Mañana' ? '☀️' : op.turno === 'Tarde' ? '🌆' : op.turno === 'Noche' ? '🌙' : '🔄';
+        const turnoIcon = op.turno === 'Mañana' ? '🌅' : op.turno === 'Tarde' ? '🌇' : op.turno === 'Noche' ? '🌙' : '📌';
 
-        // Novedades del día: perfiles activos hoy para este operador
+        // ✅ PERFILES FIJOS + NOVEDADES (v8.6)
         const _novedadesHoy = getNovedadesHoy();
-        const _perfilesHoy = _novedadesHoy[op.name] || null;
-        const _novBadge = _perfilesHoy
-          ? `<span class="nov-badge">📋 ${_perfilesHoy.length} perfil${_perfilesHoy.length !== 1 ? 'es' : ''} hoy</span>`
+        const _perfilesNov  = _novedadesHoy[op.name] || [];
+        const _perfilesFix  = op.profiles || [];
+        
+        // Unificar perfiles evitando duplicados por ID
+        const allPerfs = [..._perfilesFix];
+        _perfilesNov.forEach(np => {
+          if (!allPerfs.some(fp => String(fp.id) === String(np.id))) {
+            allPerfs.push(np);
+          }
+        });
+
+        const _novBadge = allPerfs.length > 0
+          ? `<span class="nov-badge">📋 ${allPerfs.length} perfil${allPerfs.length !== 1 ? 'es' : ''} asignados</span>`
           : '';
-        const _novDetalle = _perfilesHoy
+
+        const _novDetalle = allPerfs.length > 0
           ? `<div style="margin:6px 0 2px;padding:7px 10px;border-radius:8px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);">
-               <div style="font-size:.65rem;color:#fbbf24;font-weight:700;margin-bottom:4px;">📋 PERFILES HOY</div>
-               ${_perfilesHoy.map(p => `<div style="font-size:.68rem;color:#94a3b8;padding:1px 0;">· ID <strong style="color:#e2e8f0">${p.id}</strong> — ${p.modelo}</div>`).join('')}
+               <div style="font-size:.65rem;color:#fbbf24;font-weight:700;margin-bottom:4px;">📋 PERFILES ACTIVOS</div>
+               ${allPerfs.map(p => `<div style="font-size:.68rem;color:#94a3b8;padding:1px 0;">• ID <strong style="color:#e2e8f0">${p.id}</strong> — ${p.modelo || p.model || 'Sin nombre'}</div>`).join('')}
              </div>`
           : '';
 
@@ -10219,31 +10309,9 @@
       const match = await verifyPin(loginBuffer, storedHash);
 
       if (match) {
-        // ── Verificar bloqueo de turno para operadores ──
+        // ✅ ACCESO FLEXIBLE (v8.6): Se permite el ingreso sin importar bloqueos previos
         if (loginRole === 'operador' && currentOpName) {
-          const blockKey = 'rr_turno_block_' + currentOpName.replace(/\s+/g, '_').toLowerCase();
-          try {
-            const block = JSON.parse(localStorage.getItem(blockKey) || 'null');
-            if (block && Date.now() < block.bloqueadoHasta) {
-              const fecha = new Date(block.bloqueadoHasta);
-              const hora = fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-              const diaSem = fecha.toLocaleDateString('es-CO', { weekday: 'long' });
-              loginBuffer = '';
-              loginUpdateDots(true);
-              document.getElementById('login-error').textContent =
-                `🔒 Turno finalizado. Puedes ingresar el ${diaSem} a las ${hora}.`;
-              document.getElementById('login-attempts').textContent =
-                '⏳ El próximo operador puede loguearse ahora.';
-              setTimeout(() => {
-                loginBuffer = '';
-                loginUpdateDots();
-                document.getElementById('login-error').textContent = '';
-                document.getElementById('login-attempts').textContent = '';
-              }, 4000);
-              return;
-            }
-            if (block && Date.now() >= block.bloqueadoHasta) localStorage.removeItem(blockKey);
-          } catch (e) { }
+          console.log("[LOGIN] Acceso concedido para " + currentOpName);
         }
         loginSuccess(loginRole, currentOpName);
       } else {
@@ -13357,12 +13425,9 @@
         if (info.salidaTS && now > info.salidaTS) {
           const op = operatorsData.find(o => _normName(o.name) === _normName(name));
           if (op && op.profiles && op.profiles.length > 0) {
-            const hasCobertura = op.profiles.some(p => p.tipo === 'cobertura');
-            if (hasCobertura) {
-              console.warn(`[AutoRelease] Turno expirado para ${name}. Liberando perfiles de cobertura.`);
-              op.profiles = op.profiles.filter(p => p.tipo !== 'cobertura');
-              changed = true;
-            }
+            // ✅ PERFILES FIJOS (v8.6): No se eliminan los perfiles al terminar el turno
+            // para que el siguiente operador los encuentre listos.
+            console.log(`[AutoRelease] Turno expirado para ${name}. Manteniendo perfiles.`);
           }
           
           const isMon = loadMonitores().includes(name);

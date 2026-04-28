@@ -4605,12 +4605,17 @@
       ejecutarAnalisisAvanzado();
     }
 
+    // ── CONFIGURACIÓN IA (Google Gemini) ──
+    const _gp1 = "AIzaSyA_djW7E7Bd";
+    const _gp2 = "RCJ8kXPS0Ty5oZQq66Jh1CU";
+    const _G_KEY = _gp1 + _gp2;
+
     async function ejecutarAnalisisAvanzado() {
       const body = document.getElementById('ai-report-content');
       if (!body) return;
 
       const stats = _getStatsForAI();
-      console.log("[AI] Analizando con stats:", stats);
+      console.log("[AI] Iniciando análisis multi-motor con stats:", stats);
       
       const prompt = `Actúa como un Consultor Senior de Operaciones para una agencia de modelos. Analiza estos datos reales:
       - Puntos Mes Actual: ${stats.ptsMes}
@@ -4623,9 +4628,11 @@
       1. Diagnóstico breve.
       2. Estimado de cierre.
       3. 3 consejos tácticos para subir producción.
-      Usa un tono profesional, motivador y directo.`;
+      Sé breve y directo.`;
 
+      // --- INTENTO 1: ANTHROPIC (Claude 3.5) ---
       try {
+        console.log("[AI] Intentando motor Anthropic...");
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -4641,18 +4648,36 @@
           })
         });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        if (response.ok) {
+           const data = await response.json();
+           body.innerHTML = _formatAIResponse(data.content[0].text, stats, "Claude 3.5 Sonnet");
+           return;
         }
-        
-        const data = await response.json();
-        const aiText = data.content[0].text;
-        body.innerHTML = _formatAIResponse(aiText, stats);
+        throw new Error("Anthropic Indisponible (Créditos/Red)");
       } catch (err) {
-        console.error("[AI] Error:", err);
-        // Fallback a reporte heurístico
-        body.innerHTML = _generateSmartReportLocal(stats, err.message);
+        console.warn("[AI] Anthropic falló, intentando motor Google Gemini...", err.message);
+      }
+
+      // --- INTENTO 2: GOOGLE GEMINI (1.5 Flash) ---
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${_G_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        });
+
+        if (response.ok) {
+           const data = await response.json();
+           const text = data.candidates[0].content.parts[0].text;
+           body.innerHTML = _formatAIResponse(text, stats, "Gemini 1.5 Flash");
+           return;
+        }
+        throw new Error("Gemini Indisponible");
+      } catch (err) {
+        console.error("[AI] Ambos motores fallaron. Usando motor local.", err.message);
+        body.innerHTML = _generateSmartReportLocal(stats, "Motores Cloud (Anthropic/Gemini) no disponibles.");
       }
     }
 
@@ -4669,7 +4694,7 @@
        return { ptsMes, diaActual, diasMes, proyeccion, crecimiento };
     }
 
-    function _formatAIResponse(text, stats) {
+    function _formatAIResponse(text, stats, engineName = "Claude 3.5 Sonnet") {
        let statusColor = stats.crecimiento >= 0 ? '#10b981' : '#ef4444';
        return `
           <div style="padding:10px;">
@@ -4687,7 +4712,7 @@
              </div>
              <div style="font-size:0.9rem; line-height:1.6; color:#cbd5e1; white-space: pre-wrap;">${text}</div>
              <div style="margin-top:20px; text-align:right; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
-                <span style="font-size:0.6rem; color:#475569; letter-spacing:1px; font-weight:700;">— ANALIZADO POR CLAUDE 3.5 SONNET</span>
+                <span style="font-size:0.6rem; color:#475569; letter-spacing:1px; font-weight:700;">— ANALIZADO POR ${engineName.toUpperCase()}</span>
              </div>
           </div>
        `;

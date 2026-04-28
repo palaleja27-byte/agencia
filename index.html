@@ -5051,8 +5051,8 @@
       { name: "BRANDON MIGUEL FERNANDEZ MORA", group: "9", plataforma: "Prime", ene: 1097.84, feb: 1071.72, mar: 0, abr: 0, profiles: [{ "id": "133085188", "model": "MARCOS" }, { "id": "132062039", "model": "BEATRIZ" }, { "id": "138130329", "model": "AGUSTIN" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-01-05" },
       { name: "BRIGITH DE LOS ANGELES FERNANDEZ MORA", group: "4", plataforma: "Prime", ene: 2987.1, feb: 2064.66, mar: 0, abr: 0, profiles: [{ "id": "95955130", "model": "HECTOR" }, { "id": "108018336", "model": "LUCAS" }, { "id": "103289167", "model": "LUIS" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-02-06" },
       { name: "CARLOS MOISES RODRIGUEZ MENDOZA", group: "8", plataforma: "Prime", ene: 178.36, feb: 297.17, mar: 0, abr: 0, profiles: [{ "id": "130422416", "model": "KETY" }, { "id": "139245989", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-01-16" },
-      { name: "CATHERINE NAOMI FIGUEREDO HERNANDEZ", group: "3", plataforma: "Prime", ene: 1426.2, feb: 1818.86, mar: 0, abr: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-17" },
-      { name: "EDUIN JOSE ESPAÑA DIAZ", group: "2", plataforma: "Prime", ene: 5594.64, feb: 1932.24, mar: 0, abr: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-07-11" },
+      { name: "CATHERINE NAOMI FIGUEREDO HERNANDEZ", group: "3", plataforma: "Prime", ene: 1426.2, feb: 1818.86, mar: 0, abr: 0, profiles: [{ "id": "145839775", "model": "BRUNO", "tipo": "propio" }, { "id": "151410237", "model": "EZEQUIEL", "tipo": "propio" }, { "id": "114851358", "model": "JHOANNA", "tipo": "propio" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-17" },
+      { name: "EDUIN JOSE ESPAÑA DIAZ", group: "2", plataforma: "Prime", ene: 5594.64, feb: 1932.24, mar: 0, abr: 0, profiles: [{ "id": "103289167", "model": "MODELO", "tipo": "propio" }], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-07-11" },
       { name: "ESPERANZA JIMENEZ SEVILLA", group: "4", plataforma: "Prime", ene: 3773.98, feb: 1687.14, mar: 0, abr: 0, profiles: [{ "id": "95955130", "model": "HECTOR" }, { "id": "108018336", "model": "LUCAS" }, { "id": "103289167", "model": "LUIS" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-05-08" },
       { name: "FREDERYCK JOSE GALICIA CAMARIPANO", group: "6", plataforma: "Prime", ene: 1840.02, feb: 2259.1, mar: 0, abr: 0, profiles: [{ "id": "98389135", "model": "RAUL" }, { "id": "120720195", "model": "MARCOS" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-12-18" },
       { name: "GABRIEL LUISDEVIT GONZALEZ ARCIA", group: "1", plataforma: "Prime", ene: 1393.98, feb: 1771.2, mar: 0, abr: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-08-14" },
@@ -5193,6 +5193,12 @@
                   // Para meses históricos: respetar el valor mayor (source vs saved)
                   if (historicalMonths.includes(f) && (savedOp[f] === 0 || savedOp[f] === null) && (srcOp[f] || 0) > 0) {
                     merged[f] = srcOp[f]; // preservar dato histórico del source
+                  } else if (f === 'profiles') {
+                    // PROTECCIÓN: nunca sobrescribir profiles existentes con array vacío
+                    // Se usa el que tenga MÁS perfiles (el más completo/actualizado)
+                    const savedProfiles = Array.isArray(savedOp.profiles) ? savedOp.profiles : [];
+                    const srcProfiles = Array.isArray(srcOp.profiles) ? srcOp.profiles : [];
+                    merged.profiles = savedProfiles.length >= srcProfiles.length ? savedProfiles : srcProfiles;
                   } else {
                     merged[f] = savedOp[f];
                   }

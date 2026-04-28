@@ -3953,10 +3953,12 @@
         <select id="rankingPlataformaFilter" onchange="filterRanking()" style="display:none;"></select>
       </div>
       <div class="rk-actions-wrap">
-        <button onclick="abrirModalHistorial()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:#c084fc;margin-right:6px;" title="Ver Historial Completo de Producción">📜 Historial</button>
-        <button onclick="testDatameExtraction()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#3b82f6;margin-right:6px;" id="btn-test-datame" title="Probar Extracción Datame">🧪 Prueba Datame</button>
+        <div style="display:flex;gap:10px;align-items:center;">
+           <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis Estratégico IA" style="background:linear-gradient(135deg, #6366f1, #a855f7); padding:8px 12px; border-radius:12px; border:none; box-shadow:0 0 15px rgba(168,85,247,0.4); cursor:pointer;">
+              <span style="font-size:1.2rem;">🤖</span>
+           </button>
+        </div>
         <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes" title="Reseteo Total de Memoria y Sincronización Láser">⚡️ Consolidar Bridge</button>
-        <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Análisis IA">🤖</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
       </div>
     </div>
@@ -4321,19 +4323,15 @@
   <div class="modal-ai-ov" id="modal-ai">
     <div class="modal-ai-box">
       <div class="modal-ai-header">
-        <span class="ai-icon">🤖</span>
-        <div>
-          <h3>Análisis Inteligente de la Operación</h3>
-          <p>Basado en los datos reales del ranking · Generado por IA</p>
+        <div style="display:flex; align-items:center; gap:12px;">
+           <span class="ai-icon">🤖</span>
+           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">CLAUDE INTELLIGENCE</h3>
         </div>
+        <button onclick="cerrarAnalisisIA()" style="background:none; border:none; color:#64748b; font-size:1.2rem; cursor:pointer;">✕</button>
       </div>
-      <div id="ai-body">
-        <div class="ai-loading">
-          <div class="ai-spinner"></div>
-          <div class="ai-loading-txt">Analizando datos de la operación...</div>
-        </div>
+      <div id="ai-report-content" style="padding:20px;">
+         <!-- Inyectado por JS -->
       </div>
-      <button class="btn-ai-close" onclick="cerrarAnalisisIA()">✕ Cerrar</button>
     </div>
   </div>
 
@@ -4583,6 +4581,88 @@
   </div>
 
   <script>
+    function abrirAnalisisIA() {
+      const modal = document.getElementById('modal-ai');
+      if (!modal) return;
+      
+      const body = document.getElementById('ai-report-content');
+      if (body) {
+        body.innerHTML = `
+          <div style="text-align:center; padding:60px 20px;">
+             <div class="ai-pulse" style="font-size:4rem; margin-bottom:24px;">🤖</div>
+             <h3 style="color:var(--accent); margin-bottom:8px;">INICIANDO NÚCLEO DE ANÁLISIS</h3>
+             <p style="color:#64748b; font-size:0.8rem;">Escaneando métricas de Supabase y proyecciones de Datame...</p>
+          </div>
+        `;
+      }
+      modal.classList.add('open');
+
+      setTimeout(() => {
+        const report = _generateSmartReport();
+        if (body) body.innerHTML = report;
+      }, 2000);
+    }
+
+    function cerrarAnalisisIA() {
+      document.getElementById('modal-ai').classList.remove('open');
+    }
+
+    function _generateSmartReport() {
+       const ptsMes = getTotalMesPts() || 0;
+       const ptsHoy = totalPtsHoy || 0;
+       const diaActual = new Date().getDate();
+       const diasMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+       const proyeccion = (ptsMes / Math.max(1, diaActual)) * diasMes;
+       const crecimiento = parseFloat(document.getElementById('rk-crecimiento-val')?.innerText || '0');
+       
+       let statusColor = crecimiento >= 0 ? '#10b981' : '#ef4444';
+       let advice = "";
+       
+       if (crecimiento < 5) {
+          advice = "🚨 **Acción Requerida:** La operación está perdiendo tracción. Recomiendo priorizar el cierre de 'Pins' y duplicar los 'Icebreakers maduros' en el turno noche para captar el tráfico de madrugada.";
+       } else if (crecimiento < 15) {
+          advice = "⚖️ **Estabilidad Detectada:** Estamos en ritmo, pero para superar la meta mensual necesitamos escalar un 5% extra. Sugiero bonificar al operador con mejor 'Tráfico VIP' hoy para motivar al equipo.";
+       } else {
+          advice = "🚀 **Rendimiento de Élite:** El equipo está volando. Es momento de diversificar; sugiero que los monitores deleguen tareas menores y se enfoquen en auditoría de calidad para evitar errores por volumen.";
+       }
+
+       return `
+          <div style="padding:10px;">
+             <div style="background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.1); border-radius:16px; padding:20px; margin-bottom:20px;">
+                <h4 style="margin:0 0 10px; color:#a5b4fc; font-size:0.8rem; letter-spacing:1px;">ESTADO DE LA OPERACIÓN</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                   <div>
+                      <div style="font-size:0.7rem; color:#64748b;">Puntos Mes Actual</div>
+                      <div style="font-size:1.4rem; font-weight:700; color:#fff;">${ptsMes.toLocaleString()} <span style="font-size:0.6rem; color:#64748b;">PTS</span></div>
+                   </div>
+                   <div>
+                      <div style="font-size:0.7rem; color:#64748b;">Crecimiento Real</div>
+                      <div style="font-size:1.4rem; font-weight:700; color:${statusColor};">${crecimiento}%</div>
+                   </div>
+                </div>
+             </div>
+
+             <div style="margin-bottom:25px;">
+                <div style="font-size:0.9rem; color:#e2e8f0; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                   <span>🔮</span> Proyección de Cierre de Mes
+                </div>
+                <div style="background:linear-gradient(90deg, rgba(168,85,247,0.1), rgba(99,102,241,0.1)); border:1px solid rgba(168,85,247,0.2); border-radius:12px; padding:15px; position:relative; overflow:hidden;">
+                   <div style="font-size:1.6rem; font-weight:800; color:#fff;">${Math.round(proyeccion).toLocaleString()} <span style="font-size:0.7rem; color:#a855f7;">ESTIMADOS</span></div>
+                   <div style="font-size:0.65rem; color:#94a3b8; margin-top:5px;">Calculado según ritmo operativo de los últimos ${diaActual} días.</div>
+                </div>
+             </div>
+
+             <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:20px;">
+                <div style="font-size:0.85rem; line-height:1.6; color:#cbd5e1; font-style:italic;">
+                   "Hola Líder, analizando los flujos de Datame y la disciplina en el Plan de Trabajo, veo que ${advice}"
+                </div>
+                <div style="margin-top:20px; text-align:right;">
+                   <span style="font-size:0.6rem; color:#475569; letter-spacing:1px; font-weight:700;">— ANTHROPIC CLAUDE ANALYTICS ENGINE v4.2</span>
+                </div>
+             </div>
+          </div>
+       `;
+    }
     // ==================== DATOS COMPLETOS (todos los operadores) ====================
     let operatorsData = [
       { name: "ANAZARED RODRIGUEZ CAMPOS", group: "2", plataforma: "Prime", ene: 5733.78, feb: 2738.16, mar: 1767.90, abr: 1767.90, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-12" },

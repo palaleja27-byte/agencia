@@ -4607,20 +4607,23 @@
 
     async function ejecutarAnalisisAvanzado() {
       const body = document.getElementById('ai-report-content');
+      if (!body) return;
+
       const stats = _getStatsForAI();
+      console.log("[AI] Analizando con stats:", stats);
       
-      const prompt = `Actúa como un Consultor Senior de Operaciones. Analiza estos datos reales de mi agencia:
+      const prompt = `Actúa como un Consultor Senior de Operaciones para una agencia de modelos. Analiza estos datos reales:
       - Puntos Mes Actual: ${stats.ptsMes}
       - Crecimiento: ${stats.crecimiento}%
       - Proyección Cierre: ${stats.proyeccion} pts
       - Día del mes: ${stats.diaActual}/${stats.diasMes}
       
-      Genera un reporte profesional pero con un toque coloquial (como un socio de confianza). 
-      Debe incluir:
-      1. Diagnóstico del momento actual.
-      2. Estimado de producción a fin de mes.
-      3. 3 consejos tácticos específicos para subir la producción basado en esos números.
-      Sé breve, directo y profesional. Usa un tono que motive pero que sea realista.`;
+      Genera un reporte profesional pero coloquial. 
+      Incluye:
+      1. Diagnóstico breve.
+      2. Estimado de cierre.
+      3. 3 consejos tácticos para subir producción.
+      Usa un tono profesional, motivador y directo.`;
 
       try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -4638,16 +4641,18 @@
           })
         });
 
-        if (!response.ok) throw new Error('API Error');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         const aiText = data.content[0].text;
-        
-        if (body) body.innerHTML = _formatAIResponse(aiText, stats);
+        body.innerHTML = _formatAIResponse(aiText, stats);
       } catch (err) {
-        console.warn("AI API Fallback:", err);
-        // Fallback a reporte heurístico si falla la API (CORS/Key/etc)
-        const report = _generateSmartReportLocal(stats);
-        if (body) body.innerHTML = report;
+        console.error("[AI] Error:", err);
+        // Fallback a reporte heurístico
+        body.innerHTML = _generateSmartReportLocal(stats, err.message);
       }
     }
 
@@ -4656,7 +4661,11 @@
        const diaActual = new Date().getDate();
        const diasMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
        const proyeccion = Math.round((ptsMes / Math.max(1, diaActual)) * diasMes);
-       const crecimiento = parseFloat(document.getElementById('rk-crecimiento-val')?.innerText || '0');
+       
+       // Obtener crecimiento real desde window._rkHistorial o calcular
+       const h = window._rkHistorial || { crec: 0 };
+       const crecimiento = h.crec || 0;
+       
        return { ptsMes, diaActual, diasMes, proyeccion, crecimiento };
     }
 
@@ -4684,13 +4693,13 @@
        `;
     }
 
-    function _generateSmartReportLocal(stats) {
-       let advice = stats.crecimiento < 5 ? "La operación requiere tracción inmediata en tráfico VIP." : "Rendimiento estable, optimizar cierres nocturnos.";
+    function _generateSmartReportLocal(stats, errMsg = "") {
+       let advice = stats.crecimiento < 5 ? "La operación requiere tracción inmediata en tráfico VIP y pins." : "Rendimiento estable, enfocar en escalabilidad de perfiles.";
        return `
           <div style="padding:10px;">
-             <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:12px; padding:15px; margin-bottom:15px; font-size:0.7rem; color:#f87171;">
-                ⚠️ Nota: Usando motor analítico local (Modo Fallback).
-             </div>
+             ${errMsg ? `<div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.1); border-radius:12px; padding:15px; margin-bottom:15px; font-size:0.7rem; color:#f87171;">
+                ⚠️ Nota: Usando motor analítico local (Modo Respaldo).<br>Detalle: ${errMsg}
+             </div>` : ''}
              <div style="background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.1); border-radius:16px; padding:20px; margin-bottom:20px;">
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                    <div>
@@ -4703,7 +4712,7 @@
                    </div>
                 </div>
              </div>
-             <div style="font-size:0.9rem; line-height:1.6; color:#cbd5e1;">${advice}</div>
+             <div style="font-size:0.9rem; line-height:1.6; color:#cbd5e1; font-style:italic;">"Hola Líder, según los datos disponibles, ${advice}"</div>
           </div>
        `;
     }

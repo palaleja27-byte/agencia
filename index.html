@@ -2135,29 +2135,81 @@
     .rk-stats {
       max-width: 1200px;
       margin: 0 auto 24px;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 14px;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
     }
 
     .rk-stat-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px 20px;
+      background: rgba(30, 41, 59, 0.4);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 14px 18px;
       text-align: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 90px;
+    }
+    
+    .rk-stat-card:hover {
+      background: rgba(30, 41, 59, 0.6);
+      border-color: rgba(94, 234, 212, 0.3);
+      transform: translateY(-2px);
     }
 
     .rk-stat-card .stat-val {
-      font-size: 24px;
-      font-weight: 700;
+      font-size: 22px;
+      font-weight: 800;
       color: var(--accent);
+      line-height: 1.2;
     }
 
     .rk-stat-card .stat-lbl {
-      font-size: 11px;
-      color: #64748b;
+      font-size: 10px;
+      font-weight: 600;
+      color: #94a3b8;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    /* Cyberpunk Robot Button */
+    .btn-cyber-bot {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border: none;
+      border-radius: 14px;
+      padding: 8px 14px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-cyber-bot:hover {
+      box-shadow: 0 0 25px rgba(168, 85, 247, 0.6);
+      transform: scale(1.05);
+    }
+    .btn-cyber-bot .cyber-icon {
+      font-size: 1.4rem;
+      filter: drop-shadow(0 0 2px #fff);
+      z-index: 2;
+    }
+    .btn-cyber-bot::before {
+      content: '';
+      position: absolute;
+      top: -50%; left: -50%; width: 200%; height: 200%;
+      background: conic-gradient(from 0deg, transparent, rgba(255,255,255,0.2), transparent 40%);
+      animation: cyber-rotate 3s linear infinite;
+    }
+    @keyframes cyber-rotate {
+      100% { transform: rotate(360deg); }
+    }
       letter-spacing: 1px;
       margin-top: 4px;
     }
@@ -4065,13 +4117,11 @@
             <span id="pt-sup-pts">0</span> <small style="font-size:0.6rem;">Pts</small> | <span id="pt-sup-cop" style="color:var(--gold); font-size:0.8rem;">$0</span> <small style="font-size:0.6rem;">COP</small>
           </div>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;">
-           <button class="btn-ai-analisis" onclick="abrirAnalisisIA()" title="Reporte Inteligente" style="background:linear-gradient(135deg, #6366f1, #a855f7); padding:8px 12px; border-radius:12px; border:none; box-shadow:0 0 15px rgba(168,85,247,0.4); cursor:pointer;">
-              <span style="font-size:1.2rem;">🤖</span>
+        <div style="display:flex;gap:12px;align-items:center;">
+           <button class="btn-cyber-bot" onclick="abrirAnalisisIA()" title="Análisis Cyber-IA">
+              <span class="cyber-icon">🤖</span>
            </button>
         </div>
-        <button onclick="purgarCortesMes()" style="padding:6px 12px;border-radius:10px;font-size:.7rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes">⚡️ Consolidar Bridge</button>
-        <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()">＋ Operador</button>
       </div>
     </div>
 
@@ -5635,31 +5685,30 @@
       const copTotal = Math.round(totalPtsCurr * 1400).toLocaleString('es-CO');
 
       document.getElementById('rkStatsRow').innerHTML = `
-    <div class="rk-stat-card" style="flex: 1; padding: 12px 16px;">
+    <div class="rk-stat-card" style="flex: 1;">
       <div class="stat-val">${rkDataFiltered.length}</div>
       <div class="stat-lbl">Operadores</div>
-      <button onclick="showDailyHistory()" style="margin-top:8px;padding:4px 8px;font-size:0.6rem;background:rgba(147,197,253,0.1);border:1px solid rgba(147,197,253,0.3);color:#93c5fd;border-radius:4px;cursor:pointer;">🕰️ Historial Días</button>
+      <button onclick="showDailyHistory()" style="margin-top:6px;padding:3px 8px;font-size:0.55rem;background:rgba(147,197,253,0.08);border:1px solid rgba(147,197,253,0.2);color:#93c5fd;border-radius:6px;cursor:pointer;">🕰️ Historial</button>
     </div>
-    <div class="rk-stat-card" style="flex: 1.2; border: 2px solid rgba(94, 234, 212, 0.4); background: rgba(94, 234, 212, 0.05); transform: scale(1.02); z-index: 10; padding: 12px 16px;">
-      <div class="stat-val" id="rk-val-total" style="font-size:1.8rem; letter-spacing: -1px; text-shadow: 0 0 15px rgba(94, 234, 212, 0.6); color: #5eead4;">${totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 2})}</div>
-      <div class="stat-lbl" style="color:#5eead4; font-weight: 800;">🛰️ GLOBAL TOTAL ${currLabel.toUpperCase()}</div>
-      <div id="rk-val-cop" style="font-size:.75rem;color:#34d399;margin-top:4px; font-weight: 700;">💰 $${copTotal} COP</div>
+    <div class="rk-stat-card" style="flex: 1.3; border: 1px solid rgba(94, 234, 212, 0.3); background: rgba(94, 234, 212, 0.03); transform: scale(1.02);">
+      <div class="stat-val" id="rk-val-total" style="font-size:24px; color: #5eead4;">${totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 2})}</div>
+      <div class="stat-lbl" style="color:#5eead4; font-weight: 700; opacity: 0.8;">GLOBAL ${currLabel.toUpperCase()}</div>
+      <div id="rk-val-cop" style="font-size:.7rem;color:#34d399;margin-top:2px; font-weight: 600;">$${copTotal}</div>
     </div>
-    <div class="rk-stat-card" style="flex: 1; padding: 12px 16px;">
+    <div class="rk-stat-card" style="flex: 1;">
       <div class="stat-val" id="rk-val-avg">${avgPts.toFixed(1)}</div>
-      <div class="stat-lbl">Promedio / op ${currLabel}</div>
+      <div class="stat-lbl">Promedio / op</div>
     </div>
-    <div class="rk-stat-card" style="flex: 1; position:relative; padding: 12px 16px;">
-      <div class="stat-val" id="rk-val-growth" style="color:${crecOpColor};">${crecOpIcon} ${crecOpSign}${crecOp.toFixed(1)}%</div>
-      <div class="stat-lbl">Crecimiento operación</div>
-      <div id="rk-val-range" style="font-size:.6rem;color:#475569;margin-top:3px;">
-        ${prevLabel}: ${totalPtsAnt.toFixed(0)} pts → ${currLabel}: ${totalPtsCurr.toFixed(0)} pts
+    <div class="rk-stat-card" style="flex: 1; position:relative;">
+      <div class="stat-val" id="rk-val-growth" style="color:${crecOpColor}; font-size: 20px;">${crecOpIcon}${crecOpSign}${crecOp.toFixed(1)}%</div>
+      <div class="stat-lbl">Crecimiento</div>
+      <div id="rk-val-range" style="font-size:.55rem;color:#475569;margin-top:2px;">
+        ${totalPtsAnt.toFixed(0)} → ${totalPtsCurr.toFixed(0)}
       </div>
       <button id="btn-crec-info" onclick="toggleCrecTooltip(event)"
-        style="position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;
-               background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.3);
-               color:#5eead4;font-size:10px;font-weight:700;cursor:pointer;line-height:1;
-               transition:.2s;">ℹ</button>
+        style="position:absolute;top:8px;right:8px;width:16px;height:16px;border-radius:50%;
+               background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+               color:#64748b;font-size:9px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>
     </div>
   `;
 
@@ -12902,8 +12951,19 @@
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 14px;
+        gap: 20px;
+        background: rgba(15, 23, 42, 0.3);
+        padding: 16px 24px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
       }
+
+      .asi-management-controls {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+      }
+
 
       .asi-date-wrap {
         display: flex;
@@ -13402,6 +13462,10 @@
         </div>
         <input type="text" id="asi-search-op" placeholder="🔍 Buscar operador..." oninput="asiRender()"
                style="padding:8px 12px;border-radius:10px;font-size:.8rem;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#e2e8f0;width:200px;box-sizing:border-box;">
+      </div>
+      <div class="asi-management-controls" style="display:flex; gap:10px;">
+        <button onclick="purgarCortesMes()" style="padding:10px 18px;border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes">⚡️ Consolidar Bridge</button>
+        <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()" style="padding:10px 18px;border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.4);color:#34d399;">＋ Operador</button>
       </div>
       <div class="asi-action-btns">
         <button class="btn-asi-save" onclick="asiGuardar()">💾 Guardar Asistencia</button>

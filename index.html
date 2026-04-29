@@ -8226,8 +8226,75 @@
     // MÓDULO: ALERTAS DE RENDIMIENTO (DÍA / SEMANA / MES)
     // ══════════════════════════════════════════
 
-    let alertasPeriodo = 'dia'; 
-    let alertasJornada = 'Tarde'; 
+    const RENDIMIENTO_SNAP_KEY = 'rr_rendimiento_snapshots_v2';
+    let alertasPeriodo = 'dia';
+    let alertasJornada = '';
+    let _alertasHistorialVisible = false;
+
+    // Guarda un snapshot del rendimiento de HOY para todos los operadores
+    function guardarSnapshotRendimiento() {
+      const hoy = localDateStr();
+      const snaps = JSON.parse(localStorage.getItem(RENDIMIENTO_SNAP_KEY) || '{}');
+
+      // Solo guardar una vez por día-jornada (no sobreescribir si ya existe y tiene datos)
+      const jornadas = ['Mañana', 'Tarde', 'Noche'];
+      let hayCambios = false;
+
+      jornadas.forEach(jornada => {
+        const key = hoy + '_' + jornada;
+        const ops = operatorsData.filter(o => (o.turno || '') === jornada && o.group !== 'SP' && o.group !== 'N/A');
+        const data = {};
+        ops.forEach(op => {
+          const cortes = getCortesOp(op.name).filter(c => c.fecha === hoy && (c.jornada || '') === jornada);
+          const pts = cortes.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+          if (pts > 0) { data[op.name] = pts; hayCambios = true; }
+        });
+        if (Object.keys(data).length > 0) snaps[key] = { fecha: hoy, jornada, data, ts: Date.now() };
+      });
+
+      // Limpiar snapshots de más de 30 días
+      const cutoff = Date.now() - 30 * 86400000;
+      Object.keys(snaps).forEach(k => { if ((snaps[k].ts || 0) < cutoff) delete snaps[k]; });
+
+      if (hayCambios) localStorage.setItem(RENDIMIENTO_SNAP_KEY, JSON.stringify(snaps));
+    }
+
+    function getSnapshotDia(fecha, jornada) {
+      const snaps = JSON.parse(localStorage.getItem(RENDIMIENTO_SNAP_KEY) || '{}');
+      return snaps[fecha + '_' + jornada]?.data || {};
+    }
+
+    function renderHistorialRendimiento() {
+      const cont = document.getElementById('alerta-historial-body');
+      if (!cont) return;
+      const snaps = JSON.parse(localStorage.getItem(RENDIMIENTO_SNAP_KEY) || '{}');
+      if (!Object.keys(snaps).length) {
+        cont.innerHTML = '<div style="color:#475569;font-size:.75rem;text-align:center;padding:12px;">Sin historial aún. Se genera automáticamente cada día.</div>';
+        return;
+      }
+      // Agrupar por fecha
+      const byFecha = {};
+      Object.values(snaps).forEach(s => {
+        if (!byFecha[s.fecha]) byFecha[s.fecha] = [];
+        byFecha[s.fecha].push(s);
+      });
+      const fechas = Object.keys(byFecha).sort().reverse().slice(0, 7);
+      const jIcons = { 'Mañana': '☀️', 'Tarde': '🌆', 'Noche': '🌙' };
+      cont.innerHTML = fechas.map(f => {
+        const dia = byFecha[f];
+        const rows = dia.map(snap => {
+          const tops = Object.entries(snap.data).sort((a,b)=>b[1]-a[1]).slice(0,3);
+          return `<div style="margin-bottom:4px;">
+            <span style="font-size:.6rem;color:#5eead4;font-weight:700;">${jIcons[snap.jornada]||''} ${snap.jornada}</span>: 
+            ${tops.map(([n,p])=>`<span style="font-size:.65rem;color:#e2e8f0;">${n.split(' ')[0]} <span style="color:#34d399;">${p.toFixed(0)}pts</span></span>`).join(' · ')}
+          </div>`;
+        }).join('');
+        return `<div style="padding:8px;border-radius:8px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);margin-bottom:6px;">
+          <div style="font-size:.62rem;font-weight:700;color:#94a3b8;margin-bottom:5px;">${f}</div>
+          ${rows}
+        </div>`;
+      }).join('');
+    }
 
     function setAlertaJornada(j) {
       alertasJornada = j;
@@ -8473,111 +8540,157 @@
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
 
-      // Filtrar operadores: si jornada seleccionada → solo los de ese turno asignado
-      const ops = operatorsData.filter(o => {
-        if (o.group === 'SP' || o.group === 'N/A') return false;
-        if (alertasJornada) return (o.turno || '') === alertasJornada;
-        return true;
+      // Guardar snapshot del día actual para historial
+      guardarSnapshotRendimiento();
+
+      const hoy = localDateStr();
+      const ayer = localDateStr(new Date(Date.now() - 86400000));
+      const periodoLabel = { dia: 'Hoy vs Ayer', semana: 'Esta semana vs anterior', mes: 'Este mes vs anterior' }[alertasPeriodo];
+
+      // Jornadas a mostrar
+      const jornadasMostrar = alertasJornada ? [alertasJornada] : ['Mañana', 'Tarde', 'Noche'];
+      const jIcons = { 'Mañana': '☀️', 'Tarde': '🌆', 'Noche': '🌙' };
+
+      // Para el período 'dia': comparar snapshot de hoy vs ayer
+      // Para semana/mes: usar agregarCortesPorPeriodo
+      let secciones = [];
+
+      jornadasMostrar.forEach(jornada => {
+        const ops = operatorsData.filter(o => {
+          if (o.group === 'SP' || o.group === 'N/A') return false;
+          return (o.turno || '') === jornada;
+        });
+        if (!ops.length) return;
+
+        const alertData = ops.map(op => {
+          let current = 0, previous = 0;
+          if (alertasPeriodo === 'dia') {
+            // Usar cortes locales de hoy y snapshot de ayer
+            const cortesHoy = getCortesOp(op.name).filter(c => c.fecha === hoy && (c.jornada||'') === jornada);
+            current = cortesHoy.reduce((s,c)=>s+(Number(c.puntos)||0),0);
+            const snapAyer = getSnapshotDia(ayer, jornada);
+            previous = snapAyer[op.name] || 0;
+            // Fallback: si no hay snapshot, buscar en cortes locales
+            if (!previous) {
+              const cortesAyer = getCortesOp(op.name).filter(c => c.fecha === ayer && (c.jornada||'') === jornada);
+              previous = cortesAyer.reduce((s,c)=>s+(Number(c.puntos)||0),0);
+            }
+          } else {
+            const res = agregarCortesPorPeriodo(op.name, alertasPeriodo, jornada);
+            current = res.current; previous = res.previous;
+          }
+
+          let pct = 0, tipo = 'zero', pctLabel = '—';
+          if (previous > 0 && current > 0) {
+            pct = Math.round(((current - previous) / previous) * 100);
+            pctLabel = (pct > 0 ? '+' : '') + pct + '%';
+            tipo = pct <= -20 ? 'down' : pct < 0 ? 'warn' : 'up';
+          } else if (current > 0 && previous === 0) {
+            tipo = 'new'; pct = null; pctLabel = 'Activo';
+          } else if (current === 0 && previous > 0) {
+            tipo = 'down'; pct = -100; pctLabel = 'Sin datos';
+          }
+          return { op, current, previous, pct, pctLabel, tipo };
+        }).filter(d => d.tipo !== 'zero' || d.current > 0);
+
+        if (alertData.length) secciones.push({ jornada, alertData });
       });
-      const periodoLabel = { dia: 'Hoy vs Prom. 7 días', semana: 'Esta semana vs anterior', mes: 'Este mes vs anterior' }[alertasPeriodo];
 
-      // Build alert data for each operator
-      // Pasar jornada para que los puntos también se filtren por turno
-      const alertData = ops.map(op => {
-        const { current, previous } = agregarCortesPorPeriodo(op.name, alertasPeriodo, alertasJornada);
-        let pct = 0, tipo = 'zero', pctLabel = '—';
-        if (previous > 0 && current > 0) {
-          pct = Math.round(((current - previous) / previous) * 100);
-          pctLabel = (pct > 0 ? '+' : '') + pct + '%';
-          tipo = pct <= -20 ? 'down' : pct < 0 ? 'warn' : 'up';
-        } else if (current > 0 && previous === 0) {
-          // Sin dato anterior — no es +100%, es simplemente "sin comparación"
-          tipo = 'up'; pct = null; pctLabel = 'Nuevo';
-        } else if (current === 0 && previous > 0) {
-          tipo = 'down'; pct = -100; pctLabel = '—';
-        }
-        return { op, current, previous, pct, pctLabel, tipo };
-      }).filter(d => d.tipo !== 'zero' || d.current > 0);
+      const totalOps = secciones.reduce((s,sec)=>s+sec.alertData.length,0);
+      const downCount = secciones.reduce((s,sec)=>s+sec.alertData.filter(d=>d.tipo==='down').length,0);
+      const warnCount = secciones.reduce((s,sec)=>s+sec.alertData.filter(d=>d.tipo==='warn').length,0);
+      const upCount   = secciones.reduce((s,sec)=>s+sec.alertData.filter(d=>d.tipo==='up'||d.tipo==='new').length,0);
 
-      if (!alertData.length) {
-        wrap.innerHTML = `
-      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;">
-        <div class="alertas-header">
-          <div>
-            <div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">⚡ Alertas de Rendimiento</div>
-            
-          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">
-            <button id="alerta-j-todos"  class="rk-turno-pill ${alertasJornada === '' ? 'active' : ''}"      onclick="setAlertaJornada('')">👥 Todos</button>
-            <button id="alerta-j-manana" class="rk-turno-pill ${alertasJornada === 'Mañana' ? 'active' : ''}" onclick="setAlertaJornada('Mañana')">☀️ Mañana</button>
-            <button id="alerta-j-tarde"  class="rk-turno-pill ${alertasJornada === 'Tarde' ? 'active' : ''}"  onclick="setAlertaJornada('Tarde')">🌆 Tarde</button>
-            <button id="alerta-j-noche"  class="rk-turno-pill ${alertasJornada === 'Noche' ? 'active' : ''}"  onclick="setAlertaJornada('Noche')">🌙 Noche</button>
-          </div>
-          </div>
-          <div class="alertas-tabs">
-            <button class="alerta-tab ${alertasPeriodo === 'dia' ? 'active' : ''}"    data-p="dia"    onclick="setAlertaTab('dia')">Día</button>
-            <button class="alerta-tab ${alertasPeriodo === 'semana' ? 'active' : ''}" data-p="semana" onclick="setAlertaTab('semana')">Semana</button>
-            <button class="alerta-tab ${alertasPeriodo === 'mes' ? 'active' : ''}"    data-p="mes"    onclick="setAlertaTab('mes')">Mes</button>
-          </div>
-        </div>
-        <div class="alertas-empty">📭 Sin datos de cortes para este período aún.<br><span style="font-size:.7rem;">Registra cortes para ver el rendimiento.</span></div>
-      </div>`;
-        return;
-      }
-
-      // Sort: down first, then warn, then up
-      const order = { down: 0, warn: 1, up: 2, zero: 3 };
-      alertData.sort((a, b) => order[a.tipo] - order[b.tipo] || a.pct - b.pct);
-
-      const icons = { down: '🔴', warn: '🟡', up: '🟢', zero: '⚪' };
-      const downCount = alertData.filter(d => d.tipo === 'down').length;
-      const warnCount = alertData.filter(d => d.tipo === 'warn').length;
-      const upCount = alertData.filter(d => d.tipo === 'up').length;
-
-      const cards = alertData.map(d => `
-    <div class="alerta-card ${d.tipo}">
-      <div class="alerta-icon">${icons[d.tipo]}</div>
-      <div class="alerta-body">
-        <div class="alerta-name">${d.op.name.split(' ').slice(0, 2).join(' ')}</div>
-        <div class="alerta-desc">
-          Actual: <strong>${d.current.toFixed(1)} pts</strong> · Anterior: ${d.previous.toFixed(1)} pts
-        </div>
-        <div class="alerta-desc" style="margin-top:2px;">
-          $${Math.round(d.current * 1400).toLocaleString('es-CO')} COP
-        </div>
-      </div>
-      <div class="alerta-pts ${d.tipo}">${d.pctLabel}</div>
-    </div>`).join('');
-
-      wrap.innerHTML = `
-    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;">
-      <div class="alertas-header" style="flex-wrap:wrap;gap:8px;">
+      // Botones de jornada y período (comunes en ambos estados)
+      const headerControls = `
         <div style="flex:1;min-width:200px;">
           <div style="font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">⚡ Alertas de Rendimiento</div>
-          <div style="font-size:.65rem;color:#334155;margin-top:3px;">
-            ${periodoLabel} · 
-            <span style="color:${alertasJornada ? '#5eead4' : '#64748b'};font-weight:${alertasJornada ? '700' : '400'};">
-              ${alertasJornada || 'Todos los turnos'}
-            </span> ·
-            <span style="color:#f87171;">🔴 ${downCount} bajando</span> ·
-            <span style="color:#fbbf24;">🟡 ${warnCount} alerta</span> ·
+          <div style="font-size:.62rem;color:#334155;margin-top:2px;">
+            ${periodoLabel} &nbsp;·&nbsp;
+            <span style="color:#f87171;">🔴 ${downCount} bajando</span> &nbsp;·&nbsp;
+            <span style="color:#fbbf24;">🟡 ${warnCount} alerta</span> &nbsp;·&nbsp;
             <span style="color:#34d399;">🟢 ${upCount} subiendo</span>
           </div>
           <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">
-            <button id="alerta-j-todos"  class="rk-turno-pill ${alertasJornada === '' ? 'active' : ''}"       onclick="setAlertaJornada('')">👥 Todos</button>
-            <button id="alerta-j-manana" class="rk-turno-pill ${alertasJornada === 'Mañana' ? 'active' : ''}" onclick="setAlertaJornada('Mañana')">☀️ Mañana</button>
-            <button id="alerta-j-tarde"  class="rk-turno-pill ${alertasJornada === 'Tarde' ? 'active' : ''}"  onclick="setAlertaJornada('Tarde')">🌆 Tarde</button>
-            <button id="alerta-j-noche"  class="rk-turno-pill ${alertasJornada === 'Noche' ? 'active' : ''}"  onclick="setAlertaJornada('Noche')">🌙 Noche</button>
+            <button class="rk-turno-pill ${alertasJornada===''?'active':''}"       onclick="setAlertaJornada('')">👥 Todos</button>
+            <button class="rk-turno-pill ${alertasJornada==='Mañana'?'active':''}" onclick="setAlertaJornada('Mañana')">☀️ Mañana</button>
+            <button class="rk-turno-pill ${alertasJornada==='Tarde'?'active':''}"  onclick="setAlertaJornada('Tarde')">🌆 Tarde</button>
+            <button class="rk-turno-pill ${alertasJornada==='Noche'?'active':''}"  onclick="setAlertaJornada('Noche')">🌙 Noche</button>
           </div>
         </div>
-        <div class="alertas-tabs">
-          <button class="alerta-tab ${alertasPeriodo === 'dia' ? 'active' : ''}"    data-p="dia"    onclick="setAlertaTab('dia')">Día</button>
-          <button class="alerta-tab ${alertasPeriodo === 'semana' ? 'active' : ''}" data-p="semana" onclick="setAlertaTab('semana')">Semana</button>
-          <button class="alerta-tab ${alertasPeriodo === 'mes' ? 'active' : ''}"    data-p="mes"    onclick="setAlertaTab('mes')">Mes</button>
-        </div>
-      </div>
-      <div class="alertas-grid">${cards}</div>
-    </div>`;
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <div class="alertas-tabs">
+            <button class="alerta-tab ${alertasPeriodo==='dia'?'active':''}"    data-p="dia"    onclick="setAlertaTab('dia')">Día</button>
+            <button class="alerta-tab ${alertasPeriodo==='semana'?'active':''}" data-p="semana" onclick="setAlertaTab('semana')">Semana</button>
+            <button class="alerta-tab ${alertasPeriodo==='mes'?'active':''}"    data-p="mes"    onclick="setAlertaTab('mes')">Mes</button>
+          </div>
+          <button onclick="_alertasHistorialVisible=!_alertasHistorialVisible; renderAlertas();"
+            style="font-size:.62rem;padding:4px 10px;border-radius:8px;cursor:pointer;
+                   border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#94a3b8;
+                   transition:.2s;">
+            ${_alertasHistorialVisible?'▲ Ocultar':'📅 Historial'}
+          </button>
+        </div>`;
+
+      if (!totalOps) {
+        wrap.innerHTML = `
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;">
+          <div class="alertas-header" style="flex-wrap:wrap;gap:8px;">${headerControls}</div>
+          <div class="alertas-empty">📭 Sin datos de cortes para este período aún.<br><span style="font-size:.7rem;">Registra cortes para ver el rendimiento por jornada.</span></div>
+          ${_alertasHistorialVisible ? `<div id="alerta-historial-body" style="margin-top:12px;"></div>` : ''}
+        </div>`;
+        if (_alertasHistorialVisible) renderHistorialRendimiento();
+        return;
+      }
+
+      const icons = { down:'🔴', warn:'🟡', up:'🟢', new:'🔵', zero:'⚪' };
+
+      // Renderizar secciones por jornada
+      const seccionesHTML = secciones.map(sec => {
+        const sorted = [...sec.alertData].sort((a,b) => {
+          const ord = { down:0, warn:1, new:2, up:3, zero:4 };
+          return (ord[a.tipo]||9)-(ord[b.tipo]||9) || (b.current-a.current);
+        });
+        const cards = sorted.map(d => `
+        <div class="alerta-card ${d.tipo}" style="border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+          <div class="alerta-icon">${icons[d.tipo]||'⚪'}</div>
+          <div class="alerta-body" style="flex:1;min-width:0;">
+            <div class="alerta-name" style="font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.op.name.split(' ').slice(0,2).join(' ')}</div>
+            <div class="alerta-desc" style="font-size:.65rem;color:#64748b;">
+              Hoy: <strong style="color:#e2e8f0;">${d.current.toFixed(1)} pts</strong>${d.previous>0?' · Ref: '+d.previous.toFixed(1)+' pts':''}
+            </div>
+          </div>
+          <div class="alerta-pts ${d.tipo}" style="font-size:.85rem;font-weight:800;flex-shrink:0;">${d.pctLabel}</div>
+        </div>`).join('');
+
+        return `
+        <div style="margin-bottom:14px;">
+          <div style="font-size:.6rem;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1.2px;
+                      border-bottom:1px solid rgba(255,255,255,.05);padding-bottom:5px;margin-bottom:6px;">
+            ${jIcons[sec.jornada]||''} ${sec.jornada} &nbsp;·&nbsp;
+            <span style="color:#f87171;">${sec.alertData.filter(d=>d.tipo==='down').length}↓</span> &nbsp;
+            <span style="color:#fbbf24;">${sec.alertData.filter(d=>d.tipo==='warn').length}⚠</span> &nbsp;
+            <span style="color:#34d399;">${sec.alertData.filter(d=>d.tipo==='up'||d.tipo==='new').length}↑</span>
+          </div>
+          ${cards}
+        </div>`;
+      }).join('');
+
+      wrap.innerHTML = `
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:18px 20px;">
+        <div class="alertas-header" style="flex-wrap:wrap;gap:8px;align-items:flex-start;">${headerControls}</div>
+        <div class="alertas-grid" style="margin-top:12px;">${seccionesHTML}</div>
+        ${_alertasHistorialVisible ? `
+        <div style="border-top:1px solid rgba(255,255,255,.06);margin-top:12px;padding-top:12px;">
+          <div style="font-size:.62rem;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">📅 Historial últimos 7 días</div>
+          <div id="alerta-historial-body"></div>
+        </div>` : ''}
+      </div>`;
+      if (_alertasHistorialVisible) renderHistorialRendimiento();
     }
+
+
+
 
 
     function exportarDatos() {

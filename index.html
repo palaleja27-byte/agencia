@@ -10344,6 +10344,51 @@
     // ══════════════════════════════════════════════════════════════
     // GESTIÓN DE PERFILES DESDE ASISTENCIA — por nombre de operador
     // ══════════════════════════════════════════════════════════════
+    // --- GESTIÓN DE PERFILES MAESTROS (v8.6.27) ---
+    window.renderAsiProfileForm = function(safeId, opName) {
+      const allMasterPerfs = Object.values(DP_PERFILES_MAP).flat();
+      const options = allMasterPerfs.map(p => `<option value="${p.id}">${p.modelo} (${p.id})</option>`).join('');
+      
+      return `
+        <div id="asi-add-form-${safeId}" class="add-form" style="display:none;gap:8px;flex-direction:column;margin-top:10px;padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(99,102,241,0.2);">
+          <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;font-weight:800;letter-spacing:1px;">Elegir Perfil Maestro:</div>
+          <select id="asi-master-${safeId}" onchange="handleAsiProfileSelect('${safeId}', this.value)"
+                  style="font-size:.75rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.3);background:#0d1526;color:#e2e8f0;width:100%;outline:none;">
+            <option value="">— Seleccionar de la lista —</option>
+            ${options}
+          </select>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <input id="asi-nid-${safeId}"  type="text" placeholder="ID"
+              style="font-size:.75rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.2);background:#0d1526;color:#e2e8f0;flex:1;outline:none;"/>
+            <input id="asi-nmod-${safeId}" type="text" placeholder="Modelo"
+              style="font-size:.75rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.2);background:#0d1526;color:#e2e8f0;flex:2;outline:none;"/>
+          </div>
+          <select id="asi-tipo-${safeId}" onchange="asiPerfilToggleCubre('${opName}')"
+            style="font-size:.7rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.3);background:#0d1526;color:#e2e8f0;width:100%;">
+            <option value="propio">🟢 Perfil Propio</option>
+            <option value="cobertura">🔴 Cubriendo otro grupo</option>
+          </select>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button onclick="asiPerfilAdd('${opName}')"
+              style="flex:1;padding:10px;font-size:.75rem;font-weight:800;border-radius:10px;cursor:pointer;border:none;background:linear-gradient(135deg,#34d399,#10b981);color:#0d1526;">✓ ASIGNAR PERFIL</button>
+            <button onclick="asiPerfilToggleForm('${opName}')"
+              style="padding:10px 15px;font-size:.75rem;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#64748b;">✕</button>
+          </div>
+        </div>`;
+    };
+
+    window.handleAsiProfileSelect = function(safeId, val) {
+      if(!val) return;
+      const allMasterPerfs = Object.values(DP_PERFILES_MAP).flat();
+      const p = allMasterPerfs.find(x => x.id === val);
+      if(p) {
+        const idInp = document.getElementById('asi-nid-' + safeId);
+        const modInp = document.getElementById('asi-nmod-' + safeId);
+        if(idInp) idInp.value = p.id;
+        if(modInp) modInp.value = p.modelo;
+      }
+    };
+
     window.asiPerfilToggleForm = function (opName) {
       const safeId = opName.replace(/[^a-zA-Z0-9]/g, '_');
       const form = document.getElementById('asi-add-form-' + safeId);
@@ -10417,6 +10462,9 @@
       }
       // ──────────────────────────────────────────────────────────
       asiRender();
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
+        renderVistaOperador(currentOpName);
+      }
     };
 
     window.asiPerfilRemove = function (opName, pIdx) {
@@ -11521,13 +11569,38 @@
       const _diasMes  = Math.max(1, Math.round((_msHasta - _msDesde) / 86400000) + 1); // dias desde el 1 hasta hoy
       const _promDia  = pCurr > 0 ? (pCurr / _diasMes).toFixed(1) : '—';
 
+      // --- CÁLCULO COP PREMIUM (v8.6.27) ---
+      const _metaOp = op.meta || 100;
+      const _lograda = _ptsDia >= _metaOp;
+      const _valBase = _ptsDia * 1400;
+      const _valMeta = _ptsDia * 1500;
+      const _valActual = _lograda ? _valMeta : _valBase;
+      
+      const _fmtCOP = (v) => new Intl.NumberFormat('es-CO', { 
+        style: 'currency', currency: 'COP', maximumFractionDigits: 0 
+      }).format(v);
+
+      const _copSinMetaF = _fmtCOP(_valBase);
+      const _copConMetaF = _fmtCOP(_valMeta);
+      const _copRealF    = _fmtCOP(_valActual);
+
       document.getElementById('op-dash-metrics').innerHTML = `
-    <div class="op-dash-metric" style="grid-column: span 2; background: rgba(94, 234, 212, 0.04); border: 1px solid rgba(94, 234, 212, 0.1); padding: 18px 0;">
+    <div class="op-dash-metric" style="grid-column: span 2; background: rgba(94, 234, 212, 0.04); border: 1px solid rgba(94, 234, 212, 0.1); padding: 18px 12px; position:relative; overflow:hidden;">
+      <div style="position:absolute; top:8px; right:12px; font-size:0.5rem; color:#475569; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Meta: ${_metaOp} pts</div>
       <div class="val" style="font-size: 2.2rem; color: #5eead4; line-height:1; margin-bottom:4px;">${_ptsDia.toFixed(1)}</div>
       <div class="lbl" style="font-size: 0.75rem; letter-spacing: 1.5px; font-weight:800;">⚡ PUNTOS HOY</div>
-      <div style="font-size:0.55rem; color:#475569; margin-top:2px;">Corte: ${_hoyLabel}</div>
+      <div style="margin-top:10px; padding:8px; background:rgba(0,0,0,0.2); border-radius:10px;">
+         <div style="font-size: 1.1rem; font-weight:900; color:${_lograda ? '#34d399' : '#94a3b8'}; transition:0.3s;">${_copRealF}</div>
+         <div style="font-size: 0.55rem; color:#64748b; margin-top:2px;">
+           ${_lograda ? '🏆 ¡Meta cumplida! (x$1500)' : `Faltan ${(_metaOp - _ptsDia).toFixed(1)} pts para x$1500`}
+         </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:8px; justify-content:center; opacity:0.6;">
+         <div style="font-size:0.5rem; color:#94a3b8;">Base ($1400): <span style="color:#e2e8f0;">${_copSinMetaF}</span></div>
+         <div style="font-size:0.5rem; color:#94a3b8;">Meta ($1500): <span style="color:#e2e8f0;">${_copConMetaF}</span></div>
+      </div>
     </div>
-    <div class="op-dash-metric" style="grid-column: span 2; padding: 18px 0; background: rgba(167, 139, 250, 0.02);">
+    <div class="op-dash-metric" style="grid-column: span 2; padding: 18px 0; background: rgba(167, 139, 250, 0.02); display:flex; flex-direction:column; justify-content:center;">
       <div class="val" style="color:#a78bfa; font-size: 2.2rem; line-height:1; margin-bottom:4px;" id="op-dash-prom-val">${_promDia}</div>
       <div class="lbl" style="font-size: 0.75rem; letter-spacing: 1.5px; font-weight:800;">📅 PROM. DIARIO</div>
       <div style="font-size:0.55rem; color:#475569; margin-top:2px;">Proyectado mes actual</div>
@@ -11588,15 +11661,28 @@
 
       // Profiles
       const profiles = op.profiles || [];
-      document.getElementById('op-profiles-list').innerHTML = profiles.length
+      const safeId = name.replace(/[^a-zA-Z0-9]/g, '_');
+      const profilesListHTML = profiles.length
         ? profiles.map(p => {
           const isCov = p.tipo === 'cobertura';
-          return `<div class="op-profile-item">
-          ${isCov ? '🔴' : '🟢'} ID: ${p.id} — ${p.model}
-          ${isCov ? `<span style="color:#f87171;font-size:.75rem;margin-left:auto;">Cubriendo: ${p.cubreA}</span>` : ''}
-        </div>`;
+          return `<div class="op-profile-item" style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:12px; margin-bottom:6px;">
+            <div style="font-size:1.2rem;">${isCov ? '🔴' : '🟢'}</div>
+            <div style="flex:1;">
+              <div style="font-size:0.85rem; font-weight:700; color:#e2e8f0;">${p.model}</div>
+              <div style="font-size:0.65rem; color:#64748b;">ID: ${p.id} ${isCov ? `· Cubriendo: ${p.cubreA}` : ''}</div>
+            </div>
+          </div>`;
         }).join('')
-        : '<div style="color:#475569;font-size:.82rem;">Sin perfiles asignados.</div>';
+        : '<div style="color:#475569;font-size:.82rem;padding:20px;text-align:center;border:1px dashed rgba(255,255,255,0.05);border-radius:12px;">Sin perfiles asignados.</div>';
+
+      document.getElementById('op-profiles-list').innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="font-size:0.75rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">🗂️ Perfiles (${profiles.length})</div>
+          <button class="btn-neumorphic" onclick="asiPerfilToggleForm('${name.replace(/'/g, "\\'")}')" style="padding:6px 12px; font-size:0.65rem;">+ Agregar</button>
+        </div>
+        ${profilesListHTML}
+        ${renderAsiProfileForm(safeId, name.replace(/'/g, "\\'"))}
+      `;
 
       // Consejos del monitor para este operador
       const detKey = 'rr_det_consejos_' + op.name.replace(/\s+/g, '_').toLowerCase();
@@ -14018,34 +14104,7 @@
               onclick="asiPerfilToggleForm('${snq}')">+ Agregar</button>
           </div>
           <div id="asi-perfiles-list-${safeId}">${listItems}</div>
-          <div id="asi-add-form-${safeId}" class="add-form" style="display:none;gap:6px;flex-direction:column;margin-top:6px;">
-            <input id="asi-nid-${safeId}"  type="text" placeholder="ID del perfil"
-              style="font-size:.7rem;padding:5px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);
-                     background:#0d1526;color:#e2e8f0;width:100%;box-sizing:border-box;"/>
-            <input id="asi-nmod-${safeId}" type="text" placeholder="Nombre del modelo"
-              style="font-size:.7rem;padding:5px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);
-                     background:#0d1526;color:#e2e8f0;width:100%;box-sizing:border-box;"/>
-            <select id="asi-tipo-${safeId}" onchange="asiPerfilToggleCubre('${snq}')"
-              style="font-size:.7rem;padding:5px 8px;border-radius:6px;border:1px solid rgba(99,102,241,.3);
-                     background:#0d1526;color:#e2e8f0;width:100%;box-sizing:border-box;">
-              <option value="propio">🟢 Perfil Propio</option>
-              <option value="cobertura">🔴 Cubriendo otro grupo</option>
-            </select>
-            <select id="asi-cubre-${safeId}" style="display:none;font-size:.7rem;padding:5px 8px;border-radius:6px;
-                     border:1px solid rgba(248,113,113,.3);background:#0d1526;color:#f87171;
-                     width:100%;box-sizing:border-box;">
-              <option value="">— ¿A quién cubre? —</option>
-              ${otherOps}
-            </select>
-            <div style="display:flex;gap:6px;">
-              <button onclick="asiPerfilAdd('${snq}')"
-                style="flex:1;padding:5px 10px;font-size:.7rem;font-weight:700;border-radius:6px;cursor:pointer;
-                       border:none;background:#34d399;color:#0d1526;">✓ Guardar</button>
-              <button onclick="asiPerfilToggleForm('${snq}')"
-                style="padding:5px 10px;font-size:.7rem;font-weight:700;border-radius:6px;cursor:pointer;
-                       border:1px solid rgba(255,255,255,.1);background:transparent;color:#64748b;">✕</button>
-            </div>
-          </div>
+          ${renderAsiProfileForm(safeId, snq)}
         </div>`;
       }
 

@@ -11640,12 +11640,21 @@
       const _diasMes  = Math.max(1, Math.round((_msHasta - _msDesde) / 86400000) + 1);
       const _promDia  = pCurr > 0 ? (pCurr / _diasMes).toFixed(1) : '—';
 
-      // --- CÁLCULO COP PREMIUM (v8.6.28) ---
-      // Sincronizar meta con Meta Grupal del día (Panel Admin)
-      const _metaGrupalDia = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 0;
-      const _metaOp = _metaGrupalDia > 0 ? _metaGrupalDia : (op.meta || 100);
+      // --- CÁLCULO COP PREMIUM (v8.6.29) ---
+      // Prioridad de Meta Grupal: Hoy > Semana > Mes
+      let _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 0;
+      let _pG = 'dia';
+      if (_metaG <= 0) { _metaG = getMetaValue('grupo', op.group, 'sem'); _pG = 'sem'; }
+      if (_metaG <= 0) { _metaG = getMetaValue('grupo', op.group, 'mes'); _pG = 'mes'; }
       
-      const _lograda = _ptsDia >= _metaOp;
+      const _metaOp = _metaG > 0 ? _metaG : (op.meta || 100);
+      const _labelMeta = _metaG > 0 ? `GRUPO ${op.group} (${_pG.toUpperCase()})` : `INDIVIDUAL`;
+      
+      // Puntos del grupo para el periodo detectado
+      const _grpOps = operatorsData.filter(o => o.group === op.group);
+      const _grpPts = _grpOps.reduce((s, o) => s + getPuntosPeriodo(o.name, _pG), 0);
+      
+      const _lograda = _metaG > 0 ? (_grpPts >= _metaG) : (_ptsDia >= _metaOp);
       const _valBase = _ptsDia * 1400;
       const _valMeta = _ptsDia * 1500;
       const _valActual = _lograda ? _valMeta : _valBase;
@@ -11658,15 +11667,20 @@
       const _copConMetaF = _fmtCOP(_valMeta);
       const _copRealF    = _fmtCOP(_valActual);
 
+      const _pctG = _metaOp > 0 ? Math.min(100, (_grpPts / _metaOp) * 100).toFixed(1) : 0;
+
       document.getElementById('op-dash-metrics').innerHTML = `
     <div class="op-dash-metric" style="grid-column: span 2; background: rgba(94, 234, 212, 0.04); border: 1px solid rgba(94, 234, 212, 0.1); padding: 18px 12px; position:relative; overflow:hidden;">
-      <div style="position:absolute; top:8px; right:12px; font-size:0.5rem; color:#475569; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Meta: ${_metaOp} pts</div>
+      <div style="position:absolute; top:8px; right:12px; font-size:0.5rem; color:#475569; font-weight:800; text-transform:uppercase; letter-spacing:1px; text-align:right;">
+        META ${_labelMeta}: ${_metaOp} pts<br>
+        PROGRESO: ${_pctG}%
+      </div>
       <div class="val" style="font-size: 2.2rem; color: #5eead4; line-height:1; margin-bottom:4px;">${_ptsDia.toFixed(1)}</div>
       <div class="lbl" style="font-size: 0.75rem; letter-spacing: 1.5px; font-weight:800;">⚡ PUNTOS HOY</div>
       <div style="margin-top:10px; padding:8px; background:rgba(0,0,0,0.2); border-radius:10px;">
          <div style="font-size: 1.1rem; font-weight:900; color:${_lograda ? '#34d399' : '#94a3b8'}; transition:0.3s;">${_copRealF}</div>
          <div style="font-size: 0.55rem; color:#64748b; margin-top:2px;">
-           ${_lograda ? '🏆 ¡Meta cumplida! (x$1500)' : `Faltan ${(_metaOp - _ptsDia).toFixed(1)} pts para x$1500`}
+           ${_lograda ? '🏆 ¡Meta Grupal cumplida! (x$1500)' : `Faltan ${(_metaOp - _grpPts).toFixed(1)} pts grupales para x$1500`}
          </div>
       </div>
       <div style="display:flex; gap:10px; margin-top:8px; justify-content:center; opacity:0.6;">

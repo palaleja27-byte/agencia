@@ -605,14 +605,14 @@
       background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8));
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 16px;
-      padding: 14px 20px;
+      border-radius: 20px;
+      padding: 0;
       display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 16px;
+      flex-direction: column;
       margin-bottom: 0;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
     }
 
     .op-section {
@@ -704,11 +704,13 @@
       background: linear-gradient(135deg, #0f1a35, #111827);
       border: 1px solid rgba(94, 234, 212, .2);
       border-radius: 20px;
-      padding: 28px 24px;
+      padding: 0;
       text-align: center;
       margin-bottom: 20px;
       position: relative;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     .op-dash-hero::before {
@@ -2928,12 +2930,12 @@
     }
 
     .rk-card-name {
-      font-size: .8rem;
-      font-weight: 700;
+      font-size: .88rem;
+      font-weight: 800;
       color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.2;
     }
 
     .rk-card-sub {
@@ -2948,6 +2950,80 @@
 
     .rk-card-badge {
       padding: 2px 7px;
+    }
+
+    /* Op banner in dashboard */
+    .op-banner-wrap {
+      width: 100%;
+      height: 110px;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: 0.3s;
+    }
+    .op-banner-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.6;
+      transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .op-banner-wrap:hover .op-banner-img {
+      opacity: 0.85;
+      transform: scale(1.05);
+    }
+    .op-banner-hint {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+      color: #94a3b8;
+      font-size: 0.55rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      opacity: 0;
+      transform: translateY(-5px);
+      transition: 0.3s;
+      z-index: 5;
+    }
+    .op-banner-wrap:hover .op-banner-hint {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .op-dash-av-clickable {
+      cursor: pointer;
+      transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .op-dash-av-clickable:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 25px rgba(94,234,212,0.5) !important;
+    }
+
+    @media (max-width: 500px) {
+      .rk-card-head {
+        flex-wrap: wrap;
+        justify-content: center;
+        text-align: center;
+      }
+      .rk-card-info {
+        order: 3;
+        width: 100%;
+        margin-top: 5px;
+      }
+      .rk-card-name {
+        font-size: 0.9rem;
+      }
+      .rk-card-sub {
+        justify-content: center;
+      }
+    }
       background: rgba(94, 234, 212, .1);
       color: var(--accent);
       border-radius: 5px;
@@ -6153,6 +6229,30 @@
       document.body.appendChild(tmp);
       tmp.click();
       setTimeout(() => document.body.removeChild(tmp), 10000);
+    }
+
+    function bannerKey(name) { return 'rr_op_banner_' + name.replace(/\s+/g, '_').toUpperCase(); }
+    function getBanner(name) { return localStorage.getItem(bannerKey(name)) || null; }
+    function saveBanner(name, data) { localStorage.setItem(bannerKey(name), data); }
+
+    function triggerBannerUpload(name) {
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'image/*';
+      inp.onchange = (e) => handleBannerUpload(e, name);
+      inp.click();
+    }
+
+    function handleBannerUpload(event, name) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        saveBanner(name, e.target.result);
+        alert("Banner actualizado correctamente 🖼️");
+        renderVistaOperador();
+      };
+      reader.readAsDataURL(file);
     }
 
     function handleAvatarUpload(event, name) {
@@ -11341,21 +11441,34 @@
       const saludo = hours < 12 ? '¡Buenos días!' : hours < 18 ? '¡Buenas tardes!' : '¡Buenas noches!';
       const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       
+      const bn = typeof getBanner === 'function' ? getBanner(op.name) : null;
+      
       document.getElementById('op-dash-avatar-wrap').innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px; flex:1;">
-          <div style="position:relative; flex-shrink:0; width:52px; height:52px;">
-            ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border:3px solid var(--accent); border-radius:50%; box-shadow:0 0 15px rgba(94,234,212,0.3);">` 
-                 : `<div style="width:100%; height:100%; font-size:1.5rem; background:rgba(255,255,255,0.05); border:3px solid rgba(255,255,255,0.1); border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>`}
-            <div style="position:absolute; bottom:1px; right:1px; width:12px; height:12px; background:#34d399; border:2px solid #0f1a35; border-radius:50%;" title="En línea"></div>
+        <div class="op-banner-wrap" onclick="triggerBannerUpload('${safeName}')">
+          ${bn ? `<img src="${bn}" class="op-banner-img">` : '<div class="op-banner-img" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></div>'}
+          <div class="op-banner-hint">📸 Cambiar banner</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:18px; padding:20px 24px; position:relative; z-index:10; background:rgba(15,26,53,0.4); backdrop-filter:blur(10px); flex-wrap:wrap;">
+          <div class="op-dash-av-clickable" style="position:relative; flex-shrink:0; width:72px; height:72px; margin-top:-45px; z-index:11;" onclick="triggerAvatarUpload(null, '${safeName}')">
+            ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border:4px solid #0f1a35; border-radius:50%; box-shadow:0 8px 25px rgba(0,0,0,0.5);">` 
+                 : `<div style="width:100%; height:100%; font-size:2rem; background:#1e293b; border:4px solid #0f1a35; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 25px rgba(0,0,0,0.5);">👤</div>`}
+            <div style="position:absolute; bottom:4px; right:4px; width:16px; height:16px; background:#34d399; border:3px solid #0f1a35; border-radius:50%; box-shadow:0 0 10px rgba(52,211,153,0.5);" title="En línea"></div>
+            <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; opacity:0; transition:0.3s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
+               <span style="font-size:0.6rem; color:white; font-weight:800; text-transform:uppercase;">Cambiar</span>
+            </div>
           </div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:0.55rem; color:var(--accent); font-weight:700; text-transform:uppercase; letter-spacing:2px; opacity:0.8;">${saludo}</div>
-            <div style="font-size:1.2rem; font-weight:900; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${op.name}</div>
-            <div style="font-size:0.65rem; color:#64748b; margin-top:1px;">Grupo ${op.group} · <span style="color:#94a3b8;">${timeStr}</span></div>
+          <div style="flex:1; min-width:200px; text-align:left;">
+            <div style="font-size:0.65rem; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:2px; opacity:0.9;">${saludo}</div>
+            <div style="font-size:1.5rem; font-weight:900; color:white; line-height:1.1; word-break:break-word; margin:2px 0;">${op.name}</div>
+            <div style="font-size:0.75rem; color:#94a3b8; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+               <span style="background:rgba(94,234,212,0.1); color:var(--accent); padding:2px 8px; border-radius:6px; font-weight:700;">Grupo ${op.group}</span>
+               <span style="color:#475569;">·</span>
+               <span style="font-weight:600;">${timeStr} <small style="font-weight:400; opacity:0.6;">(Local)</small></span>
+            </div>
           </div>
-          <div style="flex-shrink:0; text-align:right;">
-            <div id="op-dash-hero-clock" style="font-size:1.4rem; font-weight:800; color:var(--accent); letter-spacing:2px; line-height:1;">${timeStr}</div>
-            <div style="font-size:0.55rem; color:#475569; text-transform:uppercase; letter-spacing:1px; margin-top:2px;">Colombia</div>
+          <div style="flex-shrink:0; text-align:right; margin-left:auto;">
+            <div id="op-dash-hero-clock" style="font-size:2rem; font-weight:900; color:var(--accent); letter-spacing:2px; line-height:1; font-family:'Bebas Neue',sans-serif;">${timeStr}</div>
+            <div style="font-size:0.6rem; color:#475569; text-transform:uppercase; letter-spacing:2px; font-weight:700;">Colombia</div>
           </div>
         </div>`;
 

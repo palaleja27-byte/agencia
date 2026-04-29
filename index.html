@@ -4154,33 +4154,79 @@
       <div class="op-ranking-pos" id="op-rank-pos">—</div>
       <div class="op-ranking-sub" id="op-rank-sub"></div>
     </div>
-    <div class="op-section">
-      <div class="op-section-title">⚡ Rendimiento en turno activo</div>
-      <div id="op-competitive-bar" style="padding:4px 0;"></div>
-    </div>
-
-    <div class="op-section">
-      <div class="op-section-title">🗂️ Tus perfiles asignados</div>
-      <div id="op-profiles-list"></div>
-    </div>
-    <div class="op-section">
-      <div class="op-section-title">💡 Consejos del monitor para ti</div>
-      <div id="op-consejos-list"></div>
-    </div>
-    <div class="op-section">
-      <div class="op-section-title">📋 Tu historial de asistencia</div>
-      <div id="op-asistencia-list"></div>
-    </div>
-
-    <!-- PORTAL DE NOTICIAS -->
-    <div class="op-section" id="op-noticias-section">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <div class="op-section-title" style="margin-bottom:0;">🌐 Noticias del mundo</div>
-        <button onclick="cargarTodasNoticias()" id="news-refresh-btn"
-          style="background:rgba(94,234,212,.1);border:1px solid rgba(94,234,212,.25);color:#5eead4;font-size:.68rem;font-weight:700;cursor:pointer;padding:5px 11px;border-radius:8px;">🔄
-          Actualizar todo</button>
+    <!-- OPENCLAW AI AGENT PANEL -->
+    <div class="op-section" id="op-openclaw-section" style="grid-column: span 2; background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05)); border: 1px solid rgba(99,102,241,0.2); border-radius: 20px; padding: 20px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:38px; height:38px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🤖</div>
+          <div>
+            <div style="font-size:0.85rem; font-weight:900; color:white; letter-spacing:1px;">AGENTE OPENCLAW</div>
+            <div id="openclaw-status-badge" style="font-size:0.55rem; color:#64748b; font-weight:700;">⚫ Sin conectar</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div id="openclaw-pulse" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+          <button onclick="ocToggleConfig()" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; font-size:0.65rem; font-weight:800; padding:5px 12px; border-radius:8px; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.3)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">⚙️ Config</button>
+          <button onclick="ocConnect()" id="openclaw-connect-btn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; font-size:0.65rem; font-weight:800; padding:5px 14px; border-radius:8px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.3); transition:0.2s;">🔗 Conectar</button>
+        </div>
       </div>
-      <div id="op-news-acordeon"></div>
+
+      <!-- Config panel (hidden by default) -->
+      <div id="openclaw-config-panel" style="display:none; background:rgba(0,0,0,0.3); border-radius:14px; padding:15px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:0.6rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">🔧 Configuración OpenClaw</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <input id="oc-api-url" type="text" placeholder="URL del agente (ej: https://...)" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <input id="oc-api-key" type="password" placeholder="API Key de OpenClaw" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <input id="oc-agent-id" type="text" placeholder="Agent ID / Workspace ID" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <button onclick="ocSaveConfig()" style="background:rgba(52,211,153,0.15); border:1px solid #34d399; color:#34d399; padding:8px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">💾 Guardar configuración</button>
+        </div>
+      </div>
+
+      <!-- Alerts feed -->
+      <div id="op-openclaw-alerts" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto; padding-right:4px;">
+        <div style="text-align:center; padding:30px 20px; color:#334155;">
+          <div style="font-size:2rem; margin-bottom:8px;">🤖</div>
+          <div style="font-size:0.75rem; font-weight:700; color:#475569;">Agente no conectado</div>
+          <div style="font-size:0.6rem; color:#334155; margin-top:4px;">Configura tu API Key de OpenClaw para recibir alertas, insights y mensajes del agente en tiempo real.</div>
+        </div>
+      </div>
+
+      <!-- Input para enviar mensajes al agente -->
+      <div style="display:flex; gap:8px; margin-top:14px; border-top:1px solid rgba(255,255,255,0.05); padding-top:14px;">
+        <input id="oc-msg-input" type="text" placeholder="Escribe al agente..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:white; padding:8px 12px; border-radius:10px; font-size:0.75rem; outline:none;" onkeydown="if(event.key==='Enter') ocSendMessage()">
+        <button onclick="ocSendMessage()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; padding:8px 14px; border-radius:10px; cursor:pointer; font-size:0.8rem;">➤</button>
+      </div>
+    </div>
+
+    <!-- CARRUSEL DE NOTICIAS INTERACTIVO -->
+    <div class="op-section" id="op-noticias-section" style="grid-column: span 2; padding:0; overflow:hidden; background:linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,27,75,0.8)); border:1px solid rgba(99,102,241,0.15); border-radius:20px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid rgba(255,255,255,0.05);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:1.2rem;">🌍</span>
+          <div>
+            <div style="font-size:0.85rem; font-weight:900; color:white; letter-spacing:1px;">TENDENCIAS &amp; VIRALES</div>
+            <div style="font-size:0.55rem; color:#64748b; font-weight:700;">Actualizado en tiempo real · Por país</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
+          <div id="news-country-tabs" style="display:flex; gap:4px; flex-wrap:wrap;">
+            <button onclick="newsFilterCountry('todos')" class="nc-tab" data-c="todos" style="font-size:0.55rem; font-weight:800; padding:4px 8px; border-radius:6px; border:1px solid rgba(94,234,212,0.3); background:rgba(94,234,212,0.15); color:#5eead4; cursor:pointer;">🌐 Todos</button>
+            <button onclick="newsFilterCountry('co')" class="nc-tab" data-c="co" style="font-size:0.55rem; font-weight:800; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:#94a3b8; cursor:pointer;">🇨🇴 CO</button>
+            <button onclick="newsFilterCountry('mx')" class="nc-tab" data-c="mx" style="font-size:0.55rem; font-weight:800; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:#94a3b8; cursor:pointer;">🇲🇽 MX</button>
+            <button onclick="newsFilterCountry('us')" class="nc-tab" data-c="us" style="font-size:0.55rem; font-weight:800; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:#94a3b8; cursor:pointer;">🇺🇸 US</button>
+            <button onclick="newsFilterCountry('es')" class="nc-tab" data-c="es" style="font-size:0.55rem; font-weight:800; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:#94a3b8; cursor:pointer;">🇪🇸 ES</button>
+          </div>
+          <button onclick="renderNewsCarousel()" style="background:rgba(94,234,212,.1);border:1px solid rgba(94,234,212,.25);color:#5eead4;font-size:.6rem;font-weight:700;cursor:pointer;padding:4px 9px;border-radius:7px;">🔄</button>
+        </div>
+      </div>
+      <!-- Carousel track -->
+      <div style="position:relative; overflow:hidden;">
+        <div id="op-news-acordeon" style="display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; -ms-overflow-style:none; padding:16px 20px 20px; gap:14px;"></div>
+        <button onclick="newsCarouselScroll(-1)" style="position:absolute; left:8px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.1); color:white; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; z-index:2; backdrop-filter:blur(4px);">‹</button>
+        <button onclick="newsCarouselScroll(1)" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.7); border:1px solid rgba(255,255,255,0.1); color:white; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; z-index:2; backdrop-filter:blur(4px);">›</button>
+      </div>
+      <!-- Trending tags -->
+      <div id="news-trending-tags" style="display:flex; gap:6px; padding:0 20px 16px; flex-wrap:wrap; border-top:1px solid rgba(255,255,255,0.04); padding-top:12px;"></div>
     </div>
     <div class="op-section" id="op-ice-section" style="grid-column: span 1;">
       <div class="op-section-title">🔥 Icebreakers TalkyTimes</div>
@@ -6831,71 +6877,211 @@
       openKeys.forEach(key => fetchNewsItem(key));
     }
 
-    function renderNewsAcordeon() {
-      const wrap = document.getElementById('op-news-acordeon');
-      if (!wrap) return;
+    // ── CARRUSEL DE NOTICIAS v2 ──────────────────────────────────────────
+    let _newsCountryFilter = 'todos';
 
-      // First source open by default if nothing is open
-      const hasOpen = NEWS_SOURCES.some(s => _newsOpen[s.key]);
-      if (!hasOpen) _newsOpen[NEWS_SOURCES[0].key] = true;
+    const NEWS_COUNTRY_MAP = {
+      co: ['América Latina', 'Colombia', 'BBC Mundo', 'Infobae', 'El Tiempo'],
+      mx: ['México', 'El Universal', 'Excélsior', 'Milenio'],
+      us: ['USA', 'CNN', 'Reuters', 'AP', 'Fox'],
+      es: ['España', 'El País', 'El Mundo', 'RTVE'],
+    };
 
-      const langColors = { ES: 'rgba(251,191,36,.15)', EN: 'rgba(99,102,241,.15)', FR: 'rgba(96,165,250,.15)', PT: 'rgba(52,211,153,.15)' };
-      const langText = { ES: '#fbbf24', EN: '#818cf8', FR: '#60a5fa', PT: '#34d399' };
+    const NEWS_IMAGES = [
+      'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&q=70',
+      'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=400&q=70',
+      'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=400&q=70',
+      'https://images.unsplash.com/photo-1478720568477-152d9b164e26?w=400&q=70',
+      'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&q=70',
+      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400&q=70',
+    ];
 
-      wrap.innerHTML = NEWS_SOURCES.map(src => {
-        const isOpen = !!_newsOpen[src.key];
-        const cached = _newsCache[src.key];
-        return `
-    <div style="border:1px solid rgba(255,255,255,.06);border-radius:12px;margin-bottom:7px;overflow:hidden;">
-      <!-- Header -->
-      <div onclick="toggleNewsAcordeon('${src.key}')"
-        style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;
-               cursor:pointer;background:rgba(255,255,255,.03);user-select:none;
-               border-bottom:${isOpen ? '1px solid rgba(255,255,255,.06)' : 'none'};"
-        onmouseover="this.style.background='rgba(255,255,255,.06)'"
-        onmouseout="this.style.background='rgba(255,255,255,.03)'">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:.9rem;">${src.flag}</span>
-          <span style="font-size:.76rem;font-weight:700;color:var(--text);">${src.label}</span>
-          <span style="font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:5px;
-                background:${langColors[src.lang]};color:${langText[src.lang]};">${src.lang}</span>
-          <span id="news-badge-${src.key}"
-            style="display:${cached ? 'inline' : 'none'};font-size:.6rem;color:#475569;
-                   background:rgba(255,255,255,.05);padding:1px 6px;border-radius:5px;">
-            ${cached ? cached.length + ' noticias' : ''}
-          </span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:.6rem;color:#475569;">${src.source}</span>
-          <span id="news-chev-${src.key}"
-            style="color:#64748b;font-size:.75rem;transition:.25s;
-                   transform:${isOpen ? 'rotate(180deg)' : ''};">▼</span>
-        </div>
-      </div>
-      <!-- Body -->
-      <div id="news-body-${src.key}" style="display:${isOpen ? 'block' : 'none'};padding:10px;">
-        ${isOpen && !cached
-            ? `<div style="padding:12px;text-align:center;color:#475569;font-size:.72rem;">⏳ Cargando ${src.source}...</div>`
-            : isOpen && cached
-              ? '' /* will be filled by fetchNewsItem */
-              : ''}
-      </div>
-    </div>`;
-      }).join('');
+    function newsFilterCountry(country) {
+      _newsCountryFilter = country;
+      document.querySelectorAll('.nc-tab').forEach(btn => {
+        const isActive = btn.dataset.c === country;
+        btn.style.background = isActive ? 'rgba(94,234,212,0.15)' : 'rgba(255,255,255,0.03)';
+        btn.style.borderColor = isActive ? 'rgba(94,234,212,0.3)' : 'rgba(255,255,255,0.08)';
+        btn.style.color = isActive ? '#5eead4' : '#94a3b8';
+      });
+      renderNewsCarousel();
+    }
 
-      // Fetch already-open ones that have no cache
-      NEWS_SOURCES.forEach(src => {
-        if (_newsOpen[src.key] && !_newsCache[src.key]) fetchNewsItem(src.key);
-        else if (_newsOpen[src.key] && _newsCache[src.key]) {
-          // Re-render cached
-          const fakeBody = document.getElementById(`news-body-${src.key}`);
-          if (fakeBody && fakeBody.innerHTML.includes('⏳')) fetchNewsItem(src.key);
+    function newsCarouselScroll(dir) {
+      const track = document.getElementById('op-news-acordeon');
+      if (track) track.scrollBy({ left: dir * 280, behavior: 'smooth' });
+    }
+
+    function renderNewsCarousel() {
+      const track = document.getElementById('op-news-acordeon');
+      const tagsEl = document.getElementById('news-trending-tags');
+      if (!track) return;
+
+      // Collect all news
+      let allNews = [];
+      Object.keys(_newsCache).forEach(k => {
+        if (_newsCache[k]) {
+          _newsCache[k].forEach(n => allNews.push({ ...n, sourceKey: k }));
         }
       });
+
+      if (allNews.length === 0) {
+        track.innerHTML = `<div style="padding:30px;text-align:center;color:#475569;font-size:0.75rem;width:100%;">
+          <div style="font-size:2rem;margin-bottom:10px;">🌍</div>
+          <div style="font-weight:700;margin-bottom:6px;">Cargando tendencias...</div>
+          <div style="font-size:0.6rem;">Actualiza para ver las noticias más recientes</div>
+        </div>`;
+        cargarTodasNoticias();
+        return;
+      }
+
+      // Filter by country
+      if (_newsCountryFilter !== 'todos') {
+        const keywords = NEWS_COUNTRY_MAP[_newsCountryFilter] || [];
+        allNews = allNews.filter(n => {
+          const src = NEWS_SOURCES.find(s => s.key === n.sourceKey);
+          return keywords.some(kw => (src?.label || '').toLowerCase().includes(kw.toLowerCase()) || (src?.source || '').toLowerCase().includes(kw.toLowerCase()));
+        });
+      }
+
+      // Shuffle and limit
+      allNews = allNews.sort(() => 0.5 - Math.random()).slice(0, 20);
+
+      // Trending tags from titles
+      const words = allNews.flatMap(n => (n.title || '').split(/\s+/).filter(w => w.length > 5)).reduce((acc, w) => { acc[w] = (acc[w] || 0) + 1; return acc; }, {});
+      const trending = Object.entries(words).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([w]) => w);
+      if (tagsEl) {
+        tagsEl.innerHTML = trending.map(tag =>
+          `<span style="font-size:0.6rem;font-weight:700;padding:3px 9px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:20px;color:#818cf8;cursor:pointer;" onclick="window.open('https://www.google.com/search?q=${encodeURIComponent(tag)}','_blank')">🔥 ${tag}</span>`
+        ).join('');
+      }
+
+      // Render cards
+      track.innerHTML = allNews.map((n, idx) => {
+        const src = NEWS_SOURCES.find(s => s.key === n.sourceKey) || { flag: '🌐', label: n.source || 'News' };
+        const img = NEWS_IMAGES[idx % NEWS_IMAGES.length];
+        const timeAgo = n.time || 'Reciente';
+        return `
+        <div style="flex:0 0 250px; scroll-snap-align:start; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:16px; overflow:hidden; cursor:pointer; transition:0.25s; display:flex; flex-direction:column;"
+             onmouseover="this.style.transform='translateY(-4px)';this.style.borderColor='rgba(99,102,241,0.3)';this.style.background='rgba(99,102,241,0.07)'"
+             onmouseout="this.style.transform='';this.style.borderColor='rgba(255,255,255,0.07)';this.style.background='rgba(255,255,255,0.03)'"
+             onclick="window.open('${n.link}','_blank')">
+          <div style="height:130px; position:relative; overflow:hidden;">
+            <img src="${img}" style="width:100%;height:100%;object-fit:cover;filter:brightness(0.6) saturate(1.2);" loading="lazy">
+            <div style="position:absolute;inset:0;background:linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.8) 100%);"></div>
+            <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);padding:2px 8px;border-radius:6px;font-size:0.55rem;font-weight:800;color:#e2e8f0;border:1px solid rgba(255,255,255,0.1);">
+              ${src.flag} ${src.label}
+            </div>
+            <div style="position:absolute;bottom:8px;right:8px;font-size:0.5rem;color:#94a3b8;">${timeAgo}</div>
+          </div>
+          <div style="padding:12px;flex:1;display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:0.78rem;font-weight:700;color:#e2e8f0;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${n.title}</div>
+            <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:0.55rem;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:0.5px;">VIRAL TREND</span>
+              <span style="font-size:0.55rem;background:rgba(52,211,153,0.1);color:#34d399;padding:2px 6px;border-radius:5px;font-weight:700;">Leer →</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
     }
+
+    function renderNewsAcordeon() { renderNewsCarousel(); }
 
     // Legacy alias so setTimeout hook still works
     function cargarNoticias() { cargarTodasNoticias(); }
+
+    // ── OPENCLAW AI AGENT ──────────────────────────────────────────────────
+    let _ocConnected = false;
+    let _ocConfig = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+
+    function ocToggleConfig() {
+      const panel = document.getElementById('openclaw-config-panel');
+      if (!panel) return;
+      const isHidden = panel.style.display === 'none';
+      panel.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) {
+        const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+        if (cfg.url) document.getElementById('oc-api-url').value = cfg.url;
+        if (cfg.key) document.getElementById('oc-api-key').value = cfg.key;
+        if (cfg.agentId) document.getElementById('oc-agent-id').value = cfg.agentId;
+      }
+    }
+
+    function ocSaveConfig() {
+      const cfg = {
+        url: document.getElementById('oc-api-url')?.value.trim(),
+        key: document.getElementById('oc-api-key')?.value.trim(),
+        agentId: document.getElementById('oc-agent-id')?.value.trim(),
+      };
+      localStorage.setItem('rr_openclaw_cfg', JSON.stringify(cfg));
+      _ocConfig = cfg;
+      document.getElementById('openclaw-config-panel').style.display = 'none';
+      _toastSync('✅ Configuración OpenClaw guardada');
+    }
+
+    function ocConnect() {
+      const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+      if (!cfg.url || !cfg.key) {
+        ocToggleConfig();
+        _toastSync('⚙️ Completa la configuración primero');
+        return;
+      }
+      _ocConnected = true;
+      const badge = document.getElementById('openclaw-status-badge');
+      const pulse = document.getElementById('openclaw-pulse');
+      const btn = document.getElementById('openclaw-connect-btn');
+      if (badge) badge.textContent = '🟢 Conectado · En vivo';
+      if (badge) badge.style.color = '#34d399';
+      if (pulse) { pulse.style.background = '#34d399'; pulse.style.animation = 'pulse 1.5s infinite'; }
+      if (btn) { btn.textContent = '🔌 Desconectar'; btn.onclick = ocDisconnect; }
+      ocAddMessage('🤖 Agente conectado. Monitoreando tu actividad...', 'bot');
+    }
+
+    function ocDisconnect() {
+      _ocConnected = false;
+      const badge = document.getElementById('openclaw-status-badge');
+      const pulse = document.getElementById('openclaw-pulse');
+      const btn = document.getElementById('openclaw-connect-btn');
+      if (badge) { badge.textContent = '⚫ Sin conectar'; badge.style.color = '#64748b'; }
+      if (pulse) { pulse.style.background = '#ef4444'; pulse.style.animation = ''; }
+      if (btn) { btn.textContent = '🔗 Conectar'; btn.onclick = ocConnect; }
+    }
+
+    function ocAddMessage(text, type) {
+      const feed = document.getElementById('op-openclaw-alerts');
+      if (!feed) return;
+      // Remove empty state placeholder
+      const placeholder = feed.querySelector('[style*="padding:30px"]');
+      if (placeholder) placeholder.remove();
+      const isBot = type === 'bot';
+      const div = document.createElement('div');
+      div.style.cssText = `padding:10px 14px; border-radius:12px; font-size:0.78rem; line-height:1.4; animation:slideInRight 0.3s ease-out; ${isBot ? 'background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.15); color:#e2e8f0;' : 'background:rgba(94,234,212,0.08); border:1px solid rgba(94,234,212,0.15); color:#a7f3d0; margin-left:20px;'}`;
+      div.innerHTML = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><span>${isBot ? '🤖' : '👤'}</span><span style="font-size:0.55rem;color:#64748b;font-weight:700;">${isBot ? 'OpenClaw Agent' : 'Tú'} · ${new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</span></div>${text}`;
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function ocSendMessage() {
+      const input = document.getElementById('oc-msg-input');
+      if (!input || !input.value.trim()) return;
+      const msg = input.value.trim();
+      input.value = '';
+      ocAddMessage(msg, 'user');
+      if (!_ocConnected) {
+        setTimeout(() => ocAddMessage('⚠️ No estoy conectado aún. Configura y conecta el agente primero.', 'bot'), 500);
+        return;
+      }
+      // Simulate agent response (replace with real API call)
+      setTimeout(() => {
+        const responses = [
+          '📊 Procesando tu solicitud...',
+          '🔍 Analizando métricas del turno actual.',
+          '💡 Sugerencia: enfócate en usuarios recurrentes con alta intención.',
+          '⚡ Detecté una oportunidad de conversión en el perfil activo.',
+        ];
+        ocAddMessage(responses[Math.floor(Math.random() * responses.length)], 'bot');
+      }, 1200);
+    }
 
 
 
@@ -11688,11 +11874,7 @@
          <div style="font-size:0.5rem; color:#94a3b8;">Meta ($1500): <span style="color:#e2e8f0;">${_copConMetaF}</span></div>
       </div>
     </div>
-    <div class="op-dash-metric" style="grid-column: span 2; padding: 18px 0; background: rgba(167, 139, 250, 0.02); display:flex; flex-direction:column; justify-content:center;">
-      <div class="val" style="color:#a78bfa; font-size: 2.2rem; line-height:1; margin-bottom:4px;" id="op-dash-prom-val">${_promDia}</div>
-      <div class="lbl" style="font-size: 0.75rem; letter-spacing: 1.5px; font-weight:800;">📅 PROM. DIARIO</div>
-      <div style="font-size:0.55rem; color:#475569; margin-top:2px;">Proyectado mes actual</div>
-    </div>`;
+    `;
 
       // Renderizar Plan de Trabajo del Operador
       if (typeof PT !== 'undefined' && PT.renderOperatorTasks) {

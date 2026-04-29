@@ -4572,9 +4572,6 @@
         <button class="btn-det-add" id="btn-det-add" onclick="detAgregarConsejo()" style="display:none">＋ Agregar
           consejo</button>
         <button class="btn-det-edit" onclick="detToggleEdit()">✏️ Editar</button>
-        <button id="btn-det-delete" class="btn-det-close"
-          style="background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3);"
-          onclick="detEliminarOperador()">🗑️ Eliminar</button>
         <button class="btn-det-close" onclick="cerrarDetalle()">✕ Cerrar</button>
       </div>
     </div>
@@ -8107,6 +8104,8 @@
       saveCortesOp(opName, cortes);
     }
 
+
+
     // Logs de entrada modal
     function abrirLogsEntrada() {
       const logs = getLogsEntrada();
@@ -8172,9 +8171,9 @@
     }
 
     // ── Delete operator ──
-    async function detEliminarOperador() {
-      if (!detOpName) return;
-      const idx = operatorsData.findIndex(o => o.name === detOpName);
+    async function eliminarOperadorTotal(name) {
+      if (!name) return;
+      const idx = operatorsData.findIndex(o => o.name === name);
       if (idx === -1) {
         alert('❌ Operador no encontrado.');
         cerrarDetalle();
@@ -8205,17 +8204,20 @@
 
       // Limpiar cortes del operador eliminado
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      delete allCortes[detOpName];
+      delete allCortes[name];
       _origSetItem(CORTE_KEY, JSON.stringify(allCortes));
 
       // Limpiar perfiles del operador eliminado
       const allPerfiles = getPerfilMetrics();
       Object.keys(allPerfiles).forEach(k => {
-        if (k.startsWith(detOpName + '::')) delete allPerfiles[k];
+        if (k.startsWith(name + '::')) delete allPerfiles[k];
       });
       _origSetItem(PERFIL_KEY, JSON.stringify(allPerfiles));
-      cerrarDetalle();
+
+      if (typeof detOpName !== 'undefined' && detOpName === name) cerrarDetalle();
+      
       renderRanking();
+      if (typeof asiRender === 'function') asiRender();
       if (typeof renderOperators === 'function') renderOperators();
       if (typeof renderPerfilesRanking === 'function') renderPerfilesRanking();
     }
@@ -13770,6 +13772,7 @@
       <button class="asi-estado-btn${est === 'A' ? ' sel-A' : ''}" title="Ausente"  onclick="asiSetEstado('${sn}','${role}','A')">❌</button>
       ${est === 'P' ? `<button class="asi-estado-btn" title="Terminar Turno" onclick="asiTerminarTurnoManual('${sn}','${role}')" style="margin-left:8px; filter:grayscale(0); opacity:0.8;">🛑</button>` : ''}
       ${role === 'monitor' ? `<button class="asi-estado-btn" title="Eliminar Monitor" onclick="asiDeleteMonitor('${sn}')" style="margin-left:8px; filter:grayscale(1); opacity:0.6;">🗑️</button>` : ''}
+      ${role === 'operador' ? `<button class="asi-estado-btn" title="Eliminar Operador Permanentemente" onclick="eliminarOperadorTotal('${sn}')" style="margin-left:8px; filter:grayscale(1); opacity:0.5;">🗑️</button>` : ''}
     </div>
   </div>`;
     }

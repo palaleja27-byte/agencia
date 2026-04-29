@@ -10528,73 +10528,136 @@
     // ==================== AGREGAR / QUITAR ====================
 
     // --- ROBOT MOTIVADOR CYBERPUNK (v8.6.28) ---
-    window.abrirRobotMotivador = function() {
+    window.abrirRobotMotivador = async function() {
       const opName = currentOpName;
       if (!opName) return;
-      
       const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
       if (!op) return;
-      
-      const pts = getPuntosHoy(opName);
-      const meta = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 100;
-      
-      const playlistTrends = [
-        "Techno Industrial & Cyberpunk 2077 Beats",
-        "Afrobeat & Global Dance Trends 2026",
-        "Reggaetón New Era (Bad Bunny x Feid Vibes)",
-        "Hardstyle para Enfoque Extremo",
-        "Phonk Industrial (High Tempo Focus)"
-      ];
-      const randomTrack = playlistTrends[Math.floor(Math.random() * playlistTrends.length)];
 
-      let msg = "";
-      let title = "SISTEMA OPERATIVO: ACTIVO";
-      
-      if (pts === 0) {
-        msg = `Detecto inactividad en tu sector, <b>${opName}</b>. 🦾 El éxito no llega por suerte, llega por ejecución. Ponle play a <b>${randomTrack}</b> y arranca con tu primer punto. ¡El algoritmo está listo para ti!`;
-        title = "ORDEN DE ARRANQUE";
-      } else if (pts < meta * 0.5) {
-        msg = `Buen inicio táctico. Llevamos <b>${pts.toFixed(1)} pts</b>. Estás en la fase de calentamiento. ⚡ Te sugiero <b>${randomTrack}</b> para mantener la dopamina alta. ¡Tu grupo ${op.group} cuenta con tu potencia!`;
-      } else if (pts < meta) {
-        msg = `¡Nivel crítico de productividad alcanzado! Estás en <b>${pts.toFixed(1)} pts</b>. La zona de bonus ($1500) está a solo un paso. 💰 No bajes la guardia ahora. Dale volumen a <b>${randomTrack}</b> y asegura esa meta.`;
-        title = "ZONA DE ALTO RENDIMIENTO";
-      } else {
-        msg = `¡ESTADO LEGENDARIO! Has superado la meta con <b>${pts.toFixed(1)} pts</b>. 🏆 Ya estás en modo cosecha máxima ($1500/punto). Relájate con un poco de <b>Lo-Fi Cyber</b> o sigue escalando al TOP 1 con <b>${randomTrack}</b>. ¡Eres imparable!`;
-        title = "CRÍTICO: META SUPERADA";
-      }
+      const pts = getPuntosHoy(opName);
+      const meta = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') || 100 : 100;
+      const pct = meta > 0 ? Math.min(100, (pts / meta) * 100).toFixed(0) : 0;
+      const hour = new Date().getHours();
+      const turno = hour < 14 ? 'mañana' : hour < 22 ? 'tarde' : 'noche';
+      const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+      const apiKey = cfg.key || localStorage.getItem('rr_ai_api_key') || '';
+
+      // Psicología base local
+      const psicoBase = pts === 0
+        ? { emoji:'⚡', color:'#f87171', nivel:'ARRANQUE', tip:'El primer mensaje es el más difícil. ¡Tú puedes!' }
+        : pts < meta * 0.4
+        ? { emoji:'🔥', color:'#fbbf24', nivel:'CALENTANDO', tip:'Cada punto cuenta. Mantén el ritmo y supera tu baseline.' }
+        : pts < meta
+        ? { emoji:'💪', color:'#5eead4', nivel:'ALTO VOLTAJE', tip:'¡Estás muy cerca! Un esfuerzo más y llegas a la meta grupal.' }
+        : { emoji:'🏆', color:'#34d399', nivel:'LEGENDARIO', tip:'¡Meta superada! Cada punto extra vale $1500. ¡Sigue!' };
+
+      // Mostrar modal inmediatamente con datos locales
+      const existingModal = document.getElementById('modal-robot-ai');
+      if (existingModal) existingModal.remove();
 
       const modalHTML = `
-        <div id="modal-robot-ai" style="position:fixed; inset:0; background:rgba(2,6,23,0.9); z-index:10000; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(12px);">
-          <div style="background:linear-gradient(135deg, #0f172a, #1e293b); border:1px solid rgba(94,234,212,0.4); border-radius:24px; padding:32px; width:90%; max-width:420px; text-align:center; box-shadow:0 0 50px rgba(94,234,212,0.2); position:relative; overflow:hidden; animation: fadeInModal .3s ease-out;">
-            <div style="position:absolute; top:0; left:0; width:100%; height:2px; background:linear-gradient(90deg,transparent,#5eead4,transparent);"></div>
-            <div style="font-size:4.5rem; margin-bottom:15px; animation: glitchRobot 2s infinite;">🤖</div>
-            <div style="font-size:0.7rem; font-weight:900; color:#5eead4; text-transform:uppercase; letter-spacing:4px; margin-bottom:8px; opacity:0.8;">${title}</div>
-            <div style="font-size:1.1rem; font-weight:900; color:white; margin-bottom:20px; font-family:'Bebas Neue',sans-serif; letter-spacing:1px;">ANALIZADOR AGENCIA RR v8.6</div>
-            <div style="font-size:0.9rem; color:#94a3b8; line-height:1.7; margin-bottom:28px; padding:0 10px; font-weight:500;">${msg}</div>
-            <div style="background:rgba(94,234,212,0.05); padding:12px; border-radius:12px; border:1px dashed rgba(94,234,212,0.2); margin-bottom:25px;">
-              <div style="font-size:0.6rem; color:#5eead4; font-weight:800; text-transform:uppercase; margin-bottom:4px;">💡 Hack de Productividad</div>
-              <div style="font-size:0.75rem; color:#e2e8f0;">Limpia tu bandeja cada 15 min para mantener el flujo de puntos.</div>
+        <div id="modal-robot-ai" style="position:fixed; inset:0; background:rgba(2,6,23,0.92); z-index:10000; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(14px);" onclick="if(event.target===this)this.remove()">
+          <div style="background:linear-gradient(135deg, #0f172a, #1e1b4b); border:1px solid rgba(99,102,241,0.4); border-radius:28px; padding:32px; width:92%; max-width:460px; position:relative; overflow:hidden; animation:fadeInModal .3s ease-out;">
+            <div style="position:absolute; top:0; left:0; width:100%; height:2px; background:linear-gradient(90deg,transparent,${psicoBase.color},transparent);"></div>
+            
+            <!-- Header robot -->
+            <div style="text-align:center; margin-bottom:20px;">
+              <div style="font-size:4rem; margin-bottom:8px; display:inline-block; animation:glitchRobot 2s infinite;">🤖</div>
+              <div style="font-size:0.6rem; font-weight:900; color:${psicoBase.color}; text-transform:uppercase; letter-spacing:4px;">${psicoBase.nivel}</div>
+              <div style="font-size:1.1rem; font-weight:900; color:white; font-family:'Bebas Neue',sans-serif; letter-spacing:1px; margin-top:4px;">COACH IA · AGENCIA RR</div>
             </div>
-            <button onclick="document.getElementById('modal-robot-ai').remove()" class="btn-neumorphic" style="width:100%; padding:16px; color:#5eead4; border-color:rgba(94,234,212,0.2); font-size:0.8rem;">ENTENDIDO. VOLVER AL FLUJO.</button>
+
+            <!-- Stats del operador -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:20px;">
+              <div style="text-align:center; background:rgba(255,255,255,0.04); border-radius:12px; padding:12px;">
+                <div style="font-size:1.4rem; font-weight:900; color:${psicoBase.color};">${pts.toFixed(1)}</div>
+                <div style="font-size:0.55rem; color:#64748b; font-weight:700;">Pts Hoy</div>
+              </div>
+              <div style="text-align:center; background:rgba(255,255,255,0.04); border-radius:12px; padding:12px;">
+                <div style="font-size:1.4rem; font-weight:900; color:#6366f1;">${pct}%</div>
+                <div style="font-size:0.55rem; color:#64748b; font-weight:700;">Meta Grp</div>
+              </div>
+              <div style="text-align:center; background:rgba(255,255,255,0.04); border-radius:12px; padding:12px;">
+                <div style="font-size:1.4rem; font-weight:900; color:#a78bfa;">G${op.group}</div>
+                <div style="font-size:0.55rem; color:#64748b; font-weight:700;">Equipo</div>
+              </div>
+            </div>
+
+            <!-- Mensaje IA -->
+            <div id="robot-msg-area" style="min-height:90px; background:rgba(0,0,0,0.3); border-radius:16px; padding:16px; margin-bottom:20px; border:1px solid rgba(255,255,255,0.06); font-size:0.88rem; color:#94a3b8; line-height:1.7; text-align:center;">
+              ${apiKey ? '<span style="opacity:0.5">🤖 Analizando tu rendimiento...</span>' : `<span>${psicoBase.emoji} ${psicoBase.tip}</span>`}
+            </div>
+
+            <!-- Config API inline -->
+            <div style="margin-bottom:16px;">
+              <div onclick="document.getElementById('robot-api-cfg').style.display = document.getElementById('robot-api-cfg').style.display === 'none' ? 'flex' : 'none'" 
+                   style="font-size:0.6rem; color:#475569; font-weight:700; cursor:pointer; text-align:center; margin-bottom:8px;">⚙️ ${apiKey ? '✅ API configurada · Click para cambiar' : '🔑 Configura tu API Key para IA real'}</div>
+              <div id="robot-api-cfg" style="display:${apiKey ? 'none' : 'flex'}; flex-direction:column; gap:6px;">
+                <input id="robot-api-key-in" type="password" placeholder="Gemini API Key (AIza...) o OpenAI" value="${apiKey}" style="background:rgba(255,255,255,0.05); border:1px solid rgba(99,102,241,0.3); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+                <input id="robot-api-url-in" type="text" placeholder="URL OpenClaw/OpenAI (dejar vacío para Gemini)" value="${cfg.url || ''}" style="background:rgba(255,255,255,0.05); border:1px solid rgba(99,102,241,0.3); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+                <button onclick="const k=document.getElementById('robot-api-key-in').value.trim();const u=document.getElementById('robot-api-url-in').value.trim();const c=JSON.parse(localStorage.getItem('rr_openclaw_cfg')||'{}');c.key=k;c.url=u;localStorage.setItem('rr_openclaw_cfg',JSON.stringify(c));localStorage.setItem('rr_ai_api_key',k);document.getElementById('robot-api-cfg').style.display='none';robotFetchAI('${opName}',${pts},${meta},'${turno}','${op.group}');" style="background:rgba(99,102,241,0.2); border:1px solid #6366f1; color:#818cf8; padding:8px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">💾 Guardar y activar IA</button>
+              </div>
+            </div>
+
+            <button onclick="document.getElementById('modal-robot-ai').remove()" style="width:100%; padding:14px; background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.15)); border:1px solid rgba(99,102,241,0.3); color:#a78bfa; border-radius:12px; font-size:0.8rem; font-weight:800; cursor:pointer; letter-spacing:1px;">ENTENDIDO · VOLVER AL FLUJO</button>
           </div>
           <style>
-            @keyframes glitchRobot {
-              0% { transform: translate(0); }
-              20% { transform: translate(-2px, 1px); }
-              40% { transform: translate(-2px, -1px); }
-              60% { transform: translate(2px, 1px); }
-              80% { transform: translate(2px, -1px); }
-              100% { transform: translate(0); }
-            }
-            @keyframes fadeInModal {
-              from { opacity: 0; transform: scale(0.9); }
-              to { opacity: 1; transform: scale(1); }
-            }
+            @keyframes glitchRobot { 0%,100%{transform:translate(0)} 20%{transform:translate(-2px,1px)} 40%{transform:translate(-2px,-1px)} 60%{transform:translate(2px,1px)} 80%{transform:translate(2px,-1px)} }
+            @keyframes fadeInModal { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
           </style>
-        </div>
-      `;
+        </div>`;
       document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+      if (apiKey) {
+        robotFetchAI(opName, pts, meta, turno, op.group);
+      }
     };
+
+    window.robotFetchAI = async function(opName, pts, meta, turno, grupo) {
+      const el = document.getElementById('robot-msg-area');
+      if (!el) return;
+      const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+      const apiKey = cfg.key || localStorage.getItem('rr_ai_api_key') || '';
+      if (!apiKey) return;
+
+      const prompt = `Eres un coach de alto rendimiento con especialidad en psicología positiva y productividad en plataformas de chat adulto. 
+El operador "${opName}" del Grupo ${grupo} tiene los siguientes datos HOY:
+- Puntos acumulados: ${pts.toFixed(1)} pts
+- Meta grupal: ${meta} pts  
+- Progreso: ${meta > 0 ? Math.min(100, (pts/meta)*100).toFixed(0) : 0}%
+- Turno: ${turno}
+
+Genera un mensaje motivacional PERSONALIZADO de 2-3 oraciones que:
+1) Reconozca su estado actual con empatía
+2) Aplique psicología positiva (técnica específica)
+3) Dé UN consejo táctico concreto para su plataforma
+Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
+
+      try {
+        let result = '';
+        if (apiKey.startsWith('AIza')) {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          });
+          const data = await res.json();
+          result = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        } else if (cfg.url) {
+          const res = await fetch(cfg.url + '/chat/completions', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ model: 'gpt-3.5-turbo', messages: [{ role: 'user', content: prompt }], max_tokens: 150 })
+          });
+          const data = await res.json();
+          result = data?.choices?.[0]?.message?.content || '';
+        }
+        if (el && result.trim()) {
+          el.innerHTML = `<div style="color:#e2e8f0; font-style:normal;">${result.trim()}</div><div style="font-size:0.55rem; color:#6366f1; margin-top:10px; font-weight:700;">🤖 Coach IA · Análisis personalizado</div>`;
+        }
+      } catch(e) {
+        if (el) el.innerHTML = `<span style="color:#f87171; font-size:0.75rem;">⚠️ Error de API. Verifica tu key en la configuración.</span>`;
+      }
+    };
+
 
     // ══════════════════════════════════════════════════════════════
     // GESTIÓN DE PERFILES DESDE ASISTENCIA — por nombre de operador
@@ -11771,33 +11834,50 @@
       
       document.getElementById('op-dash-avatar-wrap').innerHTML = `
         <div class="op-banner-wrap" onclick="triggerBannerUpload('${safeName}')">
-          ${bn ? `<img src="${bn}" class="op-banner-img">` : '<div class="op-banner-img" style="background:linear-gradient(135deg,#0f172a,#1e293b)"></div>'}
+          ${bn ? `<img src="${bn}" class="op-banner-img">` : '<div class="op-banner-img" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)"></div>'}
           <div class="op-banner-hint">📸 Cambiar banner</div>
         </div>
-        <div style="display:flex; align-items:center; gap:18px; padding:20px 24px; position:relative; z-index:10; background:rgba(15,26,53,0.4); backdrop-filter:blur(10px); flex-wrap:wrap;">
-          <div class="op-dash-av-clickable" style="position:relative; flex-shrink:0; width:72px; height:72px; margin-top:-45px; z-index:11;" onclick="triggerAvatarUpload(null, '${safeName}')">
-            ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border:4px solid #0f1a35; border-radius:50%; box-shadow:0 8px 25px rgba(0,0,0,0.5);">` 
-                 : `<div style="width:100%; height:100%; font-size:2rem; background:#1e293b; border:4px solid #0f1a35; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 25px rgba(0,0,0,0.5);">👤</div>`}
-            <div style="position:absolute; bottom:4px; right:4px; width:16px; height:16px; background:#34d399; border:3px solid #0f1a35; border-radius:50%; box-shadow:0 0 10px rgba(52,211,153,0.5);" title="En línea"></div>
-            <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; opacity:0; transition:0.3s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
-               <span style="font-size:0.6rem; color:white; font-weight:800; text-transform:uppercase;">Cambiar</span>
+        <div style="display:flex; align-items:stretch; gap:0; position:relative; z-index:10; background:rgba(15,26,53,0.5); backdrop-filter:blur(12px); flex-wrap:wrap;">
+          
+          <!-- LEFT: avatar + nombre -->
+          <div style="display:flex; align-items:center; gap:16px; padding:20px 24px; flex:1; min-width:220px;">
+            <div class="op-dash-av-clickable" style="position:relative; flex-shrink:0; width:72px; height:72px; margin-top:-40px; z-index:11;" onclick="triggerAvatarUpload(null, '${safeName}')">
+              ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border:3px solid #5eead4; border-radius:50%; box-shadow:0 0 20px rgba(94,234,212,0.3);">` 
+                   : `<div style="width:100%; height:100%; font-size:2rem; background:#1e293b; border:3px solid #5eead4; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 20px rgba(94,234,212,0.3);">👤</div>`}
+              <div style="position:absolute; bottom:2px; right:2px; width:14px; height:14px; background:#34d399; border:2px solid #0f1a35; border-radius:50%; box-shadow:0 0 8px rgba(52,211,153,0.6);"></div>
+              <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; opacity:0; transition:0.3s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
+                 <span style="font-size:0.6rem; color:white; font-weight:800;">Cambiar</span>
+              </div>
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:0.6rem; color:#5eead4; font-weight:800; text-transform:uppercase; letter-spacing:2px;">${saludo}</div>
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:3px 0;">
+                 <div style="font-size:1.45rem; font-weight:900; color:white; line-height:1.1;">${op.name}</div>
+                 <button onclick="abrirRobotMotivador()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; filter:drop-shadow(0 0 6px #6366f1); transition:0.3s;" onmouseover="this.style.transform='scale(1.2) rotate(10deg)'" onmouseout="this.style.transform='scale(1)'">🤖</button>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                 <span style="background:rgba(94,234,212,0.1); color:#5eead4; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:700;">Grupo ${op.group}</span>
+                 <span style="font-size:0.6rem; color:#475569;">· ${timeStr} <small style="opacity:0.6">(CO)</small></span>
+              </div>
             </div>
           </div>
-          <div style="flex:1; min-width:200px; text-align:left;">
-            <div style="font-size:0.65rem; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:2px; opacity:0.9;">${saludo}</div>
-            <div style="display:flex; align-items:center; gap:12px;">
-               <div style="font-size:1.5rem; font-weight:900; color:white; line-height:1.1; word-break:break-word; margin:2px 0;">${op.name}</div>
-               <button onclick="abrirRobotMotivador()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; filter:drop-shadow(0 0 5px var(--accent)); transition:0.3s;" onmouseover="this.style.transform='scale(1.2) rotate(10deg)'" onmouseout="this.style.transform='scale(1)'">🤖</button>
+
+          <!-- CENTER: Puntos Hoy — destacado -->
+          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px 28px; border-left:1px solid rgba(255,255,255,0.06); border-right:1px solid rgba(255,255,255,0.06); background:rgba(94,234,212,0.04); min-width:160px;">
+            <div id="op-dash-hero-pts" style="font-size:3rem; font-weight:900; color:#5eead4; line-height:1; font-family:'Bebas Neue',sans-serif; text-shadow:0 0 20px rgba(94,234,212,0.4);">0.0</div>
+            <div style="font-size:0.65rem; font-weight:800; color:#5eead4; letter-spacing:2px; text-transform:uppercase; margin:4px 0;">⚡ Puntos Hoy</div>
+            <div style="width:100%; height:4px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; margin-top:6px;">
+              <div id="op-dash-hero-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#5eead4,#6366f1); border-radius:4px; transition:width 0.8s ease;"></div>
             </div>
-            <div style="font-size:0.75rem; color:#94a3b8; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-               <span style="background:rgba(94,234,212,0.1); color:var(--accent); padding:2px 8px; border-radius:6px; font-weight:700;">Grupo ${op.group}</span>
-               <span style="color:#475569;">·</span>
-               <span style="font-weight:600;">${timeStr} <small style="font-weight:400; opacity:0.6;">(Local)</small></span>
-            </div>
+            <div id="op-dash-hero-meta" style="font-size:0.55rem; color:#475569; margin-top:4px; text-align:center;">Meta: — pts</div>
           </div>
-          <div style="flex-shrink:0; text-align:right; margin-left:auto;">
-            <div id="op-dash-hero-clock" style="font-size:2rem; font-weight:900; color:var(--accent); letter-spacing:2px; line-height:1; font-family:'Bebas Neue',sans-serif;">${timeStr}</div>
-            <div style="font-size:0.6rem; color:#475569; text-transform:uppercase; letter-spacing:2px; font-weight:700;">Colombia</div>
+
+          <!-- RIGHT: Ganancias COP + reloj -->
+          <div style="display:flex; flex-direction:column; align-items:flex-end; justify-content:center; padding:16px 24px; min-width:160px;">
+            <div id="op-dash-hero-clock" style="font-size:1.8rem; font-weight:900; color:#6366f1; letter-spacing:2px; line-height:1; font-family:'Bebas Neue',sans-serif;">${timeStr}</div>
+            <div style="font-size:0.55rem; color:#475569; text-transform:uppercase; letter-spacing:2px; font-weight:700; margin-bottom:8px;">Colombia</div>
+            <div id="op-dash-hero-cop" style="font-size:1.1rem; font-weight:900; color:#34d399; text-align:right;">$0 COP</div>
+            <div id="op-dash-hero-label" style="font-size:0.55rem; color:#475569; text-align:right; margin-top:2px;">Tarifa base ($1400/pt)</div>
           </div>
         </div>`;
 
@@ -11855,26 +11935,24 @@
 
       const _pctG = _metaOp > 0 ? Math.min(100, (_grpPts / _metaOp) * 100).toFixed(1) : 0;
 
-      document.getElementById('op-dash-metrics').innerHTML = `
-    <div class="op-dash-metric" style="grid-column: span 2; background: rgba(94, 234, 212, 0.04); border: 1px solid rgba(94, 234, 212, 0.1); padding: 18px 12px; position:relative; overflow:hidden;">
-      <div style="position:absolute; top:8px; right:12px; font-size:0.5rem; color:#475569; font-weight:800; text-transform:uppercase; letter-spacing:1px; text-align:right;">
-        META ${_labelMeta}: ${_metaOp} pts<br>
-        PROGRESO: ${_pctG}%
-      </div>
-      <div class="val" style="font-size: 2.2rem; color: #5eead4; line-height:1; margin-bottom:4px;">${_ptsDia.toFixed(1)}</div>
-      <div class="lbl" style="font-size: 0.75rem; letter-spacing: 1.5px; font-weight:800;">⚡ PUNTOS HOY</div>
-      <div style="margin-top:10px; padding:8px; background:rgba(0,0,0,0.2); border-radius:10px;">
-         <div style="font-size: 1.1rem; font-weight:900; color:${_lograda ? '#34d399' : '#94a3b8'}; transition:0.3s;">${_copRealF}</div>
-         <div style="font-size: 0.55rem; color:#64748b; margin-top:2px;">
-           ${_lograda ? '🏆 ¡Meta Grupal cumplida! (x$1500)' : `Faltan ${(_metaOp - _grpPts).toFixed(1)} pts grupales para x$1500`}
-         </div>
-      </div>
-      <div style="display:flex; gap:10px; margin-top:8px; justify-content:center; opacity:0.6;">
-         <div style="font-size:0.5rem; color:#94a3b8;">Base ($1400): <span style="color:#e2e8f0;">${_copSinMetaF}</span></div>
-         <div style="font-size:0.5rem; color:#94a3b8;">Meta ($1500): <span style="color:#e2e8f0;">${_copConMetaF}</span></div>
-      </div>
-    </div>
-    `;
+      document.getElementById('op-dash-metrics').innerHTML = '';
+
+      // — Actualizar hero con datos reales —
+      const _heroPts = document.getElementById('op-dash-hero-pts');
+      const _heroBar = document.getElementById('op-dash-hero-bar');
+      const _heroMeta = document.getElementById('op-dash-hero-meta');
+      const _heroCop = document.getElementById('op-dash-hero-cop');
+      const _heroLabel = document.getElementById('op-dash-hero-label');
+      if (_heroPts) _heroPts.textContent = _ptsDia.toFixed(1);
+      if (_heroBar) _heroBar.style.width = Math.min(100, (_ptsDia / _metaOp) * 100).toFixed(1) + '%';
+      if (_heroMeta) _heroMeta.textContent = `Meta: ${_metaOp} pts · ${_pctG}% ${_labelMeta}`;
+      if (_heroCop) {
+        _heroCop.textContent = _copRealF;
+        _heroCop.style.color = _lograda ? '#34d399' : '#94a3b8';
+      }
+      if (_heroLabel) _heroLabel.textContent = _lograda ? '🏆 ¡Meta grupal cumplida! (x$1500)' : `Faltan ${(_metaOp - _grpPts).toFixed(1)} pts para x$1500`;
+
+
 
       // Renderizar Plan de Trabajo del Operador
       if (typeof PT !== 'undefined' && PT.renderOperatorTasks) {
@@ -13336,10 +13414,69 @@
           if (btn) btn.classList.add('active');
         };
 
-        PT.generateIce = function (cat) {
-          const list = PT.ICEBREAKERS_BANK[cat];
+        PT.generateIce = async function (cat) {
           const el = document.getElementById('pt-ice-output');
-          if (el) el.innerText = '"' + list[Math.floor(Math.random() * list.length)] + '"';
+          if (!el) return;
+          el.innerHTML = '<span style="opacity:0.5; font-style:italic;">🤖 Generando abridor con IA...</span>';
+          el.style.color = '#64748b';
+
+          // Obtener API key del config del robot/OpenClaw
+          const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+          const apiKey = cfg.key || localStorage.getItem('rr_ai_api_key') || '';
+
+          // Contexto del operador para personalizar
+          const opName = window.currentOpName || 'el operador';
+          const opPts = typeof getPuntosHoy === 'function' ? getPuntosHoy(opName) : 0;
+          const hour = new Date().getHours();
+          const turno = hour < 14 ? 'mañana' : hour < 22 ? 'tarde' : 'noche';
+
+          const catLabels = { real: 'conexión genuina y emocional', hot: 'tensión sexual y seducción', deep: 'profundidad psicológica y vulnerabilidad' };
+          const catLabel = catLabels[cat] || 'conexión';
+
+          if (apiKey && (cfg.url || apiKey.startsWith('AIza'))) {
+            try {
+              let result = '';
+              if (apiKey.startsWith('AIza')) {
+                // Gemini API
+                const prompt = `Eres un experto en psicología de la seducción y plataformas de chat adulto. Genera UN SOLO mensaje de apertura (icebreaker) para TalkyTimes enfocado en "${catLabel}". 
+El operador ${opName} lleva ${opPts.toFixed(1)} puntos hoy, turno de ${turno}.
+El mensaje debe ser: natural, en español latino, 1-2 oraciones máx, provocador pero no vulgar, desde el personaje de la modelo.
+Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await res.json();
+                result = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              } else if (cfg.url) {
+                // OpenClaw / OpenAI compatible
+                const res = await fetch(cfg.url + '/chat/completions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                  body: JSON.stringify({
+                    model: 'gpt-3.5-turbo',
+                    messages: [{ role: 'user', content: `Genera 1 icebreaker para chat adulto TalkyTimes, tema: ${catLabel}. Español. Solo el mensaje.` }],
+                    max_tokens: 100
+                  })
+                });
+                const data = await res.json();
+                result = data?.choices?.[0]?.message?.content || '';
+              }
+
+              if (result.trim()) {
+                el.innerHTML = `<div style="border-left:3px solid #6366f1; padding-left:10px; font-style:normal;">"${result.trim()}"</div><div style="font-size:0.55rem; color:#6366f1; margin-top:8px; font-weight:700;">🤖 Generado con IA · Categoría: ${cat.toUpperCase()}</div>`;
+                el.style.color = '#e2e8f0';
+                return;
+              }
+            } catch(e) { console.warn('[ICE] API error, usando banco local:', e); }
+          }
+
+          // Fallback: banco local
+          const list = PT.ICEBREAKERS_BANK[cat] || PT.ICEBREAKERS_BANK.real;
+          const msg = list[Math.floor(Math.random() * list.length)];
+          el.innerHTML = `<div style="border-left:3px solid #475569; padding-left:10px;">"${msg}"</div><div style="font-size:0.55rem; color:#475569; margin-top:8px;">📚 Banco local · <a onclick="ocToggleConfig()" style="color:#6366f1; cursor:pointer;">Configura tu API</a> para IA real</div>`;
+          el.style.color = '#e2e8f0';
         };
 
         // ── Bitácora ──

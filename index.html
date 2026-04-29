@@ -11590,7 +11590,7 @@ ${aplicados} operadores actualizados.`);
           '<div class="op-barchart-title">Ultimos 7 dias (pts/dia)</div>' +
           '<div class="op-barchart">' + bars + '</div>' +
         '</div>' +
-        ''';
+        '</div>';
       
       // Mostrar botÃ³n logout global
       const btnLogout = document.getElementById('op-global-logout');
@@ -13290,6 +13290,40 @@ ${aplicados} operadores actualizados.`);
           }
         };
 
+
+        PT.setShift = function(shift) {
+          PT.shiftActual = shift;
+          const shifts = ['manana', 'tarde', 'noche'];
+          shifts.forEach(s => {
+            const btn = document.getElementById('pt-btn-shift-' + s);
+            if (btn) btn.classList.toggle('active', s === shift);
+          });
+          PT.renderAll();
+        };
+
+        PT.renderAll = function() {
+          const shift = PT.shiftActual || 'manana';
+          let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+          const contenedor = document.getElementById('pt-ops-list');
+          if (!contenedor) return;
+          let totalTasks = 0, doneTasks = 0, sumaPuntos = 0;
+          contenedor.innerHTML = data.map((op, idx) => {
+            const pts = getPuntosHoy ? getPuntosHoy(op.name) : (op.puntos || 0);
+            sumaPuntos += pts;
+            const tareas = PT.TAREAS_MASTER || [];
+            const estados = op.tareasEstado || [];
+            const done = estados.filter(Boolean).length;
+            totalTasks += tareas.length;
+            doneTasks += done;
+            const pct = tareas.length > 0 ? Math.round((done / tareas.length) * 100) : 0;
+            return '<div class="op-card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><strong>' + op.name + '</strong><span>' + pct + '% (' + done + '/' + tareas.length + ')</span></div></div>';
+          }).join('');
+          const globalPct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
+          const elPct = document.getElementById('pt-global-pct');
+          const elCount = document.getElementById('pt-active-count');
+          if (elPct) elPct.innerText = globalPct.toFixed(0) + '%';
+          if (elCount) elCount.innerText = data.length;
+        };
         // ââ Init on tab activation ââ
         (function ptInit() {
           const modal = document.getElementById('pt-modal-bitacora');

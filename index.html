@@ -10341,6 +10341,75 @@
 
     // ==================== AGREGAR / QUITAR ====================
 
+    // --- ROBOT MOTIVADOR CYBERPUNK (v8.6.28) ---
+    window.abrirRobotMotivador = function() {
+      const opName = currentOpName;
+      if (!opName) return;
+      
+      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+      if (!op) return;
+      
+      const pts = getPuntosHoy(opName);
+      const meta = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 100;
+      
+      const playlistTrends = [
+        "Techno Industrial & Cyberpunk 2077 Beats",
+        "Afrobeat & Global Dance Trends 2026",
+        "Reggaetón New Era (Bad Bunny x Feid Vibes)",
+        "Hardstyle para Enfoque Extremo",
+        "Phonk Industrial (High Tempo Focus)"
+      ];
+      const randomTrack = playlistTrends[Math.floor(Math.random() * playlistTrends.length)];
+
+      let msg = "";
+      let title = "SISTEMA OPERATIVO: ACTIVO";
+      
+      if (pts === 0) {
+        msg = `Detecto inactividad en tu sector, <b>${opName}</b>. 🦾 El éxito no llega por suerte, llega por ejecución. Ponle play a <b>${randomTrack}</b> y arranca con tu primer punto. ¡El algoritmo está listo para ti!`;
+        title = "ORDEN DE ARRANQUE";
+      } else if (pts < meta * 0.5) {
+        msg = `Buen inicio táctico. Llevamos <b>${pts.toFixed(1)} pts</b>. Estás en la fase de calentamiento. ⚡ Te sugiero <b>${randomTrack}</b> para mantener la dopamina alta. ¡Tu grupo ${op.group} cuenta con tu potencia!`;
+      } else if (pts < meta) {
+        msg = `¡Nivel crítico de productividad alcanzado! Estás en <b>${pts.toFixed(1)} pts</b>. La zona de bonus ($1500) está a solo un paso. 💰 No bajes la guardia ahora. Dale volumen a <b>${randomTrack}</b> y asegura esa meta.`;
+        title = "ZONA DE ALTO RENDIMIENTO";
+      } else {
+        msg = `¡ESTADO LEGENDARIO! Has superado la meta con <b>${pts.toFixed(1)} pts</b>. 🏆 Ya estás en modo cosecha máxima ($1500/punto). Relájate con un poco de <b>Lo-Fi Cyber</b> o sigue escalando al TOP 1 con <b>${randomTrack}</b>. ¡Eres imparable!`;
+        title = "CRÍTICO: META SUPERADA";
+      }
+
+      const modalHTML = `
+        <div id="modal-robot-ai" style="position:fixed; inset:0; background:rgba(2,6,23,0.9); z-index:10000; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(12px);">
+          <div style="background:linear-gradient(135deg, #0f172a, #1e293b); border:1px solid rgba(94,234,212,0.4); border-radius:24px; padding:32px; width:90%; max-width:420px; text-align:center; box-shadow:0 0 50px rgba(94,234,212,0.2); position:relative; overflow:hidden; animation: fadeInModal .3s ease-out;">
+            <div style="position:absolute; top:0; left:0; width:100%; height:2px; background:linear-gradient(90deg,transparent,#5eead4,transparent);"></div>
+            <div style="font-size:4.5rem; margin-bottom:15px; animation: glitchRobot 2s infinite;">🤖</div>
+            <div style="font-size:0.7rem; font-weight:900; color:#5eead4; text-transform:uppercase; letter-spacing:4px; margin-bottom:8px; opacity:0.8;">${title}</div>
+            <div style="font-size:1.1rem; font-weight:900; color:white; margin-bottom:20px; font-family:'Bebas Neue',sans-serif; letter-spacing:1px;">ANALIZADOR AGENCIA RR v8.6</div>
+            <div style="font-size:0.9rem; color:#94a3b8; line-height:1.7; margin-bottom:28px; padding:0 10px; font-weight:500;">${msg}</div>
+            <div style="background:rgba(94,234,212,0.05); padding:12px; border-radius:12px; border:1px dashed rgba(94,234,212,0.2); margin-bottom:25px;">
+              <div style="font-size:0.6rem; color:#5eead4; font-weight:800; text-transform:uppercase; margin-bottom:4px;">💡 Hack de Productividad</div>
+              <div style="font-size:0.75rem; color:#e2e8f0;">Limpia tu bandeja cada 15 min para mantener el flujo de puntos.</div>
+            </div>
+            <button onclick="document.getElementById('modal-robot-ai').remove()" class="btn-neumorphic" style="width:100%; padding:16px; color:#5eead4; border-color:rgba(94,234,212,0.2); font-size:0.8rem;">ENTENDIDO. VOLVER AL FLUJO.</button>
+          </div>
+          <style>
+            @keyframes glitchRobot {
+              0% { transform: translate(0); }
+              20% { transform: translate(-2px, 1px); }
+              40% { transform: translate(-2px, -1px); }
+              60% { transform: translate(2px, 1px); }
+              80% { transform: translate(2px, -1px); }
+              100% { transform: translate(0); }
+            }
+            @keyframes fadeInModal {
+              from { opacity: 0; transform: scale(0.9); }
+              to { opacity: 1; transform: scale(1); }
+            }
+          </style>
+        </div>
+      `;
+      document.body.insertAdjacentHTML('beforeend', modalHTML);
+    };
+
     // ══════════════════════════════════════════════════════════════
     // GESTIÓN DE PERFILES DESDE ASISTENCIA — por nombre de operador
     // ══════════════════════════════════════════════════════════════
@@ -11530,7 +11599,10 @@
           </div>
           <div style="flex:1; min-width:200px; text-align:left;">
             <div style="font-size:0.65rem; color:var(--accent); font-weight:800; text-transform:uppercase; letter-spacing:2px; opacity:0.9;">${saludo}</div>
-            <div style="font-size:1.5rem; font-weight:900; color:white; line-height:1.1; word-break:break-word; margin:2px 0;">${op.name}</div>
+            <div style="display:flex; align-items:center; gap:12px;">
+               <div style="font-size:1.5rem; font-weight:900; color:white; line-height:1.1; word-break:break-word; margin:2px 0;">${op.name}</div>
+               <button onclick="abrirRobotMotivador()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; filter:drop-shadow(0 0 5px var(--accent)); transition:0.3s;" onmouseover="this.style.transform='scale(1.2) rotate(10deg)'" onmouseout="this.style.transform='scale(1)'">🤖</button>
+            </div>
             <div style="font-size:0.75rem; color:#94a3b8; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                <span style="background:rgba(94,234,212,0.1); color:var(--accent); padding:2px 8px; border-radius:6px; font-weight:700;">Grupo ${op.group}</span>
                <span style="color:#475569;">·</span>
@@ -11559,18 +11631,20 @@
         : 0;
       const _ptsDia = _ptsDiaRT > 0 ? _ptsDiaRT : getPuntosHoy(op.name);
 
-      // PROM/DÍA: dias reales transcurridos en el mes actual (no el número de cortes)
-      // Si tenemos puntos reales de Supabase, los usamos; sino, los del localStorage
+      // PROM/DÍA: dias reales transcurridos en el mes actual
       const _mesStr = localDateStr().slice(0, 7);
       const _diaActual = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       const _primerDia = _mesStr + '-01';
       const _msDesde = new Date(_primerDia).getTime();
       const _msHasta = new Date(_diaActual).getTime();
-      const _diasMes  = Math.max(1, Math.round((_msHasta - _msDesde) / 86400000) + 1); // dias desde el 1 hasta hoy
+      const _diasMes  = Math.max(1, Math.round((_msHasta - _msDesde) / 86400000) + 1);
       const _promDia  = pCurr > 0 ? (pCurr / _diasMes).toFixed(1) : '—';
 
-      // --- CÁLCULO COP PREMIUM (v8.6.27) ---
-      const _metaOp = op.meta || 100;
+      // --- CÁLCULO COP PREMIUM (v8.6.28) ---
+      // Sincronizar meta con Meta Grupal del día (Panel Admin)
+      const _metaGrupalDia = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 0;
+      const _metaOp = _metaGrupalDia > 0 ? _metaGrupalDia : (op.meta || 100);
+      
       const _lograda = _ptsDia >= _metaOp;
       const _valBase = _ptsDia * 1400;
       const _valMeta = _ptsDia * 1500;
@@ -11663,14 +11737,17 @@
       const profiles = op.profiles || [];
       const safeId = name.replace(/[^a-zA-Z0-9]/g, '_');
       const profilesListHTML = profiles.length
-        ? profiles.map(p => {
+        ? profiles.map((p, pi) => {
           const isCov = p.tipo === 'cobertura';
-          return `<div class="op-profile-item" style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:12px; margin-bottom:6px;">
+          return `<div class="op-profile-item" style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:12px; margin-bottom:6px; transition:0.3s;">
             <div style="font-size:1.2rem;">${isCov ? '🔴' : '🟢'}</div>
             <div style="flex:1;">
               <div style="font-size:0.85rem; font-weight:700; color:#e2e8f0;">${p.model}</div>
               <div style="font-size:0.65rem; color:#64748b;">ID: ${p.id} ${isCov ? `· Cubriendo: ${p.cubreA}` : ''}</div>
             </div>
+            <button onclick="asiPerfilRemove('${name.replace(/'/g, "\\'")}', ${pi})" 
+                    style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.75rem; transition:0.2s;"
+                    onmouseover="this.style.background='rgba(248,113,113,0.3)'" onmouseout="this.style.background='rgba(248,113,113,0.1)'">🗑️</button>
           </div>`;
         }).join('')
         : '<div style="color:#475569;font-size:.82rem;padding:20px;text-align:center;border:1px dashed rgba(255,255,255,0.05);border-radius:12px;">Sin perfiles asignados.</div>';

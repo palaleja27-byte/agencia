@@ -32,7 +32,10 @@ def log_error_to_supabase(msg):
 def sync_tableau():
     print("🚀 Iniciando sincronización con Tableau Cloud...")
     
-    # 1. Autenticación en Tableau (Usamos API 3.4 para compatibilidad amplia)
+    # Cabeceras base para forzar JSON
+    base_headers = {"Accept": "application/json"}
+    
+    # 1. Autenticación en Tableau
     auth_url = f"{TABLEAU_SERVER}/api/3.4/auth/signin"
     auth_payload = {
         "credentials": {
@@ -43,7 +46,7 @@ def sync_tableau():
     }
     
     try:
-        res = requests.post(auth_url, json=auth_payload, timeout=30)
+        res = requests.post(auth_url, json=auth_payload, headers=base_headers, timeout=30)
         print(f"📡 Status Code Auth: {res.status_code}")
         
         if res.status_code != 200:
@@ -52,18 +55,17 @@ def sync_tableau():
             log_error_to_supabase(msg)
             return
 
-        # Validar si es JSON
         try:
             data = res.json()
-        except:
-            msg = f"Tableau no respondió con JSON. Respuesta: {res.text[:100]}..."
+        except Exception as e:
+            msg = f"Tableau no envió JSON válido. Revisa logs de Git."
             print(f"❌ {msg}")
             log_error_to_supabase(msg)
             return
 
         token = data["credentials"]["token"]
         site_id = data["credentials"]["site"]["id"]
-        headers = {"X-Tableau-Auth": token}
+        headers = {"X-Tableau-Auth": token, "Accept": "application/json"}
         print("✅ Autenticado con éxito.")
 
         # 2. Buscar el ID de la vista

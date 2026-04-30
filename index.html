@@ -4414,23 +4414,23 @@
             <span style="background:rgba(99,102,241,0.15);color:#818cf8;padding:2px 10px;border-radius:8px;font-size:.65rem;font-weight:700;">OFICIAL</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/Passport_16741406948180/Revenuedetailed" 
-               target="_blank" onclick="event.stopPropagation()"
-               style="text-decoration:none; font-size:.65rem; color:#818cf8; border:1px solid #818cf8; padding:2px 8px; border-radius:4px; transition:.2s;"
-               onmouseover="this.style.background='#818cf8'; this.style.color='white'">
-               ↗ Abrir en Tableau
-            </a>
+            <button id="tableau-sync-btn" onclick="event.stopPropagation();tableauSyncConFeedback()" 
+               style="background:rgba(129,140,248,0.1); border:1px solid rgba(129,140,248,0.3); color:#818cf8; border-radius:8px; padding:3px 12px; font-size:.65rem; cursor:pointer; transition:.2s;"
+               onmouseover="this.style.background='rgba(129,140,248,0.2)'">
+               ↻ Sync Tableau
+            </button>
             <span id="tableau-chevron" style="color:#818cf8;font-size:.85rem;transition:.3s;">▼</span>
           </div>
         </div>
 
-        <!-- Body con Iframe -->
-        <div id="tableau-body" style="display:none; height:850px; position:relative; background:#0f172a;">
-           <iframe id="tableau-iframe" 
-             src=""
-             style="width:100%; height:100%; border:none;"
-             allowfullscreen="true">
-           </iframe>
+        <!-- Body con Datos Crudos -->
+        <div id="tableau-body" style="display:none; max-height:600px; overflow-y:auto; background:#0f172a; padding:15px;">
+           <div id="tableau-data-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
+              <!-- Se llena con renderTableauPanel() -->
+              <div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">
+                Haga clic en Sync para traer los datos oficiales de Tableau...
+              </div>
+           </div>
         </div>
       </div>
     </div>
@@ -4439,22 +4439,55 @@
       function toggleTableauPanel() {
         const body = document.getElementById('tableau-body');
         const chev = document.getElementById('tableau-chevron');
-        const iframe = document.getElementById('tableau-iframe');
-        // Formato de URL de embebido corregido para Tableau Cloud
-        const url = "https://prod-uk-a.online.tableau.com/t/partnerdata/views/Passport_16741406948180/Revenuedetailed?:embed=yes&:showVizHome=no&:tabs=no&:toolbar=no";
-
         if (body.style.display === 'none') {
           body.style.display = 'block';
           chev.style.transform = 'rotate(180deg)';
-          if (!iframe.src) {
-            iframe.style.opacity = '0';
-            iframe.src = url;
-            iframe.onload = () => { iframe.style.opacity = '1'; iframe.style.transition = 'opacity 0.5s'; };
-          }
+          renderTableauPanel();
         } else {
           body.style.display = 'none';
           chev.style.transform = 'rotate(0deg)';
         }
+      }
+
+      function renderTableauPanel() {
+        const container = document.getElementById('tableau-data-container');
+        if (!container) return;
+        const entries = Object.entries(_dpTableauData);
+        if (entries.length === 0) return;
+
+        container.innerHTML = entries.map(([id, val]) => `
+          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(129,140,248,0.2); border-radius:10px; padding:10px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:0.55rem; color:#475569; font-weight:800;">ID PERFIL</div>
+              <div style="font-size:0.75rem; color:#e2e8f0; font-weight:700;">${id}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:0.55rem; color:#818cf8; font-weight:800;">OFICIAL</div>
+              <div style="font-size:0.85rem; color:#818cf8; font-weight:900;">$${Number(val).toLocaleString('es-CO')}</div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      async function tableauSyncConFeedback() {
+        const btn = document.getElementById('tableau-sync-btn');
+        const pat = localStorage.getItem('github_pat_sync');
+        if (!pat) { alert("Configure el PAT de GitHub en Datame Sync primero."); return; }
+        
+        btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
+        try {
+          const res = await fetch('https://api.github.com/repos/palaleja27-byte/agencia/actions/workflows/tableau_sync.yml/dispatches', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + pat, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ref: 'main' })
+          });
+          if (res.ok) {
+            alert('🚀 Sincronización con Tableau iniciada.\nLos datos aparecerán en 1-2 minutos.');
+          } else {
+            alert('❌ Error al contactar GitHub: ' + res.status);
+          }
+        } catch (e) { alert('❌ Error de red'); }
+        finally { btn.textContent = '↻ Sync Tableau'; btn.disabled = false; }
       }
     </script>
 
@@ -7519,6 +7552,7 @@
         if (typeof loadTableauData === 'function') loadTableauData().then(() => {
            if (typeof renderPSAPanel === 'function') renderPSAPanel();
         });
+        if (typeof tableauIniciarRealtime === 'function') tableauIniciarRealtime();
 
         // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();
@@ -15617,6 +15651,22 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         data.forEach(row => { _dpTableauData[row.perfil_id] = row.valor; });
         console.log('📊 [TABLEAU] Datos cargados:', data.length);
       } catch(e) {}
+    }
+
+    // ── Realtime para Tableau ──
+    let _tableauRealtimeSub = null;
+    function tableauIniciarRealtime() {
+      if (typeof _sb === 'undefined' || !_sb || _tableauRealtimeSub) return;
+      _tableauRealtimeSub = _sb
+        .channel('rr_tableau_sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_data' }, payload => {
+          loadTableauData().then(() => {
+            renderTableauPanel();
+            if (typeof renderDatamePaneles === 'function') renderDatamePaneles();
+          });
+          _toastSync('📊 Datos de Tableau actualizados en tiempo real');
+        })
+        .subscribe();
     }
 
     function dpRenderGrid() {

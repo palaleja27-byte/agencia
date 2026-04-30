@@ -52,12 +52,17 @@ CREATE POLICY "read_tableau_perfiles" ON tableau_perfiles FOR SELECT USING (true
 CREATE POLICY "anon_select_tableau"   ON tableau_data     FOR SELECT USING (true);
 
 -- ─── 5. Insertar paneles de Tableau ─────────────────────────────
--- PANEL-T1: Vista oficial de Agencia Romero (GRUPOROMERO)
+-- PANEL-T1: Vista "Revenuedetailed" con filtro automático GRUPOROMERO
+-- NOTA TÉCNICA: En el link del usuario:
+--   .../views/Passport_16741406948180/Revenuedetailed/.../GRUPOROMERO
+-- "GRUPOROMERO" es un filtro de usuario (User Filter) aplicado por Tableau
+-- según el token PAT. La vista real es "Revenuedetailed". El token Analytics
+-- ya tiene el filtro de agencia — solo retorna los ~10 perfiles propios.
 INSERT INTO tableau_panels (id, nombre, server, site, view_name, token_name) VALUES
   (1, 'ROMERO OFICIAL',
    'https://prod-uk-a.online.tableau.com',
    'partnerdata',
-   'GRUPOROMERO',
+   'Revenuedetailed',
    'Analytics')
 ON CONFLICT (id) DO UPDATE SET
     nombre     = EXCLUDED.nombre,

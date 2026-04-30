@@ -17,6 +17,20 @@ SUPABASE_KEY = (
 )
 BATCH_SIZE = 200
 
+# ═══════════════════════════════════════════════════════════════════
+# DIAGNÓSTICO CLAVE:
+# El link del usuario es:
+# https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/
+#   Passport_16741406948180/Revenuedetailed/.../GRUPOROMERO
+#
+# GRUPOROMERO es un FILTRO DE USUARIO (User Filter), NO una vista.
+# La vista real = "Revenuedetailed" dentro del workbook
+# "Passport_16741406948180".
+# El token PAT de "Analytics" YA tiene el filtro de agencia aplicado.
+# Al descargar /data de esa vista, Tableau devuelve SOLO los perfiles
+# que el token tiene permitidos → los ~10 de Agencia Romero.
+# ═══════════════════════════════════════════════════════════════════
+
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPERS SUPABASE
@@ -119,13 +133,16 @@ def fetch_tableau_panels() -> list:
         return rows
 
     # Fallback: panel ROMERO por defecto
+    # NOTA: La vista real en Tableau es "Revenuedetailed" dentro del workbook
+    # "Passport_16741406948180". GRUPOROMERO es el filtro de usuario que
+    # Tableau aplica automáticamente según el token PAT — NO es una vista.
     print("   📋 Usando fallback: 1 panel ROMERO hardcodeado")
     return [{
         "id": 1,
         "nombre": "ROMERO OFICIAL",
         "server": "https://prod-uk-a.online.tableau.com",
         "site":   "partnerdata",
-        "view_name": "GRUPOROMERO",
+        "view_name": "Revenuedetailed",   # ← Vista real (no GRUPOROMERO)
         "token_name": "Analytics",
     }]
 

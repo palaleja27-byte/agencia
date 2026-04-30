@@ -68,18 +68,27 @@ def sync_tableau():
         headers = {"X-Tableau-Auth": token, "Accept": "application/json"}
         print("✅ Autenticado con éxito.")
 
-        # 2. Buscar el ID de la vista
-        views_url = f"{TABLEAU_SERVER}/api/3.4/sites/{site_id}/views?filter=name:eq:{VIEW_NAME}"
+        # 2. Buscar la vista de forma flexible
+        # Traemos todas las vistas del sitio para no fallar por un espacio o mayúscula
+        views_url = f"{TABLEAU_SERVER}/api/3.4/sites/{site_id}/views"
         res = requests.get(views_url, headers=headers, timeout=30)
-        views = res.json().get("views", {}).get("view", [])
-        if not views:
-            msg = f"Vista '{VIEW_NAME}' no encontrada en el sitio"
+        all_views = res.json().get("views", {}).get("view", [])
+        
+        print(f"📡 Escaneando {len(all_views)} vistas en el sitio...")
+        
+        # Buscamos la que coincida con Revenuedetailed en nombre o URL
+        target_view = next((v for v in all_views if 
+                           VIEW_NAME.upper() in v.get('name','').upper() or 
+                           VIEW_NAME.upper() in v.get('contentUrl','').upper()), None)
+
+        if not target_view:
+            msg = f"Vista '{VIEW_NAME}' no encontrada. Vistas disponibles: " + ", ".join([v.get('name') for v in all_views[:10]])
             print(f"❌ {msg}")
             log_error_to_supabase(msg)
             return
         
-        view_id = views[0]["id"]
-        print(f"✅ Vista encontrada ID: {view_id}")
+        view_id = target_view["id"]
+        print(f"✅ Vista encontrada: '{target_view.get('name')}' (ID: {view_id})")
 
         # 3. Descargar datos (CSV)
         data_url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/views/{view_id}/data"

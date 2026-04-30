@@ -710,15 +710,18 @@
     .op-logout-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
     .op-logout-btn:active { transform: scale(0.95); }
 
-    /* Mosaic layout en pantallas grandes */
+    /* Mosaic layout en pantallas grandes — grid fijo 4 cols para eliminar espacios negros */
     @media (min-width: 1024px) {
-      .op-dash-hero { grid-column: 1 / -1; width: 100%; }
-      #op-tasks-section { grid-column: span 1; }
-      #op-stats-section { grid-column: span 2; }
+      #op-dashboard.visible {
+        grid-template-columns: 1fr 1fr 1fr 1fr !important;
+      }
+      .op-dash-hero    { grid-column: 1 / -1; width: 100%; }
+      #op-tasks-section    { grid-column: span 1; }
+      #op-stats-section    { grid-column: span 2; }
       #op-openclaw-section { grid-column: span 1; }
-      #op-rank-section { grid-column: 1 / -1; }
+      #op-rank-section     { grid-column: 1 / -1; }
       #op-profiles-section { grid-column: span 1; }
-      #op-ice-section { grid-column: span 1; }
+      #op-ice-section      { grid-column: span 1; }
       #op-noticias-section { grid-column: 1 / -1; }
     }
 
@@ -15808,12 +15811,15 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
           if (modoCompleto) {
             const netoSano = op.puntos_neto || 0;
-            // Filtro de sanidad: netos > 10000 son registros corruptos (baseline erróneo del scraper)
+            // Filtro de sanidad para TURNO: un turno real nunca supera 500 pts por jornada
+            // Valores > 500 son acumulados históricos mal etiquetados (ej: Ricardo 357 = acumulado de semanas)
+            const netoOkTurno = netoSano >= 0 && netoSano <= 500;
+            // Filtro más amplio para historial (puede haber días con más producción)
             const netoOk = netoSano >= 0 && netoSano <= 10000;
-            // Turnos del día de hoy
+            // Turnos del día de hoy — ACUMULAR con += para múltiples cortes por jornada
             if (op.fecha_dia === hoy && op.jornada && op.jornada !== 'Auto') {
               if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
-              if (netoOk) turnosHoy[id][op.jornada] = netoSano;
+              if (netoOkTurno) turnosHoy[id][op.jornada] += netoSano; // += no =
             }
             // Historial por día
             if (op.fecha_dia && netoOk) {

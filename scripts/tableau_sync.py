@@ -16,7 +16,7 @@ FALLBACK_VIEW = "Revenuedetailed"
 
 # --- CONFIGURACIÓN SUPABASE ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 
 def check_creds():
     print(f"📡 Verificando credenciales...")

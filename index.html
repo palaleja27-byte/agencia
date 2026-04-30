@@ -6417,14 +6417,79 @@
       if (e.target === document.getElementById('modal-det-op')) cerrarDetalle();
     });
 
-    // ==================== AVATARES ====================
+    // ==================== AVATARES Y BANNERS — SYNC SUPABASE ====================
     const AVATAR_PREFIX = 'rr_prime_avatar_';
     function avatarKey(name) { return AVATAR_PREFIX + name.replace(/\s+/g, '_').toLowerCase(); }
     function getAvatar(name) { return localStorage.getItem(avatarKey(name)) || null; }
     function saveAvatar(name, b64) { localStorage.setItem(avatarKey(name), b64); }
 
+    function bannerKey(name) { return 'rr_op_banner_' + name.replace(/\s+/g, '_').toUpperCase(); }
+    function getBanner(name) { return localStorage.getItem(bannerKey(name)) || null; }
+    function saveBanner(name, data) { localStorage.setItem(bannerKey(name), data); }
+
+    // ── Sync a Supabase (upsert en tabla rr_media) ─────────────────────
+    async function _mediaUpsert(name, tipo, data) {
+      if (typeof _sb === 'undefined' || !_sb) return;
+      try {
+        await _sb.from('rr_media').upsert(
+          { nombre: name.trim().toUpperCase(), tipo, data, updated_at: new Date().toISOString() },
+          { onConflict: 'nombre,tipo' }
+        );
+      } catch(e) { console.warn('[MEDIA] upsert error:', e); }
+    }
+
+    // ── Cargar todas las imágenes desde Supabase al iniciar ──────────────
+    async function mediaCargarTodo() {
+      if (typeof _sb === 'undefined' || !_sb) return;
+      try {
+        const { data, error } = await _sb.from('rr_media').select('nombre,tipo,data');
+        if (error || !data) return;
+        data.forEach(row => {
+          if (!row.nombre || !row.data) return;
+          const name = row.nombre;
+          if (row.tipo === 'avatar') {
+            localStorage.setItem(avatarKey(name), row.data);
+          } else if (row.tipo === 'banner') {
+            localStorage.setItem(bannerKey(name), row.data);
+          }
+        });
+        console.log(`[MEDIA] ${data.length} imágenes cargadas desde Supabase`);
+      } catch(e) { console.warn('[MEDIA] cargar error:', e); }
+    }
+
+    // ── Realtime: detectar cambios de otros dispositivos ────────────────
+    let _mediaRealtimeSub = null;
+    function mediaIniciarRealtime() {
+      if (typeof _sb === 'undefined' || !_sb || _mediaRealtimeSub) return;
+      _mediaRealtimeSub = _sb
+        .channel('rr_media_sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'rr_media' }, payload => {
+          const row = payload.new;
+          if (!row || !row.nombre || !row.data) return;
+          const name = row.nombre;
+          if (row.tipo === 'avatar') {
+            localStorage.setItem(avatarKey(name), row.data);
+            // Refrescar vistas sin recargar la página
+            const imgs = document.querySelectorAll('[data-av-name="' + name + '"]');
+            imgs.forEach(img => { img.src = row.data; });
+            if (currentOpName && currentOpName.trim().toUpperCase() === name) {
+              const heroAv = document.querySelector('#op-dash-avatar-wrap img[style*="border-radius:50%"]');
+              if (heroAv) heroAv.src = row.data;
+            }
+          } else if (row.tipo === 'banner') {
+            localStorage.setItem(bannerKey(name), row.data);
+            if (currentOpName && currentOpName.trim().toUpperCase() === name) {
+              const heroBn = document.querySelector('.op-banner-img');
+              if (heroBn) heroBn.src = row.data;
+            }
+          }
+          _toastSync('📸 Foto de ' + name + ' actualizada en todos los dispositivos');
+        })
+        .subscribe();
+      console.log('[MEDIA] Realtime activo para rr_media');
+    }
+
     function triggerAvatarUpload(idx, name) {
-      // Use a temporary hidden input to avoid duplicate-id issues
       const tmp = document.createElement('input');
       tmp.type = 'file'; tmp.accept = 'image/*'; tmp.style.display = 'none';
       tmp.onchange = (e) => handleAvatarUpload(e, name);
@@ -6432,10 +6497,6 @@
       tmp.click();
       setTimeout(() => document.body.removeChild(tmp), 10000);
     }
-
-    function bannerKey(name) { return 'rr_op_banner_' + name.replace(/\s+/g, '_').toUpperCase(); }
-    function getBanner(name) { return localStorage.getItem(bannerKey(name)) || null; }
-    function saveBanner(name, data) { localStorage.setItem(bannerKey(name), data); }
 
     function triggerBannerUpload(name) {
       const inp = document.createElement('input');
@@ -6448,11 +6509,24 @@
     function handleBannerUpload(event, name) {
       const file = event.target.files[0];
       if (!file) return;
+      // Comprimir antes de guardar
       const reader = new FileReader();
       reader.onload = (e) => {
-        saveBanner(name, e.target.result);
-        alert("Banner actualizado correctamente 🖼️");
-        renderVistaOperador();
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX = 1200;
+          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+          canvas.width = img.width * ratio;
+          canvas.height = img.height * ratio;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.75);
+          saveBanner(name, compressed);
+          _mediaUpsert(name.trim().toUpperCase(), 'banner', compressed);
+          renderVistaOperador();
+          _toastSync('🖼️ Banner actualizado y sincronizado');
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -6462,11 +6536,26 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (e) => {
-        saveAvatar(name, e.target.result);
-        renderRanking(); // refresh to show new avatar
+        const img = new Image();
+        img.onload = () => {
+          // Comprimir avatar a 200x200 máx
+          const canvas = document.createElement('canvas');
+          const MAX = 200;
+          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+          canvas.width = img.width * ratio;
+          canvas.height = img.height * ratio;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.80);
+          saveAvatar(name, compressed);
+          _mediaUpsert(name.trim().toUpperCase(), 'avatar', compressed);
+          renderRanking();
+          _toastSync('📸 Avatar actualizado y sincronizado');
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
+
 
     // ==================== DETALLE OPERADOR ====================
     let detOpIndex = null;
@@ -7356,6 +7445,13 @@
 
         _sbOnline = true;
         _bootProgress(90, 'Listo ✓');
+
+        // ── Sincronizar avatares y banners desde Supabase ──
+        if (typeof mediaCargarTodo === 'function') mediaCargarTodo().then(() => {
+          // Actualizar renders con fotos recién descargadas
+          if (typeof renderRanking === 'function') renderRanking();
+        });
+        if (typeof mediaIniciarRealtime === 'function') mediaIniciarRealtime();
 
         // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();

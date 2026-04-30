@@ -14,8 +14,9 @@ WORKBOOK_NAME = "Passport_16741406948180"
 VIEW_NAME = "Revenuedetailed"
 
 # --- CONFIGURACIÓN SUPABASE ---
+# Buscamos múltiples variantes por si el secreto en GitHub tiene otro nombre
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
 
 def log_error_to_supabase(msg):
     try:

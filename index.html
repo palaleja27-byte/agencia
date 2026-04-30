@@ -602,12 +602,14 @@
     }
 
     #op-dashboard.visible {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-      grid-auto-rows: auto;
-      gap: 14px;
-      padding: 16px;
+      display: grid !important;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)) !important;
+      grid-auto-rows: min-content;
+      gap: 16px;
+      padding: 20px;
       align-content: start;
+      width: 100% !important;
+    }
     }
 
     @media (min-width: 768px) {
@@ -627,12 +629,14 @@
     }
 
     .op-dash-hero {
-      grid-column: 1 / -1;
+      grid-column: 1 / -1 !important;
+      width: 100% !important;
+      min-width: 100% !important;
       background: linear-gradient(135deg, #0f1a35 0%, #111827 100%);
       border: 1px solid rgba(94, 234, 212, 0.25);
       border-radius: 20px;
       padding: 0;
-      margin-bottom: 0;
+      margin: 0 0 4px 0 !important;
       box-shadow: 0 8px 24px rgba(0,0,0,0.35);
       position: relative;
       overflow: visible;
@@ -7322,8 +7326,9 @@
 
       } catch (e) {
         _sbOnline = false;
-        _bootProgress(100, '⚠️ Sin internet — usando datos locales');
-        console.warn('[Supabase] sync load:', e.message);
+        const errMsg = (e.message || e.toString()).slice(0, 40);
+        _bootProgress(100, `⚠️ Error: ${errMsg} (Modo Local)`);
+        console.warn('[Supabase] sync load:', e);
         if (typeof loadData === 'function') loadData();
         if (currentRole === 'operador' && currentOpName) {
           if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);

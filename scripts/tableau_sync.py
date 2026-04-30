@@ -29,6 +29,23 @@ SUPABASE_KEY = (
 
 BATCH_SIZE = 200  # Registros por llamada a la función RPC
 
+# IDs de tu agencia cargados desde Supabase (fallback hardcodeado si falla la consulta)
+FALLBACK_IDS = {
+    # PANEL-1
+    "91360720",
+    # PANEL-2
+    "95956014", "91733663", "153039388", "95955130", "103289167",
+    "98389135", "98540781", "157067734", "103291980", "130431310",
+    "151070498", "143014129", "156716207",
+    # PANEL-3
+    "88243516", "79679899", "118692242", "109551682", "108018336",
+    "118179794", "130338853", "137163229", "120720195", "139247498",
+    "139245989", "120275229", "156881990", "130422416", "143017065",
+    "145211163", "145834230", "145844971", "157112125",
+    # PANEL-4
+    "131130713", "138130329", "133085188", "144863124",
+}
+
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPERS
@@ -68,6 +85,28 @@ def sb_headers() -> dict:
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type":  "application/json",
     }
+
+
+def fetch_agency_ids() -> set:
+    """
+    Obtiene desde Supabase los IDs de datame_perfiles (nuestra agencia).
+    Si falla, usa el fallback hardcodeado para no detener la sincronización.
+    """
+    url = f"{SUPABASE_URL}/rest/v1/datame_perfiles?select=id_datame&activo=eq.true"
+    try:
+        resp = requests.get(url, headers=sb_headers(), timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            ids  = {str(r["id_datame"]).strip() for r in data if r.get("id_datame")}
+            if ids:
+                print(f"   ✅ Whitelist cargada desde Supabase: {len(ids)} perfiles de la agencia")
+                return ids
+        print(f"   ⚠️  No se pudo cargar whitelist (HTTP {resp.status_code}) — usando fallback")
+    except Exception as e:
+        print(f"   ⚠️  Error al consultar datame_perfiles: {e} — usando fallback")
+
+    print(f"   📋 Fallback: {len(FALLBACK_IDS)} IDs hardcodeados")
+    return FALLBACK_IDS.copy()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -235,9 +274,14 @@ def sync_tableau():
             sb_log_error(msg)
             return
 
-        # ── 5. Construir payload ────────────────────────────────
+        # ── 5. Cargar whitelist de IDs de la agencia ───────────
+        print("\n🔍 Cargando whitelist de perfiles de la agencia...")
+        agency_ids = fetch_agency_ids()
+
+        # ── 6. Construir payload — solo IDs de nuestra agencia ──
         payload_batch = []
-        skipped       = 0
+        skipped_zero  = 0
+        skipped_ext   = 0
         seen_ids      = {}
 
         for _, row in df.iterrows():
@@ -245,16 +289,21 @@ def sync_tableau():
                 v_str = str(row[col_val]).replace("$", "").replace(",", "").replace(" ", "").strip()
                 total = float(v_str) if v_str and v_str.lower() != "nan" else 0.0
                 if total <= 0:
-                    skipped += 1
+                    skipped_zero += 1
                     continue
 
                 perfil_raw = str(row[col_id]).strip()
                 if not perfil_raw or perfil_raw.lower() == "nan":
-                    skipped += 1
+                    skipped_zero += 1
                     continue
 
                 nums     = re.findall(r"\d{7,10}", perfil_raw)
                 id_clean = nums[0] if nums else perfil_raw.split(" ")[0].split("_")[-1]
+
+                # ── FILTRO AGENCIA: descartar IDs de otras sedes ──
+                if id_clean not in agency_ids:
+                    skipped_ext += 1
+                    continue
 
                 # Deduplicar: sumar valores del mismo ID
                 if id_clean in seen_ids:
@@ -271,10 +320,14 @@ def sync_tableau():
                     "updated_at": "now()"
                 })
             except Exception:
-                skipped += 1
+                skipped_zero += 1
                 continue
 
-        print(f"\n📦 Registros válidos: {len(payload_batch)} | Descartados: {skipped}")
+        total_csv = len(df)
+        print(f"\n📦 CSV total: {total_csv} filas")
+        print(f"   ✅ Mi agencia (ROMERO): {len(payload_batch)} perfiles")
+        print(f"   🚫 Otras sedes (filtrados): {skipped_ext}")
+        print(f"   ⏭️  Sin valor / inválidos:  {skipped_zero}")
 
         if not payload_batch:
             print("⚠️  No hay datos válidos para subir.")

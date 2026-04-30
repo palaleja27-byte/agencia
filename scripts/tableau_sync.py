@@ -17,6 +17,18 @@ VIEW_NAME = "Revenuedetailed"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
+def log_error_to_supabase(msg):
+    try:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        supabase.table("tableau_data").upsert({
+            "perfil_id": "DEBUG_LOG",
+            "valor": 0,
+            "data_json": json.dumps({"error": msg, "timestamp": "now()"}),
+            "updated_at": "now()"
+        }, on_conflict="perfil_id").execute()
+    except:
+        pass
+
 def sync_tableau():
     print("🚀 Iniciando sincronización con Tableau Cloud...")
     
@@ -30,77 +42,93 @@ def sync_tableau():
         }
     }
     
-    res = requests.post(auth_url, json=auth_payload)
-    if res.status_code != 200:
-        print(f"❌ Error de auth en Tableau: {res.text}")
-        return
+    try:
+        res = requests.post(auth_url, json=auth_payload, timeout=30)
+        if res.status_code != 200:
+            msg = f"Error Auth Tableau: {res.text}"
+            print(f"❌ {msg}")
+            log_error_to_supabase(msg)
+            return
 
-    token = res.json()["credentials"]["token"]
-    site_id = res.json()["credentials"]["site"]["id"]
-    headers = {"X-Tableau-Auth": token}
-    print("✅ Autenticado en Tableau Site:", TABLEAU_SITE)
+        token = res.json()["credentials"]["token"]
+        site_id = res.json()["credentials"]["site"]["id"]
+        headers = {"X-Tableau-Auth": token}
+        print("✅ Autenticado en Tableau Site:", TABLEAU_SITE)
 
-    # 2. Buscar el ID de la vista
-    views_url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/views?filter=name:eq:{VIEW_NAME}"
-    res = requests.get(views_url, headers=headers)
-    views = res.json().get("views", {}).get("view", [])
-    if not views:
-        print("❌ No se encontró la vista Revenuedetailed")
-        return
-    
-    view_id = views[0]["id"]
-    print(f"✅ Vista encontrada ID: {view_id}")
+        # 2. Buscar el ID de la vista
+        views_url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/views?filter=name:eq:{VIEW_NAME}"
+        res = requests.get(views_url, headers=headers, timeout=30)
+        views = res.json().get("views", {}).get("view", [])
+        if not views:
+            msg = f"Vista '{VIEW_NAME}' no encontrada en el sitio"
+            print(f"❌ {msg}")
+            log_error_to_supabase(msg)
+            return
+        
+        view_id = views[0]["id"]
+        print(f"✅ Vista encontrada ID: {view_id}")
 
-    # 3. Descargar datos (CSV)
-    data_url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/views/{view_id}/data"
-    res = requests.get(data_url, headers=headers)
-    if res.status_code != 200:
-        print(f"❌ Error al descargar CSV: {res.text}")
-        return
+        # 3. Descargar datos (CSV)
+        data_url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/views/{view_id}/data"
+        res = requests.get(data_url, headers=headers, timeout=60)
+        if res.status_code != 200:
+            msg = f"Error descarga CSV (Status {res.status_code})"
+            print(f"❌ {msg}")
+            log_error_to_supabase(msg)
+            return
 
-    # 4. Procesar CSV con Pandas
-    df = pd.read_csv(io.StringIO(res.text))
-    df.columns = [c.strip() for c in df.columns]
-    print(f"📊 Columnas detectadas: {list(df.columns)}")
-    print(f"📊 Procesando {len(df)} filas de datos...")
-    
-    # Mapeo Inteligente de Columnas
-    col_id = next((c for c in df.columns if any(x in c.upper() for x in ['ID','PERFIL','USER','MODELO'])), None)
-    col_val = next((c for c in df.columns if any(x in c.upper() for x in ['TOTAL','VALOR','REVENUE','MONTO','GENERAL'])), None)
+        if len(res.text) < 10:
+            msg = "El CSV de Tableau vino vacío"
+            print(f"⚠️ {msg}")
+            log_error_to_supabase(msg)
+            return
 
-    if not col_id or not col_val:
-        print(f"❌ No se pudieron mapear las columnas. Columnas: {df.columns}")
-        return
+        # 4. Procesar CSV con Pandas
+        df = pd.read_csv(io.StringIO(res.text))
+        df.columns = [c.strip() for c in df.columns]
+        print(f"📊 Columnas detectadas: {list(df.columns)}")
+        
+        # Mapeo Inteligente
+        col_id = next((c for c in df.columns if any(x in c.upper() for x in ['ID','PERFIL','USER','MODELO'])), None)
+        col_val = next((c for c in df.columns if any(x in c.upper() for x in ['TOTAL','VALOR','REVENUE','MONTO','GENERAL'])), None)
 
-    results = []
-    for _, row in df.iterrows():
-        try:
-            val_raw = str(row[col_val]).replace('$','').replace(',','').strip()
-            total = float(val_raw) if val_raw else 0
-            perfil_raw = str(row[col_id]).strip()
+        if not col_id or not col_val:
+            msg = f"No se mapearon columnas en: {list(df.columns)}"
+            log_error_to_supabase(msg)
+            return
+
+        results = []
+        for _, row in df.iterrows():
+            try:
+                val_raw = str(row[col_val]).replace('$','').replace(',','').strip()
+                total = float(val_raw) if val_raw else 0
+                perfil_raw = str(row[col_id]).strip()
+                
+                if perfil_raw and total > 0:
+                    id_clean = perfil_raw.split('-')[0].split('/')[0].strip()
+                    results.append({
+                        "perfil_id": id_clean,
+                        "valor": total,
+                        "data_json": row.to_json(),
+                        "updated_at": "now()"
+                    })
+            except: continue
+
+        print(f"💾 Subiendo {len(results)} registros a Supabase...")
+        if results:
+            supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            for item in results:
+                supabase.table("tableau_data").upsert(item, on_conflict="perfil_id").execute()
             
-            if perfil_raw and total > 0:
-                # Extraer solo el ID si viene como "12345 - Nombre" o similar
-                id_clean = perfil_raw.split('-')[0].split('/')[0].strip()
-                results.append({
-                    "perfil_id": id_clean,
-                    "valor": total,
-                    "data_json": row.to_json(),
-                    "updated_at": "now()"
-                })
-        except Exception as e:
-            continue
-
-    print(f"💾 Subiendo {len(results)} registros a Supabase...")
-    
-    # 5. Guardar en Supabase
-    if results:
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        # Upsert por perfil_id
-        for item in results:
-            supabase.table("tableau_data").upsert(item, on_conflict="perfil_id").execute()
+            # Limpiar error anterior si hubo éxito
+            supabase.table("tableau_data").delete().eq("perfil_id", "DEBUG_LOG").execute()
             
-    print("🏁 Sincronización completada con éxito.")
+        print("🏁 Sincronización completada.")
+
+    except Exception as e:
+        msg = f"Error crítico en script: {str(e)}"
+        print(f"❌ {msg}")
+        log_error_to_supabase(msg)
 
 if __name__ == "__main__":
     sync_tableau()

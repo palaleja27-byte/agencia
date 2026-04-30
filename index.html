@@ -15747,24 +15747,32 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     async function loadTableauData() {
       if (typeof _sb === 'undefined' || !_sb) return;
       try {
-        const { data, error } = await _sb.from('tableau_data').select('perfil_id, valor, updated_at');
+        const { data, error } = await _sb.from('tableau_data').select('perfil_id, valor, updated_at, data_json');
         if (error) {
           if (typeof tableauLog === 'function') tableauLog('Error Supabase: ' + error.message, 'error');
           return;
         }
         _dpTableauData = {};
-        data.forEach(row => { _dpTableauData[row.perfil_id] = row.valor; });
+        
+        // Buscar Log de Depuración
+        const debugLog = data.find(d => d.perfil_id === 'DEBUG_LOG');
+        if (debugLog && typeof tableauLog === 'function') {
+          const info = JSON.parse(debugLog.data_json || '{}');
+          tableauLog(`⚠️ ALERTA ROBOT: ${info.error || 'Fallo desconocido'}`, 'error');
+        }
+
+        const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
+        validData.forEach(row => { _dpTableauData[row.perfil_id] = row.valor; });
         
         const timeEl = document.getElementById('tableau-sync-time');
-        if (timeEl && data.length > 0) {
-          const last = new Date(data[0].updated_at || new Date()).toLocaleTimeString('es-CO',{hour12:false});
+        if (timeEl && validData.length > 0) {
+          const last = new Date(validData[0].updated_at || new Date()).toLocaleTimeString('es-CO',{hour12:false});
           timeEl.textContent = 'Último: ' + last;
         }
         
-        if (typeof tableauLog === 'function') {
-          tableauLog(`📊 Cargados ${data.length} perfiles desde Supabase`, 'success');
+        if (typeof tableauLog === 'function' && validData.length > 0) {
+          tableauLog(`📊 Cargados ${validData.length} perfiles oficiales`, 'success');
         }
-        console.log('📊 [TABLEAU] Datos cargados:', data.length);
       } catch(e) {}
     }
 

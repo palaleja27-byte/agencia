@@ -124,23 +124,26 @@ def sync_tableau():
         results = []
         for _, row in df.iterrows():
             try:
-                # Limpiar valor (quitar $, comas, espacios)
+                # Limpiar valor numérico
                 v_str = str(row[col_val]).replace('$','').replace(',','').replace(' ','').strip()
                 total = float(v_str) if v_str and v_str != 'nan' else 0
                 
                 perfil_raw = str(row[col_id]).strip()
+                if not perfil_raw or total <= 0: continue
+
+                # Extracción Pro de ID: Buscamos el primer grupo de números largo
+                import re
+                nums = re.findall(r'\d+', perfil_raw)
+                id_clean = nums[0] if nums else perfil_raw.split(' ')[0].split('_')[-1]
                 
-                if perfil_raw and total > 0:
-                    # El ID suele ser la primera parte antes de un guión o espacio
-                    id_clean = perfil_raw.split('-')[0].split('/')[0].split(' ')[0].strip()
-                    results.append({
-                        "perfil_id": id_clean,
-                        "valor": total,
-                        "data_json": row.to_json(),
-                        "updated_at": "now()"
-                    })
+                results.append({
+                    "perfil_id": id_clean,
+                    "valor": total,
+                    "data_json": row.to_json(),
+                    "updated_at": "now()"
+                })
             except Exception as e:
-                print(f"⚠️ Error procesando fila: {e}")
+                print(f"⚠️ Error procesando fila {row.get(col_id)}: {e}")
                 continue
 
         print(f"💾 Subiendo {len(results)} registros a Supabase...")

@@ -6131,7 +6131,8 @@
           return `<div class="rk-op-card ${cardClass}">
             <div class="rk-card-head">
               <div class="rk-card-avatar-wrap" onclick="triggerAvatarUpload(${globalIndex}, '${safeName}')">
-                ${avatarHTML}
+                ${av ? `<img src="${av}" data-av-name="${safeName.toUpperCase()}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; border:2px solid #5eead4;">` 
+                     : `<div class="rk-card-avatar-ph">👤</div>`}
               </div>
               <input type="file" accept="image/*" class="pos-input-hidden" id="av-input-${globalIndex}"
                 onchange="handleAvatarUpload(event,'${safeName}')">
@@ -6517,21 +6518,23 @@
           const name = row.nombre;
           if (row.tipo === 'avatar') {
             localStorage.setItem(avatarKey(name), row.data);
-            // Refrescar vistas sin recargar la página
-            const imgs = document.querySelectorAll('[data-av-name="' + name + '"]');
+            // 🚀 Actualización reactiva: buscar todas las imágenes con este nombre
+            const target = name.trim().toUpperCase();
+            const imgs = document.querySelectorAll(`[data-av-name="${target}"]`);
             imgs.forEach(img => { img.src = row.data; });
-            if (currentOpName && currentOpName.trim().toUpperCase() === name) {
-              const heroAv = document.querySelector('#op-dash-avatar-wrap img[style*="border-radius:50%"]');
+            
+            // Si es el operador logueado, actualizar su hero
+            if (currentOpName && currentOpName.trim().toUpperCase() === target) {
+              const heroAv = document.querySelector('#op-dash-avatar-wrap img[style*="object-fit:cover"]');
               if (heroAv) heroAv.src = row.data;
             }
           } else if (row.tipo === 'banner') {
             localStorage.setItem(bannerKey(name), row.data);
-            if (currentOpName && currentOpName.trim().toUpperCase() === name) {
-              const heroBn = document.querySelector('.op-banner-img');
-              if (heroBn) heroBn.src = row.data;
-            }
+            const target = name.trim().toUpperCase();
+            const bns = document.querySelectorAll(`[data-bn-name="${target}"]`);
+            bns.forEach(img => { img.src = row.data; });
           }
-          _toastSync('📸 Foto de ' + name + ' actualizada en todos los dispositivos');
+          _toastSync('📸 Foto de ' + name + ' actualizada');
         })
         .subscribe();
       console.log('[MEDIA] Realtime activo para rr_media');
@@ -12151,7 +12154,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (!_avatarWrap) return;
       _avatarWrap.innerHTML = `
         <div class="op-banner-wrap" onclick="triggerBannerUpload('${safeName}')">
-          ${bn ? `<img src="${bn}" class="op-banner-img">` : '<div class="op-banner-img" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)"></div>'}
+          ${bn ? `<img src="${bn}" class="op-banner-img" data-bn-name="${safeName.toUpperCase()}">` : `<div class="op-banner-img" data-bn-name="${safeName.toUpperCase()}" style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)"></div>`}
           <div class="op-banner-hint">📸 Cambiar banner</div>
         </div>
         <div style="display:flex; align-items:stretch; gap:0; position:relative; z-index:10; background:rgba(15,26,53,0.5); backdrop-filter:blur(8px); flex-wrap:wrap; width:100%; box-sizing:border-box;">
@@ -12159,8 +12162,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           <!-- LEFT: avatar + nombre -->
           <div style="display:flex; align-items:center; gap:12px; padding:16px 18px; flex:1; min-width:min(220px,60%); box-sizing:border-box;">
             <div class="op-dash-av-clickable" style="position:relative; flex-shrink:0; width:64px; height:64px; z-index:11;" onclick="triggerAvatarUpload(null, '${safeName}')">
-              ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border:3px solid #5eead4; border-radius:50%; box-shadow:0 0 20px rgba(94,234,212,0.3);">` 
-                   : `<div style="width:100%; height:100%; font-size:2rem; background:#1e293b; border:3px solid #5eead4; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 20px rgba(94,234,212,0.3);">👤</div>`}
+              ${av ? `<img src="${av}" data-av-name="${safeName.toUpperCase()}" style="width:100%; height:100%; object-fit:cover; border:3px solid #5eead4; border-radius:50%; box-shadow:0 0 20px rgba(94,234,212,0.3);">` 
+                   : `<div data-av-name="${safeName.toUpperCase()}" style="width:100%; height:100%; font-size:2rem; background:#1e293b; border:3px solid #5eead4; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 20px rgba(94,234,212,0.3);">👤</div>`}
               <div style="position:absolute; bottom:2px; right:2px; width:14px; height:14px; background:#34d399; border:2px solid #0f1a35; border-radius:50%; box-shadow:0 0 8px rgba(52,211,153,0.6);"></div>
               <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; opacity:0; transition:0.3s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0">
                  <span style="font-size:0.6rem; color:white; font-weight:800;">Cambiar</span>

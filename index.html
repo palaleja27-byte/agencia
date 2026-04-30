@@ -708,10 +708,12 @@
 
     /* Mosaic layout en pantallas grandes */
     @media (min-width: 1024px) {
+      .op-dash-hero { grid-column: 1 / -1; width: 100%; }
       #op-tasks-section { grid-column: span 1; }
       #op-stats-section { grid-column: span 2; }
-      #op-noticias-section { grid-column: 1 / -1; }
+      #op-rank-section { grid-column: span 1; }
       #op-ice-section { grid-column: span 1; }
+      #op-noticias-section { grid-column: 1 / -1; }
       #op-openclaw-section { grid-column: 1 / -1; }
     }
 
@@ -4233,7 +4235,7 @@
       <div class="op-section-title">📊 Tu rendimiento completo</div>
       <div id="op-stats-content"></div>
     </div>
-    <div class="op-section">
+    <div class="op-section" id="op-rank-section">
       <div class="op-section-title">🏆 Tu posición en el ranking</div>
       <div class="op-ranking-pos" id="op-rank-pos">—</div>
       <div class="op-ranking-sub" id="op-rank-sub"></div>
@@ -4426,9 +4428,30 @@
             <span>⚡ <strong id="dp-t-hoy-pts" style="color:#34d399;">0,0</strong> pts <span id="dp-t-hoy-cop" style="font-size:.62rem;color:#34d399;">$0 COP</span></span>
             <span style="margin-left:auto;">📅 Total panel: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong> <strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
           </div>
+          <!-- RESUMEN CORTE DE TURNO (Suma de todos los paneles) -->
+          <div id="dp-corte-turno-wrap" style="background:rgba(15,23,42,0.6); border-top:1px solid rgba(45,212,191,0.1); padding:14px 18px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+              <div>
+                <h4 style="margin:0; font-size:.85rem; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px;">📋 Resumen para Corte de Turno</h4>
+                <p style="margin:4px 0 0; font-size:.65rem; color:#64748b; line-height:1.4;">
+                  Estas cifras corresponden a la <strong>Suma Global Neta</strong> de todos los paneles. Suman la producción real de cada perfil desde el inicio del turno actual.
+                </p>
+              </div>
+              <div id="dp-corte-active-label" style="background:rgba(99,102,241,0.2); color:#818cf8; padding:4px 10px; border-radius:6px; font-size:.6rem; font-weight:800; text-transform:uppercase;">TURNO: —</div>
+            </div>
+            
+            <div id="dp-corte-perfiles-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:8px; max-height:200px; overflow-y:auto; padding:4px;">
+              <!-- Se llena vía JS -->
+            </div>
+            
+            <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+               <span style="font-size:.7rem; color:#94a3b8;">Total acumulado en este turno (Global):</span>
+               <strong id="dp-corte-total-global" style="font-size:1.1rem; color:#34d399;">0.0 pts</strong>
+            </div>
+          </div>
           
           <!-- Consola de Logs (Debug) -->
-          <div id="dp-logs-container" style="background:#020617; border-top:1px solid rgba(45,212,191,.1); padding:8px 14px;">
+          <div id="dp-logs-container" style="background:#020617; border-top:1px solid rgba(255,255,255,0.05); padding:8px 14px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
               <span style="font-size:.6rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:1px;">🛰️ Consola de Sincronización</span>
               <button onclick="document.getElementById('dp-logs-console').innerHTML=''" style="background:none; border:none; color:#475569; font-size:.6rem; cursor:pointer;">Limpiar</button>
@@ -15481,6 +15504,37 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const copEl = document.getElementById('dp-panel-total-cop');
       if (ptsEl) ptsEl.textContent = totalMesPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
       if (copEl) copEl.textContent = '$' + totalCop + ' COP';
+
+      // ── Resumen Corte de Turno (Lista de perfiles activa) ──────────
+      const corteWrap = document.getElementById('dp-corte-perfiles-list');
+      if (corteWrap) {
+        const tAct = detectarTurno();
+        const labelEl = document.getElementById('dp-corte-active-label');
+        if (labelEl) labelEl.textContent = 'TURNO: ' + tAct.toUpperCase();
+        
+        let globalShiftPts = 0;
+        const allPerfs = Object.values(DP_PERFILES_MAP).flat();
+        
+        const perfilesHtml = Object.entries(_dpTurnosData).map(([id, tData]) => {
+          const pts = tData[tAct] || 0;
+          if (pts <= 0) return '';
+          globalShiftPts += pts;
+          const perfInfo = allPerfs.find(p => String(p.id) === String(id));
+          const name = perfInfo ? perfInfo.modelo : 'ID: ' + id;
+          return `
+            <div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; border:1px solid rgba(255,255,255,0.05);">
+              <div style="min-width:0; flex:1; padding-right:10px;">
+                <div style="font-size:0.75rem; font-weight:700; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${name}</div>
+                <div style="font-size:0.55rem; color:#475569;">ID: ${id}</div>
+              </div>
+              <div style="font-size:0.9rem; font-weight:800; color:#5eead4;">${pts.toLocaleString('es-CO',{minimumFractionDigits:1})}</div>
+            </div>`;
+        }).join('');
+        
+        corteWrap.innerHTML = perfilesHtml || '<div style="grid-column:1/-1; text-align:center; padding:20px; color:#475569; font-size:.7rem;">No hay producción registrada en este turno aún.</div>';
+        const totalGlobalEl = document.getElementById('dp-corte-total-global');
+        if (totalGlobalEl) totalGlobalEl.textContent = globalShiftPts.toLocaleString('es-CO',{minimumFractionDigits:1}) + ' pts';
+      }
       
       // ── Ganancia Líder Real-Time (10% del turno activo) ───────────
       const tAct = detectarTurno();

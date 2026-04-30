@@ -15821,14 +15821,16 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
             };
           }
 
-          // ── Cifra grande = SUMA de puntos_neto del mes activo ────────
-          // Se excluyen jornada='Auto' y valores anómalos > 5000 (datos de migración)
-          const mesActual = hoy.slice(0, 7);
-          if (op.fecha_dia && op.fecha_dia.startsWith(mesActual) && op.jornada !== 'Auto') {
-            const neto = op.puntos_neto || 0;
-            // umbral ampliado a 9900 para cubrir perfiles con alto volumen mensual
-            if (neto > 0 && neto < 9900) {
-              nuevosDatos[id].puntos_total += neto;
+          // ── Cifra grande = `puntos` del registro más reciente (acumulado real de Datame)
+          // `puntos` = "En Curso" del Excel = total mensual real mantenido por Datame.
+          // Solo se toma del primer registro (el más reciente, ya que ordenamos desc),
+          // evitando sumar deltas que pueden tener historial incompleto.
+          if (!nuevosDatos[id]._puntosSet) {
+            const puntosReales = op.puntos || 0;
+            // Sanidad: ignora valores absurdos (>500000 = dato corrupto de migración)
+            if (puntosReales > 0 && puntosReales < 500000) {
+              nuevosDatos[id].puntos_total = puntosReales;
+              nuevosDatos[id]._puntosSet = true;
             }
           }
 

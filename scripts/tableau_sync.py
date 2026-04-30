@@ -4,6 +4,7 @@ import pandas as pd
 import json
 import io
 import re
+import base64
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN TABLEAU
@@ -13,13 +14,11 @@ TABLEAU_SITE   = "partnerdata"
 TOKEN_NAME     = "Analytics"
 TOKEN_SECRET   = os.getenv("TABLEAU_TOKEN_SECRET")
 
-VIEW_NAME    = "GRUPOROMERO"
+VIEW_NAME     = "GRUPOROMERO"
 FALLBACK_VIEW = "Revenuedetailed"
 
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN SUPABASE
-# — Usamos requests directamente para BYPASSEAR RLS al 100%
-#   (el cliente de Python v2 a veces no envía el rol correcto)
 # ═══════════════════════════════════════════════════════════════════
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = (
@@ -28,83 +27,110 @@ SUPABASE_KEY = (
     os.getenv("SUPABASE_KEY") or ""
 )
 
-# ─── Headers con service_role explícito ──────────────────────────
-def sb_headers():
-    """Headers que le dicen a Supabase: 'soy service_role, ignora RLS'."""
-    return {
-        "apikey":        SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type":  "application/json",
-        "Prefer":        "resolution=merge-duplicates,return=minimal",
-    }
+BATCH_SIZE = 200  # Registros por llamada a la función RPC
 
-BATCH_SIZE = 500   # Supabase acepta hasta 500 registros por llamada
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════
-def check_creds():
+def decode_jwt_role(token: str) -> str:
+    """Decodifica el payload del JWT para mostrar el rol."""
+    try:
+        payload_b64 = token.split(".")[1]
+        padding = 4 - len(payload_b64) % 4
+        decoded = base64.b64decode(payload_b64 + "=" * padding).decode()
+        payload = json.loads(decoded)
+        return payload.get("role", "desconocido")
+    except Exception:
+        return "no decodificable"
+
+
+def check_creds() -> bool:
     print("📡 Verificando credenciales...")
-    print(f"   URL: {SUPABASE_URL[:20]}..." if SUPABASE_URL else "   URL: ❌ FALTANTE")
-    key_preview = SUPABASE_KEY[:6] + "***" if SUPABASE_KEY else "❌ FALTANTE"
-    print(f"   KEY: {key_preview}")
+    print(f"   URL: {SUPABASE_URL[:25]}..." if SUPABASE_URL else "   URL: ❌ FALTANTE")
 
-    # Determinar si es service_role o anon (la service_role tiene 'service_role' en el payload JWT)
-    if SUPABASE_KEY:
-        try:
-            import base64
-            payload_part = SUPABASE_KEY.split(".")[1]
-            padding = 4 - len(payload_part) % 4
-            decoded = base64.b64decode(payload_part + "=" * padding).decode()
-            if "service_role" in decoded:
-                print("   ROL: ✅ service_role (bypass RLS activo)")
-            else:
-                print("   ROL: ⚠️  anon/user — NO puede escribir con RLS activo")
-        except Exception:
-            print("   ROL: (no se pudo decodificar el JWT)")
+    if not SUPABASE_KEY:
+        print("   KEY: ❌ FALTANTE")
+        return False
 
-    return bool(SUPABASE_URL and SUPABASE_KEY)
+    rol = decode_jwt_role(SUPABASE_KEY)
+    icon = "✅" if rol == "service_role" else "⚠️ "
+    print(f"   KEY: {SUPABASE_KEY[:6]}***")
+    print(f"   ROL: {icon} {rol}")
+    if rol != "service_role":
+        print("   ℹ️  Usando modo CYBERPUNK: RPC SECURITY DEFINER (bypass RLS sin service_role)")
+    return bool(SUPABASE_URL)
 
 
-def sb_upsert_batch(records: list) -> bool:
+def sb_headers() -> dict:
+    return {
+        "apikey":        SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type":  "application/json",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CYBERPUNK UPSERT — Llama a la función SECURITY DEFINER
+# Funciona con anon key Y con service_role key
+# ═══════════════════════════════════════════════════════════════════
+def sb_rpc_upsert(records: list) -> bool:
     """
-    Hace upsert directo vía REST a Supabase usando requests.
-    Bypassea completamente el cliente de Python (que a veces pierde el rol).
-    Divide en lotes de BATCH_SIZE para evitar límites de payload.
+    Llama a la función Postgres `upsert_tableau_batch(jsonb)`.
+    Al ser SECURITY DEFINER, corre como owner y bypasea RLS
+    sin importar qué key esté usando el llamador.
     """
-    url = f"{SUPABASE_URL}/rest/v1/tableau_data"
+    url     = f"{SUPABASE_URL}/rest/v1/rpc/upsert_tableau_batch"
     headers = sb_headers()
-    total = len(records)
+    total   = len(records)
     uploaded = 0
 
     for i in range(0, total, BATCH_SIZE):
-        batch = records[i : i + BATCH_SIZE]
-        resp = requests.post(url, headers=headers, json=batch, timeout=30)
+        batch   = records[i : i + BATCH_SIZE]
+        payload = {"records": batch}
+
+        resp = requests.post(url, headers=headers, json=payload, timeout=30)
 
         if resp.status_code in (200, 201):
-            uploaded += len(batch)
-            print(f"   ✅ Lote {i//BATCH_SIZE + 1}: {len(batch)} registros subidos OK")
+            try:
+                result = resp.json()
+                count  = result.get("inserted", len(batch))
+            except Exception:
+                count = len(batch)
+            uploaded += count
+            print(f"   ✅ Lote {i//BATCH_SIZE + 1}: {count} registros escritos (SECURITY DEFINER)")
         else:
-            print(f"   ❌ Lote {i//BATCH_SIZE + 1} falló — HTTP {resp.status_code}: {resp.text[:300]}")
+            print(f"   ❌ Lote {i//BATCH_SIZE + 1} falló — HTTP {resp.status_code}: {resp.text[:400]}")
             return False
 
-    print(f"💾 Total: {uploaded}/{total} registros sincronizados con Supabase.")
+    print(f"\n💾 Total: {uploaded}/{total} registros sincronizados.")
     return True
 
 
-def sb_delete_debug_log():
-    url = f"{SUPABASE_URL}/rest/v1/tableau_data?perfil_id=eq.DEBUG_LOG"
-    requests.delete(url, headers=sb_headers(), timeout=10)
-
-
 def sb_log_error(msg: str):
-    url = f"{SUPABASE_URL}/rest/v1/tableau_data"
-    payload = [{
+    """Graba error en la tabla para que el Dashboard lo muestre."""
+    url     = f"{SUPABASE_URL}/rest/v1/rpc/upsert_tableau_batch"
+    payload = {"records": [{
         "perfil_id":  "DEBUG_LOG",
         "valor":      0,
         "data_json":  {"error": msg},
         "updated_at": "now()"
-    }]
+    }]}
+    try:
+        requests.post(url, headers=sb_headers(), json=payload, timeout=10)
+    except Exception:
+        pass
+
+
+def sb_delete_debug_log():
+    """Limpia el log de error si la sincronización fue exitosa."""
+    url = f"{SUPABASE_URL}/rest/v1/rpc/upsert_tableau_batch"
+    payload = {"records": [{
+        "perfil_id":  "DEBUG_LOG",
+        "valor":      0,
+        "data_json":  {"status": "cleared"},
+        "updated_at": "now()"
+    }]}
     try:
         requests.post(url, headers=sb_headers(), json=payload, timeout=10)
     except Exception:
@@ -132,8 +158,10 @@ def sync_tableau():
     }
 
     try:
-        res = requests.post(auth_url, json=auth_payload,
-                            headers={"Accept": "application/json"}, timeout=30)
+        res = requests.post(
+            auth_url, json=auth_payload,
+            headers={"Accept": "application/json"}, timeout=30
+        )
         print(f"📡 Status Auth: {res.status_code}")
 
         if res.status_code != 200:
@@ -142,8 +170,8 @@ def sync_tableau():
             sb_log_error(msg)
             return
 
-        data   = res.json()
-        token  = data["credentials"]["token"]
+        data    = res.json()
+        token   = data["credentials"]["token"]
         site_id = data["credentials"]["site"]["id"]
         t_headers = {"X-Tableau-Auth": token, "Accept": "application/json"}
         print("✅ Autenticado con éxito en Tableau.")
@@ -199,7 +227,7 @@ def sync_tableau():
                 (c for c in df.columns if "REVENUE" in c.upper() and "TYPE" not in c.upper()), None
             )
         )
-        print(f"🎯 Columnas mapeadas → ID='{col_id}' | Valor='{col_val}'")
+        print(f"🎯 Columnas → ID='{col_id}' | Valor='{col_val}'")
 
         if not col_id or not col_val:
             msg = f"No se encontraron columnas clave en: {list(df.columns)}"
@@ -209,8 +237,8 @@ def sync_tableau():
 
         # ── 5. Construir payload ────────────────────────────────
         payload_batch = []
-        skipped = 0
-        seen_ids = set()
+        skipped       = 0
+        seen_ids      = {}
 
         for _, row in df.iterrows():
             try:
@@ -225,18 +253,17 @@ def sync_tableau():
                     skipped += 1
                     continue
 
-                # Extraer ID numérico de 7-10 dígitos (IDs de Datame/Tableau)
-                nums = re.findall(r"\d{7,10}", perfil_raw)
+                nums     = re.findall(r"\d{7,10}", perfil_raw)
                 id_clean = nums[0] if nums else perfil_raw.split(" ")[0].split("_")[-1]
 
-                # Deduplicar: si ya existe, sumamos el valor
+                # Deduplicar: sumar valores del mismo ID
                 if id_clean in seen_ids:
-                    for rec in payload_batch:
-                        if rec["perfil_id"] == id_clean:
-                            rec["valor"] = round(rec["valor"] + total, 2)
+                    payload_batch[seen_ids[id_clean]]["valor"] = round(
+                        payload_batch[seen_ids[id_clean]]["valor"] + total, 2
+                    )
                     continue
-                seen_ids.add(id_clean)
 
+                seen_ids[id_clean] = len(payload_batch)
                 payload_batch.append({
                     "perfil_id":  id_clean,
                     "valor":      round(total, 2),
@@ -253,18 +280,17 @@ def sync_tableau():
             print("⚠️  No hay datos válidos para subir.")
             return
 
-        # ── 6. Subir a Supabase (REST directo — bypass RLS) ────
-        print(f"\n📤 Subiendo a Supabase vía REST (Service Role — bypass RLS)...")
-        ok = sb_upsert_batch(payload_batch)
+        # ── 6. CYBERPUNK UPSERT vía RPC SECURITY DEFINER ───────
+        print(f"\n⚡ CYBERPUNK MODE: RPC upsert_tableau_batch (bypass RLS)...")
+        ok = sb_rpc_upsert(payload_batch)
 
         if ok:
-            sb_delete_debug_log()
-            print("\n🏁 ¡Sincronización completada con éxito! ✅")
+            print("\n🏁 ¡SYNC COMPLETADO! Tableau → Supabase ✅")
         else:
-            print("\n❌ Sincronización falló en la subida. Revisa los logs anteriores.")
+            print("\n❌ Sync falló. Revisa los logs anteriores.")
 
     except Exception as e:
-        msg = f"Error crítico en script: {str(e)}"
+        msg = f"Error crítico: {str(e)}"
         print(f"\n❌ {msg}")
         sb_log_error(msg)
 

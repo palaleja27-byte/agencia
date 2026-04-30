@@ -715,7 +715,8 @@
       .op-dash-hero { grid-column: 1 / -1; width: 100%; }
       #op-tasks-section { grid-column: span 1; }
       #op-stats-section { grid-column: span 2; }
-      #op-rank-section { grid-column: span 1; }
+      #op-rank-section { grid-column: 1 / -1; }
+      #op-profiles-section { grid-column: span 1; }
       #op-ice-section { grid-column: span 1; }
       #op-noticias-section { grid-column: 1 / -1; }
       #op-openclaw-section { grid-column: 1 / -1; }
@@ -12084,49 +12085,68 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
          PT.renderOperatorTasks(name);
       }
 
-      // Ranking position — usa puntos reales del mes (cortes reales, no op[curr] hardcoded)
-      const _mesRank = localDateStr().slice(0, 7);
-      const _hoyRank = localDateStr();
-      const _futRank = localDateStr(new Date(Date.now() + 3 * 86400000));
-      const base = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
-      base.sort((a, b) => {
-        const ptA = getCortesOp(a.name).filter(c => {
-          if (!c.fecha) return false;
-          return (c.fecha.slice(0, 7) === _mesRank) || (c.fecha >= _hoyRank && c.fecha <= _futRank);
-        }).reduce((s, c) => s + (c.puntos || 0), 0) || a[curr] || 0;
-        const ptB = getCortesOp(b.name).filter(c => {
-          if (!c.fecha) return false;
-          return (c.fecha.slice(0, 7) === _mesRank) || (c.fecha >= _hoyRank && c.fecha <= _futRank);
-        }).reduce((s, c) => s + (c.puntos || 0), 0) || b[curr] || 0;
-        return ptB - ptA;
-      });
-      const pos = base.findIndex(o => o.name === op.name) + 1;
-      const medals = ['', '🥇', '🥈', '🥉'];
+      // ── Ranking DIARIO (Top 10 del día) ──────────────────────────
+      const _hoyStr = localDateStr();
+      const baseDaily = operatorsData
+        .filter(o => o.group !== 'SP' && o.group !== 'N/A')
+        .map(o => {
+           const ptsHoy = getCortesOp(o.name)
+             .filter(c => c.fecha === _hoyStr && (c.puntos || 0) < 10000)
+             .reduce((s, c) => s + (c.puntos || 0), 0);
+           return { name: o.name, group: o.group, points_hoy: ptsHoy };
+        });
       
-      // Ranking section refactored to be more dynamic
-      const top3 = base.slice(0, 3).map((o, i) => {
+      baseDaily.sort((a, b) => b.points_hoy - a.points_hoy);
+      const pos = baseDaily.findIndex(o => o.name.toUpperCase() === op.name.toUpperCase()) + 1;
+      const medals = ['🥇', '🥈', '🥉'];
+      
+      const top10HTML = baseDaily.slice(0, 10).map((o, i) => {
         const isMe = o.name.toUpperCase() === op.name.toUpperCase();
+        const pts = o.points_hoy > 0 ? o.points_hoy.toLocaleString('es-CO',{maximumFractionDigits:1}) : '0';
         return `
-          <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:${isMe ? 'rgba(94, 234, 212, 0.1)' : 'rgba(255,255,255,0.03)'}; border-radius:8px; margin-bottom:4px; border:1px solid ${isMe ? 'rgba(94, 234, 212, 0.2)' : 'transparent'};">
-            <span style="font-size:1rem;">${medals[i+1]}</span>
-            <span style="font-size:0.8rem; color:${isMe ? 'var(--accent)' : 'white'}; font-weight:${isMe?'700':'500'};">${o.name}</span>
-          </div>
-        `;
+          <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:${isMe ? 'rgba(94, 234, 212, 0.15)' : 'rgba(255,255,255,0.03)'}; border-radius:12px; border:1px solid ${isMe ? '#5eead455' : 'transparent'}; margin-bottom:8px;">
+            <div style="width:24px; font-weight:900; font-size:0.9rem; color:${i<3?'#fbbf24':'#475569'}; text-align:center;">${i<3 ? medals[i] : (i+1)}</div>
+            <div style="flex:1; min-width:0;">
+               <div style="font-size:0.85rem; font-weight:700; color:${isMe?'#5eead4':'white'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${o.name}</div>
+               <div style="font-size:0.6rem; color:#64748b; font-weight:700; text-transform:uppercase;">Grupo ${o.group}</div>
+            </div>
+            <div style="text-align:right;">
+               <div style="font-size:1.1rem; font-weight:900; color:#5eead4;">${pts}</div>
+               <div style="font-size:0.5rem; color:#475569; text-transform:uppercase;">PTS HOY</div>
+            </div>
+          </div>`;
       }).join('');
 
-      const _rankEl = document.getElementById('op-rank-pos'); if (_rankEl) _rankEl.innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-          <div style="font-size:2.8rem; font-weight:900; color:var(--accent); line-height:1;">#${pos}</div>
-          <div style="text-align:left;">
-            <div style="font-size:0.6rem; color:#64748b; text-transform:uppercase; letter-spacing:1px;">Global</div>
-            <div style="font-size:0.8rem; font-weight:700;">${medals[pos] || ''} de ${base.length}</div>
+      const _rankEl = document.getElementById('op-rank-pos');
+      if (_rankEl) {
+        _rankEl.innerHTML = `
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(94,234,212,0.05); padding:15px 20px; border-radius:16px; border:1px dashed rgba(94,234,212,0.2);">
+               <div style="display:flex; align-items:center; gap:12px;">
+                  <div style="font-size:3.5rem; font-weight:900; color:#5eead4; line-height:1; font-family:'Bebas Neue',sans-serif;">#${pos}</div>
+                  <div>
+                    <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Tu Posición Hoy</div>
+                    <div style="font-size:0.9rem; font-weight:700; color:white;">Global de ${baseDaily.length}</div>
+                  </div>
+               </div>
+               <div style="text-align:right;">
+                  <div style="font-size:0.6rem; color:#475569; text-transform:uppercase; font-weight:800;">Actualizado</div>
+                  <div id="op-rank-sub" style="font-size:0.8rem; font-weight:700; color:#818cf8;">Recién</div>
+               </div>
+            </div>
+            
+            <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
+               <div style="font-size:0.75rem; color:#5eead4; font-weight:900; text-transform:uppercase; letter-spacing:2px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                  <span>🏆 TOP 10 MEJORES DEL DÍA</span>
+                  <div style="flex:1; height:1px; background:linear-gradient(90deg, rgba(94,234,212,0.3), transparent);"></div>
+               </div>
+               <div id="op-top-daily-list" style="max-height:350px; overflow-y:auto; padding-right:6px; scrollbar-width:thin;">
+                  ${top10HTML}
+               </div>
+            </div>
           </div>
-        </div>
-        <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
-          <div style="font-size:0.6rem; color:#64748b; margin-bottom:8px; text-transform:uppercase;">Top 3 Global</div>
-          ${top3}
-        </div>
-      `;
+        `;
+      }
       const _rankSubEl = document.getElementById('op-rank-sub'); if (_rankSubEl) _rankSubEl.textContent = 'Actualizado: ' + currLabel;
 
       // Barra competitiva

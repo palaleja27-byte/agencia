@@ -719,6 +719,8 @@
     @media (min-width: 600px) and (max-width: 1023px) {
       #op-noticias-section { grid-column: 1 / -1; }
       #op-openclaw-section { grid-column: 1 / -1; }
+      #op-tasks-section { grid-column: 1 / -1; }
+      #op-stats-section { grid-column: 1 / -1; }
     }
 
     /* En móvil: todo 1 columna */
@@ -729,6 +731,8 @@
         gap: 10px;
       }
       .op-dash-hero { grid-column: 1 / -1; }
+      #op-tasks-section { grid-column: 1 / -1; }
+      #op-stats-section { grid-column: 1 / -1; }
       #op-noticias-section { grid-column: 1 / -1; }
       #op-openclaw-section { grid-column: 1 / -1; }
       .op-section { border-radius: 14px; padding: 12px; }
@@ -4405,7 +4409,14 @@
           <div class="dp-grid" id="dp-perfiles-grid"></div>
           <!-- Barra totales -->
           <div class="dp-total-bar" style="flex-wrap:wrap;gap:6px 16px;padding:10px 18px;">
-            <span style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">HOY POR TURNO</span>
+            <div style="width:100%; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px; margin-bottom:4px;">
+               <span style="font-size:.58rem;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:800;">🌍 SUMA GLOBAL (Todos los paneles)</span>
+               <span style="font-size:.65rem; color:#fbbf24;">🌅 <strong id="dp-g-man-pts">0,0</strong></span>
+               <span style="font-size:.65rem; color:#818cf8;">🌇 <strong id="dp-g-tar-pts">0,0</strong></span>
+               <span style="font-size:.65rem; color:#7dd3fc;">🌙 <strong id="dp-g-noc-pts">0,0</strong></span>
+               <span style="margin-left:auto; font-size:.65rem; color:#34d399;">⚡ Total: <strong id="dp-g-hoy-pts">0,0</strong> <small id="dp-g-hoy-cop" style="opacity:0.6; font-size:.55rem;">$0</small></span>
+            </div>
+            <span style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">🕐 HOY POR TURNO (Panel actual)</span>
             <span>🌅 <strong id="dp-t-man-pts" style="color:#fbbf24;">0,0</strong> pts <span id="dp-t-man-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
             <span style="color:#334155;">|</span>
             <span>🌇 <strong id="dp-t-tar-pts" style="color:#818cf8;">0,0</strong> pts <span id="dp-t-tar-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
@@ -15352,6 +15363,15 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       let totalMesPts = 0;
       let acumMan = 0, acumTar = 0, acumNoc = 0;
 
+      // Calcular Totales Globales (Todos los paneles)
+      let gMan = 0, gTar = 0, gNoc = 0;
+      Object.values(_dpTurnosData).forEach(t => {
+        gMan += t['Mañana'] || 0;
+        gTar += t['Tarde']  || 0;
+        gNoc += t['Noche']  || 0;
+      });
+      const gHoy = gMan + gTar + gNoc;
+
       grid.innerHTML = perfs.map(p => {
         const d         = _dpPuntosData[p.id] || {};
         // ── CIFRA GRANDE: total acumulado del mes ────────────────
@@ -15449,6 +15469,13 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       if (_g('dp-t-noc-cop')) _g('dp-t-noc-cop').textContent = _cop(acumNoc);
       if (_g('dp-t-hoy-pts')) _g('dp-t-hoy-pts').textContent = _fmt(acumHoy);
       if (_g('dp-t-hoy-cop')) _g('dp-t-hoy-cop').textContent = _cop(acumHoy);
+
+      // Actualizar Globales
+      if (_g('dp-g-man-pts')) _g('dp-g-man-pts').textContent = _fmt(gMan);
+      if (_g('dp-g-tar-pts')) _g('dp-g-tar-pts').textContent = _fmt(gTar);
+      if (_g('dp-g-noc-pts')) _g('dp-g-noc-pts').textContent = _fmt(gNoc);
+      if (_g('dp-g-hoy-pts')) _g('dp-g-hoy-pts').textContent = _fmt(gHoy);
+      if (_g('dp-g-hoy-cop')) _g('dp-g-hoy-cop').textContent = _cop(gHoy);
       const totalCop = Math.round(totalMesPts * 1400).toLocaleString('es-CO');
       const ptsEl = document.getElementById('dp-panel-total-pts');
       const copEl = document.getElementById('dp-panel-total-cop');

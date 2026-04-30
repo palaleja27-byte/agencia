@@ -60,26 +60,36 @@ def sync_tableau():
 
     # 4. Procesar CSV con Pandas
     df = pd.read_csv(io.StringIO(res.text))
+    df.columns = [c.strip() for c in df.columns]
+    print(f"📊 Columnas detectadas: {list(df.columns)}")
     print(f"📊 Procesando {len(df)} filas de datos...")
     
-    # Aquí mapeamos las columnas de Tableau (ajustar según el CSV real)
-    # Buscamos columnas comunes: 'ID Trusted User', 'Total general'
-    # Intentamos normalizar nombres de columnas
-    df.columns = [c.strip() for c in df.columns]
-    
+    # Mapeo Inteligente de Columnas
+    col_id = next((c for c in df.columns if any(x in c.upper() for x in ['ID','PERFIL','USER','MODELO'])), None)
+    col_val = next((c for c in df.columns if any(x in c.upper() for x in ['TOTAL','VALOR','REVENUE','MONTO','GENERAL'])), None)
+
+    if not col_id or not col_val:
+        print(f"❌ No se pudieron mapear las columnas. Columnas: {df.columns}")
+        return
+
     results = []
     for _, row in df.iterrows():
-        # Ejemplo de mapeo - Ajustar según nombres reales en el CSV de Tableau
-        perfil_raw = str(row.get('ID Trusted User', ''))
-        total = float(row.get('Total general', 0))
-        
-        if perfil_raw and total > 0:
-            results.append({
-                "perfil_id": perfil_raw.split('/')[0].strip(), # Extraer ID numérico si viene como "ID - Nombre"
-                "valor": total,
-                "data_json": row.to_json(),
-                "updated_at": "now()"
-            })
+        try:
+            val_raw = str(row[col_val]).replace('$','').replace(',','').strip()
+            total = float(val_raw) if val_raw else 0
+            perfil_raw = str(row[col_id]).strip()
+            
+            if perfil_raw and total > 0:
+                # Extraer solo el ID si viene como "12345 - Nombre" o similar
+                id_clean = perfil_raw.split('-')[0].split('/')[0].strip()
+                results.append({
+                    "perfil_id": id_clean,
+                    "valor": total,
+                    "data_json": row.to_json(),
+                    "updated_at": "now()"
+                })
+        except Exception as e:
+            continue
 
     print(f"💾 Subiendo {len(results)} registros a Supabase...")
     

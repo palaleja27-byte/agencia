@@ -106,16 +106,56 @@
     }
 
     .login-box {
-      background: var(--panel);
-      border: 1px solid rgba(94, 234, 212, .2);
-      border-radius: 24px;
-      padding: 40px 36px;
-      width: 94%;
-      max-width: 400px;
+      background: #0f172a;
+      border-radius: 32px;
+      padding: 50px 40px;
+      box-shadow: 20px 20px 60px #080c16, -20px -20px 60px #16223e;
+      border: 1px solid rgba(255,255,255,0.02);
+      width: 100%;
+      max-width: 420px;
       text-align: center;
-      box-shadow: 0 0 80px rgba(94, 234, 212, .08);
-      max-height: 96vh;
-      overflow-y: auto;
+    }
+
+    .login-role-btn {
+      background: #0f172a;
+      border-radius: 20px;
+      box-shadow: 8px 8px 16px #080c16, -8px -8px 16px #16223e;
+      border: none;
+      padding: 18px 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      color: #94a3b8;
+    }
+
+    .login-role-btn.active {
+      box-shadow: inset 6px 6px 12px #080c16, inset -6px -6px 12px #16223e;
+      color: #2dd4bf;
+    }
+
+    .pin-key {
+      background: #0f172a;
+      width: 70px;
+      height: 70px;
+      border-radius: 18px;
+      box-shadow: 6px 6px 12px #080c16, -6px -6px 12px #16223e;
+      border: none;
+      color: #e2e8f0;
+      font-size: 1.5rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pin-key:active {
+      box-shadow: inset 4px 4px 8px #080c16, inset -4px -4px 8px #16223e;
+      transform: scale(0.96);
     }
 
     .login-logo {
@@ -3928,25 +3968,24 @@
 
   <div id="login-screen">
     <div class="login-box">
-      <div class="login-logo">🏢</div>
-      <div class="login-title">RR PRIME</div>
-      <div class="login-sub">Agencia de Operadores · Acceso Seguro</div>
+      <div style="margin-bottom: 25px;">
+        <img src="C:\Users\ADMIN\.gemini\antigravity\brain\34d51013-315e-42b8-969b-278ec5b3bc0c\rr_prime_logo_premium_1777572945911.png" 
+             style="width: 140px; filter: drop-shadow(0 0 15px rgba(45,212,191,0.2));">
+      </div>
+      <div class="login-sub" style="font-size: 0.75rem; color: #64748b; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-bottom: 30px;">Agencia de Operadores</div>
 
-      <div class="login-roles">
+      <div class="login-roles" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 35px;">
         <div class="login-role-btn active" id="role-btn-monitor" onclick="loginSelectRole('monitor')">
-          <span class="r-icon">👨‍💼</span>
-          <div class="r-name">Monitor</div>
-          <div class="r-desc">Gestión del turno</div>
+          <span class="r-icon">👔</span>
+          <div class="r-name" style="font-size: 0.75rem; font-weight: 700;">Monitor</div>
         </div>
         <div class="login-role-btn" id="role-btn-admin" onclick="loginSelectRole('admin')">
           <span class="r-icon">🔑</span>
-          <div class="r-name">Admin</div>
-          <div class="r-desc">Control total</div>
+          <div class="r-name" style="font-size: 0.75rem; font-weight: 700;">Admin</div>
         </div>
         <div class="login-role-btn" id="role-btn-operador" onclick="loginSelectRole('operador')">
           <span class="r-icon">👤</span>
-          <div class="r-name">Operador</div>
-          <div class="r-desc">Mi perfil</div>
+          <div class="r-name" style="font-size: 0.75rem; font-weight: 700;">Operador</div>
         </div>
       </div>
 
@@ -4455,18 +4494,46 @@
         const entries = Object.entries(_dpTableauData);
         if (entries.length === 0) return;
 
-        container.innerHTML = entries.map(([id, val]) => `
-          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(129,140,248,0.2); border-radius:10px; padding:10px; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <div style="font-size:0.55rem; color:#475569; font-weight:800;">ID PERFIL</div>
-              <div style="font-size:0.75rem; color:#e2e8f0; font-weight:700;">${id}</div>
+        // Calcular Resumen
+        const totalVenta = entries.reduce((s, [id, v]) => s + Number(v), 0);
+        const avgVenta = totalVenta / entries.length;
+
+        let html = `
+          <div style="grid-column: 1/-1; display: flex; gap: 15px; margin-bottom: 25px;">
+            <div style="flex: 1; padding: 25px; background: #0f172a; border-radius: 20px; box-shadow: inset 8px 8px 16px #080c16, inset -8px -8px 16px #16223e; text-align: center; border: 1px solid rgba(129,140,248,0.1);">
+              <div style="font-size: 0.6rem; color: #818cf8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">VENTA TOTAL TABLEAU</div>
+              <div style="font-size: 1.8rem; color: #e2e8f0; font-weight: 900; margin-top: 5px;">$${Math.round(totalVenta).toLocaleString('es-CO')}</div>
             </div>
-            <div style="text-align:right;">
-              <div style="font-size:0.55rem; color:#818cf8; font-weight:800;">OFICIAL</div>
-              <div style="font-size:0.85rem; color:#818cf8; font-weight:900;">$${Number(val).toLocaleString('es-CO')}</div>
+            <div style="flex: 1; padding: 25px; background: #0f172a; border-radius: 20px; box-shadow: inset 8px 8px 16px #080c16, inset -8px -8px 16px #16223e; text-align: center; border: 1px solid rgba(129,140,248,0.1);">
+              <div style="font-size: 0.6rem; color: #818cf8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">PROMEDIO POR PERFIL</div>
+              <div style="font-size: 1.8rem; color: #e2e8f0; font-weight: 900; margin-top: 5px;">$${Math.round(avgVenta).toLocaleString('es-CO')}</div>
             </div>
           </div>
-        `).join('');
+          <div style="grid-column: 1/-1; font-size: 0.65rem; color: #475569; margin-bottom: 15px; padding-left: 5px; font-weight: 700;">DETALLE DE FACTURACIÓN POR PERFIL</div>
+        `;
+
+        html += entries.sort((a,b) => b[1] - a[1]).map(([id, val]) => {
+          const maxVal = entries.sort((a,b) => b[1] - a[1])[0][1];
+          const percent = (val / maxVal) * 100;
+          return `
+          <div style="background: #0f172a; border-radius: 16px; padding: 18px; box-shadow: 6px 6px 12px #080c16, -4px -4px 12px #16223e; display: flex; flex-direction: column; gap: 10px; border: 1px solid rgba(255,255,255,0.02);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 0.55rem; color: #64748b; font-weight: 800; text-transform: uppercase;">ID PERFIL</div>
+                <div style="font-size: 0.8rem; color: #f1f5f9; font-weight: 700;">${id}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 0.55rem; color: #818cf8; font-weight: 800; text-transform: uppercase;">OFICIAL</div>
+                <div style="font-size: 1.1rem; color: #818cf8; font-weight: 900;">$${Number(val).toLocaleString('es-CO')}</div>
+              </div>
+            </div>
+            <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden; box-shadow: inset 1px 1px 2px #000;">
+              <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, #4f46e5, #818cf8); border-radius: 3px; box-shadow: 0 0 10px rgba(129,140,248,0.4);"></div>
+            </div>
+          </div>
+        `}).join('');
+        
+        container.innerHTML = html;
       }
 
       async function tableauSyncConFeedback() {

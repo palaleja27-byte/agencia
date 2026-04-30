@@ -4463,11 +4463,22 @@
         </div>
 
         <!-- Body con Datos Crudos -->
-        <div id="tableau-body" style="display:none; max-height:600px; overflow-y:auto; background:#0f172a; padding:15px;">
+        <div id="tableau-body" style="display:none; max-height:800px; overflow-y:auto; background:#0f172a; padding:15px;">
+           <!-- Resumen y Data -->
            <div id="tableau-data-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
-              <!-- Se llena con renderTableauPanel() -->
               <div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">
-                Haga clic en Sync para traer los datos oficiales de Tableau...
+                Iniciando sistema de auditoría...
+              </div>
+           </div>
+
+           <!-- Consola de Logs Tableau -->
+           <div style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:0.55rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:1px;">📡 Auditoría de Enlace Tableau</div>
+                <div id="tableau-sync-time" style="font-size:0.55rem; color:#475569;">Esperando sync...</div>
+              </div>
+              <div id="tableau-console" style="background:rgba(0,0,0,0.3); border-radius:8px; padding:10px; font-family:monospace; font-size:0.6rem; color:#94a3b8; height:120px; overflow-y:auto; line-height:1.4; border:1px solid rgba(255,255,255,0.03);">
+                <div>[SISTEMA] Consola lista.</div>
               </div>
            </div>
         </div>
@@ -4536,12 +4547,31 @@
         container.innerHTML = html;
       }
 
+      function tableauLog(msg, type='info') {
+        const cons = document.getElementById('tableau-console');
+        if (!cons) return;
+        const colors = { info:'#94a3b8', success:'#2dd4bf', error:'#f87171', warn:'#fbbf24' };
+        const time = new Date().toLocaleTimeString('es-CO', {hour12:false});
+        const div = document.createElement('div');
+        div.style.color = colors[type];
+        div.style.marginBottom = '2px';
+        div.textContent = `[${time}] ${msg}`;
+        cons.appendChild(div);
+        cons.scrollTop = cons.scrollHeight;
+      }
+
       async function tableauSyncConFeedback() {
         const btn = document.getElementById('tableau-sync-btn');
         const pat = localStorage.getItem('github_pat_sync');
-        if (!pat) { alert("Configure el PAT de GitHub en Datame Sync primero."); return; }
+        if (!pat) { 
+          tableauLog('ERROR: PAT de GitHub no configurado', 'error');
+          alert("Configure el PAT de GitHub en Datame Sync primero."); 
+          return; 
+        }
         
+        tableauLog('🚀 Disparando GitHub Action (tableau_sync.yml)...', 'info');
         btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
+        
         try {
           const res = await fetch('https://api.github.com/repos/palaleja27-byte/agencia/actions/workflows/tableau_sync.yml/dispatches', {
             method: 'POST',
@@ -4549,11 +4579,16 @@
             body: JSON.stringify({ ref: 'main' })
           });
           if (res.ok) {
+            tableauLog('✅ Orden enviada con éxito. El robot está trabajando.', 'success');
             alert('🚀 Sincronización con Tableau iniciada.\nLos datos aparecerán en 1-2 minutos.');
           } else {
+            tableauLog(`❌ Error GitHub (Status ${res.status})`, 'error');
             alert('❌ Error al contactar GitHub: ' + res.status);
           }
-        } catch (e) { alert('❌ Error de red'); }
+        } catch (e) { 
+          tableauLog('❌ Error de red al contactar GitHub', 'error');
+          alert('❌ Error de red'); 
+        }
         finally { btn.textContent = '↻ Sync Tableau'; btn.disabled = false; }
       }
     </script>
@@ -15712,10 +15747,23 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     async function loadTableauData() {
       if (typeof _sb === 'undefined' || !_sb) return;
       try {
-        const { data, error } = await _sb.from('tableau_data').select('perfil_id, valor');
-        if (error) return;
+        const { data, error } = await _sb.from('tableau_data').select('perfil_id, valor, updated_at');
+        if (error) {
+          if (typeof tableauLog === 'function') tableauLog('Error Supabase: ' + error.message, 'error');
+          return;
+        }
         _dpTableauData = {};
         data.forEach(row => { _dpTableauData[row.perfil_id] = row.valor; });
+        
+        const timeEl = document.getElementById('tableau-sync-time');
+        if (timeEl && data.length > 0) {
+          const last = new Date(data[0].updated_at || new Date()).toLocaleTimeString('es-CO',{hour12:false});
+          timeEl.textContent = 'Último: ' + last;
+        }
+        
+        if (typeof tableauLog === 'function') {
+          tableauLog(`📊 Cargados ${data.length} perfiles desde Supabase`, 'success');
+        }
         console.log('📊 [TABLEAU] Datos cargados:', data.length);
       } catch(e) {}
     }

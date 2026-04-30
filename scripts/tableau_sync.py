@@ -110,9 +110,11 @@ def sync_tableau():
         df.columns = [c.strip() for c in df.columns]
         print(f"📊 Columnas detectadas: {list(df.columns)}")
         
-        # Mapeo Inteligente
-        col_id = next((c for c in df.columns if any(x in c.upper() for x in ['ID','PERFIL','USER','MODELO'])), None)
-        col_val = next((c for c in df.columns if any(x in c.upper() for x in ['TOTAL','VALOR','REVENUE','MONTO','GENERAL'])), None)
+        # Mapeo Específico según el reporte real detectado
+        col_id = 'ID Trusted User' if 'ID Trusted User' in df.columns else next((c for c in df.columns if 'ID' in c.upper()), None)
+        col_val = 'Revenue' if 'Revenue' in df.columns else next((c for c in df.columns if 'REVENUE' in c.upper() and 'TYPE' not in c.upper()), None)
+
+        print(f"🎯 Usando columnas: ID='{col_id}', Valor='{col_val}'")
 
         if not col_id or not col_val:
             msg = f"No se mapearon columnas en: {list(df.columns)}"
@@ -122,30 +124,37 @@ def sync_tableau():
         results = []
         for _, row in df.iterrows():
             try:
-                val_raw = str(row[col_val]).replace('$','').replace(',','').strip()
-                total = float(val_raw) if val_raw else 0
+                # Limpiar valor (quitar $, comas, espacios)
+                v_str = str(row[col_val]).replace('$','').replace(',','').replace(' ','').strip()
+                total = float(v_str) if v_str and v_str != 'nan' else 0
+                
                 perfil_raw = str(row[col_id]).strip()
                 
                 if perfil_raw and total > 0:
-                    id_clean = perfil_raw.split('-')[0].split('/')[0].strip()
+                    # El ID suele ser la primera parte antes de un guión o espacio
+                    id_clean = perfil_raw.split('-')[0].split('/')[0].split(' ')[0].strip()
                     results.append({
                         "perfil_id": id_clean,
                         "valor": total,
                         "data_json": row.to_json(),
                         "updated_at": "now()"
                     })
-            except: continue
+            except Exception as e:
+                print(f"⚠️ Error procesando fila: {e}")
+                continue
 
         print(f"💾 Subiendo {len(results)} registros a Supabase...")
         if results:
             supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
             for item in results:
+                # Log de lo que estamos subiendo para auditoría
+                print(f"   -> Perfil: {item['perfil_id']} | Valor: {item['valor']}")
                 supabase.table("tableau_data").upsert(item, on_conflict="perfil_id").execute()
             
-            # Limpiar error anterior si hubo éxito
+            # Limpiar error anterior
             supabase.table("tableau_data").delete().eq("perfil_id", "DEBUG_LOG").execute()
             
-        print("🏁 Sincronización completada.")
+        print("🏁 Sincronización completada con éxito.")
 
     except Exception as e:
         msg = f"Error crítico en script: {str(e)}"

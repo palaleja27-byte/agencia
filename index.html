@@ -7504,6 +7504,11 @@
         });
         if (typeof mediaIniciarRealtime === 'function') mediaIniciarRealtime();
 
+        // ── Sincronizar datos de Tableau ──
+        if (typeof loadTableauData === 'function') loadTableauData().then(() => {
+           if (typeof renderPSAPanel === 'function') renderPSAPanel();
+        });
+
         // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();
         _autoFixActivePair();
@@ -15591,6 +15596,20 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     }
 
     function dpRenderGrid() {
+    let _dpTableauData = {}; // Cache de datos de Tableau {perfil_id: valor}
+
+    async function loadTableauData() {
+      if (typeof _sb === 'undefined' || !_sb) return;
+      try {
+        const { data, error } = await _sb.from('tableau_data').select('perfil_id, valor');
+        if (error) return;
+        _dpTableauData = {};
+        data.forEach(row => { _dpTableauData[row.perfil_id] = row.valor; });
+        console.log('📊 [TABLEAU] Datos cargados:', data.length);
+      } catch(e) {}
+    }
+
+    function renderDatamePaneles() {
       const grid  = document.getElementById('dp-perfiles-grid');
       const panel = DP_PANELS_META.find(p => p.id === _dpActivePanelId);
       const perfs = DP_PERFILES_MAP[_dpActivePanelId] || [];
@@ -15663,6 +15682,14 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
               <div class="dp-card-pts">${totalMes > 0 ? totalMes.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
               <div class="dp-card-cop">${totalMes > 0 ? '$'+copMes+' COP' : ''}</div>
               <div class="dp-card-ts">${totalMes > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
+              
+              <!-- DATO DE TABLEAU (Solo si existe) -->
+              ${_dpTableauData[p.id] != null ? `
+              <div style="margin-top:6px; padding:4px 8px; background:rgba(129,140,248,0.1); border:1px solid rgba(129,140,248,0.3); border-radius:6px; display:inline-block;">
+                <div style="font-size:0.5rem; color:#a5b4fc; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">📊 Venta Tableau</div>
+                <div style="font-size:0.75rem; color:#818cf8; font-weight:900;">$${Number(_dpTableauData[p.id]).toLocaleString('es-CO')}</div>
+              </div>
+              ` : ''}
             </div>
             <button class="dp-card-expand-btn">▼</button>
           </div>

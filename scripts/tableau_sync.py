@@ -15,9 +15,14 @@ VIEW_NAME = "GRUPOROMERO"
 FALLBACK_VIEW = "Revenuedetailed"
 
 # --- CONFIGURACIÓN SUPABASE ---
-# Buscamos múltiples variantes por si el secreto en GitHub tiene otro nombre
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+
+def check_creds():
+    print(f"📡 Verificando credenciales...")
+    print(f"   URL: {SUPABASE_URL[:15]}..." if SUPABASE_URL else "   URL: ❌ FALTANTE")
+    print(f"   KEY: {SUPABASE_KEY[:4]}***" if SUPABASE_KEY else "   KEY: ❌ FALTANTE")
+    return bool(SUPABASE_URL and SUPABASE_KEY)
 
 def log_error_to_supabase(msg):
     try:
@@ -32,6 +37,10 @@ def log_error_to_supabase(msg):
         pass
 
 def sync_tableau():
+    if not check_creds():
+        print("❌ Sincronización abortada por falta de credenciales.")
+        return
+
     print("🚀 Iniciando sincronización con Tableau Cloud...")
     
     # Cabeceras base para forzar JSON

@@ -1,0 +1,29 @@
+name: Tableau Cloud Sync
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Cada 30 minutos
+  workflow_dispatch: # Permite correrlo manualmente
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: os-actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas requests supabase
+
+      - name: Run Tableau Sync
+        env:
+          TABLEAU_TOKEN_SECRET: ${{ secrets.TABLEAU_TOKEN_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python scripts/tableau_sync.py

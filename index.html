@@ -742,7 +742,13 @@
       #op-stats-section { grid-column: 1 / -1; }
       #op-noticias-section { grid-column: 1 / -1; }
       #op-openclaw-section { grid-column: 1 / -1; }
+      #op-hero-openclaw { display: none !important; }
       .op-section { border-radius: 14px; padding: 12px; }
+    }
+
+    /* Desktop: mostrar mini OpenClaw en hero */
+    @media (min-width: 900px) {
+      #op-hero-openclaw { display: flex !important; }
     }
 
     .op-section:hover {
@@ -7206,7 +7212,44 @@
       }, 1200);
     }
 
-
+    function ocHeroSend() {
+      const input = document.getElementById('oc-hero-input');
+      if (!input || !input.value.trim()) return;
+      const msg = input.value.trim();
+      input.value = '';
+      ocAddMessage(msg, 'user');
+      const heroFeed = document.getElementById('op-hero-oc-feed');
+      if (heroFeed) {
+        const d = document.createElement('div');
+        d.style.cssText = 'font-size:0.6rem; color:#a7f3d0; padding:2px 0; text-align:right;';
+        d.textContent = '👤 ' + msg;
+        heroFeed.appendChild(d);
+        heroFeed.scrollTop = heroFeed.scrollHeight;
+      }
+      if (!_ocConnected) {
+        setTimeout(() => {
+          ocAddMessage('⚠️ Conecta el agente primero con 🔗 Conectar.', 'bot');
+        }, 400);
+        return;
+      }
+      setTimeout(() => {
+        const responses = [
+          '📊 Procesando tu solicitud...',
+          '🔍 Analizando métricas del turno actual.',
+          '💡 Sugerencia: enfócate en usuarios recurrentes con alta intención.',
+          '⚡ Detecté una oportunidad de conversión en el perfil activo.',
+        ];
+        const resp = responses[Math.floor(Math.random() * responses.length)];
+        ocAddMessage(resp, 'bot');
+        if (heroFeed) {
+          const d = document.createElement('div');
+          d.style.cssText = 'font-size:0.6rem; color:#818cf8; padding:2px 0;';
+          d.textContent = '🤖 ' + resp;
+          heroFeed.appendChild(d);
+          heroFeed.scrollTop = heroFeed.scrollHeight;
+        }
+      }, 1000);
+    }
 
     function bloquearOpManual() {
       const name = document.getElementById('acceso-block-name')?.value.trim();
@@ -12004,6 +12047,33 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
             <div style="font-size:0.55rem; color:#475569; text-transform:uppercase; letter-spacing:2px; font-weight:700; margin-bottom:8px;">Colombia</div>
             <div id="op-dash-hero-cop" style="font-size:1.1rem; font-weight:900; color:#34d399; text-align:right;">$0 COP</div>
             <div id="op-dash-hero-label" style="font-size:0.55rem; color:#475569; text-align:right; margin-top:2px;">Tarifa base ($1400/pt)</div>
+          </div>
+
+          <!-- FAR-RIGHT: Mini OpenClaw (solo desktop) -->
+          <div id="op-hero-openclaw" style="display:none; flex-direction:column; justify-content:space-between; padding:14px 16px; border-left:1px solid rgba(99,102,241,0.2); background:linear-gradient(135deg,rgba(99,102,241,0.06),rgba(139,92,246,0.04)); flex:2; min-width:260px; max-width:380px; box-sizing:border-box;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:28px; height:28px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:0.9rem; flex-shrink:0;">🤖</div>
+                <div>
+                  <div style="font-size:0.65rem; font-weight:900; color:white; letter-spacing:0.5px;">AGENTE OPENCLAW</div>
+                  <div id="openclaw-hero-status" style="font-size:0.5rem; color:#64748b; font-weight:700;">⚫ Sin conectar</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <div id="openclaw-hero-pulse" style="width:7px; height:7px; border-radius:50%; background:#ef4444;"></div>
+                <button onclick="ocConnect()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; font-size:0.55rem; font-weight:800; padding:4px 10px; border-radius:6px; cursor:pointer;">🔗 Conectar</button>
+              </div>
+            </div>
+            <div id="op-hero-oc-feed" style="flex:1; overflow-y:auto; max-height:55px; margin-bottom:8px; scrollbar-width:none;">
+              <div style="text-align:center; color:#334155; font-size:0.6rem; padding:8px 0;">Configura tu API Key en ⚙️ Config para recibir alertas.</div>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input id="oc-hero-input" type="text" placeholder="Escribe al agente..." 
+                style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(99,102,241,0.25); color:white; padding:6px 10px; border-radius:8px; font-size:0.65rem; outline:none; min-width:0;"
+                onkeydown="if(event.key==='Enter'){ocHeroSend()}"
+              >
+              <button onclick="ocHeroSend()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; width:28px; height:28px; border-radius:8px; cursor:pointer; font-size:0.8rem; display:flex; align-items:center; justify-content:center; flex-shrink:0;">›</button>
+            </div>
           </div>
         </div>`;
 

@@ -4244,6 +4244,10 @@
       <div class="op-ranking-pos" id="op-rank-pos">—</div>
       <div class="op-ranking-sub" id="op-rank-sub"></div>
     </div>
+    <div class="op-section" id="op-profiles-section">
+      <div class="op-section-title">🗂️ Perfiles Asignados</div>
+      <div id="op-profiles-list"></div>
+    </div>
     <!-- OPENCLAW AI AGENT PANEL -->
     <div class="op-section" id="op-openclaw-section" style="grid-column: span 2; background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05)); border: 1px solid rgba(99,102,241,0.2); border-radius: 20px; padding: 20px;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
@@ -12130,7 +12134,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       // Profiles
       const profiles = op.profiles || [];
-      const safeId = name.replace(/[^a-zA-Z0-9]/g, '_');
       const profilesListHTML = profiles.length
         ? profiles.map((p, pi) => {
           const isCov = p.tipo === 'cobertura';
@@ -12147,13 +12150,13 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }).join('')
         : '<div style="color:#475569;font-size:.82rem;padding:20px;text-align:center;border:1px dashed rgba(255,255,255,0.05);border-radius:12px;">Sin perfiles asignados.</div>';
 
+      const _profListEl = document.getElementById('op-profiles-list');
       if (_profListEl) _profListEl.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div style="font-size:0.75rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">🗂️ Perfiles (\)</div>
-          <button class="btn-neumorphic" onclick="asiPerfilToggleForm('\')" style="padding:6px 12px; font-size:0.65rem;">+ Agregar</button>
+          <div style="font-size:0.75rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">🗂️ Perfiles (${profiles.length})</div>
+          <button class="btn-neumorphic" onclick="asiPerfilToggleForm('${name.replace(/'/g, "\\'")}')" style="padding:6px 12px; font-size:0.65rem;">+ Agregar</button>
         </div>
-        \
-        \
+        ${profilesListHTML}
       `;
 
       // Consejos del monitor para este operador
@@ -12161,7 +12164,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const consejos = JSON.parse(localStorage.getItem(detKey) || '[]');
       const _consejosEl = document.getElementById('op-consejos-list');
       if (_consejosEl) _consejosEl.innerHTML = consejos.length
-        ? consejos.map(c => `<div class="op-consejo-item">💡 \</div>`).join('')
+        ? consejos.map(c => `<div class="op-consejo-item">💡 ${c}</div>`).join('')
         : '<div style="color:#475569;font-size:.82rem;">El monitor aún no ha dejado consejos para ti.</div>';
 
       // Asistencia personal
@@ -13863,12 +13866,25 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         color: #475569;
       }
 
-      .asi-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
-        gap: 12px;
-        align-items: start;
-      }
+    .asi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+      gap: 16px;
+      align-items: stretch;
+    }
+    .asi-card {
+      height: 100%;
+      background: rgba(15,23,42,0.7);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      transition: border-color .25s, box-shadow .25s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      overflow: hidden;
+    }
 
       @media (max-width: 600px) {
         .asi-grid { grid-template-columns: 1fr; gap: 10px; }

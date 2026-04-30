@@ -208,22 +208,58 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     t_headers = {"X-Tableau-Auth": token, "Accept": "application/json"}
     print(f"   ✅ Auth OK en Tableau.")
 
-    # ── Localizar la vista ───────────────────────────────────────
-    views_url = f"{server}/api/3.4/sites/{site_id}/views"
-    res = requests.get(views_url, headers=t_headers, timeout=30)
-    all_views = res.json().get("views", {}).get("view", [])
+    # ── Ingeniería Inversa: buscar por WORKBOOK ──────────────────
+    # El URL real es: .../views/Passport_16741406948180/Revenuedetailed/
+    # Estrategia: buscar el workbook por contentUrl, luego sus vistas
+    WORKBOOK_CONTENT_URL = "Passport_16741406948180"
 
-    target = next(
-        (v for v in all_views if view_name.upper() in v.get("contentUrl", "").upper()), None
+    # 1. Obtener todos los workbooks del sitio
+    wb_url = f"{server}/api/3.4/sites/{site_id}/workbooks?pageSize=200"
+    res_wb = requests.get(wb_url, headers=t_headers, timeout=30)
+    all_workbooks = res_wb.json().get("workbooks", {}).get("workbook", [])
+    print(f"   🔍 Workbooks en el sitio: {len(all_workbooks)}")
+
+    # 2. Buscar el workbook de Agencia Romero por contentUrl
+    target_wb = next(
+        (wb for wb in all_workbooks
+         if WORKBOOK_CONTENT_URL.lower() in wb.get("contentUrl", "").lower()),
+        None
     )
+
+    if not target_wb:
+        # Fallback: listar TODOS los workbooks para diagnóstico
+        print(f"   ⚠️  Workbook '{WORKBOOK_CONTENT_URL}' no encontrado.")
+        print(f"   📋 Workbooks disponibles:")
+        for wb in all_workbooks:
+            print(f"      → {wb.get('contentUrl','')} | {wb.get('name','')}")
+        return 0
+
+    wb_id = target_wb["id"]
+    print(f"   ✅ Workbook encontrado: '{target_wb.get('name')}' (id={wb_id})")
+
+    # 3. Obtener las vistas del workbook
+    views_in_wb_url = f"{server}/api/3.4/sites/{site_id}/workbooks/{wb_id}/views"
+    res_views = requests.get(views_in_wb_url, headers=t_headers, timeout=30)
+    wb_views = res_views.json().get("views", {}).get("view", [])
+    print(f"   📋 Vistas en el workbook:")
+    for v in wb_views:
+        print(f"      → contentUrl: {v.get('contentUrl','')} | name: {v.get('name','')}")
+
+    # 4. Localizar la vista "Revenuedetailed" dentro del workbook
+    target = next(
+        (v for v in wb_views
+         if "revenuedetailed" in v.get("contentUrl", "").lower()
+         or "revenue" in v.get("name", "").lower()),
+        wb_views[0] if wb_views else None  # Si solo hay una vista, usarla
+    )
+
     if not target:
-        print(f"   ❌ Vista '{view_name}' no encontrada en {len(all_views)} vistas del sitio.")
-        print(f"      Vistas disponibles: {[v.get('contentUrl','') for v in all_views[:10]]}")
+        print(f"   ❌ No se encontró vista 'Revenuedetailed' en el workbook.")
         return 0
 
     view_id   = target["id"]
-    view_real = target.get("name", view_name)
-    print(f"   ✅ Vista encontrada: '{view_real}' (id={view_id})")
+    view_real = target.get("name", "?")
+    print(f"   ✅ Vista seleccionada: '{view_real}' (id={view_id})")
 
     # ── Descargar CSV ────────────────────────────────────────────
     data_url = f"{server}/api/3.15/sites/{site_id}/views/{view_id}/data"

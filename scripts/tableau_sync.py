@@ -32,8 +32,8 @@ def log_error_to_supabase(msg):
 def sync_tableau():
     print("🚀 Iniciando sincronización con Tableau Cloud...")
     
-    # 1. Autenticación en Tableau
-    auth_url = f"{TABLEAU_SERVER}/api/3.15/auth/signin"
+    # 1. Autenticación en Tableau (Usamos API 3.4 para compatibilidad amplia)
+    auth_url = f"{TABLEAU_SERVER}/api/3.4/auth/signin"
     auth_payload = {
         "credentials": {
             "personalAccessTokenName": TOKEN_NAME,
@@ -44,19 +44,30 @@ def sync_tableau():
     
     try:
         res = requests.post(auth_url, json=auth_payload, timeout=30)
+        print(f"📡 Status Code Auth: {res.status_code}")
+        
         if res.status_code != 200:
-            msg = f"Error Auth Tableau: {res.text}"
+            msg = f"Error Auth Tableau: {res.text[:200]}"
             print(f"❌ {msg}")
             log_error_to_supabase(msg)
             return
 
-        token = res.json()["credentials"]["token"]
-        site_id = res.json()["credentials"]["site"]["id"]
+        # Validar si es JSON
+        try:
+            data = res.json()
+        except:
+            msg = f"Tableau no respondió con JSON. Respuesta: {res.text[:100]}..."
+            print(f"❌ {msg}")
+            log_error_to_supabase(msg)
+            return
+
+        token = data["credentials"]["token"]
+        site_id = data["credentials"]["site"]["id"]
         headers = {"X-Tableau-Auth": token}
-        print("✅ Autenticado en Tableau Site:", TABLEAU_SITE)
+        print("✅ Autenticado con éxito.")
 
         # 2. Buscar el ID de la vista
-        views_url = f"{TABLEAU_SERVER}/api/3.15/sites/{site_id}/views?filter=name:eq:{VIEW_NAME}"
+        views_url = f"{TABLEAU_SERVER}/api/3.4/sites/{site_id}/views?filter=name:eq:{VIEW_NAME}"
         res = requests.get(views_url, headers=headers, timeout=30)
         views = res.json().get("views", {}).get("view", [])
         if not views:

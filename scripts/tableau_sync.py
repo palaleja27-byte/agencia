@@ -316,12 +316,16 @@ def sync_panel(panel: dict, token_secret: str) -> int:
         if not any(k in view_name2.lower() or k in view_curl.lower() for k in ["revenue", "passport", "kpi", "usage", "detail", "score", "romero"]):
             continue
 
-        # Descargar CSV de la vista
-        csv_res = requests.get(
-            f"{server}/api/3.15/sites/{sid2}/views/{view_id2}/data",
-            headers=h2, timeout=20
-        )
-        if csv_res.status_code != 200 or len(csv_res.text) < 10:
+        # Descargar CSV de la vista (con manejo de timeout robusto)
+        try:
+            csv_res = requests.get(
+                f"{server}/api/3.15/sites/{sid2}/views/{view_id2}/data",
+                headers=h2, timeout=60
+            )
+            if csv_res.status_code != 200 or len(csv_res.text) < 10:
+                continue
+        except requests.exceptions.RequestException as e:
+            print(f"      ⚠️  Timeout/Error descargando vista '{view_name2}': {e}")
             continue
 
         try:

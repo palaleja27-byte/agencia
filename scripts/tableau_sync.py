@@ -205,59 +205,103 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     data    = res.json()
     token   = data["credentials"]["token"]
     site_id = data["credentials"]["site"]["id"]
-    t_headers = {"X-Tableau-Auth": token, "Accept": "application/json"}
+    t_headers = {\"X-Tableau-Auth\": token, "Accept": "application/json"}
     print(f"   ✅ Auth OK en Tableau.")
 
-    # ── Ingeniería Inversa: buscar por WORKBOOK ──────────────────
-    # ⚡ MODO EXPLORACIÓN: cambia este valor para probar workbooks
-    WORKBOOK_CONTENT_URL = "Regional"  # ← Explorando este workbook
+    # ── ESCANEO TOTAL: buscar en TODOS los sitios disponibles ────
+    # Obtener lista de todos los sitios a los que tiene acceso el token
+    all_sites_url = f"{server}/api/3.4/sites?pageSize=100"
+    res_sites = requests.get(all_sites_url, headers=t_headers, timeout=30)
+    all_sites = []
+    if res_sites.status_code == 200:
+        all_sites = res_sites.json().get("sites", {}).get("site", [])
+        print(f"\n   🌐 SITIOS DISPONIBLES ({len(all_sites)} total):")
+        for s in all_sites:
+            print(f"      → contentUrl: '{s.get('contentUrl','')}' | name: '{s.get('name','')}'")
+    else:
+        print(f"   ⚠️  No se pudo listar sitios (HTTP {res_sites.status_code}) — usando sitio actual")
+        all_sites = [{"contentUrl": site, "id": site_id, "name": site}]
 
-    # 1. Obtener todos los workbooks del sitio
-    wb_url = f"{server}/api/3.4/sites/{site_id}/workbooks?pageSize=200"
-    res_wb = requests.get(wb_url, headers=t_headers, timeout=30)
-    all_workbooks = res_wb.json().get("workbooks", {}).get("workbook", [])
-    print(f"   🔍 Workbooks en el sitio: {len(all_workbooks)}")
+    # Buscar en CADA sitio los workbooks que contengan palabras clave
+    KEYWORDS = ["andinas", "marketing", "romero", "revenue", "agencia", "partner"]
+    found_wb  = None
+    found_site = None
+    found_token = None
+    found_site_id = None
 
-    # 2. Buscar el workbook de Agencia Romero por contentUrl
-    target_wb = next(
-        (wb for wb in all_workbooks
-         if WORKBOOK_CONTENT_URL.lower() in wb.get("contentUrl", "").lower()),
-        None
-    )
+    for s in all_sites:
+        s_content_url = s.get("contentUrl", "")
+        s_name        = s.get("name", "")
 
-    if not target_wb:
-        # Fallback: listar TODOS los workbooks para diagnóstico
-        print(f"   ⚠️  Workbook '{WORKBOOK_CONTENT_URL}' no encontrado.")
-        print(f"   📋 Workbooks disponibles:")
-        for wb in all_workbooks:
-            print(f"      → {wb.get('contentUrl','')} | {wb.get('name','')}")
+        # Re-autenticar en cada sitio
+        auth2 = requests.post(
+            f"{server}/api/3.4/auth/signin",
+            json={"credentials": {
+                "personalAccessTokenName":   token_name,
+                "personalAccessTokenSecret": token_secret,
+                "site": {"contentUrl": s_content_url}
+            }},
+            headers={"Accept": "application/json"}, timeout=20
+        )
+        if auth2.status_code != 200:
+            print(f"      ⚠️  Sitio '{s_name}': no se pudo autenticar")
+            continue
+
+        auth2_data   = auth2.json()
+        t2           = auth2_data["credentials"]["token"]
+        sid2         = auth2_data["credentials"]["site"]["id"]
+        h2           = {"X-Tableau-Auth": t2, "Accept": "application/json"}
+
+        # Listar workbooks del sitio
+        wbs = requests.get(
+            f"{server}/api/3.4/sites/{sid2}/workbooks?pageSize=200",
+            headers=h2, timeout=30
+        )
+        if wbs.status_code != 200:
+            continue
+
+        workbooks = wbs.json().get("workbooks", {}).get("workbook", [])
+        print(f"\n   📂 Sitio '{s_name}' ({s_content_url}): {len(workbooks)} workbooks")
+
+        for wb in workbooks:
+            wb_name = wb.get("name", "").lower()
+            wb_url  = wb.get("contentUrl", "").lower()
+            match   = any(kw in wb_name or kw in wb_url for kw in KEYWORDS)
+            marker  = "  ⭐" if match else ""
+            print(f"      → {wb.get('contentUrl','')} | {wb.get('name','')}{marker}")
+            if match and not found_wb:
+                found_wb     = wb
+                found_site   = s_name
+                found_token  = t2
+                found_site_id = sid2
+
+    if not found_wb:
+        print(f"\n   ❌ No se encontró workbook con palabras clave {KEYWORDS} en ningún sitio.")
         return 0
 
-    wb_id = target_wb["id"]
-    print(f"   ✅ Workbook encontrado: '{target_wb.get('name')}' (id={wb_id})")
+    print(f"\n   🎯 WORKBOOK OBJETIVO: '{found_wb.get('name')}' en sitio '{found_site}'")
+    t_headers  = {"X-Tableau-Auth": found_token, "Accept": "application/json"}
+    site_id    = found_site_id
+    wb_id      = found_wb["id"]
 
-    # 3. Obtener las vistas del workbook
+    # Obtener las vistas del workbook encontrado
     views_in_wb_url = f"{server}/api/3.4/sites/{site_id}/workbooks/{wb_id}/views"
     res_views = requests.get(views_in_wb_url, headers=t_headers, timeout=30)
     wb_views = res_views.json().get("views", {}).get("view", [])
-    print(f"   📋 Vistas en el workbook:")
+    print(f"   📋 Vistas del workbook '{found_wb.get('name')}':")
     for v in wb_views:
         print(f"      → contentUrl: {v.get('contentUrl','')} | name: {v.get('name','')}")
 
-    # 4. Localizar la vista "Revenuedetailed" dentro del workbook
+    # Usar la primera vista disponible (o buscar Revenue si existe)
     target = next(
         (v for v in wb_views
-         if "revenuedetailed" in v.get("contentUrl", "").lower()
-         or "revenue" in v.get("name", "").lower()),
-        wb_views[0] if wb_views else None  # Si solo hay una vista, usarla
+         if "revenue" in v.get("name", "").lower()
+         or "revenue" in v.get("contentUrl", "").lower()),
+        wb_views[0] if wb_views else None
     )
-
     if not target:
-        print(f"   ❌ No se encontró vista de Revenue en el workbook.")
-        print(f"   📌 Usando primera vista disponible para exploración...")
-        if not wb_views:
-            return 0
-        target = wb_views[0]
+        print("   ❌ No hay vistas en este workbook.")
+        return 0
 
     view_id   = target["id"]
     view_real = target.get("name", "?")

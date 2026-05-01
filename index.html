@@ -4528,8 +4528,22 @@
           </div>
         `;
 
-        // Ordenar por nombre (ya que no tenemos revenue aún)
-        const sorted = entries.sort((a, b) => {
+        // Filtrar y dejar solo los perfiles que están mapeados a la agencia
+        const filteredEntries = entries.filter(([id]) => {
+          let esDeAgencia = false;
+          if (typeof DP_PANELS_META !== 'undefined') {
+            DP_PANELS_META.forEach(p => {
+              const perfiles = DP_PERFILES_MAP[p.id] || [];
+              if (perfiles.some(prof => prof.id.toString() === id.toString())) {
+                esDeAgencia = true;
+              }
+            });
+          }
+          return esDeAgencia;
+        });
+
+        // Ordenar por nombre o valor
+        const sorted = filteredEntries.sort((a, b) => {
           const va = typeof a[1] === 'object' ? Number(a[1].valor||0) : Number(a[1]||0);
           const vb = typeof b[1] === 'object' ? Number(b[1].valor||0) : Number(b[1]||0);
           return vb - va;
@@ -4539,25 +4553,31 @@
           const val = typeof rawData === 'object' ? Number(rawData.valor||0) : Number(rawData||0);
           const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
 
-          // Extraer nombre del data_json de Tableau (columna "ID Trusted User" = "ID - Nombre, Edad")
-          let nombreTableau = '';
-          const idTrusted = dj['ID Trusted User'] || dj['id_trusted_user'] || '';
-          if (idTrusted) {
-            const partes = idTrusted.split(' - ');
-            if (partes.length > 1) nombreTableau = partes[1].split(',')[0].trim();
-          }
-
           // Buscar nombre en Datame (DP_PERFILES_MAP)
-          let nombreReal = nombreTableau || 'Perfil ' + id;
-          let esDeAgencia = false;
+          let nombreReal = 'Perfil ' + id;
           if (typeof DP_PANELS_META !== 'undefined') {
             DP_PANELS_META.forEach(p => {
               const perfiles = DP_PERFILES_MAP[p.id] || [];
               const match = perfiles.find(prof => prof.id.toString() === id.toString());
-              if (match) { nombreReal = match.nombre; esDeAgencia = true; }
+              if (match) nombreReal = match.nombre;
             });
           }
-          if (!esDeAgencia && nombreTableau) esDeAgencia = true; // viene de Tableau = es de agencia
+
+          // Procesar las métricas extras dinámicamente
+          const metricasExtra = Object.entries(dj)
+            .filter(([k, v]) => {
+               const kUp = k.toUpperCase();
+               return !kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER') && !kUp.includes('TYPE') && v != null && v !== '' && v !== 'N/A';
+            })
+            .map(([k, v]) => {
+              let valStr = v;
+              if (typeof v === 'string' && !isNaN(Number(v.replace(/[$ ,]/g, ''))) && v.trim() !== '') {
+                 valStr = Number(v.replace(/[$ ,]/g, '')).toLocaleString('en-US');
+              } else if (typeof v === 'number') {
+                 valStr = v.toLocaleString('en-US');
+              }
+              return `<div style="font-size:0.55rem; color:#94a3b8; display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding-bottom:3px;"><span style="color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;" title="${k}">${k}</span> <span style="color:#e2e8f0;font-weight:700;">${valStr}</span></div>`;
+            }).join('');
 
           const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
           const percent = val > 0 ? Math.round((val/maxVal)*100) : 0;
@@ -4570,16 +4590,17 @@
               <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${id}</div>
               <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
-            <div style="font-size:0.82rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombreReal}</div>
+            <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombreReal}</div>
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-               <div style="font-size:${val>0?'1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">
+               <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">
                  ${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}
                </div>
                <div style="font-size:0.48rem;color:#334155;">#${idx+1}</div>
             </div>
-            <div style="width:100%;height:2px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;">
+            <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;margin-bottom:4px;">
               <div style="width:${percent||8}%;height:100%;background:${accentC};border-radius:2px;opacity:${val>0?1:0.3};"></div>
             </div>
+            ${metricasExtra ? `<div style="margin-top:2px; display:flex; flex-direction:column; gap:4px; max-height:90px; overflow-y:auto; padding-right:4px;">${metricasExtra}</div>` : ''}
           </div>
           `;
         }).join('');

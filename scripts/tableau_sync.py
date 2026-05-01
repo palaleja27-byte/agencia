@@ -243,13 +243,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
         print(f"   ⚠️  No se pudo listar sitios (HTTP {res_sites.status_code}) — usando sitio actual")
         all_sites = [{"contentUrl": site, "id": site_id, "name": site}]
 
-    # Buscar en CADA sitio los workbooks que contengan palabras clave
-    KEYWORDS = ["andinas", "marketing", "romero", "revenue", "agencia", "partner"]
-    found_wb  = None
-    found_site = None
-    found_token = None
-    found_site_id = None
-    all_workbooks = []   # acumulador global (wb, token, site_id) de TODOS los sitios
+    all_views_to_scan = []   # acumulador global (view, token, site_id) de TODOS los sitios
 
     for s in all_sites:
         s_content_url = s.get("contentUrl", "")
@@ -274,30 +268,25 @@ def sync_panel(panel: dict, token_secret: str) -> int:
         sid2         = auth2_data["credentials"]["site"]["id"]
         h2           = {"X-Tableau-Auth": t2, "Accept": "application/json"}
 
-        # Listar workbooks del sitio
-        wbs = requests.get(
-            f"{server}/api/3.4/sites/{sid2}/workbooks?pageSize=200",
+        # Listar VISTAS del sitio directamente (bypasseando workbooks)
+        vws = requests.get(
+            f"{server}/api/3.4/sites/{sid2}/views?pageSize=1000",
             headers=h2, timeout=30
         )
-        if wbs.status_code != 200:
+        if vws.status_code != 200:
             continue
 
-        workbooks = wbs.json().get("workbooks", {}).get("workbook", [])
-        print(f"\n   📂 Sitio '{s_name}' ({s_content_url}): {len(workbooks)} workbooks")
+        site_views = vws.json().get("views", {}).get("view", [])
+        print(f"\n   📂 Sitio '{s_name}' ({s_content_url}): {len(site_views)} vistas encontradas directamente")
 
-        for wb in workbooks:
-            wb_name = wb.get("name", "").lower()
-            wb_url  = wb.get("contentUrl", "").lower()
-            match   = any(kw in wb_name or kw in wb_url for kw in KEYWORDS)
+        for view in site_views:
+            view_name = view.get("name", "").lower()
+            view_url  = view.get("contentUrl", "").lower()
+            match   = any(kw in view_name or kw in view_url for kw in KEYWORDS)
             marker  = "  ⭐" if match else ""
-            print(f"      → {wb.get('contentUrl','')} | {wb.get('name','')}{marker}")
-            # Acumular con su token y site_id para el escaneo datame
-            all_workbooks.append({"wb": wb, "token": t2, "sid": sid2})
-            if match and not found_wb:
-                found_wb      = wb
-                found_site    = s_name
-                found_token   = t2
-                found_site_id = sid2
+            
+            # Acumular TODAS las vistas para el escaneo, pero podemos priorizar si queremos
+            all_views_to_scan.append({"view": view, "token": t2, "sid": sid2, "site_name": s_name})
 
     # ── ESTRATEGIA DATAME: buscar IDs propios en TODOS los workbooks ──
     # Cargar los IDs de datame_perfiles (nuestros perfiles de agencia)
@@ -306,75 +295,68 @@ def sync_panel(panel: dict, token_secret: str) -> int:
         print("   ❌ Sin IDs de datame_perfiles. Abortando.")
         return 0
 
-    # Escanear TODOS los workbooks buscando vistas que contengan nuestros IDs
-    print(f"\n   🔍 Escaneando {len(all_workbooks)} workbooks buscando IDs de la agencia...")
+    # Escanear TODAS las vistas buscando nuestros IDs
+    print(f"\n   🔍 Escaneando {len(all_views_to_scan)} vistas buscando IDs de la agencia...")
     found_records = []      # acumulador de registros encontrados
 
-    for entry in all_workbooks:
-        wb     = entry["wb"]
+    for entry in all_views_to_scan:
+        view   = entry["view"]
         t2     = entry["token"]
         sid2   = entry["sid"]
+        s_name = entry["site_name"]
         h2     = {"X-Tableau-Auth": t2, "Accept": "application/json"}
-        wb_name = wb.get('name', '')
-        wb_id2  = wb.get('id', '')
+        
+        view_id2   = view.get('id', '')
+        view_name2 = view.get('name', '')
+        view_curl  = view.get('contentUrl', '')
 
-        # Obtener vistas del workbook
-        vws_res = requests.get(
-            f"{server}/api/3.4/sites/{sid2}/workbooks/{wb_id2}/views",
+        # Filtrado rápido para no descargar 1000 CSVs: solo vistas que parezcan relevantes
+        # Si el nombre tiene revenue, passport, kpi, usage, detail, etc.
+        if not any(k in view_name2.lower() or k in view_curl.lower() for k in ["revenue", "passport", "kpi", "usage", "detail", "score", "romero"]):
+            continue
+
+        # Descargar CSV de la vista
+        csv_res = requests.get(
+            f"{server}/api/3.15/sites/{sid2}/views/{view_id2}/data",
             headers=h2, timeout=20
         )
-        if vws_res.status_code != 200:
+        if csv_res.status_code != 200 or len(csv_res.text) < 10:
             continue
-        vws = vws_res.json().get("views", {}).get("view", [])
 
-        for view in vws:
-            view_id2  = view.get("id", "")
-            view_name2 = view.get("name", "")
+        try:
+            df = pd.read_csv(io.StringIO(csv_res.text))
+            df.columns = [c.strip() for c in df.columns]
+        except Exception:
+            continue
 
-            # Descargar CSV de la vista
-            csv_res = requests.get(
-                f"{server}/api/3.15/sites/{sid2}/views/{view_id2}/data",
-                headers=h2, timeout=30
+        # Buscar columna de ID en el CSV
+        col_id = next(
+            (c for c in df.columns
+             if any(k in c.upper() for k in ["ID", "USER", "PERFIL", "PROFILE"])),
+            None
+        )
+        if not col_id:
+            continue
+
+        # Cruzar IDs del CSV con los IDs de datame_perfiles
+        df["_id_clean"] = df[col_id].astype(str).str.strip()
+        matched = df[df["_id_clean"].isin(datame_ids)]
+
+        if matched.empty:
+            # Intentar con regex numérico
+            df["_id_num"] = df[col_id].astype(str).apply(
+                lambda x: re.findall(r"\d{7,10}", x)[0] if re.findall(r"\d{7,10}", x) else ""
             )
-            if csv_res.status_code != 200 or len(csv_res.text) < 10:
-                continue
-
-            try:
-                df = pd.read_csv(io.StringIO(csv_res.text))
-                df.columns = [c.strip() for c in df.columns]
-            except Exception:
-                continue
-
-            # Buscar columna de ID en el CSV
-            col_id = next(
-                (c for c in df.columns
-                 if any(k in c.upper() for k in ["ID", "USER", "PERFIL", "PROFILE"])),
-                None
-            )
-            if not col_id:
-                continue
-
-            # Cruzar IDs del CSV con los IDs de datame_perfiles
-            df["_id_clean"] = df[col_id].astype(str).str.strip()
-            matched = df[df["_id_clean"].isin(datame_ids)]
-
-            if matched.empty:
-                # Intentar con regex numérico
-                df["_id_num"] = df[col_id].astype(str).apply(
-                    lambda x: re.findall(r"\d{7,10}", x)[0] if re.findall(r"\d{7,10}", x) else ""
-                )
-                matched = df[df["_id_num"].isin(datame_ids)]
-                if not matched.empty:
-                    df["_id_clean"] = df["_id_num"]
-
+            matched = df[df["_id_num"].isin(datame_ids)]
             if not matched.empty:
-                hits = len(matched)
-                print(f"   ✅ MATCH! Workbook '{wb_name}' / Vista '{view_name2}': {hits} IDs encontrados")
-                print(f"      IDs: {list(matched['_id_clean'].unique())}")
-                source_info = {"workbook": wb_name, "vista": view_name2,
-                               "col_id": col_id, "df": df, "matched": matched}
-                found_records.append(source_info)
-            # else: no mencionar en el log para no saturar
+                df["_id_clean"] = df["_id_num"]
+
+        if not matched.empty:
+            hits = len(matched)
+            print(f"   ✅ MATCH! Vista '{view_curl}': {hits} IDs encontrados")
+            source_info = {"workbook": view_curl.split('/')[0], "vista": view_name2,
+                           "col_id": col_id, "df": df, "matched": matched}
+            found_records.append(source_info)
 
     if not found_records:
         print(f"\n   ⚠️  Ningún workbook tiene IDs que coincidan con datame_perfiles.")

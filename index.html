@@ -15803,7 +15803,12 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         }
 
         const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
-        validData.forEach(row => { _dpTableauData[row.perfil_id] = row.valor; });
+        validData.forEach(row => {
+          _dpTableauData[row.perfil_id] = {
+            valor:     row.valor    || 0,
+            data_json: row.data_json || {}
+          };
+        });
         
         const timeEl = document.getElementById('tableau-sync-time');
         if (timeEl && validData.length > 0) {
@@ -15911,7 +15916,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
               ${_dpTableauData[p.id] != null ? `
               <div style="margin-top:6px; padding:4px 8px; background:rgba(129,140,248,0.1); border:1px solid rgba(129,140,248,0.3); border-radius:6px; display:inline-block;">
                 <div style="font-size:0.5rem; color:#a5b4fc; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">📊 Venta Tableau</div>
-                <div style="font-size:0.75rem; color:#818cf8; font-weight:900;">$${Number(_dpTableauData[p.id]).toLocaleString('es-CO')}</div>
+                <div style="font-size:0.75rem; color:#818cf8; font-weight:900;">$${Number(typeof _dpTableauData[p.id]==='object' ? _dpTableauData[p.id].valor : _dpTableauData[p.id]).toLocaleString('es-CO')}</div>
               </div>
               ` : ''}
             </div>

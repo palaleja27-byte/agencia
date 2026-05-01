@@ -205,7 +205,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     data    = res.json()
     token   = data["credentials"]["token"]
     site_id = data["credentials"]["site"]["id"]
-    t_headers = {\"X-Tableau-Auth\": token, "Accept": "application/json"}
+    t_headers = {"X-Tableau-Auth": token, "Accept": "application/json"}
     print(f"   ✅ Auth OK en Tableau.")
 
     # ── ESCANEO TOTAL: buscar en TODOS los sitios disponibles ────

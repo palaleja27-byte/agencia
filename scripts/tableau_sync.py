@@ -209,9 +209,8 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     print(f"   ✅ Auth OK en Tableau.")
 
     # ── Ingeniería Inversa: buscar por WORKBOOK ──────────────────
-    # El URL real es: .../views/Passport_16741406948180/Revenuedetailed/
-    # Estrategia: buscar el workbook por contentUrl, luego sus vistas
-    WORKBOOK_CONTENT_URL = "Passport_16741406948180"
+    # ⚡ MODO EXPLORACIÓN: cambia este valor para probar workbooks
+    WORKBOOK_CONTENT_URL = "Regional"  # ← Explorando este workbook
 
     # 1. Obtener todos los workbooks del sitio
     wb_url = f"{server}/api/3.4/sites/{site_id}/workbooks?pageSize=200"
@@ -254,8 +253,11 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     )
 
     if not target:
-        print(f"   ❌ No se encontró vista 'Revenuedetailed' en el workbook.")
-        return 0
+        print(f"   ❌ No se encontró vista de Revenue en el workbook.")
+        print(f"   📌 Usando primera vista disponible para exploración...")
+        if not wb_views:
+            return 0
+        target = wb_views[0]
 
     view_id   = target["id"]
     view_real = target.get("name", "?")
@@ -275,6 +277,12 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     df = pd.read_csv(io.StringIO(res.text))
     df.columns = [c.strip() for c in df.columns]
     print(f"   📊 CSV: {len(df)} filas | Columnas: {list(df.columns)}")
+
+    # ⚡ MODO EXPLORACIÓN: muestra las primeras 5 filas para identificar el panel
+    print(f"\n   🔍 PRIMERAS 5 FILAS DEL WORKBOOK '{WORKBOOK_CONTENT_URL}':")
+    for i, row in df.head(5).iterrows():
+        print(f"      [{i}] {dict(row)}")
+    print()
 
     col_id = (
         "ID Trusted User" if "ID Trusted User" in df.columns

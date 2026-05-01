@@ -155,13 +155,34 @@ def fetch_panel_ids(panel_id: int) -> set:
     rows = sb_get(f"tableau_perfiles?select=id_tableau&panel_id=eq.{panel_id}&activo=eq.true")
     if rows:
         ids = {str(r["id_tableau"]).strip() for r in rows if r.get("id_tableau")}
-        # Si solo hay la fila PENDING (placeholder), ignorarla
         ids.discard("PENDING")
         if ids:
             print(f"      🔑 {len(ids)} IDs en whitelist del panel {panel_id}")
             return ids
-    print(f"      ⚠️  Sin whitelist definida para panel {panel_id} — se aceptarán TODOS los IDs de esta vista")
-    return set()  # set vacío = sin restricción de ID (acepta todos los de la vista)
+    print(f"      ⚠️  Sin whitelist en tableau_perfiles — usando IDs de datame_perfiles como llave")
+    return set()
+
+
+def fetch_datame_ids() -> set:
+    """
+    Lee datame_perfiles desde Supabase.
+    Devuelve un set de id_datame (los IDs propios de la agencia).
+    Estos IDs son la LLAVE DE BÚSQUEDA en el CSV de Tableau.
+    """
+    rows = sb_get("datame_perfiles?select=id_datame&activo=eq.true")
+    if rows:
+        ids = {str(r["id_datame"]).strip() for r in rows if r.get("id_datame")}
+        ids.discard("PENDING")
+        print(f"   🔑 {len(ids)} IDs propios de Agencia Romero cargados desde datame_perfiles:")
+        print(f"      {sorted(ids)}")
+        return ids
+    # Fallback hardcodeado con los IDs conocidos de la agencia
+    fallback = {
+        "7ROMERO", "ROMERO01", "ROMERO02"  # reemplazar con IDs reales si se conocen
+    }
+    print(f"   ⚠️  datame_perfiles vacío — usando fallback hardcodeado: {fallback}")
+    return fallback
+
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -275,126 +296,143 @@ def sync_panel(panel: dict, token_secret: str) -> int:
                 found_token  = t2
                 found_site_id = sid2
 
-    if not found_wb:
-        print(f"\n   ❌ No se encontró workbook con palabras clave {KEYWORDS} en ningún sitio.")
+    # ── ESTRATEGIA DATAME: buscar IDs propios en TODOS los workbooks ──
+    # Cargar los IDs de datame_perfiles (nuestros perfiles de agencia)
+    datame_ids = fetch_datame_ids()
+    if not datame_ids:
+        print("   ❌ Sin IDs de datame_perfiles. Abortando.")
         return 0
 
-    print(f"\n   🎯 WORKBOOK OBJETIVO: '{found_wb.get('name')}' en sitio '{found_site}'")
-    t_headers  = {"X-Tableau-Auth": found_token, "Accept": "application/json"}
-    site_id    = found_site_id
-    wb_id      = found_wb["id"]
+    # Escanear TODOS los workbooks buscando vistas que contengan nuestros IDs
+    print(f"\n   🔍 Escaneando {len(all_workbooks)} workbooks buscando IDs de la agencia...")
+    found_records = []      # acumulador de registros encontrados
+    source_info   = {}      # workbook/vista donde se encontraron
 
-    # Obtener las vistas del workbook encontrado
-    views_in_wb_url = f"{server}/api/3.4/sites/{site_id}/workbooks/{wb_id}/views"
-    res_views = requests.get(views_in_wb_url, headers=t_headers, timeout=30)
-    wb_views = res_views.json().get("views", {}).get("view", [])
-    print(f"   📋 Vistas del workbook '{found_wb.get('name')}':")
-    for v in wb_views:
-        print(f"      → contentUrl: {v.get('contentUrl','')} | name: {v.get('name','')}")
+    for wb in all_workbooks:
+        wb_name = wb.get('name', '')
+        wb_curl = wb.get('contentUrl', '')
+        wb_id2  = wb.get('id', '')
 
-    # Usar la primera vista disponible (o buscar Revenue si existe)
-    target = next(
-        (v for v in wb_views
-         if "revenue" in v.get("name", "").lower()
-         or "revenue" in v.get("contentUrl", "").lower()),
-        wb_views[0] if wb_views else None
+        # Obtener vistas del workbook
+        vws_res = requests.get(
+            f"{server}/api/3.4/sites/{site_id}/workbooks/{wb_id2}/views",
+            headers=t_headers, timeout=20
+        )
+        if vws_res.status_code != 200:
+            continue
+        vws = vws_res.json().get("views", {}).get("view", [])
+
+        for view in vws:
+            view_id2  = view.get("id", "")
+            view_name2 = view.get("name", "")
+
+            # Descargar CSV de la vista
+            csv_res = requests.get(
+                f"{server}/api/3.15/sites/{site_id}/views/{view_id2}/data",
+                headers=t_headers, timeout=30
+            )
+            if csv_res.status_code != 200 or len(csv_res.text) < 10:
+                continue
+
+            try:
+                df = pd.read_csv(io.StringIO(csv_res.text))
+                df.columns = [c.strip() for c in df.columns]
+            except Exception:
+                continue
+
+            # Buscar columna de ID en el CSV
+            col_id = next(
+                (c for c in df.columns
+                 if any(k in c.upper() for k in ["ID", "USER", "PERFIL", "PROFILE"])),
+                None
+            )
+            if not col_id:
+                continue
+
+            # Cruzar IDs del CSV con los IDs de datame_perfiles
+            df["_id_clean"] = df[col_id].astype(str).str.strip()
+            matched = df[df["_id_clean"].isin(datame_ids)]
+
+            if matched.empty:
+                # Intentar con regex numérico
+                df["_id_num"] = df[col_id].astype(str).apply(
+                    lambda x: re.findall(r"\d{7,10}", x)[0] if re.findall(r"\d{7,10}", x) else ""
+                )
+                matched = df[df["_id_num"].isin(datame_ids)]
+                if not matched.empty:
+                    df["_id_clean"] = df["_id_num"]
+
+            if not matched.empty:
+                hits = len(matched)
+                print(f"   ✅ MATCH! Workbook '{wb_name}' / Vista '{view_name2}': {hits} IDs encontrados")
+                print(f"      IDs: {list(matched['_id_clean'].unique())}")
+                source_info = {"workbook": wb_name, "vista": view_name2,
+                               "col_id": col_id, "df": df, "matched": matched}
+                found_records.append(source_info)
+            # else: no mencionar en el log para no saturar
+
+    if not found_records:
+        print(f"\n   ⚠️  Ningún workbook tiene IDs que coincidan con datame_perfiles.")
+        print(f"   📄 IDs buscados: {sorted(datame_ids)}")
+        return 0
+
+    # Usar la primera fuente encontrada con más matches
+    best = max(found_records, key=lambda x: len(x["matched"]))
+    print(f"\n   🎯 FUENTE GANADORA: '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+    df      = best["df"]
+    matched = best["matched"]
+    col_id  = best["col_id"]
+    view_real = best["vista"
+]
+
+    # ── Buscar columna de valor (revenue) ────────────────────────
+    col_val = next(
+        (c for c in df.columns
+         if any(k in c.upper() for k in ["REVENUE", "EARNINGS", "AMOUNT", "TOTAL", "COINS", "INCOME"])
+         and "TYPE" not in c.upper()),
+        None
     )
-    if not target:
-        print("   ❌ No hay vistas en este workbook.")
-        return 0
 
-    view_id   = target["id"]
-    view_real = target.get("name", "?")
-    print(f"   ✅ Vista seleccionada: '{view_real}' (id={view_id})")
+    print(f"   📊 {len(matched)} filas de la agencia | Col ID='{col_id}' | Col Valor='{col_val}'")
+    print(f"   🔍 Primeras 5 filas de nuestros perfiles:")
+    for i, row in matched.head(5).iterrows():
+        print(f"      [{i}] ID={row[col_id]} | Valor={row.get(col_val, 'N/A')}")
 
-    # ── Descargar CSV ────────────────────────────────────────────
-    data_url = f"{server}/api/3.15/sites/{site_id}/views/{view_id}/data"
-    res = requests.get(data_url, headers=t_headers, timeout=60)
-    if res.status_code != 200:
-        print(f"   ❌ CSV falló (HTTP {res.status_code})")
-        return 0
-    if len(res.text) < 10:
-        print("   ⚠️  CSV vacío")
-        return 0
-
-    # ── Procesar CSV ─────────────────────────────────────────────
-    df = pd.read_csv(io.StringIO(res.text))
-    df.columns = [c.strip() for c in df.columns]
-    print(f"   📊 CSV: {len(df)} filas | Columnas: {list(df.columns)}")
-
-    # ⚡ MODO EXPLORACIÓN: muestra las primeras 5 filas para identificar el panel
-    print(f"\n   🔍 PRIMERAS 5 FILAS DEL WORKBOOK '{WORKBOOK_CONTENT_URL}':")
-    for i, row in df.head(5).iterrows():
-        print(f"      [{i}] {dict(row)}")
-    print()
-
-    col_id = (
-        "ID Trusted User" if "ID Trusted User" in df.columns
-        else next((c for c in df.columns if "ID" in c.upper()), None)
-    )
-    col_val = (
-        "Revenue" if "Revenue" in df.columns
-        else next((c for c in df.columns if "REVENUE" in c.upper() and "TYPE" not in c.upper()), None)
-    )
-    if not col_id or not col_val:
-        print(f"   ❌ Columnas clave no encontradas. Disponibles: {list(df.columns)}")
-        return 0
-
-    print(f"   🎯 Mapeado → ID='{col_id}' | Valor='{col_val}'")
-
-    # ── Construir payload con filtro de whitelist ─────────────────
+    # ── Construir payload ─────────────────────────────────────────
     payload = []
     seen    = {}
-    skip_ext = 0
-    skip_bad = 0
 
-    for _, row in df.iterrows():
-        try:
-            v_str = str(row[col_val]).replace("$","").replace(",","").replace(" ","").strip()
-            valor = float(v_str) if v_str and v_str.lower() != "nan" else 0.0
-            if valor <= 0:
-                skip_bad += 1
-                continue
+    for _, row in matched.iterrows():
+        id_clean = str(row["_id_clean"]).strip()
+        valor    = 0.0
+        if col_val:
+            try:
+                v_str = str(row[col_val]).replace("$","").replace(",","").replace(" ","").strip()
+                valor = float(v_str) if v_str and v_str.lower() != "nan" else 0.0
+            except Exception:
+                valor = 0.0
 
-            perfil_raw = str(row[col_id]).strip()
-            if not perfil_raw or perfil_raw.lower() == "nan":
-                skip_bad += 1
-                continue
+        if id_clean in seen:
+            payload[seen[id_clean]]["valor"] = round(payload[seen[id_clean]]["valor"] + valor, 2)
+            continue
 
-            nums     = re.findall(r"\d{7,10}", perfil_raw)
-            id_clean = nums[0] if nums else perfil_raw.split(" ")[0].split("_")[-1]
+        seen[id_clean] = len(payload)
+        payload.append({
+            "perfil_id":    id_clean,
+            "panel_id":     panel_id,
+            "panel_nombre": panel_nombre,
+            "valor":        round(valor, 2),
+            "data_json":    json.loads(row.to_json()),
+            "updated_at":   "now()"
+        })
 
-            # Filtro whitelist (si está vacía = acepta todo lo de la vista)
-            if whitelist and id_clean not in whitelist:
-                skip_ext += 1
-                continue
-
-            if id_clean in seen:
-                payload[seen[id_clean]]["valor"] = round(payload[seen[id_clean]]["valor"] + valor, 2)
-                continue
-
-            seen[id_clean] = len(payload)
-            payload.append({
-                "perfil_id":   id_clean,
-                "panel_id":    panel_id,
-                "panel_nombre": panel_nombre,
-                "valor":       round(valor, 2),
-                "data_json":   json.loads(row.to_json()),
-                "updated_at":  "now()"
-            })
-        except Exception:
-            skip_bad += 1
-
-    print(f"   📦 De la vista: {len(payload)} perfiles válidos | {skip_ext} de otra sede | {skip_bad} sin datos")
-
-    if not payload:
-        print("   ⚠️  Sin datos para subir en este panel.")
-        return 0
-
-    # Loguear qué IDs se detectaron (útil para configurar la whitelist)
-    print(f"   🔍 IDs detectados en esta vista:")
+    print(f"   📦 {len(payload)} perfiles de la agencia listos para subir:")
     for rec in payload:
         print(f"      → {rec['perfil_id']} | ${rec['valor']:,.2f}")
+
+    if not payload:
+        print("   ⚠️  Sin datos válidos para subir.")
+        return 0
 
     # ── Subir a Supabase ─────────────────────────────────────────
     print(f"\n   ⚡ CYBERPUNK UPSERT → {len(payload)} registros...")

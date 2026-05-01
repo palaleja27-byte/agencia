@@ -381,19 +381,37 @@ def sync_panel(panel: dict, token_secret: str) -> int:
         print(f"   📄 IDs buscados: {sorted(datame_ids)}")
         return 0
 
-    # Usar la primera fuente encontrada con más matches
-    best = max(found_records, key=lambda x: len(x["matched"]))
-    print(f"\n   🎯 FUENTE GANADORA: '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
-    df      = best["df"]
-    matched = best["matched"]
-    col_id  = best["col_id"]
-    view_real = best["vista"
-]
+    # Priorizar fuente que tenga columna de REVENUE sobre la que solo tiene IDs
+    REVENUE_KEYS = ["REVENUE", "EARNINGS", "AMOUNT", "TOTAL", "COINS", "INCOME", "SCORE", "KPI"]
+
+    def has_revenue(rec):
+        return any(
+            any(k in c.upper() for k in REVENUE_KEYS) and "TYPE" not in c.upper()
+            for c in rec["df"].columns
+        )
+
+    # Primero intentar fuente con revenue, luego la de más matches
+    best_with_revenue = [r for r in found_records if has_revenue(r)]
+    if best_with_revenue:
+        best = max(best_with_revenue, key=lambda x: len(x["matched"]))
+        print(f"\n   🎯 FUENTE GANADORA (con revenue): '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+    else:
+        best = max(found_records, key=lambda x: len(x["matched"]))
+        print(f"\n   🎯 FUENTE GANADORA (sin revenue, solo IDs): '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+        print(f"      ⚠️  Todas las fuentes encontradas:")
+        for r in found_records:
+            cols = [c for c in r["df"].columns if any(k in c.upper() for k in REVENUE_KEYS)]
+            print(f"         → {r['workbook']} / {r['vista']} | Cols revenue: {cols or 'ninguna'}")
+
+    df       = best["df"]
+    matched  = best["matched"]
+    col_id   = best["col_id"]
+    view_real = best["vista"]
 
     # ── Buscar columna de valor (revenue) ────────────────────────
     col_val = next(
         (c for c in df.columns
-         if any(k in c.upper() for k in ["REVENUE", "EARNINGS", "AMOUNT", "TOTAL", "COINS", "INCOME"])
+         if any(k in c.upper() for k in REVENUE_KEYS)
          and "TYPE" not in c.upper()),
         None
     )

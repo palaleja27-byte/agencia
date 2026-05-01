@@ -4506,63 +4506,87 @@
         if (!container) return;
         const entries = Object.entries(_dpTableauData);
         if (entries.length === 0) {
-          container.innerHTML = '<div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">Sin datos cargados. Clic en Sync.</div>';
+          container.innerHTML = '<div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">Sin datos cargados. Clic en ↻ Sync.</div>';
           return;
         }
 
         // Calcular Resumen Global
-        const totalVenta = entries.reduce((s, [id, v]) => s + Number(v), 0);
-        const avgVenta = totalVenta / entries.length;
+        const totalVenta = entries.reduce((s, [id, d]) => s + (typeof d === 'object' ? Number(d.valor||0) : Number(d||0)), 0);
 
         let html = `
-          <div style="grid-column: 1/-1; display: flex; gap: 12px; margin-bottom: 20px; flex-wrap:wrap;">
-            <div style="flex: 1; min-width:200px; padding:15px; background:rgba(99,102,241,0.05); border-radius:14px; border:1px solid rgba(129,140,248,0.1); text-align:center;">
-              <div style="font-size: 0.55rem; color: #818cf8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">VENTA TOTAL TABLEAU</div>
-              <div style="font-size: 1.4rem; color: #e2e8f0; font-weight: 900; margin-top: 4px;">$${totalVenta.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+          <div style="grid-column: 1/-1; display: flex; gap: 12px; margin-bottom: 16px; flex-wrap:wrap;">
+            <div style="flex:1;min-width:180px;padding:14px;background:rgba(99,102,241,0.07);border-radius:14px;border:1px solid rgba(129,140,248,0.15);text-align:center;">
+              <div style="font-size:0.52rem;color:#818cf8;font-weight:800;text-transform:uppercase;letter-spacing:1px;">PERFILES TABLEAU</div>
+              <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${entries.length}</div>
+              <div style="font-size:0.5rem;color:#475569;margin-top:2px;">ROMERO OFICIAL · UK</div>
             </div>
-            <div style="flex: 1; min-width:200px; padding:15px; background:rgba(20,184,166,0.05); border-radius:14px; border:1px solid rgba(20,184,166,0.1); text-align:center;">
-              <div style="font-size: 0.55rem; color: #2dd4bf; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">TOTAL PERFILES</div>
-              <div style="font-size: 1.4rem; color: #e2e8f0; font-weight: 900; margin-top: 4px;">${entries.length}</div>
+            <div style="flex:1;min-width:180px;padding:14px;background:rgba(20,184,166,0.06);border-radius:14px;border:1px solid rgba(20,184,166,0.12);text-align:center;">
+              <div style="font-size:0.52rem;color:#2dd4bf;font-weight:800;text-transform:uppercase;letter-spacing:1px;">REVENUE TOTAL</div>
+              <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${totalVenta > 0 ? '$'+totalVenta.toLocaleString('en-US',{minimumFractionDigits:2}) : '— Pendiente'}</div>
+              <div style="font-size:0.5rem;color:#475569;margin-top:2px;">Límites de uso · Tableau</div>
             </div>
           </div>
         `;
 
-        // Ordenar por valor y renderizar
-        html += entries.sort((a,b) => b[1] - a[1]).map(([id, val]) => {
-          // Buscar match en Datame
-          let nombreReal = "EXTERNO / OTRA SEDE";
-          let esDeAgencia = false;
-          DP_PANELS_META.forEach(p => {
-            const perfiles = DP_PERFILES_MAP[p.id] || [];
-            const match = perfiles.find(prof => prof.id.toString() === id.toString());
-            if (match) { nombreReal = match.nombre; esDeAgencia = true; }
-          });
+        // Ordenar por nombre (ya que no tenemos revenue aún)
+        const sorted = entries.sort((a, b) => {
+          const va = typeof a[1] === 'object' ? Number(a[1].valor||0) : Number(a[1]||0);
+          const vb = typeof b[1] === 'object' ? Number(b[1].valor||0) : Number(b[1]||0);
+          return vb - va;
+        });
 
-          const maxVal = Math.max(...entries.map(e => e[1]));
-          const percent = (val / maxVal) * 100;
-          const cardBorder = esDeAgencia ? 'rgba(99,102,241,0.2)' : 'rgba(248,113,113,0.15)';
-          const badgeColor = esDeAgencia ? '#818cf8' : '#f87171';
+        html += sorted.map(([id, rawData], idx) => {
+          const val = typeof rawData === 'object' ? Number(rawData.valor||0) : Number(rawData||0);
+          const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
+
+          // Extraer nombre del data_json de Tableau (columna "ID Trusted User" = "ID - Nombre, Edad")
+          let nombreTableau = '';
+          const idTrusted = dj['ID Trusted User'] || dj['id_trusted_user'] || '';
+          if (idTrusted) {
+            const partes = idTrusted.split(' - ');
+            if (partes.length > 1) nombreTableau = partes[1].split(',')[0].trim();
+          }
+
+          // Buscar nombre en Datame (DP_PERFILES_MAP)
+          let nombreReal = nombreTableau || 'Perfil ' + id;
+          let esDeAgencia = false;
+          if (typeof DP_PANELS_META !== 'undefined') {
+            DP_PANELS_META.forEach(p => {
+              const perfiles = DP_PERFILES_MAP[p.id] || [];
+              const match = perfiles.find(prof => prof.id.toString() === id.toString());
+              if (match) { nombreReal = match.nombre; esDeAgencia = true; }
+            });
+          }
+          if (!esDeAgencia && nombreTableau) esDeAgencia = true; // viene de Tableau = es de agencia
+
+          const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
+          const percent = val > 0 ? Math.round((val/maxVal)*100) : 0;
+          const cardBg  = 'rgba(99,102,241,0.04)';
+          const accentC = '#818cf8';
 
           return `
-          <div style="background: rgba(255,255,255,0.02); border-radius: 12px; padding: 12px; border: 1px solid ${cardBorder}; display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="font-size: 0.55rem; color: #64748b; font-weight: 800;">ID: ${id}</div>
-              <span style="font-size: 0.45rem; background: ${badgeColor}22; color: ${badgeColor}; padding: 1px 6px; border-radius: 4px; font-weight: 900; letter-spacing:0.5px;">${esDeAgencia ? 'MI AGENCIA' : 'OTRA SEDE'}</span>
+          <div style="background:${cardBg};border-radius:12px;padding:12px;border:1px solid rgba(99,102,241,0.15);display:flex;flex-direction:column;gap:6px;transition:.2s;" onmouseover="this.style.borderColor='rgba(129,140,248,0.4)'" onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${id}</div>
+              <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
-            <div style="font-size: 0.8rem; color: #f1f5f9; font-weight: 700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${nombreReal}</div>
-            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-               <div style="font-size: 1rem; color: #2dd4bf; font-weight: 900;">$${Number(val).toLocaleString('en-US', {minimumFractionDigits:2})}</div>
-               <div style="font-size: 0.5rem; color: #475569;">OFICIAL</div>
+            <div style="font-size:0.82rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombreReal}</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+               <div style="font-size:${val>0?'1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">
+                 ${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}
+               </div>
+               <div style="font-size:0.48rem;color:#334155;">#${idx+1}</div>
             </div>
-            <div style="width: 100%; height: 3px; background: rgba(0,0,0,0.2); border-radius: 2px; overflow: hidden;">
-              <div style="width: ${percent}%; height: 100%; background: ${badgeColor}; border-radius: 2px;"></div>
+            <div style="width:100%;height:2px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;">
+              <div style="width:${percent||8}%;height:100%;background:${accentC};border-radius:2px;opacity:${val>0?1:0.3};"></div>
             </div>
           </div>
           `;
         }).join('');
-        
+
         container.innerHTML = html;
       }
+
 
       function tableauLog(msg, type='info') {
         const cons = document.getElementById('tableau-console');

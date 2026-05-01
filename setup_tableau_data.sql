@@ -74,19 +74,38 @@ ON CONFLICT (id) DO UPDATE SET
 --   (2, 'OTRA AGENCIA', '...', '...', 'NOMBREAGENCIA2', 'Analytics')
 -- ON CONFLICT (id) DO UPDATE SET view_name = EXCLUDED.view_name;
 
--- ─── 6. Insertar perfiles del PANEL-T1 (ROMERO OFICIAL) ─────────
--- ⚠️  COMPLETAR con los IDs reales del panel GRUPOROMERO en Tableau.
---     Puedes verlos en el CSV cuando el script loguea las columnas.
---     Por ahora ponemos los modelos que ya conocemos de datame que
---     tienen alta probabilidad de estar en ese panel:
-INSERT INTO tableau_perfiles (panel_id, id_tableau, modelo) VALUES
-  -- Los IDs deben ser los que aparecen en la columna "ID Trusted User"
-  -- del CSV de Tableau para la vista GRUPOROMERO.
-  -- Reemplaza estos con los reales una vez que el script los loguee:
-  (1, 'PENDING', 'Por confirmar con el log del script')
-ON CONFLICT DO NOTHING;
+-- ─── 6. MIGRACIÓN: agregar columnas faltantes (idempotente) ─────
+ALTER TABLE tableau_data
+  ADD COLUMN IF NOT EXISTS panel_id     INTEGER DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS panel_nombre TEXT    DEFAULT 'ROMERO OFICIAL';
 
--- ─── 7. Función SECURITY DEFINER (actualizada con panel_id) ─────
+-- ─── 7. Insertar los 14 perfiles CONFIRMADOS del panel Romero ───
+-- ✅ IDs confirmados por ingeniería inversa del workbook "Limits usage"
+-- El script cruzó datame_perfiles con todos los workbooks de Tableau
+-- y encontró match exacto con estos 14 perfiles de la agencia.
+INSERT INTO tableau_perfiles (panel_id, id_tableau, modelo, activo) VALUES
+  (1, '91360720',  'Sandra Marina',  true),
+  (1, '91733663',  'Daniel',         true),
+  (1, '95955130',  'Hector',         true),
+  (1, '95956014',  'Pablo',          true),
+  (1, '98389135',  'Raul',           true),
+  (1, '98540781',  'Leandro',        true),
+  (1, '103289167', 'Luis',           true),
+  (1, '103291980', 'Armando',        true),
+  (1, '130431310', 'Rafael',         true),
+  (1, '143014129', 'Renee',          true),
+  (1, '151070498', 'Valquimar',      true),
+  (1, '153839388', 'Agustin',        true),
+  (1, '156716207', 'Agnaldo',        true),
+  (1, '157067734', 'Valdemir',       true)
+ON CONFLICT (panel_id, id_tableau) DO UPDATE SET
+  modelo = EXCLUDED.modelo,
+  activo = true;
+
+-- Eliminar el placeholder PENDING si existe
+DELETE FROM tableau_perfiles WHERE id_tableau = 'PENDING';
+
+-- ─── 8. Función SECURITY DEFINER (actualizada con panel_id) ─────
 DROP FUNCTION IF EXISTS upsert_tableau_batch(jsonb);
 
 CREATE OR REPLACE FUNCTION upsert_tableau_batch(records jsonb)
@@ -104,9 +123,9 @@ BEGIN
         INSERT INTO tableau_data (perfil_id, panel_id, panel_nombre, valor, data_json, updated_at)
         VALUES (
             rec->>'perfil_id',
-            (rec->>'panel_id')::int,
-            rec->>'panel_nombre',
-            (rec->>'valor')::numeric,
+            COALESCE((rec->>'panel_id')::int, 1),
+            COALESCE(rec->>'panel_nombre', 'ROMERO OFICIAL'),
+            COALESCE((rec->>'valor')::numeric, 0),
             rec->'data_json',
             now()
         )
@@ -126,7 +145,7 @@ $$;
 GRANT EXECUTE ON FUNCTION upsert_tableau_batch(jsonb) TO anon;
 GRANT EXECUTE ON FUNCTION upsert_tableau_batch(jsonb) TO authenticated;
 
--- ─── 8. Realtime ────────────────────────────────────────────────
+-- ─── 9. Realtime ────────────────────────────────────────────────
 DO $$
 BEGIN
     BEGIN
@@ -136,4 +155,4 @@ BEGIN
     END;
 END $$;
 
-SELECT 'OK: tableau_panels + tableau_perfiles listos' AS status;
+SELECT 'OK: 14 perfiles Romero + migración panel_id completada' AS status;

@@ -396,14 +396,24 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     view_real = best["vista"]
 
     # ── Buscar columna de valor (revenue) ────────────────────────
+    # 1. Buscar coincidencias exactas primero (según captura de pantalla del usuario)
+    exact_keys = ["Total general", "Total", "Revenue", "Amount"]
     col_val = next(
-        (c for c in df.columns
-         if any(k in c.upper() for k in REVENUE_KEYS)
-         and "TYPE" not in c.upper()),
+        (c for c in df.columns if c.strip() in exact_keys),
         None
     )
+    
+    # 2. Si no hay exactas, buscar aproximadas excluyendo basura
+    if not col_val:
+        col_val = next(
+            (c for c in df.columns
+             if any(k in c.upper() for k in REVENUE_KEYS)
+             and not any(exc in c.upper() for exc in ["TYPE", "TITLE", "SERVICE"])),
+            None
+        )
 
     print(f"   📊 {len(matched)} filas de la agencia | Col ID='{col_id}' | Col Valor='{col_val}'")
+    print(f"   🔍 Columnas completas: {list(df.columns)}")
     print(f"   🔍 Primeras 5 filas de nuestros perfiles:")
     for i, row in matched.head(5).iterrows():
         print(f"      [{i}] ID={row[col_id]} | Valor={row.get(col_val, 'N/A')}")
@@ -422,8 +432,24 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             except Exception:
                 valor = 0.0
 
+        row_json = json.loads(row.to_json())
+
         if id_clean in seen:
-            payload[seen[id_clean]]["valor"] = round(payload[seen[id_clean]]["valor"] + valor, 2)
+            idx = seen[id_clean]
+            payload[idx]["valor"] = round(payload[idx]["valor"] + valor, 2)
+            # Acumular numericos en data_json
+            for k, v in row_json.items():
+                if k not in payload[idx]["data_json"]:
+                    payload[idx]["data_json"][k] = v
+                else:
+                    try:
+                        curr_v = payload[idx]["data_json"][k]
+                        if str(curr_v).replace(".","").replace("-","").isdigit():
+                            v_num = float(str(v).replace("$","").replace(",","").replace(" ","").strip()) if v else 0.0
+                            curr_num = float(str(curr_v).replace("$","").replace(",","").replace(" ","").strip()) if curr_v else 0.0
+                            payload[idx]["data_json"][k] = round(curr_num + v_num, 2)
+                    except Exception:
+                        pass
             continue
 
         seen[id_clean] = len(payload)
@@ -432,7 +458,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             "panel_id":     panel_id,
             "panel_nombre": panel_nombre,
             "valor":        round(valor, 2),
-            "data_json":    json.loads(row.to_json()),
+            "data_json":    row_json,
             "updated_at":   "now()"
         })
 

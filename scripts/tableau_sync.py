@@ -423,14 +423,21 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     seen    = {}
 
     for _, row in matched.iterrows():
-        id_clean = str(row["_id_clean"]).strip()
-        valor    = 0.0
-        if col_val:
-            try:
-                v_str = str(row[col_val]).replace("$","").replace(",","").replace(" ","").strip()
-                valor = float(v_str) if v_str and v_str.lower() != "nan" else 0.0
-            except Exception:
-                valor = 0.0
+        raw_id = str(row["_id_clean"]).strip()
+        nums   = re.findall(r"\d{7,10}", raw_id)
+        id_clean = nums[0] if nums else raw_id
+
+        # Sumatoria inteligente: Tableau a veces divide el revenue en multiples columnas (title_1, title_2, etc)
+        valor = 0.0
+        for c in df.columns:
+            if any(k in c.upper() for k in ["REVENUE", "TOTAL", "AMOUNT", "EARNINGS", "TITLE", "SERVICE"]):
+                if "TYPE" not in c.upper() and "ID" not in c.upper():
+                    try:
+                        v_str = str(row[c]).replace("$","").replace(",","").replace(" ","").strip()
+                        if v_str and v_str.lower() != "nan":
+                            valor += float(v_str)
+                    except Exception:
+                        pass
 
         row_json = json.loads(row.to_json())
 

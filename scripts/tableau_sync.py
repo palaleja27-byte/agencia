@@ -434,6 +434,13 @@ def sync_panel(panel: dict, token_secret: str) -> int:
 
         row_json = json.loads(row.to_json())
 
+        # Des-pivotar: Si Tableau envía filas por 'Revenue type', convertir ese tipo en llave
+        type_col = next((c for c in df.columns if "TYPE" in c.upper() or "SERVICIO" in c.upper()), None)
+        if type_col and col_val:
+            rt = str(row[type_col]).strip()
+            if rt and rt.lower() != "nan" and rt.lower() != "none":
+                row_json[rt] = valor
+
         if id_clean in seen:
             idx = seen[id_clean]
             payload[idx]["valor"] = round(payload[idx]["valor"] + valor, 2)

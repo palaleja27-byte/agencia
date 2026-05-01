@@ -244,6 +244,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
         all_sites = [{"contentUrl": site, "id": site_id, "name": site}]
 
     all_views_to_scan = []   # acumulador global (view, token, site_id) de TODOS los sitios
+    KEYWORDS = ["andinas", "marketing", "romero", "revenue", "agencia", "partner", "passport"]
 
     for s in all_sites:
         s_content_url = s.get("contentUrl", "")

@@ -249,6 +249,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     found_site = None
     found_token = None
     found_site_id = None
+    all_workbooks = []   # acumulador global (wb, token, site_id) de TODOS los sitios
 
     for s in all_sites:
         s_content_url = s.get("contentUrl", "")
@@ -290,10 +291,12 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             match   = any(kw in wb_name or kw in wb_url for kw in KEYWORDS)
             marker  = "  ⭐" if match else ""
             print(f"      → {wb.get('contentUrl','')} | {wb.get('name','')}{marker}")
+            # Acumular con su token y site_id para el escaneo datame
+            all_workbooks.append({"wb": wb, "token": t2, "sid": sid2})
             if match and not found_wb:
-                found_wb     = wb
-                found_site   = s_name
-                found_token  = t2
+                found_wb      = wb
+                found_site    = s_name
+                found_token   = t2
                 found_site_id = sid2
 
     # ── ESTRATEGIA DATAME: buscar IDs propios en TODOS los workbooks ──
@@ -306,17 +309,19 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     # Escanear TODOS los workbooks buscando vistas que contengan nuestros IDs
     print(f"\n   🔍 Escaneando {len(all_workbooks)} workbooks buscando IDs de la agencia...")
     found_records = []      # acumulador de registros encontrados
-    source_info   = {}      # workbook/vista donde se encontraron
 
-    for wb in all_workbooks:
+    for entry in all_workbooks:
+        wb     = entry["wb"]
+        t2     = entry["token"]
+        sid2   = entry["sid"]
+        h2     = {"X-Tableau-Auth": t2, "Accept": "application/json"}
         wb_name = wb.get('name', '')
-        wb_curl = wb.get('contentUrl', '')
         wb_id2  = wb.get('id', '')
 
         # Obtener vistas del workbook
         vws_res = requests.get(
-            f"{server}/api/3.4/sites/{site_id}/workbooks/{wb_id2}/views",
-            headers=t_headers, timeout=20
+            f"{server}/api/3.4/sites/{sid2}/workbooks/{wb_id2}/views",
+            headers=h2, timeout=20
         )
         if vws_res.status_code != 200:
             continue
@@ -328,8 +333,8 @@ def sync_panel(panel: dict, token_secret: str) -> int:
 
             # Descargar CSV de la vista
             csv_res = requests.get(
-                f"{server}/api/3.15/sites/{site_id}/views/{view_id2}/data",
-                headers=t_headers, timeout=30
+                f"{server}/api/3.15/sites/{sid2}/views/{view_id2}/data",
+                headers=h2, timeout=30
             )
             if csv_res.status_code != 200 or len(csv_res.text) < 10:
                 continue

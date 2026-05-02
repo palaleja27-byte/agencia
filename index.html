@@ -4493,13 +4493,21 @@
     </div>
 
     <script>
+      // ── Cache global para datos de Tableau (debe existir ANTES de renderTableauPanel) ──
+      if (typeof _dpTableauData === 'undefined') { var _dpTableauData = {}; }
+
       function toggleTableauPanel() {
         const body = document.getElementById('tableau-body');
         const chev = document.getElementById('tableau-chevron');
         if (body.style.display === 'none') {
           body.style.display = 'block';
           chev.style.transform = 'rotate(180deg)';
-          renderTableauPanel();
+          // Cargar datos primero, luego pintar
+          if (typeof loadTableauData === 'function') {
+            loadTableauData().then(() => renderTableauPanel());
+          } else {
+            renderTableauPanel();
+          }
         } else {
           body.style.display = 'none';
           chev.style.transform = 'rotate(0deg)';
@@ -4510,19 +4518,42 @@
         const container = document.getElementById('tableau-data-container');
         if (!container) return;
         const entries = Object.entries(_dpTableauData);
+
         if (entries.length === 0) {
           container.innerHTML = '<div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">Sin datos cargados. Clic en ↻ Sync.</div>';
           return;
         }
 
+        // ── Recopilar TODOS los IDs mapeados en DP_PERFILES_MAP ──
+        const allMappedIds = new Set();
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).forEach(arr => arr.forEach(p => allMappedIds.add(String(p.id).trim())));
+        }
+        // Si no hay mapa, mostrar todos los perfiles sin filtrar
+        const useFilter = allMappedIds.size > 0;
+
+        if (typeof tableauLog === 'function') {
+          tableauLog(`🗺 Mapa: ${allMappedIds.size} IDs | Tableau: ${entries.length} IDs`, 'info');
+          const sample = entries.slice(0,3).map(([id])=>id).join(', ');
+          tableauLog(`🔍 Muestra Tableau: ${sample}`, 'info');
+        }
+
+        const filteredEntries = useFilter
+          ? entries.filter(([id]) => allMappedIds.has(String(id).trim()))
+          : entries;
+
+        if (typeof tableauLog === 'function') {
+          tableauLog(`✅ Perfiles a pintar: ${filteredEntries.length}`, filteredEntries.length > 0 ? 'success' : 'warn');
+        }
+
         // Calcular Resumen Global
-        const totalVenta = entries.reduce((s, [id, d]) => s + (typeof d === 'object' ? Number(d.valor||0) : Number(d||0)), 0);
+        const totalVenta = filteredEntries.reduce((s, [id, d]) => s + (typeof d === 'object' ? Number(d.valor||0) : Number(d||0)), 0);
 
         let html = `
           <div style="grid-column: 1/-1; display: flex; gap: 12px; margin-bottom: 16px; flex-wrap:wrap;">
             <div style="flex:1;min-width:180px;padding:14px;background:rgba(99,102,241,0.07);border-radius:14px;border:1px solid rgba(129,140,248,0.15);text-align:center;">
               <div style="font-size:0.52rem;color:#818cf8;font-weight:800;text-transform:uppercase;letter-spacing:1px;">PERFILES TABLEAU</div>
-              <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${entries.length}</div>
+              <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${filteredEntries.length}</div>
               <div style="font-size:0.5rem;color:#475569;margin-top:2px;">ROMERO OFICIAL · UK</div>
             </div>
             <div style="flex:1;min-width:180px;padding:14px;background:rgba(20,184,166,0.06);border-radius:14px;border:1px solid rgba(20,184,166,0.12);text-align:center;">
@@ -4533,85 +4564,89 @@
           </div>
         `;
 
-        // Filtrar y dejar solo los perfiles que están mapeados a la agencia
-        const filteredEntries = entries.filter(([id]) => {
-          let esDeAgencia = false;
-          if (typeof DP_PANELS_META !== 'undefined') {
-            DP_PANELS_META.forEach(p => {
-              const perfiles = DP_PERFILES_MAP[p.id] || [];
-              if (perfiles.some(prof => prof.id.toString() === id.toString())) {
-                esDeAgencia = true;
-              }
-            });
-          }
-          return esDeAgencia;
-        });
+        if (filteredEntries.length === 0) {
+          html += `<div style="color:#f87171; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px; border:1px solid rgba(248,113,113,0.2); border-radius:8px;">
+            ⚠️ Datos recibidos (${entries.length}) pero ningún ID coincide con el mapa de perfiles.<br>
+            <span style="font-size:.6rem;color:#475569;">IDs en Tableau: ${entries.map(([id])=>id).slice(0,8).join(', ')}</span><br>
+            <span style="font-size:.6rem;color:#475569;">IDs en mapa: ${[...allMappedIds].slice(0,8).join(', ')}</span>
+          </div>`;
+          container.innerHTML = html;
+          return;
+        }
 
-        // Ordenar por nombre o valor
-        const sorted = filteredEntries.sort((a, b) => {
+        // Filtrar ya está hecho arriba — continúa con filteredEntries
+        const alreadyFiltered = filteredEntries;
+
+        // Ordenar por valor descendente
+        const sorted = alreadyFiltered.sort((a, b) => {
           const va = typeof a[1] === 'object' ? Number(a[1].valor||0) : Number(a[1]||0);
           const vb = typeof b[1] === 'object' ? Number(b[1].valor||0) : Number(b[1]||0);
           return vb - va;
         });
 
+        // Construir IDs mapeados → modelo para búsqueda rápida
+        const idToModelo = {};
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).forEach(arr => arr.forEach(p => { idToModelo[String(p.id).trim()] = p.modelo || p.nombre; }));
+        }
+
         html += sorted.map(([id, rawData], idx) => {
           const val = typeof rawData === 'object' ? Number(rawData.valor||0) : Number(rawData||0);
           const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
 
-          // Buscar nombre en Datame (DP_PERFILES_MAP)
-          let nombreReal = 'Perfil ' + id;
-          if (typeof DP_PANELS_META !== 'undefined') {
-            DP_PANELS_META.forEach(p => {
-              const perfiles = DP_PERFILES_MAP[p.id] || [];
-              const match = perfiles.find(prof => prof.id.toString() === id.toString());
-              if (match) nombreReal = match.nombre;
-            });
-          }
+          const nombreReal = idToModelo[String(id).trim()] || 'Perfil ' + id;
+          const opAsignado = dj['Admin'] || dj['admin'] || 'No Asignado';
 
-          // Procesar las métricas extras dinámicamente
+          // Procesar métricas de servicios
           const metricasExtra = Object.entries(dj)
             .filter(([k, v]) => {
                const kUp = k.toUpperCase();
-               return !kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER') && !kUp.includes('TYPE') && v != null && v !== '' && v !== 'N/A';
+               return !kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER')
+                 && !kUp.includes('TYPE') && kUp !== 'ADMIN' && kUp !== 'REVENUE'
+                 && kUp !== 'MAX HOUR' && !kUp.includes('TITLE') && !kUp.includes('SOURCE')
+                 && !kUp.startsWith('_')
+                 && v != null && v !== '' && v !== 'N/A' && v !== 0 && v !== '0' && v !== 0.0;
             })
             .map(([k, v]) => {
               let valStr = v;
-              if (typeof v === 'string' && !isNaN(Number(v.replace(/[$ ,]/g, ''))) && v.trim() !== '') {
-                 valStr = Number(v.replace(/[$ ,]/g, '')).toLocaleString('en-US');
-              } else if (typeof v === 'number') {
-                 valStr = v.toLocaleString('en-US');
+              const numV = Number(String(v).replace(/[$ ,]/g, ''));
+              if (!isNaN(numV) && numV !== 0) {
+                valStr = numV.toLocaleString('en-US', {style:'currency', currency:'USD'});
               }
-              return `<div style="font-size:0.55rem; color:#94a3b8; display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.03); padding-bottom:3px;"><span style="color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;" title="${k}">${k}</span> <span style="color:#e2e8f0;font-weight:700;">${valStr}</span></div>`;
+              const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              return `<div style="font-size:0.55rem;display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04);padding-bottom:3px;"><span style="color:#64748b;font-weight:600;" title="${displayKey}">${displayKey}</span><span style="color:#34d399;font-weight:700;">${valStr}</span></div>`;
             }).join('');
 
           const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
           const percent = val > 0 ? Math.round((val/maxVal)*100) : 0;
-          const cardBg  = 'rgba(99,102,241,0.04)';
-          const accentC = '#818cf8';
 
           return `
-          <div style="background:${cardBg};border-radius:12px;padding:12px;border:1px solid rgba(99,102,241,0.15);display:flex;flex-direction:column;gap:6px;transition:.2s;" onmouseover="this.style.borderColor='rgba(129,140,248,0.4)'" onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
+          <div style="background:rgba(99,102,241,0.04);border-radius:12px;padding:12px;border:1px solid rgba(99,102,241,0.15);display:flex;flex-direction:column;gap:6px;transition:.2s;" onmouseover="this.style.borderColor='rgba(129,140,248,0.4)'" onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${id}</div>
               <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
-            <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombreReal}</div>
+            <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${nombreReal}</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <div style="font-size:0.75rem;">👤</div>
+              <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;">${opAsignado}</div>
+            </div>
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-               <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">
-                 ${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}
-               </div>
+               <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}</div>
                <div style="font-size:0.48rem;color:#334155;">#${idx+1}</div>
             </div>
             <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;margin-bottom:4px;">
-              <div style="width:${percent||8}%;height:100%;background:${accentC};border-radius:2px;opacity:${val>0?1:0.3};"></div>
+              <div style="width:${percent||8}%;height:100%;background:#818cf8;border-radius:2px;opacity:${val>0?1:0.3};"></div>
             </div>
-            ${metricasExtra ? `<div style="margin-top:2px; display:flex; flex-direction:column; gap:4px; max-height:90px; overflow-y:auto; padding-right:4px;">${metricasExtra}</div>` : ''}
+            ${metricasExtra ? `<div style="margin-top:2px;display:flex;flex-direction:column;gap:4px;max-height:90px;overflow-y:auto;padding-right:4px;">${metricasExtra}</div>` : ''}
           </div>
           `;
         }).join('');
 
         container.innerHTML = html;
       }
+
+
 
 
       function tableauLog(msg, type='info') {
@@ -5607,8 +5642,6 @@
     // ==================== DATOS COMPLETOS (todos los operadores) ====================
     let operatorsData = [
       { name: "ANAZARED RODRIGUEZ CAMPOS", group: "2", plataforma: "Prime", ene: 5733.78, feb: 2738.16, mar: 1767.90, abr: 1767.90, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-12" },
-      { name: "BRIGITH DE LOS ANGELES FERNANDEZ MORA", group: "4", plataforma: "Prime", ene: 782.10, feb: 26.04, mar: 808.14, abr: 808.14, profiles: [{ "id": "103289167", "model": "MODELO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-01-01" },
-      { name: "ESPERANZA JIMENEZ SEVILLA", group: "4", plataforma: "Prime", ene: 198.54, feb: 151.74, mar: 350.28, abr: 350.28, profiles: [{ "id": "98540781", "model": "MODELO" }, { "id": "103291980", "model": "MODELO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-01-01" },
       { name: "ANDREINA DE LOS ANGELES YSSA MORENO", group: "2", plataforma: "Prime", ene: 467.63, feb: 938.28, mar: 0, abr: 0, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-11-19" },
       { name: "ANDRI JOSUE CALDERON PEREZ", group: "8", plataforma: "Prime", ene: 0, feb: 553.73, mar: 0, abr: 0, profiles: [{ "id": "156881990", "model": "RALPH" }, { "id": "139245989", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-07" },
       { name: "BORIS JUVENAL PATIÑO ESCORIHUELA", group: "5", plataforma: "Prime", ene: 2649.76, feb: 1758.55, mar: 0, abr: 0, profiles: [{ "id": "118179794", "model": "HORACIO" }, { "id": "137163229", "model": "SEBASTIAN" }, { "id": "130338853", "model": "IVALDO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-14" },
@@ -5617,7 +5650,7 @@
       { name: "CARLOS MOISES RODRIGUEZ MENDOZA", group: "8", plataforma: "Prime", ene: 178.36, feb: 297.17, mar: 0, abr: 0, profiles: [{ "id": "130422416", "model": "KETY" }, { "id": "139245989", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-01-16" },
       { name: "CATHERINE NAOMI FIGUEREDO HERNANDEZ", group: "3", plataforma: "Prime", ene: 1426.2, feb: 1818.86, mar: 0, abr: 0, profiles: [{ "id": "145839775", "model": "BRUNO", "tipo": "propio" }, { "id": "151410237", "model": "EZEQUIEL", "tipo": "propio" }, { "id": "114851358", "model": "JHOANNA", "tipo": "propio" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-17" },
       { name: "EDUIN JOSE ESPAÑA DIAZ", group: "2", plataforma: "Prime", ene: 5594.64, feb: 1932.24, mar: 0, abr: 0, profiles: [{ "id": "103289167", "model": "MODELO", "tipo": "propio" }], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-07-11" },
-      { name: "ESPERANZA JIMENEZ SEVILLA", group: "4", plataforma: "Prime", ene: 3773.98, feb: 1687.14, mar: 0, abr: 0, profiles: [{ "id": "95955130", "model": "HECTOR" }, { "id": "108018336", "model": "LUCAS" }, { "id": "103289167", "model": "LUIS" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-05-08" },
+      { name: "ESPERANZA JIMENEZ SEVILLA", group: "4", plataforma: "Prime", ene: 3773.98, feb: 1687.14, mar: 0, abr: 0, profiles: [{ "id": "98540781", "model": "LEANDRO" }, { "id": "103291980", "model": "ARMANDO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-05-08" },
       { name: "FREDERYCK JOSE GALICIA CAMARIPANO", group: "6", plataforma: "Prime", ene: 1840.02, feb: 2259.1, mar: 0, abr: 0, profiles: [{ "id": "98389135", "model": "RAUL" }, { "id": "120720195", "model": "MARCOS" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-12-18" },
       { name: "GABRIEL LUISDEVIT GONZALEZ ARCIA", group: "1", plataforma: "Prime", ene: 1393.98, feb: 1771.2, mar: 0, abr: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-08-14" },
       { name: "JESUS ALBERTO AVILA BELISARIO", group: "6", plataforma: "Prime", ene: 1549.26, feb: 2197.26, mar: 0, abr: 0, profiles: [{ "id": "98389135", "model": "RAUL" }, { "id": "130422416", "model": "KETY" }, { "id": "120720195", "model": "MARCOS" }, { "id": "139247498", "model": "DAMIAN" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-02" },
@@ -12299,8 +12332,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         '<div class="op-stats-grid" style="gap:8px;">' +
           '<div class="op-stat-card highlight" style="padding:10px;">' +
             '<div class="op-stat-label">Hoy</div>' +
-            '<div class="op-stat-pts" style="font-size:1.1rem;">' + fmtPts(ptsHoy) + ' <small style="font-size:.6rem;color:#475569;">pts</small></div>' +
-            '<div class="op-stat-cop" style="font-size:.6rem;">$' + fmt(Math.round(ptsHoy*VALOR_COP)) + '</div>' +
+            '<div class="op-stat-pts" style="font-size:1.1rem;" id="op-dash-hoy-val">' + fmtPts(ptsHoy) + ' <small style="font-size:.6rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop" style="font-size:.6rem;" id="op-dash-hoy-cop">$' + fmt(Math.round(ptsHoy*VALOR_COP)) + '</div>' +
             badge(crecDiario) +
           '</div>' +
           '<div class="op-stat-card" style="padding:10px;">' +
@@ -15849,43 +15882,72 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         </button>`).join('');
     }
 
-    let _dpTableauData = {}; // Cache de datos de Tableau {perfil_id: valor}
+    // _dpTableauData ya declarado con var en el primer <script> (línea ~4497)
 
     async function loadTableauData() {
-      if (typeof _sb === 'undefined' || !_sb) return;
-      try {
-        const { data, error } = await _sb.from('tableau_data').select('perfil_id, valor, updated_at, data_json');
-        if (error) {
-          if (typeof tableauLog === 'function') tableauLog('Error Supabase: ' + error.message, 'error');
-          return;
-        }
-        _dpTableauData = {};
-        
-        // Buscar Log de Depuración
-        const debugLog = data.find(d => d.perfil_id === 'DEBUG_LOG');
-        if (debugLog && typeof tableauLog === 'function') {
-          const info = JSON.parse(debugLog.data_json || '{}');
-          tableauLog(`⚠️ ALERTA ROBOT: ${info.error || 'Fallo desconocido'}`, 'error');
-        }
+      if (typeof _sb === 'undefined' || !_sb) {
+        if (typeof tableauLog === 'function') tableauLog('⚠️ Supabase no disponible', 'warn');
+        return;
+      }
 
-        const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
-        validData.forEach(row => {
-          _dpTableauData[row.perfil_id] = {
-            valor:     row.valor    || 0,
-            data_json: row.data_json || {}
-          };
-        });
-        
-        const timeEl = document.getElementById('tableau-sync-time');
-        if (timeEl && validData.length > 0) {
-          const last = new Date(validData[0].updated_at || new Date()).toLocaleTimeString('es-CO',{hour12:false});
-          timeEl.textContent = 'Último: ' + last;
+      // Intentar primero la tabla donde escribe el RPC, luego la alternativa
+      const TABLES_TO_TRY = ['tableau_data', 'tableau_perfiles'];
+      let data = null;
+
+      for (const tbl of TABLES_TO_TRY) {
+        try {
+          const res = await _sb.from(tbl).select('perfil_id, valor, updated_at, data_json');
+          if (res.error) {
+            if (typeof tableauLog === 'function') tableauLog(`⚠️ Tabla '${tbl}': ${res.error.message}`, 'warn');
+            continue; // probar la siguiente
+          }
+          if (res.data && res.data.length > 0) {
+            data = res.data;
+            if (typeof tableauLog === 'function') tableauLog(`✅ Tabla '${tbl}' OK — ${data.length} filas`, 'success');
+            break;
+          } else {
+            if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' vacía`, 'info');
+          }
+        } catch(e) {
+          if (typeof tableauLog === 'function') tableauLog(`❌ Error en '${tbl}': ${e.message}`, 'error');
         }
-        
-        if (typeof tableauLog === 'function' && validData.length > 0) {
-          tableauLog(`📊 Cargados ${validData.length} perfiles oficiales`, 'success');
-        }
-      } catch(e) {}
+      }
+
+      if (!data || data.length === 0) {
+        if (typeof tableauLog === 'function') tableauLog('❌ Sin datos en ninguna tabla Tableau', 'error');
+        return;
+      }
+
+      _dpTableauData = {};
+
+      // Buscar Log de Depuración
+      const debugLog = data.find(d => d.perfil_id === 'DEBUG_LOG');
+      if (debugLog && typeof tableauLog === 'function') {
+        const info = typeof debugLog.data_json === 'string' ? JSON.parse(debugLog.data_json || '{}') : (debugLog.data_json || {});
+        tableauLog(`⚠️ ALERTA ROBOT: ${info.error || 'Fallo desconocido'}`, 'error');
+      }
+
+      const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
+      validData.forEach(row => {
+        const djRaw = row.data_json;
+        const dj = typeof djRaw === 'string' ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })() : (djRaw || {});
+        _dpTableauData[String(row.perfil_id).trim()] = {
+          valor:     Number(row.valor) || 0,
+          data_json: dj
+        };
+      });
+
+      const timeEl = document.getElementById('tableau-sync-time');
+      if (timeEl) {
+        const last = new Date(validData[0]?.updated_at || new Date()).toLocaleTimeString('es-CO',{hour12:false});
+        timeEl.textContent = `Último: ${last} (${validData.length} perfiles)`;
+      }
+
+      if (typeof tableauLog === 'function') {
+        tableauLog(`📊 ${validData.length} perfiles listos para pintar`, 'success');
+        const ids = Object.keys(_dpTableauData).slice(0, 5).join(', ');
+        tableauLog(`🔑 IDs muestra: ${ids}...`, 'info');
+      }
     }
 
     // ── Realtime para Tableau ──
@@ -15894,7 +15956,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       if (typeof _sb === 'undefined' || !_sb || _tableauRealtimeSub) return;
       _tableauRealtimeSub = _sb
         .channel('rr_tableau_sync')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_data' }, payload => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, payload => {
           loadTableauData().then(() => {
             renderTableauPanel();
             if (typeof renderDatamePaneles === 'function') renderDatamePaneles();
@@ -16598,10 +16660,47 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         _opRtRenderWidget();
 
         // ── Actualizar métricas del dashboard en tiempo real (sin re-render completo) ──
-        // HOY: suma de todos los turnos del día desde Supabase
         const _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
+        
+        // 1. Actualizar Stats Card
         const _hoyEl = document.getElementById('op-dash-hoy-val');
-        if (_hoyEl && _hoyTotal > 0) _hoyEl.textContent = _hoyTotal.toFixed(1) + ' pts';
+        const _hoyCopEl = document.getElementById('op-dash-hoy-cop');
+        if (_hoyEl && _hoyTotal > 0) {
+          _hoyEl.innerHTML = _hoyTotal.toFixed(1) + ' <small style="font-size:.6rem;color:#475569;">pts</small>';
+        }
+
+        // 2. Actualizar Hero Section
+        const _heroPts = document.getElementById('op-dash-hero-pts');
+        const _heroBar = document.getElementById('op-dash-hero-bar');
+        const _heroCop = document.getElementById('op-dash-hero-cop');
+        const _heroMeta = document.getElementById('op-dash-hero-meta');
+        
+        if (_heroPts && _hoyTotal > 0) {
+          _heroPts.textContent = _hoyTotal.toFixed(1);
+          
+          const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => o.name.toUpperCase() === opName.toUpperCase());
+          if (op) {
+             let _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 0;
+             let _pG = 'dia';
+             if (_metaG <= 0) { _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'sem') : 0; _pG = 'sem'; }
+             if (_metaG <= 0) { _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'mes') : 0; _pG = 'mes'; }
+             const _metaOp = _metaG > 0 ? _metaG : (op.meta || 100);
+             
+             const _grpOps = operatorsData.filter(o => o.group === op.group);
+             const _grpPts = _grpOps.reduce((s, o) => s + (typeof getPuntosPeriodo === 'function' ? getPuntosPeriodo(o.name, _pG) : 0), 0);
+             const _lograda = _metaG > 0 ? (_grpPts >= _metaG) : (_hoyTotal >= _metaOp);
+             const _valActual = _hoyTotal * (_lograda ? 1500 : 1400);
+             
+             if (_heroBar) _heroBar.style.width = Math.min(100, (_hoyTotal / _metaOp) * 100).toFixed(1) + '%';
+             if (_heroCop) _heroCop.textContent = '$' + Math.round(_valActual).toLocaleString('es-CO') + ' COP';
+             if (_hoyCopEl) _hoyCopEl.textContent = '$' + Math.round(_valActual).toLocaleString('es-CO');
+             
+             if (_heroMeta && _metaG > 0) {
+                const _pctG = Math.min(100, (_grpPts / _metaG) * 100).toFixed(1);
+                _heroMeta.textContent = `Meta: ${_metaG} pts · ${_pctG}% GRUPO ${op.group}`;
+             }
+          }
+        }
 
         // ABRIL / PROM-DÍA: usar _opRtTotalMes (Supabase real) / días transcurridos del mes
         if (_opRtTotalMes > 0) {

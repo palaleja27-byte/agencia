@@ -4398,6 +4398,47 @@
   <div id="tab-ranking" class="tab-content active">
 
     <!-- Top bar simplificada: solo acciones y stats (Búsqueda y jornadas eliminados) -->
+    <!-- Metas de Operación (Moved to Top) -->
+    <div id="rk-metas-wrap" style="display:none;max-width:1200px;margin:15px auto 24px;">
+      <div style="background:var(--panel);border:2px solid #39FF14;border-radius:16px;overflow:hidden;box-shadow: 0 0 15px rgba(57, 255, 20, 0.2);">
+        <!-- Header colapsable -->
+        <div onclick="toggleMetasPanel()"
+          style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;background:rgba(57, 255, 20, 0.07);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.1rem;">🎯</span>
+            <span style="font-weight:900;font-size:1.1rem;color:#39FF14;text-transform:uppercase;letter-spacing:1px;">Metas de Operación</span>
+            <span id="metas-periodo-badge"
+              style="background:rgba(57, 255, 20, 0.2);color:#39FF14;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;">Mes</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
+              <button id="meta-btn-dia" onclick="setMetasPeriodo('dia')"
+                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(57, 255, 20, 0.3);background:rgba(255,255,255,.03);color:#64748b;">Hoy</button>
+              <button id="meta-btn-sem" onclick="setMetasPeriodo('sem')"
+                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(57, 255, 20, 0.3);background:rgba(255,255,255,.03);color:#64748b;">Semana</button>
+              <button id="meta-btn-mes" onclick="setMetasPeriodo('mes')"
+                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(57, 255, 20, 0.4);background:rgba(57, 255, 20, 0.15);color:#39FF14;">Mes</button>
+            </div>
+            <span id="metas-chevron" style="color:#39FF14;font-size:.85rem;transition:.3s;">▼</span>
+          </div>
+        </div>
+        <div id="metas-panel-body" style="display:none;padding:16px 18px;">
+          <div style="margin-bottom:18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+              <span style="font-size:.78rem;font-weight:800;color:#39FF14;text-transform:uppercase;letter-spacing:.8px;">⚡ Meta General</span>
+              <button onclick="abrirEditarMeta('general','GENERAL')"
+                style="padding:5px 12px;background:rgba(57, 255, 20, 0.15);color:#39FF14;border:1px solid rgba(57, 255, 20, 0.3);border-radius:8px;font-size:.7rem;font-weight:700;cursor:pointer;">✏️ Editar</button>
+            </div>
+            <div id="meta-general-bar"></div>
+          </div>
+          <div style="border-top:1px solid rgba(255,255,255,.06);padding-top:14px;">
+            <div style="font-size:.72rem;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">📊 Metas por Grupo</div>
+            <div id="meta-grupos-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="rk-topbar" style="display: flex; gap: 15px; align-items: stretch; justify-content: space-between;">
       <div class="rk-stats" id="rkStatsRow" style="flex:1; margin:0; display:flex; gap:10px; align-items:center; max-width: none;"></div>
       <div class="rk-actions-wrap" style="display: flex; align-items: center; gap: 10px;">
@@ -4636,15 +4677,32 @@
           Object.values(DP_PERFILES_MAP).forEach(arr => arr.forEach(p => { idToModelo[String(p.id).trim()] = p.modelo || p.nombre; }));
         }
 
+        // --- CALCULAR SUMA GLOBAL POR SERVICIO ---
+        const sumGlobal = {};
+        const svcIcons = {'ALL':'📊','MAILS':'📧','STICKERS':'🎨','CHAT AUDIO':'🎙️','CHAT POSTS':'💬','MAIL READS':'📖','CHAT':'💬','CARTAS':'✉️','LETTERS':'✉️','VIDEO':'📹','GIFTS':'🎁','PHOTOS':'📸','VIRTUAL GIFTS':'🎁'};
+        
+        sorted.forEach(([id, rawData]) => {
+          const dj = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
+          Object.entries(dj).forEach(([k, v]) => {
+            const kUp = k.toUpperCase();
+            if (!kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER')
+                 && !kUp.includes('TYPE') && kUp !== 'ADMIN' && kUp !== 'REVENUE'
+                 && kUp !== 'MAX HOUR' && !kUp.includes('TITLE') && !kUp.includes('SOURCE')
+                 && !kUp.startsWith('_')) {
+              const numV = Number(String(v).replace(/[$ ,]/g, ''));
+              if (!isNaN(numV)) {
+                sumGlobal[k] = (sumGlobal[k] || 0) + numV;
+              }
+            }
+          });
+        });
+
         html += sorted.map(([id, rawData], idx) => {
           const val = typeof rawData === 'object' ? Number(rawData.valor||0) : Number(rawData||0);
           const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
 
           const nombreReal = idToModelo[String(id).trim()] || 'Perfil ' + id;
           const opAsignado = dj['Admin'] || dj['admin'] || 'No Asignado';
-
-          // Mapa de iconos por servicio
-          const svcIcons = {'ALL':'📊','MAILS':'📧','STICKERS':'🎨','CHAT AUDIO':'🎙️','CHAT POSTS':'💬','MAIL READS':'📖','CHAT':'💬','CARTAS':'✉️','LETTERS':'✉️','VIDEO':'📹','GIFTS':'🎁','PHOTOS':'📸','VIRTUAL GIFTS':'🎁'};
 
           // Procesar métricas de servicios
           const metricasExtra = Object.entries(dj)
@@ -4692,6 +4750,39 @@
           </div>
           `;
         }).join('');
+
+        // --- AGREGAR TARJETA DE RESUMEN GLOBAL AL FINAL ---
+        const resHtml = Object.entries(sumGlobal)
+          .sort((a,b) => b[1] - a[1])
+          .map(([k, v]) => {
+            const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '▸';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(45,212,191,0.05);">
+              <span style="font-size:0.65rem;color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:0.8rem;">${icon}</span> ${displayKey}
+              </span>
+              <span style="font-size:0.75rem;color:#34d399;font-weight:800;">$${v.toLocaleString('en-US',{minimumFractionDigits:2})}</span>
+            </div>`;
+          }).join('');
+
+        html += `
+        <div style="background:linear-gradient(135deg, rgba(20,184,166,0.1), rgba(45,212,191,0.05));border-radius:12px;padding:16px;border:2px solid rgba(20,184,166,0.3);display:flex;flex-direction:column;gap:10px;box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:0.55rem;color:#2dd4bf;font-weight:900;letter-spacing:1px;text-transform:uppercase;">RESUMEN DE AGENCIA</div>
+            <span style="font-size:1.2rem;">🏢</span>
+          </div>
+          <div style="font-size:1.4rem;color:#f1f5f9;font-weight:900;line-height:1;margin-bottom:4px;">
+            $${totalVenta.toLocaleString('en-US',{minimumFractionDigits:2})}
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,0.1);"></div>
+          <div style="display:flex;flex-direction:column;gap:2px;max-height:220px;overflow-y:auto;padding-right:4px;">
+            ${resHtml}
+          </div>
+          <div style="margin-top:auto;padding-top:8px;text-align:center;">
+            <div style="font-size:0.5rem;color:#475569;font-weight:700;">TOTAL ACUMULADO TABLEAU</div>
+          </div>
+        </div>
+        `;
 
         container.innerHTML = html;
       }
@@ -4837,67 +4928,14 @@
     <!-- Panel análisis de crecimiento (solo monitor/admin) -->
     <!-- rk-crec-analisis movido al tooltip del botón ℹ en stats card -->
 
-    <!-- Metas Grupales y General (solo monitor/admin) -->
-    <div id="rk-metas-wrap" style="display:none;max-width:1200px;margin:0 auto 24px;">
-      <div style="background:var(--panel);border:1px solid rgba(251,191,36,.25);border-radius:16px;overflow:hidden;">
-
-        <!-- Header colapsable -->
-        <div onclick="toggleMetasPanel()"
-          style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;background:rgba(251,191,36,.07);">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:1.1rem;">🎯</span>
-            <span style="font-weight:700;font-size:.9rem;color:#fbbf24;">Metas de Operación</span>
-            <span id="metas-periodo-badge"
-              style="background:rgba(251,191,36,.2);color:#fbbf24;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;">Mes</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <!-- Period selector -->
-            <div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
-              <button id="meta-btn-dia" onclick="setMetasPeriodo('dia')"
-                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(251,191,36,.3);background:rgba(255,255,255,.03);color:#64748b;">Hoy</button>
-              <button id="meta-btn-sem" onclick="setMetasPeriodo('sem')"
-                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(251,191,36,.3);background:rgba(255,255,255,.03);color:#64748b;">Semana</button>
-              <button id="meta-btn-mes" onclick="setMetasPeriodo('mes')"
-                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(251,191,36,.4);background:rgba(251,191,36,.15);color:#fbbf24;">Mes</button>
-            </div>
-            <span id="metas-chevron" style="color:#fbbf24;font-size:.85rem;transition:.3s;">▼</span>
-          </div>
-        </div>
-
-        <!-- Body -->
-        <div id="metas-panel-body" style="display:none;padding:16px 18px;">
-
-          <!-- Meta General -->
-          <div style="margin-bottom:18px;">
-            <div
-              style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-              <span
-                style="font-size:.78rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:.8px;">⚡
-                Meta General — Toda la Operación</span>
-              <button onclick="abrirEditarMeta('general','GENERAL')"
-                style="padding:5px 12px;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);border-radius:8px;font-size:.7rem;font-weight:700;cursor:pointer;">✏️
-                Editar meta</button>
-            </div>
-            <div id="meta-general-bar"></div>
-          </div>
-
-          <div style="border-top:1px solid rgba(255,255,255,.06);padding-top:14px;">
-            <div
-              style="font-size:.72rem;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">
-              📊 Metas por Grupo</div>
-            <div id="meta-grupos-list"></div>
-          </div>
-
-        </div>
-      </div>
     </div>
 
-    <!-- Modal editar meta -->
+    <!-- Modal editar meta (moved after wrap) -->
     <div id="modal-editar-meta"
       style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9000;align-items:center;justify-content:center;">
       <div
-        style="background:#0f172a;border:1px solid rgba(251,191,36,.3);border-radius:18px;padding:28px 24px;width:90%;max-width:360px;">
-        <div style="font-size:.9rem;font-weight:800;color:#fbbf24;margin-bottom:4px;" id="meta-modal-title">Editar Meta
+        style="background:#0f172a;border:1px solid #39FF14;border-radius:18px;padding:28px 24px;width:90%;max-width:360px;">
+        <div style="font-size:.9rem;font-weight:800;color:#39FF14;margin-bottom:4px;text-transform:uppercase;" id="meta-modal-title">Editar Meta
         </div>
         <div style="font-size:.75rem;color:#64748b;margin-bottom:16px;">Los puntos se convierten automáticamente a COP
           (×1400)</div>
@@ -4907,13 +4945,13 @@
             style="width:100%;padding:10px 12px;background:#1e293b;border:1px solid var(--border);color:white;border-radius:10px;font-size:.9rem;box-sizing:border-box;outline:none;">
         </div>
         <div
-          style="padding:10px 12px;background:rgba(251,191,36,.08);border-radius:8px;font-size:.75rem;color:#fbbf24;margin-bottom:16px;"
+          style="padding:10px 12px;background:rgba(57,255,20,.08);border-radius:8px;font-size:.75rem;color:#39FF14;margin-bottom:16px;"
           id="meta-cop-preview">
           = $0 COP
         </div>
         <div style="display:flex;gap:8px;">
           <button onclick="guardarMeta()"
-            style="flex:1;padding:11px;background:rgba(251,191,36,.2);color:#fbbf24;border:1px solid rgba(251,191,36,.35);border-radius:11px;font-weight:700;cursor:pointer;">💾
+            style="flex:1;padding:11px;background:rgba(57,255,20,.2);color:#39FF14;border:1px solid rgba(57,255,20,.35);border-radius:11px;font-weight:700;cursor:pointer;">💾
             Guardar</button>
           <button onclick="document.getElementById('modal-editar-meta').style.display='none'"
             style="padding:11px 16px;background:rgba(248,113,113,.1);color:#f87171;border:1px solid rgba(248,113,113,.25);border-radius:11px;font-weight:700;cursor:pointer;">Cancelar</button>
@@ -4921,53 +4959,7 @@
       </div>
     </div>
 
-    <!-- Control de Accesos (solo monitor/admin) -->
-    <div id="rk-accesos-wrap" style="display:none;max-width:1200px;margin:0 auto 24px;">
-      <div style="background:var(--panel);border:1px solid rgba(168,85,247,.3);border-radius:16px;overflow:hidden;">
-        <div onclick="toggleAccesosPanel()"
-          style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;background:rgba(168,85,247,.08);">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span style="font-size:1.1rem;">🔐</span>
-            <span style="font-weight:700;font-size:.9rem;color:#a78bfa;">Control de Accesos</span>
-            <span id="accesos-count-badge"
-              style="background:rgba(168,85,247,.2);color:#a78bfa;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;"></span>
-          </div>
-          <span id="accesos-chevron" style="color:#a78bfa;font-size:.85rem;transition:.3s;">▼</span>
-        </div>
-        <div id="accesos-panel-body" style="display:none;padding:16px 18px;">
-          <div
-            style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-            <div style="font-size:.75rem;color:#64748b;">Gestiona bloqueos de turno. En urgencias puedes liberar o
-              bloquear manualmente a cualquier operador.</div>
-            <button onclick="renderAccesosPanel()"
-              style="padding:6px 12px;background:rgba(168,85,247,.15);color:#a78bfa;border:1px solid rgba(168,85,247,.3);border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer;">🔄
-              Actualizar</button>
-          </div>
-          <div id="accesos-list"></div>
-          <!-- Bloqueo manual -->
-          <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);">
-            <div
-              style="font-size:.72rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">
-              Bloquear operador manualmente</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <input id="acceso-block-name" list="login-op-datalist" placeholder="Nombre del operador..."
-                style="flex:1;min-width:180px;padding:9px 12px;background:#0f172a;border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:.8rem;outline:none;">
-              <select id="acceso-block-horas"
-                style="padding:9px 12px;background:#0f172a;border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:.8rem;outline:none;">
-                <option value="8">8 horas</option>
-                <option value="12">12 horas</option>
-                <option value="4">4 horas</option>
-                <option value="2">2 horas</option>
-                <option value="1">1 hora</option>
-              </select>
-              <button onclick="bloquearOpManual()"
-                style="padding:9px 16px;background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3);border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔒
-                Bloquear</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+
 
     <!-- Tabla -->
     <!-- Tabla (desktop) / Cards (mobile) -->
@@ -9223,8 +9215,6 @@
     function guardarSnapshotRendimiento() {
       const hoy = localDateStr();
       const snaps = JSON.parse(localStorage.getItem(RENDIMIENTO_SNAP_KEY) || '{}');
-
-      // Solo guardar una vez por día-jornada (no sobreescribir si ya existe y tiene datos)
       const jornadas = ['Mañana', 'Tarde', 'Noche'];
       let hayCambios = false;
 
@@ -9235,15 +9225,23 @@
         ops.forEach(op => {
           const cortes = getCortesOp(op.name).filter(c => c.fecha === hoy && (c.jornada || '') === jornada);
           const pts = cortes.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-          if (pts > 0) { data[op.name] = pts; hayCambios = true; }
+          if (pts > 0) {
+            // Solo actualizamos si el nuevo puntaje es mayor al guardado (evita pérdida de datos por refrescos parciales)
+            if (!snaps[key] || !snaps[key].data[op.name] || pts > snaps[key].data[op.name]) {
+              data[op.name] = pts;
+              hayCambios = true;
+            } else {
+              data[op.name] = snaps[key].data[op.name];
+            }
+          }
         });
-        if (Object.keys(data).length > 0) snaps[key] = { fecha: hoy, jornada, data, ts: Date.now() };
+        if (Object.keys(data).length > 0) {
+           snaps[key] = { fecha: hoy, jornada, data, ts: Date.now() };
+        }
       });
 
-      // Limpiar snapshots de más de 30 días
-      const cutoff = Date.now() - 30 * 86400000;
+      const cutoff = Date.now() - 60 * 86400000; // Guardar 60 días
       Object.keys(snaps).forEach(k => { if ((snaps[k].ts || 0) < cutoff) delete snaps[k]; });
-
       if (hayCambios) localStorage.setItem(RENDIMIENTO_SNAP_KEY, JSON.stringify(snaps));
     }
 
@@ -9586,7 +9584,13 @@
 
       // Para el período 'dia': comparar snapshot de hoy vs ayer
       // Para semana/mes: usar agregarCortesPorPeriodo
-      let secciones = [];
+      // Algoritmo SMART BASELINE: Calculamos promedio de últimos 7 días disponibles
+      const snaps = JSON.parse(localStorage.getItem(RENDIMIENTO_SNAP_KEY) || '{}');
+      const ultimos7Dias = [];
+      for(let i=1; i<=14; i++) { // Miramos hasta 14 días atrás para capturar 7 activos
+        const f = localDateStr(new Date(Date.now() - i * 86400000));
+        ultimos7Dias.push(f);
+      }
 
       jornadasMostrar.forEach(jornada => {
         const ops = operatorsData.filter(o => {
@@ -9596,34 +9600,35 @@
         if (!ops.length) return;
 
         const alertData = ops.map(op => {
-          let current = 0, previous = 0;
-          if (alertasPeriodo === 'dia') {
-            // Usar cortes locales de hoy y snapshot de ayer
-            const cortesHoy = getCortesOp(op.name).filter(c => c.fecha === hoy && (c.jornada||'') === jornada);
-            current = cortesHoy.reduce((s,c)=>s+(Number(c.puntos)||0),0);
-            const snapAyer = getSnapshotDia(ayer, jornada);
-            previous = snapAyer[op.name] || 0;
-            // Fallback: si no hay snapshot, buscar en cortes locales
-            if (!previous) {
-              const cortesAyer = getCortesOp(op.name).filter(c => c.fecha === ayer && (c.jornada||'') === jornada);
-              previous = cortesAyer.reduce((s,c)=>s+(Number(c.puntos)||0),0);
-            }
-          } else {
-            const res = agregarCortesPorPeriodo(op.name, alertasPeriodo, jornada);
-            current = res.current; previous = res.previous;
-          }
+          // Rendimiento de HOY
+          const cortesHoy = getCortesOp(op.name).filter(c => c.fecha === hoy && (c.jornada||'') === jornada);
+          const current = cortesHoy.reduce((s,c)=>s+(Number(c.puntos)||0),0);
+
+          // BASELINE: Promedio de los últimos 7 días (mismo turno)
+          let historialPts = [];
+          ultimos7Dias.forEach(f => {
+            const val = (snaps[f + '_' + jornada]?.data || {})[op.name];
+            if (val > 0) historialPts.push(val);
+          });
+          
+          const previous = historialPts.length > 0 
+            ? historialPts.reduce((s,v)=>s+v,0) / historialPts.length 
+            : 0;
 
           let pct = 0, tipo = 'zero', pctLabel = '—';
           if (previous > 0 && current > 0) {
             pct = Math.round(((current - previous) / previous) * 100);
             pctLabel = (pct > 0 ? '+' : '') + pct + '%';
-            tipo = pct <= -20 ? 'down' : pct < 0 ? 'warn' : 'up';
+            // Umbrales dinámicos: -25% es crítico (down), -5% es advertencia (warn)
+            tipo = pct <= -25 ? 'down' : pct < -5 ? 'warn' : 'up';
           } else if (current > 0 && previous === 0) {
-            tipo = 'new'; pct = null; pctLabel = 'Activo';
+            tipo = 'new'; pct = null; pctLabel = 'Nuevo';
           } else if (current === 0 && previous > 0) {
-            tipo = 'down'; pct = -100; pctLabel = 'Sin datos';
+            // Si el Baseline es alto pero hoy lleva 0, es alerta crítica inmediata
+            tipo = 'down'; pct = -100; pctLabel = 'Sin Puntos';
           }
-          return { op, current, previous, pct, pctLabel, tipo };
+          
+          return { op, current, previous, pct, pctLabel, tipo, countHist: historialPts.length };
         }).filter(d => d.tipo !== 'zero' || d.current > 0);
 
         if (alertData.length) secciones.push({ jornada, alertData });
@@ -9690,7 +9695,7 @@
           <div class="alerta-body" style="flex:1;min-width:0;">
             <div class="alerta-name" style="font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.op.name.split(' ').slice(0,2).join(' ')}</div>
             <div class="alerta-desc" style="font-size:.65rem;color:#64748b;">
-              Hoy: <strong style="color:#e2e8f0;">${d.current.toFixed(1)} pts</strong>${d.previous>0?' · Ref: '+d.previous.toFixed(1)+' pts':''}
+              Hoy: <strong style="color:#e2e8f0;">${d.current.toFixed(1)}</strong> · Baseline: ${d.previous.toFixed(1)} <span style="font-size:0.55rem;opacity:0.5;">(avg 7d)</span>
             </div>
           </div>
           <div class="alerta-pts ${d.tipo}" style="font-size:.85rem;font-weight:800;flex-shrink:0;">${d.pctLabel}</div>
@@ -14305,6 +14310,54 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
   <!-- TAB 3: ASISTENCIA -->
   <div id="tab-asistencia" class="tab-content">
+    
+    <!-- Control de Accesos (Strategic relocation for easy monitoring) -->
+    <div id="rk-accesos-wrap" style="display:none;max-width:1200px;margin:0 auto 24px;">
+      <div style="background:var(--panel);border:1px solid rgba(168,85,247,.3);border-radius:16px;overflow:hidden;">
+        <div onclick="toggleAccesosPanel()"
+          style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;background:rgba(168,85,247,.08);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.1rem;">🔐</span>
+            <span style="font-weight:700;font-size:.9rem;color:#a78bfa;">Control de Accesos</span>
+            <span id="accesos-count-badge"
+              style="background:rgba(168,85,247,.2);color:#a78bfa;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;"></span>
+          </div>
+          <span id="accesos-chevron" style="color:#a78bfa;font-size:.85rem;transition:.3s;">▼</span>
+        </div>
+        <div id="accesos-panel-body" style="display:none;padding:16px 18px;">
+          <div
+            style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+            <div style="font-size:.75rem;color:#64748b;">Gestiona bloqueos de turno. En urgencias puedes liberar o
+              bloquear manualmente a cualquier operador.</div>
+            <button onclick="renderAccesosPanel()"
+              style="padding:6px 12px;background:rgba(168,85,247,.15);color:#a78bfa;border:1px solid rgba(168,85,247,.3);border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer;">🔄
+              Actualizar</button>
+          </div>
+          <div id="accesos-list"></div>
+          <!-- Bloqueo manual -->
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);">
+            <div
+              style="font-size:.72rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">
+              Bloquear operador manualmente</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="acceso-block-name" list="login-op-datalist" placeholder="Nombre del operador..."
+                style="flex:1;min-width:180px;padding:9px 12px;background:#0f172a;border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:.8rem;outline:none;">
+              <select id="acceso-block-horas"
+                style="padding:9px 12px;background:#0f172a;border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:.8rem;outline:none;">
+                <option value="8">8 horas</option>
+                <option value="12">12 horas</option>
+                <option value="4">4 horas</option>
+                <option value="2">2 horas</option>
+                <option value="1">1 hora</option>
+              </select>
+              <button onclick="bloquearOpManual()"
+                style="padding:9px 16px;background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3);border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔒
+                Bloquear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <style>
       #tab-asistencia {
         padding: 0 20px 60px;

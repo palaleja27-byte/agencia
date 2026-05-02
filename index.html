@@ -4548,6 +4548,26 @@
 
         // Calcular Resumen Global
         const totalVenta = filteredEntries.reduce((s, [id, d]) => s + (typeof d === 'object' ? Number(d.valor||0) : Number(d||0)), 0);
+        
+        // Timestamp UK
+        const tsEl = document.getElementById('tableau-sync-time');
+        const lastSyncText = tsEl ? tsEl.textContent : 'Sin datos';
+
+        // Calcular Totales por Turno
+        const turnosTotal = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Sin Turno': 0 };
+        const idToTurno = {};
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            if (op.perfiles) op.perfiles.forEach(pid => { idToTurno[String(pid)] = op.turno || 'Sin Turno'; });
+          });
+        }
+
+        filteredEntries.forEach(([id, d]) => {
+          const val = typeof d === 'object' ? Number(d.valor||0) : Number(d||0);
+          const turno = idToTurno[String(id)] || 'Sin Turno';
+          if (turnosTotal[turno] !== undefined) turnosTotal[turno] += val;
+          else turnosTotal['Sin Turno'] += val;
+        });
 
         let html = `
           <div style="grid-column: 1/-1; display: flex; gap: 12px; margin-bottom: 16px; flex-wrap:wrap;">
@@ -4561,6 +4581,32 @@
               <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${totalVenta > 0 ? '$'+totalVenta.toLocaleString('en-US',{minimumFractionDigits:2}) : '— Pendiente'}</div>
               <div style="font-size:0.5rem;color:#475569;margin-top:2px;">Límites de uso · Tableau</div>
             </div>
+          </div>
+
+          <div style="grid-column: 1/-1; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+              <div style="font-size:0.55rem; color:#64748b; font-weight:700;">☀️ MAÑANA</div>
+              <div style="font-size:0.9rem; color:#f1f5f9; font-weight:800;">$${turnosTotal['Mañana'].toLocaleString()}</div>
+            </div>
+            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+              <div style="font-size:0.55rem; color:#64748b; font-weight:700;">🌆 TARDE</div>
+              <div style="font-size:0.9rem; color:#f1f5f9; font-weight:800;">$${turnosTotal['Tarde'].toLocaleString()}</div>
+            </div>
+            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+              <div style="font-size:0.55rem; color:#64748b; font-weight:700;">🌙 NOCHE</div>
+              <div style="font-size:0.9rem; color:#f1f5f9; font-weight:800;">$${turnosTotal['Noche'].toLocaleString()}</div>
+            </div>
+            <button onclick="alert('Funcionalidad de Historial Diario en desarrollo - Próximamente')" 
+              style="padding:10px; background:rgba(129,140,248,0.1); border-radius:10px; border:1px solid rgba(129,140,248,0.2); color:#818cf8; cursor:pointer; font-size:0.6rem; font-weight:800; text-transform:uppercase;">
+              📅 Ver Historial
+            </button>
+          </div>
+
+          <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;padding:8px 14px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:10px;">
+            <span style="font-size:0.9rem;">🇬🇧</span>
+            <span style="font-size:0.6rem;color:#fbbf24;font-weight:700;">ÚLTIMA SYNC UK:</span>
+            <span style="font-size:0.6rem;color:#e2e8f0;font-weight:800;">${lastSyncText}</span>
+            <span style="font-size:0.5rem;color:#64748b;">· Tableau refresca cada ~1-2h</span>
           </div>
         `;
 
@@ -4597,6 +4643,9 @@
           const nombreReal = idToModelo[String(id).trim()] || 'Perfil ' + id;
           const opAsignado = dj['Admin'] || dj['admin'] || 'No Asignado';
 
+          // Mapa de iconos por servicio
+          const svcIcons = {'ALL':'📊','MAILS':'📧','STICKERS':'🎨','CHAT AUDIO':'🎙️','CHAT POSTS':'💬','MAIL READS':'📖','CHAT':'💬','CARTAS':'✉️','LETTERS':'✉️','VIDEO':'📹','GIFTS':'🎁','PHOTOS':'📸','VIRTUAL GIFTS':'🎁'};
+
           // Procesar métricas de servicios
           const metricasExtra = Object.entries(dj)
             .filter(([k, v]) => {
@@ -4614,7 +4663,8 @@
                 valStr = numV.toLocaleString('en-US', {style:'currency', currency:'USD'});
               }
               const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-              return `<div style="font-size:0.55rem;display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.04);padding-bottom:3px;"><span style="color:#64748b;font-weight:600;" title="${displayKey}">${displayKey}</span><span style="color:#34d399;font-weight:700;">${valStr}</span></div>`;
+              const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '▸';
+              return `<div style="font-size:0.55rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:2px 0;"><span style="color:#64748b;font-weight:600;display:flex;align-items:center;gap:4px;" title="${displayKey}"><span style="font-size:0.65rem;">${icon}</span>${displayKey}</span><span style="color:#34d399;font-weight:700;">${valStr}</span></div>`;
             }).join('');
 
           const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
@@ -6010,36 +6060,44 @@
         return `${d.getFullYear()}-${mm}`;
       };
       const now = new Date();
-      const d0 = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-      const d1 = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const d2 = new Date(now.getFullYear(), now.getMonth(), 1);
-      
-      const m0Key = formatMes(d0);
-      const m1Key = formatMes(d1);
-      const m2Key = formatMes(d2); // Mes Actual
-
-      const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-      const m0Name = nombresMeses[d0.getMonth()];
-      const m1Name = nombresMeses[d1.getMonth()];
-      const m2Name = nombresMeses[d2.getMonth()];
-
       try {
+        const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        
+        // Fecha de inicio: 1 de Febrero del año actual
+        const dFeb = new Date(now.getFullYear(), 1, 1);
         const { data: ops } = await _sb
           .from('operaciones')
           .select('fecha_dia, puntos_neto, jornada')
-          .gte('fecha_dia', `${m0Key}-01`)
+          .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
           .neq('jornada', 'Auto');
 
         if (!ops || !ops.length) return;
 
-        let m0Total = 0, m1Total = 0, m2Total = 0;
+        // Agrupar por mes para el historial extendido
+        const historialMap = {};
         ops.forEach(r => {
-          const m = r.fecha_dia.slice(0, 7);
-          const val = r.puntos_neto || 0;
-          if (m === m0Key) m0Total += val;
-          else if (m === m1Key) m1Total += val;
-          else if (m === m2Key) m2Total += val;
+          const mesKey = r.fecha_dia.slice(0, 7);
+          historialMap[mesKey] = (historialMap[mesKey] || 0) + (r.puntos_neto || 0);
         });
+
+        // Crear el array para el modal de crecimiento (desde Febrero hasta ahora)
+        const extHist = [];
+        let tempDate = new Date(dFeb);
+        while (tempDate <= now) {
+          const k = formatMes(tempDate);
+          extHist.push({
+            name: nombresMeses[tempDate.getMonth()],
+            total: historialMap[k] || 0,
+            esCurrent: k === m2Key
+          });
+          tempDate.setMonth(tempDate.getMonth() + 1);
+        }
+        window._rkHistorialExt = extHist;
+
+        // Mantener compatibilidad con el objeto h viejo
+        let m0Total = historialMap[m0Key] || 0;
+        let m1Total = historialMap[m1Key] || 0;
+        let m2Total = historialMap[m2Key] || 0;
 
         // Crecimiento Real (Actual vs Anterior)
         const crecOp = m1Total > 0 ? ((m2Total - m1Total) / m1Total * 100) : 0;
@@ -9350,23 +9408,64 @@
         `;
       }
 
-      // --- TABLA HISTORICA DELTA-SHIFT (tm) ---
+      // --- TABLA HISTORICA DELTA-SHIFT (tm) con % por mes ---
+      // Calcular crecimiento de cada mes vs anterior
+      const crecM0 = 0; // Primer mes, no hay anterior
+      const crecM1 = h.m0Total > 0 ? ((h.m1Total - h.m0Total) / h.m0Total * 100) : 0;
+      const crecM2 = h.m1Total > 0 ? ((h.m2Total - h.m1Total) / h.m1Total * 100) : 0;
+      const fmtCrecBadge = (pct) => {
+        if (pct === 0) return '<span style="font-size:0.6rem;color:#64748b;">—</span>';
+        const c = pct > 0 ? '#34d399' : '#f87171';
+        const s = pct > 0 ? '+' : '';
+        return `<span style="font-size:0.6rem;color:${c};font-weight:700;background:${c}15;padding:1px 6px;border-radius:4px;">${s}${pct.toFixed(1)}%</span>`;
+      };
+
+      // Datos extendidos desde Febrero (si hay)
+      const extHist = window._rkHistorialExt || null;
+      let filasExtras = '';
+      if (extHist && extHist.length) {
+        filasExtras = extHist.map((m, i) => {
+          const prevTotal = i > 0 ? extHist[i-1].total : 0;
+          const mCrec = prevTotal > 0 ? ((m.total - prevTotal) / prevTotal * 100) : 0;
+          const esActual = m.esCurrent;
+          const rowBg = esActual ? 'background:rgba(52,211,153,0.05);' : '';
+          const nameColor = esActual ? '#34d399' : '#94a3b8';
+          const nameWeight = esActual ? '800' : '400';
+          const valColor = esActual ? '#34d399' : '#a78bfa';
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);${rowBg}">
+            <td style="padding:6px 0;color:${nameColor};font-weight:${nameWeight};">${m.name}${esActual ? ' (Actual)' : ''}</td>
+            <td style="text-align:right;font-weight:700;color:${valColor};">${m.total.toLocaleString()} pts</td>
+            <td style="text-align:right;padding-left:8px;">${i > 0 ? fmtCrecBadge(mCrec) : '<span style="font-size:0.6rem;color:#64748b;">—</span>'}</td>
+          </tr>`;
+        }).join('');
+      }
+
       const tablaHist = `
         <div style="margin: 15px 0; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
           <div style="font-size: 0.7rem; color: #475569; margin-bottom: 8px; text-transform: uppercase; font-weight: 800;">📅 Historial de Operación ${hoy.getFullYear()}</div>
           <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
+              <td style="padding:4px 0;font-size:0.6rem;color:#475569;font-weight:700;">MES</td>
+              <td style="text-align:right;font-size:0.6rem;color:#475569;font-weight:700;">PUNTOS</td>
+              <td style="text-align:right;font-size:0.6rem;color:#475569;font-weight:700;padding-left:8px;">VS ANT.</td>
+            </tr>
+            ${filasExtras ? filasExtras : `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
               <td style="padding: 6px 0; color: #94a3b8;">${h.m0Name}</td>
               <td style="text-align: right; font-weight: 700; color: #a78bfa;">${h.m0Total.toLocaleString()} pts</td>
+              <td style="text-align:right;padding-left:8px;">${fmtCrecBadge(crecM0)}</td>
             </tr>
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
               <td style="padding: 6px 0; color: #94a3b8;">${h.m1Name}</td>
               <td style="text-align: right; font-weight: 700; color: #a78bfa;">${h.m1Total.toLocaleString()} pts</td>
+              <td style="text-align:right;padding-left:8px;">${fmtCrecBadge(crecM1)}</td>
             </tr>
             <tr style="background: rgba(52,211,153,0.05);">
               <td style="padding: 6px 0; color: #34d399; font-weight: 800;">${h.m2Name} (Actual)</td>
               <td style="text-align: right; font-weight: 800; color: #34d399;">${h.m2Total.toLocaleString()} pts</td>
+              <td style="text-align:right;padding-left:8px;">${fmtCrecBadge(crecM2)}</td>
             </tr>
+            `}
           </table>
           <div style="margin-top: 10px; font-size: 0.65rem; color: ${h.crec >= 0 ? '#34d399' : '#f87171'}; text-align: center; font-weight: 700;">
             ${h.crec >= 0 ? '🚀 +'+h.crec.toFixed(1)+'%' : '🔻 '+h.crec.toFixed(1)+'%'} vs Mes Anterior

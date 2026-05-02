@@ -82,12 +82,17 @@
     }
 
     .tab-content {
-      display: none;
+      display: none !important;
     }
 
     .tab-content.active {
-      display: block;
+      display: block !important;
       width: 100%;
+    }
+
+    /* Force hide ranking when tab is not active */
+    #tab-ranking:not(.active) #rk-table-desktop {
+      display: none !important;
     }
 
     /* ══ LOGIN SCREEN ══ */
@@ -4432,7 +4437,7 @@
             <div id="meta-general-bar"></div>
           </div>
           <div style="border-top:1px solid rgba(255,255,255,.06);padding-top:14px;">
-            <div style="font-size:.72rem;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">📊 Metas por Grupo</div>
+            <div style="font-size:.72rem;font-weight:800;color:#2dd4bf;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">📊 Metas por Grupo</div>
             <div id="meta-grupos-list"></div>
           </div>
         </div>
@@ -5972,25 +5977,22 @@
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content')[tabIndex].classList.add('active');
       document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
-      if (tabIndex === 0) renderRanking();
-      if (tabIndex === 1) renderOperators();
+      if (tabIndex === 0) try { renderRanking(); } catch(e) { console.error("Err Tab 0:", e); }
+      if (tabIndex === 1) try { renderOperators(); } catch(e) { console.error("Err Tab 1:", e); }
       if (tabIndex === 2) {
-        // Plan de Trabajo — force iframe reflow if needed
-        const iframe = document.querySelector('#tab-plantrabajo iframe');
-        if (iframe) {
-          iframe.style.width = '1px';
-          requestAnimationFrame(() => {
-            iframe.style.width = '100%';
-            const tab = document.getElementById('tab-plantrabajo');
-            if (tab) iframe.style.height = (window.innerHeight - 130) + 'px';
-          });
-        }
+        try {
+          if (typeof PT !== 'undefined' && typeof PT.renderAll === 'function') {
+            PT.renderAll();
+          }
+        } catch(e) { console.error("Err Tab 2:", e); }
       }
       if (tabIndex === 3) {
         setTimeout(() => {
-          if (typeof asiInitDate === 'function') asiInitDate();
-          if (typeof asiLoadDraft === 'function') asiLoadDraft();
-          if (typeof asiRender === 'function') asiRender();
+          try {
+            if (typeof asiInitDate === 'function') asiInitDate();
+            if (typeof asiLoadDraft === 'function') asiLoadDraft();
+            if (typeof asiRender === 'function') asiRender();
+          } catch(e) { console.error("Err Tab 3:", e); }
         }, 0);
       }
     }
@@ -8463,7 +8465,7 @@
       const pct = meta > 0 ? Math.min(100, (actual / meta) * 100) : 0;
       const cop = Math.round(actual * 1400).toLocaleString('es-CO');
       const metaCOP = meta > 0 ? Math.round(meta * 1400).toLocaleString('es-CO') : '—';
-      const barColor = pct >= 90 ? '#34d399' : pct >= 60 ? '#fbbf24' : pct >= 30 ? '#60a5fa' : '#f87171';
+      const barColor = pct >= 90 ? '#2dd4bf' : pct >= 60 ? '#fbbf24' : pct >= 30 ? '#60a5fa' : '#f87171';
       const label = isGeneral ? '🌐 Total Operación' : `Grupo ${id}`;
       const nOps = isGeneral
         ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').length
@@ -9589,6 +9591,7 @@
       // Jornadas a mostrar
       const jornadasMostrar = alertasJornada ? [alertasJornada] : ['Mañana', 'Tarde', 'Noche'];
       const jIcons = { 'Mañana': '☀️', 'Tarde': '🌆', 'Noche': '🌙' };
+      const secciones = [];
 
       // Para el período 'dia': comparar snapshot de hoy vs ayer
       // Para semana/mes: usar agregarCortesPorPeriodo
@@ -12226,6 +12229,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       } else {
         if (tabBar) tabBar.style.display = '';
         if (opDash) opDash.classList.remove('visible');
+        // Clear lingering inline styles on tab contents
+        document.querySelectorAll('.tab-content').forEach(t => t.style.display = '');
         loadData();
         buildGroupSelect();   // Poblar select grupos con datos guardados
         // Mostrar btn Grupos solo para admin

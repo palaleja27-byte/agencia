@@ -12808,6 +12808,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Renderizar Plan de Trabajo del Operador
       if (typeof PT !== 'undefined' && PT.renderOperatorTasks) {
          PT.renderOperatorTasks(name);
+         // Auto-trigger de capacitación si el admin la envió
+         PT.checkTrainingPending(name);
       }
 
       // ── Ranking DIARIO (Top 10 del día) ──────────────────────────
@@ -13794,9 +13796,15 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                 </div>
 
                 <div class="pt-card-footer">
-                   <div class="pt-footer-stat">Avance: <b>${ptsPct.toFixed(0)}%</b></div>
+                   <div class="pt-footer-stat">
+                      Avance: <b>${ptsPct.toFixed(0)}%</b>
+                      ${op.lastTraining ? `<br><span style="font-size:0.6rem; color:#94a3b8;">Última Cap: ${op.lastTraining}</span>` : ''}
+                   </div>
                    <div class="pt-footer-actions">
-                      <button class="pt-btn-action log" onclick="PT.verBitacora(${idx})">📋 Ver Historial</button>
+                      <button class="pt-btn-action log" onclick="PT.verBitacora(${idx})">📋 Historial</button>
+                      <button class="pt-btn-action training" onclick="PT.enviarCapacitacionAdmin(${idx})" style="background:${op.trainingPending ? '#f59e0b' : 'rgba(99,102,241,0.2)'};">
+                         ${op.trainingPending ? '⏳ Enviada' : '🎓 Enviar Cap.'}
+                      </button>
                    </div>
                 </div>
             `;
@@ -14164,6 +14172,27 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           }
         };
 
+        PT.enviarCapacitacionAdmin = function (idx) {
+          const op = PT.baseDatos[PT.shiftActual][idx];
+          op.trainingPending = true;
+          PT.saveData();
+          PT.renderAll();
+          _toastSync('Capacitación enviada al operador ' + op.name);
+        };
+
+        PT.checkTrainingPending = function (name) {
+           const shift = getPTShiftKey(detectarTurno());
+           const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+           const op = data.find(o => _normName(o.name) === _normName(name));
+           if (op && op.trainingPending) {
+              // Solo abrir si no está ya abierto
+              const modal = document.getElementById('pt-modal-training');
+              if (modal && modal.style.display !== 'flex') {
+                 PT.abrirCapacitacionPorNombre(name);
+              }
+           }
+        };
+
         PT.abrirCapacitacionRaw = function () {
           const modal = document.getElementById('pt-modal-training');
           const container = document.getElementById('pt-training-questions');
@@ -14233,6 +14262,16 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
                 puntos: correctas
              });
              localStorage.setItem(key, JSON.stringify(log.slice(0, 50)));
+
+             // Limpiar flag y guardar resultado en el objeto del turno para el monitor
+             const shift = getPTShiftKey(detectarTurno());
+             let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+             let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+             if (opIdx !== -1) {
+                data[opIdx].trainingPending = false;
+                data[opIdx].lastTraining = resultStr;
+                localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
+             }
 
              // Notificar al monitor
              const alerta = {

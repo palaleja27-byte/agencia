@@ -8165,7 +8165,7 @@
       'rr_prime_months_meta',
       'rr_prime_op_pins',
       'rr_metas_operacion',
-      'rr_prime_v15_mañana',
+      'rr_prime_v15_manana',
       'rr_prime_v15_tarde',
       'rr_prime_v15_noche'
     ];
@@ -8206,8 +8206,26 @@
       }
     }
 
-    // Correr cada 3 minutos
-    setInterval(_sbPeriodicResync, 3 * 60 * 1000);
+    // Correr cada 30 segundos (Resync Global fluido)
+    setInterval(_sbPeriodicResync, 30 * 1000);
+
+    // Sync frecuente para el operador (para detectar comandos remotos como capacitación)
+    setInterval(async () => {
+       if (typeof _opLoggedInName !== 'undefined' && _opLoggedInName && _sb && _sbOnline) {
+          const shift = (typeof getPTShiftKey === 'function') ? getPTShiftKey(detectarTurno()) : detectarTurno().toLowerCase();
+          const key = 'rr_prime_v15_' + (shift === 'mañana' ? 'manana' : shift);
+          const { data, error } = await _sb.from('kv_store').select('value').eq('key', key).single();
+          if (!error && data) {
+             if (_sbMemCache[key] !== data.value) {
+                _origSetItem(key, data.value);
+                _sbMemCache[key] = data.value;
+                if (typeof PT !== 'undefined' && PT.checkTrainingPending) {
+                   PT.checkTrainingPending(_opLoggedInName);
+                }
+             }
+          }
+       }
+    }, 15000); 
 
 
 
@@ -13879,7 +13897,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                   <div style="display:flex; flex-wrap:wrap; gap:8px;">
                      <button class="btn-neumorphic" onclick="PT.guardarBitacoraOp('${name}')" style="padding:8px 12px; font-size:0.6rem;">💾 Guardar</button>
                      <button class="btn-neumorphic" onclick="PT.verBitacoraOp('${name}')" style="padding:8px 12px; font-size:0.6rem;">📋 Historial</button>
-                     <button class="btn-neumorphic" onclick="PT.abrirCapacitacionPorNombre('${name}')" style="padding:8px 12px; font-size:0.6rem; background:rgba(99,102,241,0.2); border-color:#6366f1;">🎓 Capacitación</button>
                   </div>
                </div>
                

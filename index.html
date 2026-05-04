@@ -12521,6 +12521,15 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const mesRef      = ptsMar > 0 ? ptsMar : (ptsFeb > 0 ? ptsFeb : 1);
       const crecMensual = crec(ptsMes, mesRef);
 
+      // — Actualizar Hero en tiempo real —
+      const heroPts = document.getElementById('op-dash-hero-pts');
+      const heroCop = document.getElementById('op-dash-hero-cop');
+      if (heroPts) heroPts.textContent = ptsHoy.toFixed(1);
+      if (heroCop) {
+         const valBase = ptsHoy * 1400;
+         heroCop.textContent = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(valBase);
+      }
+
       const badge = (pct) => {
         if (pct === 0) return '<span class="op-stat-badge flat">Sin cambio</span>';
         const sign = pct > 0 ? '+' : ''; const cls = pct > 0 ? 'up' : 'down'; const ico = pct > 0 ? 'up' : 'down';
@@ -12886,11 +12895,13 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         : '<div style="color:#475569;font-size:.82rem;padding:20px;text-align:center;border:1px dashed rgba(255,255,255,0.05);border-radius:12px;">Sin perfiles asignados.</div>';
 
       const _profListEl = document.getElementById('op-profiles-list');
+      const safeId = name.replace(/[^a-zA-Z0-9]/g, '_');
       if (_profListEl) _profListEl.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <div style="font-size:0.75rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">🗂️ Perfiles (${profiles.length})</div>
           <button class="btn-neumorphic" onclick="asiPerfilToggleForm('${name.replace(/'/g, "\\'")}')" style="padding:6px 12px; font-size:0.65rem;">+ Agregar</button>
         </div>
+        ${renderAsiProfileForm(safeId, name)}
         ${profilesListHTML}
       `;
 

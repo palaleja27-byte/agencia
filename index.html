@@ -13656,15 +13656,24 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           ]
         };
 
-        PT.shiftActual = detectarTurno().toLowerCase(); // Auto-seleccionar turno actual
+        function getPTShiftKey(s) {
+          if (!s) return 'manana';
+          const low = s.toLowerCase();
+          if (low.includes('ma') || low.includes('manana')) return 'manana';
+          if (low.includes('tarde')) return 'tarde';
+          if (low.includes('noche')) return 'noche';
+          return 'manana';
+        }
+
+        PT.shiftActual = getPTShiftKey(detectarTurno()); 
         PT.baseDatos = { 'manana': [], tarde: [], noche: [] };
         PT.charts = {};
         PT.modalOpIdx = null;
 
         PT.setShift = function (shift) {
-          PT.shiftActual = shift;
+          PT.shiftActual = getPTShiftKey(shift);
           document.querySelectorAll('.pt-dashboard .pt-tab-btn').forEach(b => b.classList.remove('active'));
-          const btn = document.getElementById('pt-btn-shift-' + shift);
+          const btn = document.getElementById('pt-btn-shift-' + PT.shiftActual);
           if (btn) btn.classList.add('active');
           PT.loadData();
         };
@@ -13772,12 +13781,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                    </div>
                 </div>
             `;
-            contenedor.appendChild(tarjeta);
-          });
-            contenedor.appendChild(tarjeta);
-          });
+          contenedor.appendChild(tarjeta);
+        });
 
-          // Actualizar Header
+        // Actualizar Header
           const globalPct = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
           document.getElementById('pt-global-pct').innerText = globalPct.toFixed(0) + '%';
           document.getElementById('pt-active-count').innerText = data.length;
@@ -13807,7 +13814,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           const container = document.getElementById('op-tasks-content');
           if (!container) return;
           
-          const shift = detectarTurno().toLowerCase();
+          const shift = getPTShiftKey(detectarTurno());
           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
           

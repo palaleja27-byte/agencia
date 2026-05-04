@@ -13796,8 +13796,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                 <div class="pt-card-footer">
                    <div class="pt-footer-stat">Avance: <b>${ptsPct.toFixed(0)}%</b></div>
                    <div class="pt-footer-actions">
-                      <button class="pt-btn-action log" onclick="PT.verBitacora(${idx})">📋 Bitácora</button>
-                      <button class="pt-btn-action training" onclick="PT.abrirCapacitacion(${idx})">🎓 Capacitación</button>
+                      <button class="pt-btn-action log" onclick="PT.verBitacora(${idx})">📋 Ver Historial</button>
                    </div>
                 </div>
             `;
@@ -13869,9 +13868,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
             <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:10px;">
                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                   <div style="font-size:0.85rem; font-weight:700; color:#a5b4fc;">Progreso: ${pct.toFixed(0)}%</div>
-                  <div style="display:flex; gap:12px;">
-                     <button class="btn-neumorphic" onclick="PT.guardarBitacoraOp('${name}')" style="padding:10px 14px; font-size:0.65rem;">💾 Guardar Hoy</button>
-                     <button class="btn-neumorphic" onclick="PT.verBitacoraOp('${name}')" style="padding:10px 14px; font-size:0.65rem;">📋 Mi Historial</button>
+                  <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                     <button class="btn-neumorphic" onclick="PT.guardarBitacoraOp('${name}')" style="padding:8px 12px; font-size:0.6rem;">💾 Guardar</button>
+                     <button class="btn-neumorphic" onclick="PT.verBitacoraOp('${name}')" style="padding:8px 12px; font-size:0.6rem;">📋 Historial</button>
+                     <button class="btn-neumorphic" onclick="PT.abrirCapacitacionPorNombre('${name}')" style="padding:8px 12px; font-size:0.6rem; background:rgba(99,102,241,0.2); border-color:#6366f1;">🎓 Capacitación</button>
                   </div>
                </div>
                
@@ -14149,9 +14149,22 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           { q: "Qué es el 'Engagement'?", a: ["Compromiso de boda", "Nivel de interacción y lealtad del cliente", "Cerrar sesión"], correct: 1 }
         ];
 
-        PT.abrirCapacitacion = function (idx) {
-          const op = PT.baseDatos[PT.shiftActual][idx];
-          PT._currentTrainingOp = op;
+        PT.abrirCapacitacionPorNombre = function (name) {
+          const shift = getPTShiftKey(detectarTurno());
+          const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+          const idx = data.findIndex(o => _normName(o.name) === _normName(name));
+          if (idx !== -1) {
+             PT.shiftActual = shift;
+             PT.baseDatos[shift] = data;
+             PT.abrirCapacitacion(idx);
+          } else {
+             // Si no está en el turno, crear objeto temporal para la capacitación
+             PT._currentTrainingOp = { name: name };
+             PT.abrirCapacitacionRaw();
+          }
+        };
+
+        PT.abrirCapacitacionRaw = function () {
           const modal = document.getElementById('pt-modal-training');
           const container = document.getElementById('pt-training-questions');
           if (!modal || !container) return;
@@ -14171,6 +14184,12 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           `).join('');
 
           modal.style.display = 'flex';
+        };
+
+        PT.abrirCapacitacion = function (idx) {
+          const op = PT.baseDatos[PT.shiftActual][idx];
+          PT._currentTrainingOp = op;
+          PT.abrirCapacitacionRaw();
         };
 
         PT.selectOption = function (qi, ai) {

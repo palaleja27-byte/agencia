@@ -8804,14 +8804,15 @@
 
     function getPuntosHoy(opName) {
       // Prioridad 1: Supabase (Real-Time)
-      if (typeof _dpTurnosData !== 'undefined') {
+      if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined' && operatorsData) {
          const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
          if (op && op.profiles && op.profiles.length > 0) {
             let ptsSup = 0;
             op.profiles.forEach(p => {
                const t = _dpTurnosData[p.id];
                if (t) {
-                  ptsSup += (t['Mañana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0) + (t['manana'] || 0);
+                  // Unificamos claves de turnos (Mañana con tilde y manana sin tilde por seguridad)
+                  ptsSup += (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
                }
             });
             if (ptsSup > 0) return ptsSup;
@@ -13587,7 +13588,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         </div>
 
         <div style="display:flex; justify-content:center; gap:10px; margin-bottom:30px;">
-          <button class="pt-tab-btn" id="pt-btn-shift-mañana" onclick="PT.setShift('mañana')">☀️ MAÑANA (06-14)</button>
+          <button class="pt-tab-btn" id="pt-btn-shift-manana" onclick="PT.setShift('manana')">☀️ MAÑANA (06-14)</button>
           <button class="pt-tab-btn" id="pt-btn-shift-tarde" onclick="PT.setShift('tarde')">🌆 TARDE (14-22)</button>
           <button class="pt-tab-btn" id="pt-btn-shift-noche" onclick="PT.setShift('noche')">🌙 NOCHE (22-06)</button>
         </div>
@@ -13688,17 +13689,17 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
            const btn = document.querySelector('.btn-force-sync');
            if(btn) btn.innerHTML = '⏳ Sincronizando...';
            
-           const keys = ['rr_prime_v15_mañana', 'rr_prime_v15_tarde', 'rr_prime_v15_noche'];
-           for(const k of keys) {
-              if(typeof _sb !== 'undefined' && _sb) {
-                 const { data } = await _sb.from('kv_store').select('value').eq('key', k).single();
-                 if(data) {
-                    localStorage.setItem(k, data.value);
-                    const s = k.replace('rr_prime_v15_', '');
-                    PT.baseDatos[s] = JSON.parse(data.value || '[]');
-                 }
-              }
-           }
+            const keys = ['rr_prime_v15_manana', 'rr_prime_v15_tarde', 'rr_prime_v15_noche'];
+            for(const k of keys) {
+               if(typeof _sb !== 'undefined' && _sb) {
+                  const { data } = await _sb.from('kv_store').select('value').eq('key', k).single();
+                  if(data) {
+                     localStorage.setItem(k, data.value);
+                     const s = k.replace('rr_prime_v15_', '');
+                     PT.baseDatos[s] = JSON.parse(data.value || '[]');
+                  }
+               }
+            }
            PT.renderAll();
            if(btn) {
               btn.innerHTML = '✅ Sincronizado';

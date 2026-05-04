@@ -13816,12 +13816,16 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                 <div class="pt-card-footer">
                    <div class="pt-footer-stat">
                       Avance: <b>${ptsPct.toFixed(0)}%</b>
-                      ${op.lastTraining ? `<br><span style="font-size:0.6rem; color:#94a3b8;">Última Cap: ${op.lastTraining}</span>` : ''}
+                      ${op.lastTraining ? `<br><span style="font-size:0.6rem; color:#5eead4;">Cap: ${op.lastTraining}</span>` : ''}
                    </div>
-                   <div class="pt-footer-actions">
-                      <button class="pt-btn-action log" onclick="PT.verBitacora(${idx})">📋 Historial</button>
-                      <button class="pt-btn-action training" onclick="PT.enviarCapacitacionAdmin(${idx})" style="background:${op.trainingPending ? '#f59e0b' : 'rgba(99,102,241,0.2)'};">
-                         ${op.trainingPending ? '⏳ Enviada' : '🎓 Enviar Cap.'}
+                   <div class="pt-footer-actions" style="display:flex; flex-direction:column; gap:5px;">
+                      <div style="display:flex; gap:5px;">
+                         <button class="pt-btn-action log" onclick="PT.verBitacoraNombre('${op.name}')" style="flex:1; padding:8px 0;">📋 Bitácora</button>
+                         <button class="pt-btn-action log" onclick="PT.verHistorialCap('${op.name}')" style="flex:1; padding:8px 0; background:rgba(94,234,212,0.1); border-color:#5eead4;">🎓 Hist. Cap.</button>
+                      </div>
+                      <button class="pt-btn-action training" onclick="PT.enviarCapacitacionAdminNombre('${op.name}')" 
+                              style="width:100%; background:${op.trainingPending ? '#f59e0b' : 'rgba(99,102,241,0.2)'}; border:1px solid ${op.trainingPending ? '#fbbf24' : 'rgba(99,102,241,0.5)'};">
+                         ${op.trainingPending ? '⏳ CAPACITACIÓN ENVIADA (Pendiente)' : '🚀 ENVIAR CAPACITACIÓN'}
                       </button>
                    </div>
                 </div>
@@ -14189,12 +14193,41 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           }
         };
 
-        PT.enviarCapacitacionAdmin = function (idx) {
-          const op = PT.baseDatos[PT.shiftActual][idx];
-          op.trainingPending = true;
-          PT.saveData();
-          PT.renderAll();
-          _toastSync('Capacitación enviada al operador ' + op.name);
+        PT.enviarCapacitacionAdminNombre = function (name) {
+          const shift = PT.shiftActual;
+          let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+          let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+          if (opIdx !== -1) {
+             data[opIdx].trainingPending = true;
+             localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
+             PT.loadData();
+             _toastSync('Capacitación enviada a ' + name);
+          }
+        };
+
+        PT.verHistorialCap = function (name) {
+           const key = PT._logKey(name);
+           const log = JSON.parse(localStorage.getItem(key) || '[]');
+           const capLog = log.filter(l => l.tipo.includes('CAPACITACIÓN'));
+           if (capLog.length === 0) { alert('No hay historial de capacitaciones para ' + name); return; }
+           
+           let html = `<div style="padding:20px; color:#fff;">
+              <h3 style="margin-top:0; color:#5eead4; font-size:1.2rem;">🎓 Historial de Capacitación: ${name}</h3>
+              <div style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:10px;">
+                 ${capLog.map(l => `
+                    <div style="background:rgba(255,255,255,0.03); padding:15px; border-radius:16px; border:1px solid rgba(255,255,255,0.08);">
+                       <div style="display:flex; justify-content:space-between; align-items:center;">
+                          <span style="font-weight:800; font-size:1rem; color:${l.resultado.includes('APROBADO') ? '#5eead4' : '#f87171'};">${l.resultado}</span>
+                          <span style="font-size:0.7rem; color:#64748b;">${l.fecha}</span>
+                       </div>
+                    </div>
+                 `).join('')}
+              </div>
+           </div>`;
+           
+           const modal = document.getElementById('pt-modal-log');
+           const content = document.getElementById('pt-log-content');
+           if (modal && content) { content.innerHTML = html; modal.style.display = 'flex'; }
         };
 
         PT.checkTrainingPending = function (name) {
@@ -14202,10 +14235,22 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
            const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
            const op = data.find(o => _normName(o.name) === _normName(name));
            if (op && op.trainingPending) {
-              // Solo abrir si no está ya abierto
               const modal = document.getElementById('pt-modal-training');
               if (modal && modal.style.display !== 'flex') {
-                 PT.abrirCapacitacionPorNombre(name);
+                 // ALERTA INVASIVA
+                 Swal.fire({
+                    title: '🎓 CAPACITACIÓN OBLIGATORIA',
+                    text: 'El monitor ha solicitado que realices un refuerzo de conocimientos ahora mismo.',
+                    icon: 'info',
+                    confirmButtonText: 'Comenzar Ahora',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    background: '#0f172a',
+                    color: '#fff',
+                    confirmButtonColor: '#6366f1'
+                 }).then(() => {
+                    PT.abrirCapacitacionPorNombre(name);
+                 });
               }
            }
         };
@@ -14313,6 +14358,17 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
         PT._logKey = function (opName) {
           return 'rr_prime_log_' + opName.replace(/\s+/g, '_').toLowerCase();
+        };
+
+        PT.verBitacoraNombre = function (name) {
+           const shift = getPTShiftKey(detectarTurno());
+           const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+           const idx = data.findIndex(o => _normName(o.name) === _normName(name));
+           if (idx !== -1) {
+              PT.shiftActual = shift;
+              PT.baseDatos[shift] = data;
+              PT.verBitacora(idx);
+           }
         };
 
         PT.guardarBitacora = function (idx) {

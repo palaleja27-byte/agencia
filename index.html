@@ -6322,6 +6322,7 @@
       const _hoy = localDateStr();
       const _ptsHoyMap = {};
       const _horaMap = {};
+      const _connectedMap = {};
       
       const opsEnTurnoDraft = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
       const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
@@ -6350,35 +6351,17 @@
           });
         }
 
-        if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
-           if (op.name.includes('CATHERINE')) {
-               dpLog(`⚙️ Evaluando CATHERINE: logueado=${estaLogueado}, turno=${op.turno}, jornadaActual sist=${jornadaActual}, jornada a leer=${jornadaALeer}`, 'info');
-           }
-           combinedProfiles.forEach(p => {
-              const turnosPerfil = _dpTurnosData[p.id];
-              if (turnosPerfil) {
-                 // 🌟 SOPORTE TURNOS DE 12 HORAS 🌟
-                 // Si el operador está en un turno de 12 horas, sus puntos producidos en este día
-                 // abarcan múltiples jornadas. Sumamos todas las jornadas del día para no perder datos.
-                 const horasReg = (typeof asiGetHoras === 'function') ? asiGetHoras(op.name) : null;
-                 const es12h = op.turno_horas === 12 || (horasReg && horasReg.horas === 12);
-                 let pts = 0;
-                 
-                 if (es12h) {
-                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
-                    if (op.name.includes('CATHERINE') && pts >= 0) dpLog(`⏱️ Modo 12h: sumando M+T+N = ${pts.toFixed(1)} pts`, 'success');
-                 } else if (jornadaALeer) {
-                    pts = (turnosPerfil[jornadaALeer] || 0);
-                    if (op.name.includes('CATHERINE') && pts >= 0) dpLog(`✅ ID ${p.id} en ${jornadaALeer}: ${pts.toFixed(1)} pts`, 'success');
-                 }
-                 
-                 datamePts += pts;
-              } else if (op.name.includes('CATHERINE')) {
-                 const estaEnDB = p.id in _dpTurnosData;
-                 dpLog(`❌ Sin datos: ID ${p.id}. ¿Raspado hoy? ${estaEnDB ? 'Sí, pero sin datos' : 'NO. El ID no tiene puntos hoy o no está en datame_perfiles.'}`, 'error');
-              }
-           });
-        }
+         if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
+            combinedProfiles.forEach(p => {
+               const turnosPerfil = _dpTurnosData[p.id];
+               if (turnosPerfil) {
+                  // Sumamos todos los turnos del día para el perfil (Mañana + Tarde + Noche)
+                  // Esto asegura que se vean los puntos acumulados sin importar el cambio de jornada.
+                  const pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                  datamePts += pts;
+               }
+            });
+         }
 
         // --- 2. Lógica Legacy (localStorage) ---
         const cortes = getCortesOp(op.name);
@@ -6390,6 +6373,7 @@
 
         // Usamos Datame Realtime si tiene puntos, sino el legacy
         _ptsHoyMap[op.name] = datamePts > 0 ? datamePts : legacyPts;
+        _connectedMap[op.name.toUpperCase()] = estaLogueado;
 
         const last = hoyCortes[hoyCortes.length - 1];
         _horaMap[op.name] = datamePts > 0 ? '🛰️ Datame Sync' : (last ? (last.hora || null) : null);
@@ -6615,8 +6599,9 @@
         }
 
         // ── MODO DÍA ──
+        const isConnected = _connectedMap[op.name.toUpperCase()];
         const hasCorte = pHoy > 0;
-        const cardClass = hasCorte ? 'up' : 'no-corte';
+        const cardClass = (hasCorte || isConnected) ? 'up' : 'no-corte';
         const ptsCls = hasCorte ? 'has-pts' : 'no-pts';
         const barPctDia = Math.round((pHoy / maxHoy) * 100);
         const copHoy = Math.round(pHoy * 1400).toLocaleString('es-CO');

@@ -5085,7 +5085,7 @@
     <div class="rk-table-wrap" id="rk-table-desktop">
       <!-- Vista Día / Mes — único control de ordenamiento -->
       <div class="rk-view-toggle" style="padding:10px 0 6px;">
-        <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')">📅 Mes</button>
+        <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')" style="display:none">📅 Mes</button>
         <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy</button>
       </div>
       <!-- Mantener IDs para compatibilidad con headers de tabla -->
@@ -7186,9 +7186,9 @@
     // Detecta turno según hora actual
     function detectarTurno() {
       const h = new Date().getHours();
-      if (h >= 6 && h < 14) return 'Mañana';
-      if (h >= 14 && h < 22) return 'Tarde';
-      return 'Noche';
+      if (h >= 6 && h < 14) return 'manana';
+      if (h >= 14 && h < 22) return 'tarde';
+      return 'noche';
     }
 
 
@@ -8803,15 +8803,30 @@
 
 
     function getPuntosHoy(opName) {
+      // Prioridad 1: Supabase (Real-Time)
+      if (typeof _dpTurnosData !== 'undefined') {
+         const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+         if (op && op.profiles && op.profiles.length > 0) {
+            let ptsSup = 0;
+            op.profiles.forEach(p => {
+               const t = _dpTurnosData[p.id];
+               if (t) {
+                  ptsSup += (t['Mañana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0) + (t['manana'] || 0);
+               }
+            });
+            if (ptsSup > 0) return ptsSup;
+         }
+      }
+      
+      // Prioridad 2: LocalStorage (Cortes manuales)
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       const norm = _normName(opName);
       const key = Object.keys(all).find(k => _normName(k) === norm) || opName;
       const cortes = all[key] || [];
-      const hoy = getLogicalDate();
-      const futuro3 = getLogicalDate(new Date(Date.now() + 3 * 86400000));
+      const hoy = localDateStr();
       return cortes
-        .filter(c => getLogicalDate(c.fecha) >= hoy && getLogicalDate(c.fecha) <= futuro3)
-        .reduce((s, c) => s + (c.puntos || 0), 0);
+        .filter(c => c.fecha === hoy)
+        .reduce((s, c) => s + (Number(c.puntos) || 0), 0);
     }
 
 
@@ -12799,9 +12814,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const baseDaily = operatorsData
         .filter(o => o.group !== 'SP' && o.group !== 'N/A')
         .map(o => {
-           const ptsHoy = getCortesOp(o.name)
-             .filter(c => c.fecha === _hoyStr && (c.puntos || 0) < 10000)
-             .reduce((s, c) => s + (c.puntos || 0), 0);
+           const ptsHoy = getPuntosHoy(o.name);
            return { name: o.name, group: o.group, points_hoy: ptsHoy };
         });
       
@@ -13643,7 +13656,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         };
 
         PT.shiftActual = detectarTurno().toLowerCase(); // Auto-seleccionar turno actual
-        PT.baseDatos = { 'mañana': [], tarde: [], noche: [] };
+        PT.baseDatos = { 'manana': [], tarde: [], noche: [] };
         PT.charts = {};
         PT.modalOpIdx = null;
 

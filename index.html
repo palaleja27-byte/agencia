@@ -13614,7 +13614,27 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       </div>
 
-      <!-- Modal movido al final del body -->
+      <!-- Modal de Capacitación -->
+      <div id="pt-modal-training" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+         <div style="background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:24px; width:100%; max-width:800px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 50px rgba(0,0,0,0.5);">
+            <div style="padding:20px 30px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+               <div>
+                  <h2 style="margin:0; font-size:1.4rem; color:#fff;">🎓 Capacitación de Refuerzo</h2>
+                  <p style="margin:0; font-size:0.8rem; color:#64748b;">Responde las 30 preguntas para validar tus conocimientos.</p>
+               </div>
+               <button onclick="PT.cerrarCapacitacion()" style="background:rgba(255,255,255,0.05); border:none; color:#fff; width:36px; height:36px; border-radius:12px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div id="pt-training-questions" style="flex:1; overflow-y:auto; padding:30px; display:grid; grid-template-columns:1fr; gap:25px;">
+               <!-- Preguntas inyectadas por JS -->
+            </div>
+            
+            <div style="padding:20px 30px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:flex-end; gap:15px; background:rgba(255,255,255,0.02);">
+               <button class="btn-neumorphic" onclick="PT.cerrarCapacitacion()" style="padding:12px 24px; font-size:0.9rem; background:transparent; border:1px solid rgba(255,255,255,0.1);">Cancelar</button>
+               <button class="btn-neumorphic" onclick="PT.evaluarCapacitacion()" style="padding:12px 30px; font-size:0.9rem; background:linear-gradient(135deg, #6366f1, #a855f7); color:#fff; border:none;">Finalizar y Enviar</button>
+            </div>
+         </div>
+      </div>
 
       <script>
         // ══ PLAN DE TRABAJO — PT Namespace (evita colisiones globales) ══
@@ -14179,8 +14199,38 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           });
 
           const pct = (correctas / PT.preguntasCapacitacion.length) * 100;
-          alert(`Resultado de capacitación para ${PT._currentTrainingOp.name}:\n\n${correctas} de ${PT.preguntasCapacitacion.length} correctas (${pct}%)\n\n${pct >= 80 ? '¡APROBADO! 🏆' : 'REPROBADO. Debe reforzar conocimientos.'}`);
+          const name = PT._currentTrainingOp ? PT._currentTrainingOp.name : 'Operador';
+          const resultStr = `${pct >= 80 ? '✅ APROBADO' : '❌ REPROBADO'} (${correctas}/30 - ${pct.toFixed(1)}%)`;
           
+          alert(`Resultado de capacitación para ${name}:\n\n${correctas} de ${PT.preguntasCapacitacion.length} correctas (${pct.toFixed(1)}%)\n\n${pct >= 80 ? '¡APROBADO! 🏆' : 'REPROBADO. Debe reforzar conocimientos.'}`);
+          
+          if (PT._currentTrainingOp) {
+             const key = PT._logKey(name);
+             let log = JSON.parse(localStorage.getItem(key) || '[]');
+             log.unshift({
+                fecha: new Date().toLocaleString(),
+                tipo: '🎓 CAPACITACIÓN',
+                resultado: resultStr,
+                puntos: correctas
+             });
+             localStorage.setItem(key, JSON.stringify(log.slice(0, 50)));
+
+             // Notificar al monitor
+             const alerta = {
+                id: Date.now(),
+                from: '🎓 ' + name,
+                dest: 'todos',
+                pri: pct >= 80 ? 'success' : 'danger',
+                msg: `Finalizó capacitación: ${resultStr}`,
+                jornada: detectarTurno(),
+                timestamp: new Date().getTime(),
+                readBy: []
+             };
+             let alertas = JSON.parse(localStorage.getItem('rr_prime_consejos_2026') || '[]');
+             alertas.unshift(alerta);
+             localStorage.setItem('rr_prime_consejos_2026', JSON.stringify(alertas.slice(0, 100)));
+          }
+
           if (pct >= 80) {
             PT.cerrarCapacitacion();
           }

@@ -1258,57 +1258,76 @@
         box-sizing: border-box;
       }
 
-      .btn-ai-analisis {
-        font-size: 16px !important;
-        padding: 10px !important;
-      }
-
       .rk-stats {
         grid-template-columns: repeat(2, 1fr);
         padding: 0;
-        gap: 10px;
+        gap: 12px;
         margin: 0 10px;
       }
 
       .rk-stat-card {
-        padding: 12px 8px;
-        min-height: 80px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
+        padding: 20px 10px !important;
+        min-height: 120px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
+        box-sizing: border-box !important;
       }
-
+      
       .rk-stat-card .stat-val {
-        font-size: 1.05rem;
-        line-height: 1.1;
-        margin: 4px 0;
+        font-size: 1.3rem !important;
+        word-break: break-word !important;
+        line-height: 1.1 !important;
+        margin: 8px 0 !important;
       }
-
+      
       .rk-stat-card .stat-lbl {
-        font-size: 0.52rem;
-        letter-spacing: 0.3px;
+        font-size: 0.7rem !important;
+        margin-bottom: 5px !important;
+        text-transform: uppercase !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.5px !important;
+      }
+      
+      #rk-val-growth {
+        font-size: 0.95rem !important;
+        white-space: normal !important;
+        text-align: center !important;
+        line-height: 1.3 !important;
+        margin-top: 8px !important;
+        font-weight: 700 !important;
       }
 
       /* ── Metas Responsividad ── */
       #rk-metas-wrap > div > div:first-child {
         flex-direction: column !important;
-        gap: 12px !important;
-        padding: 16px !important;
+        gap: 15px !important;
+        padding: 20px 15px !important;
         align-items: center !important;
+      }
+      
+      #rk-metas-wrap > div > div:first-child > div:first-child {
+        width: 100% !important;
+        justify-content: center !important;
       }
 
       #rk-metas-wrap [onclick="event.stopPropagation()"] {
         width: 100% !important;
         justify-content: center !important;
-        margin-top: 4px !important;
+        margin-top: 15px !important;
         display: flex !important;
         gap: 8px !important;
+        flex-wrap: wrap !important;
       }
 
       #rk-metas-wrap [onclick="event.stopPropagation()"] button {
-        flex: 1 !important;
-        max-width: 100px !important;
-        padding: 8px 4px !important;
+        flex: 1 1 30% !important;
+        min-width: 80px !important;
+        padding: 14px 5px !important;
+        font-size: 0.8rem !important;
+        border-radius: 10px !important;
       }
 
       /* Paneles Tableau/Datame Responsivos */
@@ -6197,8 +6216,12 @@
         let m1Total = historialMap[m1Key] || 0;
         let m2Total = historialMap[m2Key] || 0;
 
-        // Crecimiento Real (Actual vs Anterior)
-        const crecOp = m1Total > 0 ? ((m2Total - m1Total) / m1Total * 100) : 0;
+        // Crecimiento Proyectado (Actual Proyectado vs Anterior)
+        const currentDay = now.getDate() || 1;
+        const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const projectedM2 = (m2Total / currentDay) * totalDays;
+        
+        const crecOp = m1Total > 0 ? ((projectedM2 - m1Total) / m1Total * 100) : 0;
         const sign = crecOp >= 0 ? '+' : '';
         const color = crecOp >= 0 ? '#34d399' : '#f87171';
         const icon = crecOp >= 0 ? '📈' : '📉';
@@ -6213,8 +6236,13 @@
         if (elCop) elCop.textContent = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
         const numOps = operatorsData.length || 1;
         if (elAvg) elAvg.textContent = (m2Total / numOps).toFixed(1);
-        if (elCrec) { elCrec.style.color = color; elCrec.textContent = icon + ' ' + sign + crecOp.toFixed(1) + '%'; }
-        if (elRange) { elRange.textContent = `${m1Name}: ${m1Total.toFixed(0)} pts → ${m2Name}: ${m2Total.toFixed(0)} pts`; }
+        if (elCrec) { 
+          elCrec.style.color = color; 
+          elCrec.textContent = icon + ' ' + sign + crecOp.toFixed(1) + '% (Proyectado)'; 
+        }
+        if (elRange) { 
+          elRange.textContent = `${m1Name}: ${m1Total.toFixed(0)} pts → Proyección ${m2Name}: ${projectedM2.toFixed(0)} pts`; 
+        }
 
         window._rkHistorial = { 
           m0Total, m1Total, m2Total, 
@@ -13698,39 +13726,44 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
             const ptsPct = Math.min((realPts / op.meta) * 100, 100);
 
             const tarjeta = document.createElement('div');
-            tarjeta.className = 'op-card';
-            tarjeta.style.borderLeft = `4px solid ${taskPct >= 100 ? '#10b981' : taskPct >= 50 ? '#fbbf24' : '#ef4444'}`;
+            tarjeta.className = 'pt-op-card';
             tarjeta.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <div>
-                       <h2 style="margin:0;color:var(--accent);font-size:1.1rem;">${op.name}</h2>
-                       <div style="font-size:0.6rem; color:#64748b; margin-top:2px;">
-                          Último corte: ${realPts.toFixed(1)} pts / Meta: ${op.meta}
+                <div class="pt-card-header">
+                    <div class="pt-card-info">
+                       <div class="pt-op-name">${op.name}</div>
+                       <div class="pt-op-sub">
+                          ${realPts.toFixed(1)} pts / Meta: ${op.meta}
                        </div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:1.1rem; font-weight:900; color:#fff;">${taskPct.toFixed(0)}%</div>
-                        <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase;">Tareas hechas</div>
+                    <div class="pt-card-pct">
+                        <div class="pt-pct-val">${taskPct.toFixed(0)}%</div>
+                        <div class="pt-pct-lbl">HECHO</div>
                     </div>
                 </div>
                 
-                <div class="progress-container" style="height:6px; margin:5px 0 15px;">
-                    <div class="progress-bar" style="width:${taskPct}%; background:#10b981;"></div>
+                <div class="pt-progress-bg">
+                    <div class="pt-progress-bar" style="width:${taskPct}%; background:${taskPct >= 100 ? '#2dd4bf' : taskPct >= 50 ? '#fbbf24' : '#f87171'}"></div>
                 </div>
 
-                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; margin-bottom:15px;">
+                <div class="pt-tasks-grid">
                    ${PT.TAREAS_MASTER.map((t, ti) => `
-                      <div style="font-size:0.65rem; color:${op.tareasEstado[ti] ? '#10b981' : '#475569'}; display:flex; align-items:center; gap:5px;">
-                         ${op.tareasEstado[ti] ? '✅' : '⚪'} ${t}
+                      <div class="pt-task-item ${op.tareasEstado[ti] ? 'active' : ''}">
+                         <span class="pt-task-icon">${op.tareasEstado[ti] ? '✅' : '⚪'}</span>
+                         <span class="pt-task-txt">${t}</span>
                       </div>
                    `).join('')}
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
-                   <div style="font-size:0.65rem; color:#64748b;">Avance Producción: <b>${ptsPct.toFixed(0)}%</b></div>
-                   <button class="btn-bitacora btn-view-log" onclick="PT.verBitacora(${idx})">📋 Ver Bitácora</button>
+                <div class="pt-card-footer">
+                   <div class="pt-footer-stat">Avance: <b>${ptsPct.toFixed(0)}%</b></div>
+                   <div class="pt-footer-actions">
+                      <button class="pt-btn-action log" onclick="PT.verBitacora(${idx})">📋 Bitácora</button>
+                      <button class="pt-btn-action training" onclick="PT.abrirCapacitacion(${idx})">🎓 Capacitación</button>
+                   </div>
                 </div>
             `;
+            contenedor.appendChild(tarjeta);
+          });
             contenedor.appendChild(tarjeta);
           });
 
@@ -14045,28 +14078,38 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         };
 
         // ── Bitácora ──
-        // ?? CAPACITACION ??
+        // 🎓 CAPACITACION (30 PREGUNTAS) 🎓
         PT.preguntasCapacitacion = [
-          { q: "Cul es el objetivo principal del Trfico VIP?", a: ["Atraer trfico masivo sin filtrar", "Filtrar y priorizar clientes de alto valor (VIP)", "Borrar mensajes antiguos de la bandeja"], correct: 1 },
-          { q: "Con qu frecuencia se debe realizar el Trfico VIP?", a: ["Una vez al da", "Cada hora", "Solo cuando hay pocos puntos"], correct: 1 },
-          { q: "Cuntas conversaciones nuevas se deben iniciar como mnimo segn la meta diaria?", a: ["1 a 2", "3 a 5", "Ms de 10"], correct: 1 },
-          { q: "Qu es un 'Pin' en el contexto de un cliente fijado?", a: ["Un cdigo de descuento", "Un cliente que se ha anclado/fijado en la parte superior para seguimiento", "Una contrasea de acceso"], correct: 1 },
-          { q: "Qu debe contener una historia diaria narrativa?", a: ["Cualquier foto de internet", "Contenido real y autntico que cuente una historia o momento", "Solo texto sin imgenes"], correct: 1 },
-          { q: "Qu define a un 'Icebreaker maduro'?", a: ["Un simple 'Hola'", "Un mensaje personalizado, provocador y emocionalmente conectado", "Un mensaje enviado a menores de edad"], correct: 1 },
-          { q: "Por qu es importante la limpieza de la bandeja de entrada?", a: ["Para que se vea bonita", "Para evitar distracciones y asegurar que no se pierdan clientes potenciales", "No es importante"], correct: 1 },
-          { q: "Qu es el revenue total en el panel de Tableau?", a: ["El dinero gastado en publicidad", "La suma total de ventas/monedas generadas por los perfiles", "El nmero de mensajes enviados"], correct: 1 },
-          { q: "Qu significa un 'Abridor' en la plataforma?", a: ["El primer mensaje enviado a un cliente para iniciar interaccin", "Una herramienta para abrir archivos", "Un tipo de regalo virtual"], correct: 0 },
-          { q: "Cmo se debe responder a un regalo virtual?", a: ["Ignorndolo", "Agradeciendo con entusiasmo y escalando la seduccin", "Pidiendo ms regalos de inmediato"], correct: 1 },
-          { q: "Qu es el 'Corte' en la operativa diaria?", a: ["El momento de descanso", "La validacin y registro de puntos en un momento determinado", "Cuando se cae el internet"], correct: 1 },
-          { q: "Cul es la meta de puntos estndar por operador (mes)?", a: ["1000 pts", "100 pts (segn configuracin actual)", "Depende del humor del administrador"], correct: 1 },
-          { q: "Qu es un 'Hot' Icebreaker?", a: ["Un mensaje sobre el clima", "Un mensaje con alta tensin sexual y seduccin directa", "Un mensaje enojado"], correct: 1 },
-          { q: "Qu es un 'Deep' Icebreaker?", a: ["Un mensaje sobre el mar", "Un mensaje que busca vulnerabilidad y conexin psicolgica", "Un mensaje muy largo"], correct: 1 },
-          { q: "Qu se debe hacer si un cliente deja de responder?", a: ["Spamear con 10 mensajes", "Re-enganchar con un abridor creativo o historia narrativa", "Borrar el contacto de inmediato"], correct: 1 },
-          { q: "Qu herramienta usamos para ver el crecimiento de la operacin?", a: ["Calculadora", "Panel de Crecimiento en el Dashboard", "No se puede ver"], correct: 1 },
-          { q: "Quin es el responsable de marcar las tareas hechas en el monitoreo?", a: ["El sistema automticamente", "El operador y validado por el monitor", "Nadie"], correct: 1 },
-          { q: "Para qu sirve la bitcora?", a: ["Para escribir poemas", "Para registrar hitos y el progreso de las tareas realizadas", "Para chatear con otros operadores"], correct: 1 },
-          { q: "Qu significa 'Real-Time' en nuestro dashboard?", a: ["Que los datos se actualizan una vez al mes", "Que los datos se actualizan en tiempo real o con muy poco retraso", "Es el nombre de un operador"], correct: 1 },
-          { q: "Cul es la actitud correcta ante una meta no alcanzada?", a: ["Culpar al sistema", "Analizar el fallo, capacitarse y ajustar la estrategia para el da siguiente", "Rendirse"], correct: 1 }
+          { q: "Cuál es el objetivo principal del Tráfico VIP?", a: ["Atraer tráfico masivo sin filtrar", "Filtrar y priorizar clientes de alto valor (VIP)", "Borrar mensajes antiguos"], correct: 1 },
+          { q: "Con qué frecuencia se debe realizar el Tráfico VIP?", a: ["Una vez al día", "Cada hora", "Solo cuando hay pocos puntos"], correct: 1 },
+          { q: "Cuántas conversaciones nuevas se deben iniciar mínimo al día?", a: ["1 a 2", "3 a 5", "Más de 10"], correct: 1 },
+          { q: "Qué es un 'Pin' en el contexto de un cliente?", a: ["Un código", "Un cliente anclado para seguimiento prioritario", "Una contraseña"], correct: 1 },
+          { q: "Qué debe contener una historia diaria narrativa?", a: ["Cualquier foto", "Contenido real y auténtico que cuente un momento", "Solo texto"], correct: 1 },
+          { q: "Qué define a un 'Icebreaker maduro'?", a: ["Un 'Hola'", "Un mensaje personalizado y emocionalmente conectado", "Un emoji"], correct: 1 },
+          { q: "Por qué es importante la limpieza de la bandeja?", a: ["Por estética", "Para asegurar que no se pierdan clientes potenciales", "No es importante"], correct: 1 },
+          { q: "Qué es el revenue total en Tableau?", a: ["Dinero gastado", "Suma total de monedas generadas", "Número de mensajes"], correct: 1 },
+          { q: "Qué significa un 'Abridor'?", a: ["Mensaje inicial para iniciar interacción", "Herramienta de archivos", "Regalo virtual"], correct: 0 },
+          { q: "Cómo se debe responder a un regalo virtual?", a: ["Ignorando", "Agradeciendo con entusiasmo y escalando seducción", "Pidiendo más"], correct: 1 },
+          { q: "Qué es el 'Corte' diario?", a: ["Descanso", "Validación y registro de puntos", "Falla de internet"], correct: 1 },
+          { q: "Cuál es la meta de puntos estándar actual?", a: ["1000 pts", "100 pts", "Sin meta"], correct: 1 },
+          { q: "Qué es un 'Hot' Icebreaker?", a: ["Sobre el clima", "Alta tensión sexual y seducción directa", "Mensaje enojado"], correct: 1 },
+          { q: "Qué es un 'Deep' Icebreaker?", a: ["Sobre el mar", "Busca vulnerabilidad y conexión psicológica", "Mensaje largo"], correct: 1 },
+          { q: "Qué hacer si un cliente deja de responder?", a: ["Spamear", "Re-enganchar con abridor creativo o historia", "Borrar"], correct: 1 },
+          { q: "Qué herramienta mide el crecimiento?", a: ["Calculadora", "Panel de Crecimiento en Dashboard", "Papel y lápiz"], correct: 1 },
+          { q: "Quién marca las tareas hechas?", a: ["El sistema solo", "El operador y validado por monitor", "Nadie"], correct: 1 },
+          { q: "Para qué sirve la bitácora?", a: ["Poemas", "Registrar hitos y progreso de tareas", "Chatear"], correct: 1 },
+          { q: "Qué significa 'Real-Time'?", a: ["Actualización mensual", "Datos actualizados al instante", "Nombre de operador"], correct: 1 },
+          { q: "Actitud ante una meta no alcanzada:", a: ["Culpar al sistema", "Analizar, capacitarse y ajustar estrategia", "Rendirse"], correct: 1 },
+          { q: "Por qué las tareas diarias son obligatorias?", a: ["Para molestar", "Aseguran la sostenibilidad y crecimiento de la cuenta", "No lo son"], correct: 1 },
+          { q: "Qué es un perfil 'Top'?", a: ["El que más gasta", "El que tiene más potencial de facturación recurrente", "El más nuevo"], correct: 1 },
+          { q: "Importancia de la puntualidad en el turno:", a: ["Ninguna", "Asegura la cobertura total de las horas pico de tráfico", "Solo para el bono"], correct: 1 },
+          { q: "Qué es la retención de clientes?", a: ["No dejarlos ir de la oficina", "Mantener al cliente activo y facturando a largo plazo", "Bloquearlos"], correct: 1 },
+          { q: "Cómo se maneja un cliente grosero?", a: ["Respondiendo igual", "Manteniendo profesionalismo y escalando si es necesario", "Ignorando siempre"], correct: 1 },
+          { q: "Función de las alertas de rendimiento:", a: ["Decoración", "Detectar caídas de producción en tiempo real", "Enviar spam"], correct: 1 },
+          { q: "Qué es el 'Shadowing'?", a: ["Seguir a alguien", "Aprender observando a los mejores operadores", "Estar en la sombra"], correct: 1 },
+          { q: "Para qué sirven los PINs en el dashboard?", a: ["Para jugar", "Acceso rápido a perfiles críticos", "Sin uso"], correct: 1 },
+          { q: "Cómo influye la calidad del mensaje en el revenue?", a: ["No influye", "Mensajes de calidad generan conexiones y facturación mayor", "Es mejor cantidad"], correct: 1 },
+          { q: "Qué es el 'Engagement'?", a: ["Compromiso de boda", "Nivel de interacción y lealtad del cliente", "Cerrar sesión"], correct: 1 }
         ];
 
         PT.abrirCapacitacion = function (idx) {

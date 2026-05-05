@@ -6383,13 +6383,9 @@
             combinedProfiles.forEach(p => {
                const turnosPerfil = _dpTurnosData[p.id];
                if (turnosPerfil) {
-                  // Solo tomar los puntos de la jornada que le corresponde al operador (o todo si es Completo)
-                  let pts = 0;
-                  if (jornadaALeer === 'Completo') {
-                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
-                  } else {
-                    pts = turnosPerfil[jornadaALeer] || 0;
-                  }
+                  // DELTA-SHIFT™: cada turno ya es un delta independiente (puntos_neto = total - baseline).
+                  // Sumamos todos los turnos del día = producción total del día para el perfil.
+                  const pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
                   datamePts += pts;
                }
             });
@@ -8869,28 +8865,23 @@
 
 
     function getPuntosHoy(opName) {
-      // Prioridad 1: Supabase (Real-Time)
+      // Prioridad 1: Supabase (Real-Time) — DELTA-SHIFT™
       if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined' && operatorsData) {
          const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
          
+         // Combinar perfiles estáticos + dinámicos del turno (DELTA-SHIFT™)
          let combinedProfiles = op ? [...(op.profiles || [])] : [];
          const realName = op ? op.name : opName;
          
-         // DELTA-SHIFT™: Añadir perfiles dinámicos
          const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
          const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : 'Mañana';
          const shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
          const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
          
-         const opsEnTurnoDraft = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
-         const estaLogueado = op ? opsEnTurnoDraft.has(op.name.toUpperCase()) : false;
-         let jornadaALeer = estaLogueado ? jornadaActual : (op?.turno || jornadaActual);
-
          try {
            const draftFull = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
            const draftEntry = draftFull[realName + '||operador'] || draftFull[realName.toUpperCase() + '||operador'];
            if (draftEntry && Array.isArray(draftEntry.perfiles)) {
-             jornadaALeer = jornadaActual; // Forzar turno actual si está en el draft
              draftEntry.perfiles.forEach(dp => {
                if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
                  combinedProfiles.push(dp);
@@ -8904,15 +8895,10 @@
             combinedProfiles.forEach(p => {
                const t = _dpTurnosData[p.id];
                if (t) {
-                  // Solo tomar los puntos de la jornada que le corresponde
-                  let pts = 0;
-                  if (jornadaALeer === 'Completo') {
-                    pts = (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
-                  } else {
-                    const normJornada = jornadaALeer === 'Mañana' || jornadaALeer === 'manana' ? 'Mañana' : jornadaALeer;
-                    pts = (t[normJornada] || 0) + (normJornada === 'Mañana' ? (t['manana'] || 0) : 0);
-                  }
-                  ptsSup += pts;
+                  // DELTA-SHIFT™: cada jornada ya es un delta independiente calculado por el watcher.
+                  // puntos_neto = puntos_total - puntos_baseline para cada turno.
+                  // Sumar Mañana + Tarde + Noche = producción total del día del perfil.
+                  ptsSup += (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
                }
             });
             if (ptsSup > 0) return ptsSup;

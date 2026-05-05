@@ -12522,10 +12522,41 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       ptsFeb       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-02').reduce((s,[,v])=>s+v,0);
       ptsMar       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-03').reduce((s,[,v])=>s+v,0);
 
-      // HOY: priorizar datos en tiempo real del operador activo
-      if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _opRtOpName.toUpperCase() === name.toUpperCase()) {
-        const rtHoy = Object.values(_opRtTurnos).reduce((s,v)=>s+v,0);
-        if (rtHoy > 0) ptsHoy = rtHoy;
+      // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
+      let datamePtsHoy = 0;
+      if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined') {
+        const opData = operatorsData.find(o => String(o.name).toUpperCase() === String(name).toUpperCase());
+        if (opData) {
+           let combinedProfiles = [...(opData.profiles || [])];
+           
+           // DELTA-SHIFT™: Agregar perfiles del draft de asistencia si existen
+           const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
+           const _shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
+           const _draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + _shKey) || '{}');
+           const draftEntry = _draftFull[opData.name + '||operador'];
+           
+           if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+              draftEntry.perfiles.forEach(dp => {
+                if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) combinedProfiles.push(dp);
+              });
+           }
+
+           if (combinedProfiles.length > 0) {
+              combinedProfiles.forEach(p => {
+                 const turnosPerfil = _dpTurnosData[p.id];
+                 if (turnosPerfil) {
+                    datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                 }
+              });
+           }
+        }
+      }
+
+      if (datamePtsHoy > 0) {
+         ptsHoy = datamePtsHoy;
+      } else if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _opRtOpName.toUpperCase() === name.toUpperCase()) {
+         const rtHoy = Object.values(_opRtTurnos).reduce((s,v)=>s+v,0);
+         if (rtHoy > ptsHoy) ptsHoy = rtHoy;
       }
       // ESTE MES: priorizar _opRtTotalMes (total mensual acumulado de Datame, mas preciso)
       if (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&

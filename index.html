@@ -16677,67 +16677,9 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       if (ptsEl) ptsEl.textContent = totalMesPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
       if (copEl) copEl.textContent = '$' + totalCop + ' COP';
 
-      // ── Resumen Corte de Turno (agrupado por OPERADOR) ─────────────
-      const corteWrap = document.getElementById('dp-corte-perfiles-list');
-      if (corteWrap) {
-        const tAct = detectarTurno();
-        const labelEl = document.getElementById('dp-corte-active-label');
-        if (labelEl) labelEl.textContent = 'TURNO: ' + tAct.toUpperCase();
+      // ── Resumen Corte de Turno → delegar a función autónoma ─────────
+      renderCorteTurnoLive();
 
-        // Construir mapa inverso: id_perfil → { operador, modelo }
-        const perfilToOp = {};
-        if (typeof operatorsData !== 'undefined') {
-          operatorsData.forEach(op => {
-            (op.profiles || []).forEach(p => {
-              perfilToOp[String(p.id)] = { operador: op.name, grupo: op.group, modelo: p.model || p.modelo || p.id };
-            });
-          });
-        }
-        // Fallback con DP_PERFILES_MAP
-        Object.values(DP_PERFILES_MAP).flat().forEach(p => {
-          if (!perfilToOp[String(p.id)]) {
-            perfilToOp[String(p.id)] = { operador: '—', grupo: '', modelo: p.modelo || p.id };
-          }
-        });
-
-        // Acumular pts del turno por operador
-        const opTurnoMap = {}; // { opName: { pts, perfiles[], grupo } }
-        let globalShiftPts = 0;
-
-        Object.entries(_dpTurnosData).forEach(([id, tData]) => {
-          const pts = tData[tAct] || 0;
-          if (pts <= 0) return;
-          globalShiftPts += pts;
-          const info = perfilToOp[String(id)] || { operador: 'ID: ' + id, grupo: '', modelo: 'ID: ' + id };
-          const opKey = info.operador;
-          if (!opTurnoMap[opKey]) opTurnoMap[opKey] = { pts: 0, perfiles: [], grupo: info.grupo };
-          opTurnoMap[opKey].pts += pts;
-          opTurnoMap[opKey].perfiles.push({ modelo: info.modelo, id, pts });
-        });
-
-        // Ordenar operadores por pts desc
-        const opsSorted = Object.entries(opTurnoMap).sort((a, b) => b[1].pts - a[1].pts);
-
-        const perfilesHtml = opsSorted.map(([opName, data], idx) => {
-          const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx+1}`;
-          const perfilesStr = data.perfiles.map(p => `${p.modelo} (${p.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})})`).join(', ');
-          return `
-            <div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; border:1px solid rgba(255,255,255,0.05);">
-              <div style="min-width:0; flex:1; padding-right:10px;">
-                <div style="font-size:0.75rem; font-weight:700; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${medal} ${opName}</div>
-                <div style="font-size:0.52rem; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${perfilesStr}</div>
-              </div>
-              <div style="text-align:right; flex-shrink:0;">
-                <div style="font-size:0.95rem; font-weight:800; color:#5eead4;">${data.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}</div>
-                <div style="font-size:0.5rem; color:#475569; text-transform:uppercase;">pts ${tAct}</div>
-              </div>
-            </div>`;
-        }).join('');
-
-        corteWrap.innerHTML = perfilesHtml || '<div style="grid-column:1/-1; text-align:center; padding:20px; color:#475569; font-size:.7rem;">No hay producción registrada en este turno aún.<br><small style="font-size:.6rem;">Si los datos son recientes, espera la próxima sincronización automática (cada 5 min).</small></div>';
-        const totalGlobalEl = document.getElementById('dp-corte-total-global');
-        if (totalGlobalEl) totalGlobalEl.textContent = globalShiftPts.toLocaleString('es-CO',{minimumFractionDigits:1}) + ' pts';
-      }
       
       // ── Ganancia Líder Real-Time (10% del turno activo) ───────────
       const tAct = detectarTurno();
@@ -16761,6 +16703,156 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     function dpToggleCard(id) {
       const card = document.getElementById('dp-card-' + id);
       if (card) card.classList.toggle('expanded');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RESUMEN CORTE DE TURNO — Consulta autónoma a Supabase
+    // No depende de _dpTurnosData; hace su propia query fresca.
+    // ═══════════════════════════════════════════════════════════════
+    let _corteRefreshTimer = null;
+
+    async function renderCorteTurnoLive() {
+      const corteWrap = document.getElementById('dp-corte-perfiles-list');
+      const totalEl   = document.getElementById('dp-corte-total-global');
+      const labelEl   = document.getElementById('dp-corte-active-label');
+      if (!corteWrap) return;
+      if (typeof _sb === 'undefined') return;
+
+      // Detectar turno activo por hora Colombia
+      const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
+        ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
+        : new Date().getHours();
+      const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
+      if (labelEl) labelEl.textContent = 'TURNO: ' + tAct.toUpperCase();
+
+      // Mostrar loading
+      corteWrap.innerHTML = '<div style="text-align:center;padding:16px;color:#475569;font-size:.72rem;">⏳ Cargando datos del turno ' + tAct + '...</div>';
+
+      try {
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+
+        // Variantes de nombre de jornada (Supabase puede tener distintas formas)
+        const jornadaVariants = [tAct, tAct.toLowerCase(), tAct.toUpperCase()];
+
+        // Consultar operaciones de HOY para el turno activo
+        // puntos_neto = lo generado en el turno (diferencial desde inicio de turno)
+        const { data: rows, error } = await _sb
+          .from('operaciones')
+          .select('id_perfil, puntos_neto, jornada, agencia, puntos')
+          .eq('fecha_dia', hoy)
+          .in('jornada', jornadaVariants)
+          .gt('puntos_neto', 0)
+          .order('puntos_neto', { ascending: false });
+
+        if (error) {
+          console.warn('[Corte] Error Supabase:', error.message);
+          // Fallback: intentar sin filtro de jornada (tomar todos los de hoy)
+          const { data: rowsAll } = await _sb
+            .from('operaciones')
+            .select('id_perfil, puntos_neto, jornada, puntos')
+            .eq('fecha_dia', hoy)
+            .gt('puntos_neto', 0)
+            .lte('puntos_neto', 800);
+
+          if (!rowsAll || rowsAll.length === 0) {
+            corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin datos para hoy aún.<br><small>La sincronización se actualiza automáticamente cada 5 min.</small></div>';
+            if (totalEl) totalEl.textContent = '0,0 pts';
+            return;
+          }
+          // Usar todos los de hoy si no hay por jornada
+          _renderCorteRows(rowsAll, corteWrap, totalEl, tAct);
+          return;
+        }
+
+        if (!rows || rows.length === 0) {
+          // Intento 2: buscar sin filtro estricto de jornada
+          const { data: rowsHoy } = await _sb
+            .from('operaciones')
+            .select('id_perfil, puntos_neto, jornada, puntos')
+            .eq('fecha_dia', hoy)
+            .gt('puntos_neto', 0)
+            .lte('puntos_neto', 800);
+
+          if (!rowsHoy || rowsHoy.length === 0) {
+            corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin producción registrada para el turno ' + tAct + ' hoy.<br><small style="font-size:.6rem;">Actualización automática cada 5 min.</small></div>';
+            if (totalEl) totalEl.textContent = '0,0 pts';
+            return;
+          }
+          _renderCorteRows(rowsHoy, corteWrap, totalEl, tAct);
+          return;
+        }
+
+        _renderCorteRows(rows, corteWrap, totalEl, tAct);
+
+      } catch(e) {
+        console.error('[Corte] Error:', e);
+        corteWrap.innerHTML = '<div style="text-align:center;padding:16px;color:#f87171;font-size:.7rem;">⚠️ Error al cargar datos. Reintentando...</div>';
+        setTimeout(renderCorteTurnoLive, 15000);
+      }
+    }
+
+    function _renderCorteRows(rows, corteWrap, totalEl, tAct) {
+      // Construir mapa inverso id_perfil → operador
+      const perfilToOp = {};
+      if (typeof operatorsData !== 'undefined') {
+        operatorsData.forEach(op => {
+          (op.profiles || []).forEach(p => {
+            perfilToOp[String(p.id).trim()] = {
+              operador: op.name, grupo: op.group,
+              modelo: p.model || p.modelo || ('ID ' + p.id)
+            };
+          });
+        });
+      }
+      // Fallback con DP_PERFILES_MAP
+      if (typeof DP_PERFILES_MAP !== 'undefined') {
+        Object.values(DP_PERFILES_MAP).flat().forEach(p => {
+          const k = String(p.id).trim();
+          if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', grupo: '', modelo: p.modelo || ('ID ' + p.id) };
+        });
+      }
+
+      // Agrupar por operador (acumular netos)
+      const opMap = {};
+      let globalPts = 0;
+      rows.forEach(r => {
+        const pts = r.puntos_neto || 0;
+        if (pts <= 0 || pts > 800) return; // sanidad
+        globalPts += pts;
+        const info = perfilToOp[String(r.id_perfil).trim()] || { operador: 'ID: ' + r.id_perfil, grupo: '', modelo: 'Perfil ' + r.id_perfil };
+        if (!opMap[info.operador]) opMap[info.operador] = { pts: 0, perfiles: [], grupo: info.grupo };
+        opMap[info.operador].pts += pts;
+        opMap[info.operador].perfiles.push({ modelo: info.modelo, id: r.id_perfil, pts });
+      });
+
+      const sorted = Object.entries(opMap).sort((a, b) => b[1].pts - a[1].pts);
+
+      if (sorted.length === 0) {
+        corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin producción > 0 en turno ' + tAct + ' hoy.</div>';
+        if (totalEl) totalEl.textContent = '0,0 pts';
+        return;
+      }
+
+      const medals = ['🥇','🥈','🥉'];
+      corteWrap.innerHTML = sorted.map(([opName, data], idx) => {
+        const medal = idx < 3 ? medals[idx] : '#' + (idx + 1);
+        const perfsStr = data.perfiles
+          .sort((a,b) => b.pts - a.pts)
+          .map(p => `${p.modelo}: ${p.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}`)
+          .join(' · ');
+        return `<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center;border:1px solid ${idx===0?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)'};margin-bottom:4px;">
+          <div style="min-width:0;flex:1;padding-right:10px;">
+            <div style="font-size:0.78rem;font-weight:700;color:${idx===0?'#fbbf24':idx<3?'#e2e8f0':'#94a3b8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${medal} ${opName}</div>
+            <div style="font-size:0.52rem;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${perfsStr}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:1rem;font-weight:800;color:${idx===0?'#fbbf24':'#5eead4'};">${data.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}</div>
+            <div style="font-size:0.48rem;color:#475569;text-transform:uppercase;">pts ${tAct}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      if (totalEl) totalEl.textContent = globalPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
     }
 
     async function dpSyncConFeedback() {
@@ -17037,6 +17129,9 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     setTimeout(dpMostrarWrap, 4000);
     // Sincronizar automáticamente para el Resumen de Corte de Turno (visible para todos)
     setTimeout(sincronizarDatamePaneles, 5500);
+    // Resumen Corte de Turno — consulta autónoma (independiente de dpMostrarWrap)
+    setTimeout(renderCorteTurnoLive, 4500);
+    setInterval(renderCorteTurnoLive, 300000);  // Refrescar cada 5 min
     setInterval(sincronizarDatamePaneles, 300000); // Refresh cada 5 min
 
     // ══════════════════════════════════════════════════════════════

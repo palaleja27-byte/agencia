@@ -12961,57 +12961,75 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
          PT.checkTrainingPending(name);
       }
 
-      // ── Ranking DIARIO (Top 10 del día) ─────────────────────────────────────
+      // ── Ranking de TURNO ACTUAL (todos los compañeros de turno, ordenados por pts hoy) ───
       const _hoyStr = localDateStr();
-      const baseDaily = operatorsData
+
+      // Detectar turno actual por hora Colombia
+      const _horaCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours();
+      let _turnoActual;
+      if (_horaCol >= 6 && _horaCol < 14)       _turnoActual = 'Mañana';
+      else if (_horaCol >= 14 && _horaCol < 22)  _turnoActual = 'Tarde';
+      else                                        _turnoActual = 'Noche';
+      const _turnoIcon = _turnoActual === 'Mañana' ? '🌅' : _turnoActual === 'Tarde' ? '🌇' : '🌙';
+
+      // Todos los operadores del turno actual (excluyendo SP y N/A)
+      const allDailyRaw = operatorsData
         .filter(o => o.group !== 'SP' && o.group !== 'N/A')
         .map(o => {
-           // Para el operador actual usar su dato real-time (_ptsDia) que es más preciso
            const isCurrentOp = o.name.toUpperCase() === op.name.toUpperCase();
            const ptsHoy = isCurrentOp ? _ptsDia : getPuntosHoy(o.name);
-           return { name: o.name, group: o.group, points_hoy: ptsHoy };
+           return { name: o.name, group: o.group, turno: o.turno || '', points_hoy: ptsHoy };
         });
-      
+
+      // Filtrar por turno actual; si el operador no tiene turno asignado, mostrar todos
+      const turnoOps = allDailyRaw.filter(o => {
+        if (!o.turno) return true; // Sin turno asignado → siempre visible
+        return o.turno === _turnoActual;
+      });
+
+      // Si hay muy pocos en el turno (<3), mostrar todos de todos modos
+      const baseDaily = turnoOps.length >= 2 ? turnoOps : allDailyRaw;
+      const isTurnoFiltered = turnoOps.length >= 2;
+
       baseDaily.sort((a, b) => b.points_hoy - a.points_hoy);
-      // Posición real entre TODOS (incluye los que tienen 0)
+
+      // Posición dentro del turno (entre todos, incluidos con 0 pts)
       const pos = baseDaily.findIndex(o => o.name.toUpperCase() === op.name.toUpperCase()) + 1;
       const medals = ['🥇', '🥈', '🥉'];
-      
-      // Top 10: solo operadores con puntos > 0 (competencia real del día)
-      const top10 = baseDaily.filter(o => o.points_hoy > 0).slice(0, 10);
-      
-      // Si el operador actual no está en el top 10 pero tiene puntos, agregarlo igualmente
-      const meInTop = top10.some(o => o.name.toUpperCase() === op.name.toUpperCase());
-      if (!meInTop && _ptsDia > 0) {
-        top10.push({ name: op.name, group: op.group, points_hoy: _ptsDia });
-      }
+      const activeInShift = baseDaily.filter(o => o.points_hoy > 0).length;
 
-      // Badge de competencia: pts al líder o pts de ventaja
+      // Badge de competencia: pts al líder del turno
       const leader = baseDaily[0];
       const ptsToLeader = leader && leader.name.toUpperCase() !== op.name.toUpperCase()
         ? (leader.points_hoy - _ptsDia).toFixed(1)
         : null;
       const competitiveBadge = ptsToLeader !== null && Number(ptsToLeader) > 0
-        ? `<div style="font-size:0.6rem; color:#f59e0b; margin-top:4px; font-weight:700;">⚡ A ${ptsToLeader} pts del líder</div>`
+        ? `<div style="font-size:0.6rem; color:#f59e0b; margin-top:4px; font-weight:700;">⚡ A ${ptsToLeader} pts del líder de turno</div>`
         : pos === 1 && _ptsDia > 0
-          ? `<div style="font-size:0.6rem; color:#34d399; margin-top:4px; font-weight:700;">🏆 ¡Eres el líder del día!</div>`
+          ? `<div style="font-size:0.6rem; color:#34d399; margin-top:4px; font-weight:700;">🏆 ¡Lideras tu turno!</div>`
           : '';
-      
-      const top10HTML = top10.map((o, i) => {
-        // Recalcular índice real en baseDaily para el número de posición
-        const realIdx = baseDaily.findIndex(x => x.name.toUpperCase() === o.name.toUpperCase());
-        const displayPos = realIdx + 1;
+
+      // Lista COMPLETA del turno (todos visibles, no solo top 10)
+      const rankHTML = baseDaily.map((o, i) => {
+        const displayPos = i + 1;
         const isMe = o.name.toUpperCase() === op.name.toUpperCase();
-        const pts = o.points_hoy > 0 ? o.points_hoy.toLocaleString('es-CO',{maximumFractionDigits:1}) : '0';
+        const pts = o.points_hoy > 0 ? o.points_hoy.toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '0';
+        const dimmed = o.points_hoy === 0 && !isMe;
         return `
-          <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:${isMe ? 'rgba(94, 234, 212, 0.15)' : 'rgba(255,255,255,0.03)'}; border-radius:12px; border:1px solid ${isMe ? '#5eead455' : 'transparent'}; margin-bottom:8px; transition:0.2s;">
-            <div style="width:28px; font-weight:900; font-size:${displayPos<=3?'1.1':'0.9'}rem; color:${displayPos<3?'#fbbf24':displayPos===3?'#cd7f32':'#475569'}; text-align:center; flex-shrink:0;">${displayPos<=3 ? medals[displayPos-1] : '#'+displayPos}</div>
+          <div style="display:flex; align-items:center; gap:12px; padding:10px 14px;
+            background:${isMe ? 'rgba(94,234,212,0.15)' : 'rgba(255,255,255,0.03)'};
+            border-radius:12px; border:1px solid ${isMe ? '#5eead455' : 'transparent'};
+            margin-bottom:6px; opacity:${dimmed ? '0.45' : '1'}; transition:0.2s;">
+            <div style="width:28px; font-weight:900; font-size:${displayPos<=3?'1.1':'0.85'}rem;
+              color:${displayPos===1?'#fbbf24':displayPos===2?'#94a3b8':displayPos===3?'#cd7f32':'#334155'};
+              text-align:center; flex-shrink:0;">${displayPos<=3 ? medals[displayPos-1] : '#'+displayPos}</div>
             <div style="flex:1; min-width:0;">
-               <div style="font-size:0.85rem; font-weight:700; color:${isMe?'#5eead4':'white'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${o.name}${isMe?' 👈':''}</div>
-               <div style="font-size:0.6rem; color:#64748b; font-weight:700; text-transform:uppercase;">Grupo ${o.group}</div>
+               <div style="font-size:0.82rem; font-weight:700; color:${isMe?'#5eead4':dimmed?'#475569':'#e2e8f0'};
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${o.name}${isMe?' 👈':''}</div>
+               <div style="font-size:0.58rem; color:#64748b; font-weight:700; text-transform:uppercase;">Grupo ${o.group}</div>
             </div>
             <div style="text-align:right; flex-shrink:0;">
-               <div style="font-size:1.1rem; font-weight:900; color:${isMe?'#5eead4':'#94a3b8'};">${pts}</div>
+               <div style="font-size:1rem; font-weight:900; color:${isMe?'#5eead4':o.points_hoy>0?'#94a3b8':'#334155'};">${pts}</div>
                <div style="font-size:0.5rem; color:#475569; text-transform:uppercase;">PTS HOY</div>
             </div>
           </div>`;
@@ -13020,15 +13038,14 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const _rankEl = document.getElementById('op-rank-pos');
       if (_rankEl) {
         const _nowTime = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-        const activeCount = baseDaily.filter(o => o.points_hoy > 0).length;
         _rankEl.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:16px;">
             <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(94,234,212,0.05); padding:15px 20px; border-radius:16px; border:1px dashed rgba(94,234,212,0.2);">
                <div style="display:flex; align-items:center; gap:12px;">
                   <div style="font-size:3.5rem; font-weight:900; color:${pos<=3?'#fbbf24':'#5eead4'}; line-height:1; font-family:'Bebas Neue',sans-serif;">#${pos}</div>
                   <div>
-                    <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Tu Posición Hoy</div>
-                    <div style="font-size:0.9rem; font-weight:700; color:white;">de ${activeCount > 0 ? activeCount + ' activos' : baseDaily.length + ' operadores'}</div>
+                    <div style="font-size:0.7rem; color:#64748b; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Tu Posición ${isTurnoFiltered ? 'en el Turno' : 'Hoy'}</div>
+                    <div style="font-size:0.9rem; font-weight:700; color:white;">de ${baseDaily.length} compañeros${isTurnoFiltered ? (' ' + _turnoIcon + ' ' + _turnoActual) : ''}</div>
                     ${competitiveBadge}
                   </div>
                </div>
@@ -13040,12 +13057,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
             
             <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
                <div style="font-size:0.75rem; color:#5eead4; font-weight:900; text-transform:uppercase; letter-spacing:2px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                  <span>🏆 TOP 10 MEJORES DEL DÍA</span>
+                  <span>${_turnoIcon} RANKING ${isTurnoFiltered ? 'TURNO ' + _turnoActual.toUpperCase() : 'DEL DÍA'}</span>
                   <div style="flex:1; height:1px; background:linear-gradient(90deg, rgba(94,234,212,0.3), transparent);"></div>
-                  <span style="font-size:0.55rem; color:#475569; font-weight:700;">${activeCount} CON ACTIVIDAD</span>
+                  <span style="font-size:0.55rem; color:#475569; font-weight:700;">${activeInShift} CON ACTIVIDAD</span>
                </div>
-               <div id="op-top-daily-list" style="max-height:350px; overflow-y:auto; padding-right:6px; scrollbar-width:thin;">
-                  ${top10.length > 0 ? top10HTML : '<div style="text-align:center; color:#475569; font-size:.8rem; padding:20px;">Sin actividad registrada hoy aún</div>'}
+               <div id="op-top-daily-list" style="max-height:400px; overflow-y:auto; padding-right:6px; scrollbar-width:thin;">
+                  ${baseDaily.length > 0 ? rankHTML : '<div style="text-align:center; color:#475569; font-size:.8rem; padding:20px;">Sin compañeros de turno registrados</div>'}
                </div>
             </div>
           </div>

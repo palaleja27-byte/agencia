@@ -17030,7 +17030,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         let modoCompleto = false;
         const { data: opsNuevo, error: errNuevo } = await _sb
           .from('operaciones')
-          .select('id_perfil, puntos, puntos_neto, fecha_corte, fecha_dia, jornada, agencia')
+          .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
           .gte('fecha_corte', FECHA_INICIO)
           .order('fecha_corte', { ascending: false });
 
@@ -17092,10 +17092,21 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
             const netoOkTurno = netoSano >= 0 && netoSano <= 800;
             // Filtro más amplio para historial (puede haber días con más producción)
             const netoOk = netoSano >= 0 && netoSano <= 10000;
-            // Turnos del día de hoy — ACUMULAR con += para múltiples cortes por jornada
+            // Turnos del día de hoy — recalcular neto usando puntos_total - puntos_baseline
+            // si el dato almacenado (puntos_neto) es menor al recalculado (baseline incorrecto del watcher)
             if (op.fecha_dia === hoy && op.jornada && op.jornada !== 'Auto') {
               if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
-              if (netoOkTurno) turnosHoy[id][op.jornada] += netoSano; // += no =
+              // Recalcular neto: si tenemos puntos_total y puntos_baseline, usar la diferencia
+              let netoReal = netoSano;
+              const pt = op.puntos_total || 0;
+              const pb = op.puntos_baseline || 0;
+              if (pt > 0 && pb > 0 && pt > pb) {
+                const recalcNeto = pt - pb;
+                // Usar el mayor entre el almacenado y el recalculado (más preciso)
+                if (recalcNeto > netoReal && recalcNeto <= 800) netoReal = recalcNeto;
+              }
+              const netoRealOk = netoReal >= 0 && netoReal <= 800;
+              if (netoRealOk) turnosHoy[id][op.jornada] = Math.max(turnosHoy[id][op.jornada], netoReal);
             }
             // Historial por día
             if (op.fecha_dia && netoOk) {

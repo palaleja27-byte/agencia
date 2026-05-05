@@ -8194,6 +8194,7 @@
           if (currentRole === 'operador' && currentOpName) {
             if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
             if (typeof renderOpStats === 'function') renderOpStats(currentOpName);
+            if (typeof PT !== 'undefined' && PT.checkTrainingPending) PT.checkTrainingPending(currentOpName);
           } else {
             if (typeof renderRanking === 'function') renderRanking();
             if (typeof renderPSAPanel === 'function') renderPSAPanel();
@@ -8211,7 +8212,7 @@
 
     // Sync frecuente para el operador (para detectar comandos remotos como capacitación)
     setInterval(async () => {
-       if (typeof _opLoggedInName !== 'undefined' && _opLoggedInName && _sb && _sbOnline) {
+       if (typeof currentOpName !== 'undefined' && currentOpName && _sb && _sbOnline) {
           const shift = (typeof getPTShiftKey === 'function') ? getPTShiftKey(detectarTurno()) : detectarTurno().toLowerCase();
           const key = 'rr_prime_v15_' + (shift === 'mañana' ? 'manana' : shift);
           const { data, error } = await _sb.from('kv_store').select('value').eq('key', key).single();
@@ -8220,7 +8221,7 @@
                 _origSetItem(key, data.value);
                 _sbMemCache[key] = data.value;
                 if (typeof PT !== 'undefined' && PT.checkTrainingPending) {
-                   PT.checkTrainingPending(_opLoggedInName);
+                   PT.checkTrainingPending(currentOpName);
                 }
              }
           }

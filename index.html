@@ -6383,9 +6383,13 @@
             combinedProfiles.forEach(p => {
                const turnosPerfil = _dpTurnosData[p.id];
                if (turnosPerfil) {
-                  // Sumamos todos los turnos del día para el perfil (Mañana + Tarde + Noche)
-                  // Esto asegura que se vean los puntos acumulados sin importar el cambio de jornada.
-                  const pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                  // Solo tomar los puntos de la jornada que le corresponde al operador (o todo si es Completo)
+                  let pts = 0;
+                  if (jornadaALeer === 'Completo') {
+                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                  } else {
+                    pts = turnosPerfil[jornadaALeer] || 0;
+                  }
                   datamePts += pts;
                }
             });
@@ -8868,13 +8872,47 @@
       // Prioridad 1: Supabase (Real-Time)
       if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined' && operatorsData) {
          const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
-         if (op && op.profiles && op.profiles.length > 0) {
+         
+         let combinedProfiles = op ? [...(op.profiles || [])] : [];
+         const realName = op ? op.name : opName;
+         
+         // DELTA-SHIFT™: Añadir perfiles dinámicos
+         const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+         const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : 'Mañana';
+         const shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
+         const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
+         
+         const opsEnTurnoDraft = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
+         const estaLogueado = op ? opsEnTurnoDraft.has(op.name.toUpperCase()) : false;
+         let jornadaALeer = estaLogueado ? jornadaActual : (op?.turno || jornadaActual);
+
+         try {
+           const draftFull = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
+           const draftEntry = draftFull[realName + '||operador'] || draftFull[realName.toUpperCase() + '||operador'];
+           if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+             jornadaALeer = jornadaActual; // Forzar turno actual si está en el draft
+             draftEntry.perfiles.forEach(dp => {
+               if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
+                 combinedProfiles.push(dp);
+               }
+             });
+           }
+         } catch (e) {}
+
+         if (combinedProfiles.length > 0) {
             let ptsSup = 0;
-            op.profiles.forEach(p => {
+            combinedProfiles.forEach(p => {
                const t = _dpTurnosData[p.id];
                if (t) {
-                  // Unificamos claves de turnos (Mañana con tilde y manana sin tilde por seguridad)
-                  ptsSup += (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
+                  // Solo tomar los puntos de la jornada que le corresponde
+                  let pts = 0;
+                  if (jornadaALeer === 'Completo') {
+                    pts = (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
+                  } else {
+                    const normJornada = jornadaALeer === 'Mañana' || jornadaALeer === 'manana' ? 'Mañana' : jornadaALeer;
+                    pts = (t[normJornada] || 0) + (normJornada === 'Mañana' ? (t['manana'] || 0) : 0);
+                  }
+                  ptsSup += pts;
                }
             });
             if (ptsSup > 0) return ptsSup;
@@ -17160,9 +17198,32 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     }
 
     function _opRtGetIds(opName) {
+      if (!opName) return [];
       const op = (typeof operatorsData !== 'undefined' ? operatorsData : [])
-        .find(o => o.name.toUpperCase() === opName?.toUpperCase());
-      return (op?.profiles || []).map(p => String(p.id)).filter(Boolean);
+        .find(o => o.name.toUpperCase() === opName.toUpperCase());
+      
+      let combinedProfiles = op ? [...(op.profiles || [])] : [];
+      const realName = op ? op.name : opName;
+      
+      // 🧠 DELTA-SHIFT™: Añadir perfiles dinámicos del turno actual
+      const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const jornadaActual = _opRtJornada();
+      const shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
+      const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
+      
+      try {
+        const draftFull = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
+        const draftEntry = draftFull[realName + '||operador'] || draftFull[realName.toUpperCase() + '||operador'];
+        if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+          draftEntry.perfiles.forEach(dp => {
+            if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
+              combinedProfiles.push(dp);
+            }
+          });
+        }
+      } catch (e) {}
+
+      return combinedProfiles.map(p => String(p.id)).filter(Boolean);
     }
 
     // ── Renderiza el widget en la vista del operador ──────────────

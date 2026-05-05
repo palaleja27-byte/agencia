@@ -6548,6 +6548,7 @@
 
         // ── MODO MES ──
         if (rkViewMode === 'mes') {
+          const av = savedAvatar; // alias para el template del avatar
           const cardClass = op.growth <= -20 ? 'down' : op.growth < 0 ? 'warn' : op.growth > 0 ? 'up' : 'zero';
           const growthCls = op.growth > 0 ? 'up' : op.growth < 0 ? (op.growth <= -20 ? 'down' : 'warn') : 'zero';
           const growthSign = op.growth > 0 ? '+' : '';
@@ -17025,32 +17026,25 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         _opRtRenderWidget();
 
         // ── Actualizar métricas del dashboard en tiempo real (sin re-render completo) ──
-        // FUENTE MAESTRA: usar _dpTurnosData (suma de TODOS los turnos del día de Datame)
-        // que es la misma fuente que ve el Admin en monitoreo. Fallback: _hoyTotal (solo turno activo)
-        let _datamePtsHoyRt = 0;
-        const _opDataRt = (typeof operatorsData !== 'undefined' ? operatorsData : [])
-          .find(o => o.name.toUpperCase() === opName.toUpperCase());
-        if (typeof _dpTurnosData !== 'undefined' && _opDataRt) {
-          let _combinedRt = [...(_opDataRt.profiles || [])];
-          // DELTA-SHIFT™: incluir perfiles del draft de asistencia
-          const _jornadaRt = _opRtJornada();
-          const _shKeyRt = _jornadaRt === 'Mañana' ? 'manana' : _jornadaRt === 'Tarde' ? 'tarde' : 'noche';
-          const _hoyRt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-          const _draftRt = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoyRt + '_' + _shKeyRt) || '{}');
-          const _draftEntryRt = _draftRt[_opDataRt.name + '||operador'];
-          if (_draftEntryRt && Array.isArray(_draftEntryRt.perfiles)) {
-            _draftEntryRt.perfiles.forEach(dp => {
-              if (!_combinedRt.some(p => String(p.id) === String(dp.id))) _combinedRt.push(dp);
-            });
+        // FUENTE MAESTRA: consultar TODOS los turnos de hoy en Supabase para obtener el
+        // total diario real (igual que renderOpStats) y NO solo el turno activo
+        let _hoyTotal = 0;
+        try {
+          const { data: _opsAll } = await _sb
+            .from('operaciones')
+            .select('puntos_neto, jornada')
+            .in('id_perfil', ids)
+            .eq('fecha_dia', hoy)
+            .neq('jornada', 'Auto');
+          if (_opsAll && _opsAll.length > 0) {
+            _hoyTotal = _opsAll.reduce((s, r) => s + (r.puntos_neto || 0), 0);
+          } else {
+            // Fallback: solo turno activo
+            _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
           }
-          _combinedRt.forEach(p => {
-            const t = _dpTurnosData[p.id];
-            if (t) _datamePtsHoyRt += (t['Mañana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
-          });
+        } catch(_e) {
+          _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
         }
-        const _hoyTotal = _datamePtsHoyRt > 0
-          ? _datamePtsHoyRt
-          : Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
 
         // 1. Actualizar Stats Card
         const _hoyEl = document.getElementById('op-dash-hoy-val');

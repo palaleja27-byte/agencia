@@ -6124,11 +6124,15 @@
 
     // ══════════════════════════════════════════════════════════════
     // HELPER — operadores presentes/tardanza en asistencia de hoy
+    // Con filtro de turno terminado por hora Colombia
     // ══════════════════════════════════════════════════════════════
     function _getOpsEnTurnoHoy(turnoFiltro) {
       if (typeof ASI_KEY === 'undefined') return null;
       const fecha = localDateStr();
       const shiftMap = { 'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche' };
+
+      // Hora actual en Colombia
+      const _horaColNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours();
 
       // Qué turnos revisar
       const shifts = turnoFiltro && shiftMap[turnoFiltro]
@@ -6137,6 +6141,8 @@
 
       let totalEntries = 0;
       const presentes = new Set();
+      // Cargar horas de turno para verificar salidaTS
+      const allHoras = (typeof ASI_HORAS_KEY !== 'undefined') ? JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}') : {};
 
       shifts.forEach(sh => {
         const draft = JSON.parse(
@@ -6146,9 +6152,35 @@
         totalEntries += entries.length;
         entries.forEach(([k, v]) => {
           if (!k.endsWith('||operador')) return;
-          if (v?.estado === 'P' || v?.estado === 'T') {
-            presentes.add(k.replace('||operador', '').toUpperCase());
+          if (v?.estado !== 'P' && v?.estado !== 'T') return;
+
+          const opNameUpper = k.replace('||operador', '').toUpperCase();
+
+          // Verificar si el turno ya terminó:
+          // 1. salidaTS ya pasó
+          const opName = k.replace('||operador', '');
+          const horaInfo = allHoras[opName];
+          if (horaInfo?.salidaTS && Date.now() > horaInfo.salidaTS) return; // turno terminado
+
+          // 2. Verificar por hora Colombia según turno del operador
+          const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name.toUpperCase() === opNameUpper) : null;
+          const opTurno = op?.turno || '';
+          // Horas de fin de turno estándar (8h) por turno
+          const turnoFin = { 'Mañana': 14, 'Tarde': 22, 'Noche': 6 };
+          if (opTurno && turnoFin[opTurno] !== undefined) {
+            const finH = turnoFin[opTurno];
+            // Turno Noche: termina a las 6 (madrugada del día siguiente)
+            // A las 6:01+ AM el turno noche ya terminó
+            if (opTurno === 'Noche') {
+              // Si es de madrugada (0-5h) el turno sigue, si es 6h+ terminó
+              if (_horaColNow >= 6 && _horaColNow < 14) return; // Noche terminó, es Mañana
+            } else {
+              // Mañana termina a las 14h, Tarde termina a las 22h
+              if (_horaColNow >= finH) return; // turno terminado por hora
+            }
           }
+
+          presentes.add(opNameUpper);
         });
       });
 
@@ -15684,6 +15716,27 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const now = Date.now();
       let changed = false;
       const dateStr = typeof localDateStr === 'function' ? localDateStr() : '';
+      const _horaCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours();
+
+      // --- Auto-calcular salidaTS para operadores sin él pero con turno conocido ---
+      // Esto permite que el autoRelease funcione aunque el admin no haya puesto 8h/12h
+      const turnoFinMap = { 'Mañana': 14, 'Tarde': 22 }; // Noche es especial
+      if (typeof operatorsData !== 'undefined') {
+        operatorsData.forEach(op => {
+          if (!op.turno || op.group === 'SP' || op.group === 'N/A') return;
+          const k = (typeof asiKey === 'function') ? asiKey(op.name, 'operador') : op.name + '||operador';
+          const inPresente = typeof asiEstados !== 'undefined' && asiEstados[k]?.estado === 'P';
+          if (!inPresente) return;
+          if (allHoras[op.name]?.salidaTS) return; // ya tiene salidaTS
+          const finH = turnoFinMap[op.turno];
+          if (finH !== undefined && _horaCol >= finH) {
+            // Este operador ya debería haber terminado → marcar salidaTS = ahora
+            if (!allHoras[op.name]) allHoras[op.name] = {};
+            allHoras[op.name].salidaTS = Date.now() - 1; // pasado por 1ms → forzar release
+            localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+          }
+        });
+      }
 
       for (const name in allHoras) {
         const info = allHoras[name];
@@ -15732,6 +15785,8 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         if (asiTab && asiTab.classList.contains('active') && typeof asiRender === 'function') {
            asiRender();
         }
+        // Actualizar ranking principal también
+        if (typeof renderRanking === 'function') setTimeout(renderRanking, 200);
       }
     }
 

@@ -17015,8 +17015,33 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         _opRtRenderWidget();
 
         // ── Actualizar métricas del dashboard en tiempo real (sin re-render completo) ──
-        const _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
-        
+        // FUENTE MAESTRA: usar _dpTurnosData (suma de TODOS los turnos del día de Datame)
+        // que es la misma fuente que ve el Admin en monitoreo. Fallback: _hoyTotal (solo turno activo)
+        let _datamePtsHoyRt = 0;
+        const _opDataRt = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+          .find(o => o.name.toUpperCase() === opName.toUpperCase());
+        if (typeof _dpTurnosData !== 'undefined' && _opDataRt) {
+          let _combinedRt = [...(_opDataRt.profiles || [])];
+          // DELTA-SHIFT™: incluir perfiles del draft de asistencia
+          const _jornadaRt = _opRtJornada();
+          const _shKeyRt = _jornadaRt === 'Mañana' ? 'manana' : _jornadaRt === 'Tarde' ? 'tarde' : 'noche';
+          const _hoyRt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+          const _draftRt = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoyRt + '_' + _shKeyRt) || '{}');
+          const _draftEntryRt = _draftRt[_opDataRt.name + '||operador'];
+          if (_draftEntryRt && Array.isArray(_draftEntryRt.perfiles)) {
+            _draftEntryRt.perfiles.forEach(dp => {
+              if (!_combinedRt.some(p => String(p.id) === String(dp.id))) _combinedRt.push(dp);
+            });
+          }
+          _combinedRt.forEach(p => {
+            const t = _dpTurnosData[p.id];
+            if (t) _datamePtsHoyRt += (t['Mañana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
+          });
+        }
+        const _hoyTotal = _datamePtsHoyRt > 0
+          ? _datamePtsHoyRt
+          : Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
+
         // 1. Actualizar Stats Card
         const _hoyEl = document.getElementById('op-dash-hoy-val');
         const _hoyCopEl = document.getElementById('op-dash-hoy-cop');
@@ -17029,30 +17054,29 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const _heroBar = document.getElementById('op-dash-hero-bar');
         const _heroCop = document.getElementById('op-dash-hero-cop');
         const _heroMeta = document.getElementById('op-dash-hero-meta');
-        
+
         if (_heroPts && _hoyTotal > 0) {
           _heroPts.textContent = _hoyTotal.toFixed(1);
-          
-          const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => o.name.toUpperCase() === opName.toUpperCase());
-          if (op) {
-             let _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'dia') : 0;
+
+          if (_opDataRt) {
+             let _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', _opDataRt.group, 'dia') : 0;
              let _pG = 'dia';
-             if (_metaG <= 0) { _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'sem') : 0; _pG = 'sem'; }
-             if (_metaG <= 0) { _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', op.group, 'mes') : 0; _pG = 'mes'; }
-             const _metaOp = _metaG > 0 ? _metaG : (op.meta || 100);
-             
-             const _grpOps = operatorsData.filter(o => o.group === op.group);
+             if (_metaG <= 0) { _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', _opDataRt.group, 'sem') : 0; _pG = 'sem'; }
+             if (_metaG <= 0) { _metaG = (typeof getMetaValue === 'function') ? getMetaValue('grupo', _opDataRt.group, 'mes') : 0; _pG = 'mes'; }
+             const _metaOp = _metaG > 0 ? _metaG : (_opDataRt.meta || 100);
+
+             const _grpOps = (typeof operatorsData !== 'undefined' ? operatorsData : []).filter(o => o.group === _opDataRt.group);
              const _grpPts = _grpOps.reduce((s, o) => s + (typeof getPuntosPeriodo === 'function' ? getPuntosPeriodo(o.name, _pG) : 0), 0);
              const _lograda = _metaG > 0 ? (_grpPts >= _metaG) : (_hoyTotal >= _metaOp);
              const _valActual = _hoyTotal * (_lograda ? 1500 : 1400);
-             
+
              if (_heroBar) _heroBar.style.width = Math.min(100, (_hoyTotal / _metaOp) * 100).toFixed(1) + '%';
              if (_heroCop) _heroCop.textContent = '$' + Math.round(_valActual).toLocaleString('es-CO') + ' COP';
              if (_hoyCopEl) _hoyCopEl.textContent = '$' + Math.round(_valActual).toLocaleString('es-CO');
-             
+
              if (_heroMeta && _metaG > 0) {
                 const _pctG = Math.min(100, (_grpPts / _metaG) * 100).toFixed(1);
-                _heroMeta.textContent = `Meta: ${_metaG} pts · ${_pctG}% GRUPO ${op.group}`;
+                _heroMeta.textContent = `Meta: ${_metaG} pts · ${_pctG}% GRUPO ${_opDataRt.group}`;
              }
           }
         }

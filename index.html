@@ -11595,6 +11595,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     };
 
     window.asiPerfilAdd = function (opName) {
+      // Resolver __OP_CURRENT__ para la vista de operador (evita escaping de nombres especiales)
+      if (opName === '__OP_CURRENT__' && typeof currentOpName !== 'undefined' && currentOpName) {
+        opName = currentOpName;
+      }
       const safeId = opName.replace(/[^a-zA-Z0-9]/g, '_');
       const idVal = document.getElementById('asi-nid-' + safeId)?.value.trim();
       const modVal = document.getElementById('asi-nmod-' + safeId)?.value.trim();
@@ -11685,6 +11689,22 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         renderOpDashboard(currentOpName);
       }
     };
+
+    // ── Helpers directos para la vista de Operador ──────────────────────────────
+    // Usan currentOpName internamente para evitar problemas de escaping con nombres especiales
+    window.opEliminarPerfil = function (pIdx) {
+      if (typeof currentOpName !== 'undefined' && currentOpName) {
+        asiPerfilRemove(currentOpName, pIdx);
+      }
+    };
+    window.opAgregarPerfil = function () {
+      if (typeof currentOpName !== 'undefined' && currentOpName) {
+        const safeId = currentOpName.replace(/[^a-zA-Z0-9]/g, '_');
+        const form = document.getElementById('asi-add-form-' + safeId);
+        if (form) form.style.display = form.style.display === 'flex' ? 'none' : 'flex';
+      }
+    };
+
 
     window.asiPerfilSetTipo = function (opName, pIdx, tipo) {
       const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
@@ -12970,7 +12990,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
               <div style="font-size:0.85rem; font-weight:700; color:#e2e8f0;">${p.model}</div>
               <div style="font-size:0.65rem; color:#64748b;">ID: ${p.id} ${isCov ? `· Cubriendo: ${p.cubreA}` : ''}</div>
             </div>
-            <button onclick="asiPerfilRemove('${name.replace(/'/g, "\\'")}', ${pi})" 
+            <button onclick="opEliminarPerfil(${pi})" 
                     style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.75rem; transition:0.2s;"
                     onmouseover="this.style.background='rgba(248,113,113,0.3)'" onmouseout="this.style.background='rgba(248,113,113,0.1)'">🗑️</button>
           </div>`;
@@ -12982,9 +13002,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (_profListEl) _profListEl.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <div style="font-size:0.75rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">🗂️ Perfiles (${profiles.length})</div>
-          <button class="btn-neumorphic" onclick="asiPerfilToggleForm('${name.replace(/'/g, "\\'")}')" style="padding:6px 12px; font-size:0.65rem;">+ Agregar</button>
+          <button class="btn-neumorphic" onclick="opAgregarPerfil()" style="padding:6px 12px; font-size:0.65rem;">+ Agregar</button>
         </div>
-        ${renderAsiProfileForm(safeId, name)}
+        ${renderAsiProfileForm(safeId, '__OP_CURRENT__')}
         ${profilesListHTML}
       `;
 

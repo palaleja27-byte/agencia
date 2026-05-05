@@ -14232,15 +14232,40 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
            if (op && op.trainingPending) {
               const modal = document.getElementById('pt-modal-training');
               if (modal && modal.style.display !== 'flex') {
-                 // ALERTA INVASIVA NATIVA
-                 alert("🎓 CAPACITACIÓN OBLIGATORIA\nEl monitor ha solicitado que realices un refuerzo de conocimientos ahora mismo.");
-                 PT.abrirCapacitacionPorNombre(name);
+                 // Verificar si ya existe el modal de alerta para no duplicarlo
+                 if (document.getElementById('pt-custom-alert')) return;
+
+                 // Crear ALERTA INVASIVA ESTÉTICA
+                 const alertDiv = document.createElement('div');
+                 alertDiv.id = 'pt-custom-alert';
+                 alertDiv.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.95); backdrop-filter:blur(15px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px;';
                  
-                 // Ocultar botones de cerrar para forzar realización
-                 setTimeout(() => {
-                   const btns = modal.querySelectorAll('button[onclick="PT.cerrarCapacitacion()"]');
-                   btns.forEach(b => b.style.display = 'none');
-                 }, 100);
+                 alertDiv.innerHTML = `
+                   <div style="background:linear-gradient(145deg, #1e1b4b, #0f172a); border:2px solid #6366f1; border-radius:24px; padding:40px; max-width:500px; text-align:center; box-shadow:0 25px 50px -12px rgba(99,102,241,0.5); transform: scale(0.9); animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;">
+                     <style>@keyframes popIn { to { transform: scale(1); } }</style>
+                     <div style="font-size:4rem; margin-bottom:20px; animation: pulse 2s infinite;">🚨</div>
+                     <h2 style="font-size:1.8rem; color:#fff; font-weight:900; margin:0 0 15px; letter-spacing:1px; text-transform:uppercase;">Capacitación Obligatoria</h2>
+                     <p style="color:#94a3b8; font-size:1.1rem; line-height:1.5; margin-bottom:30px;">
+                       El monitor ha solicitado que realices un refuerzo de conocimientos en este momento. <b>Tu sesión está pausada hasta que completes esta evaluación.</b>
+                     </p>
+                     <button id="pt-btn-start-training" style="background:linear-gradient(135deg, #6366f1, #8b5cf6); color:white; border:none; padding:16px 32px; font-size:1.2rem; font-weight:800; border-radius:14px; cursor:pointer; width:100%; text-transform:uppercase; letter-spacing:2px; box-shadow:0 10px 25px -5px rgba(99,102,241,0.6); transition:0.3s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 15px 30px -5px rgba(99,102,241,0.8)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 10px 25px -5px rgba(99,102,241,0.6)';">
+                       Comenzar Ahora 🚀
+                     </button>
+                   </div>
+                 `;
+                 
+                 document.body.appendChild(alertDiv);
+                 
+                 document.getElementById('pt-btn-start-training').onclick = () => {
+                   document.body.removeChild(alertDiv);
+                   PT.abrirCapacitacionPorNombre(name);
+                   
+                   // Ocultar botones de cerrar para forzar realización
+                   setTimeout(() => {
+                     const btns = modal.querySelectorAll('button[onclick="PT.cerrarCapacitacion()"]');
+                     btns.forEach(b => b.style.display = 'none');
+                   }, 100);
+                 };
               }
            }
         };
@@ -14303,7 +14328,36 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           const name = PT._currentTrainingOp ? PT._currentTrainingOp.name : 'Operador';
           const resultStr = `${pct >= 80 ? '✅ APROBADO' : '❌ REPROBADO'} (${correctas}/${numPreguntas} - ${pct.toFixed(1)}%)`;
           
-          alert(`Resultado de capacitación para ${name}:\n\n${correctas} de ${numPreguntas} correctas (${pct.toFixed(1)}%)\n\n${pct >= 80 ? '¡APROBADO! 🏆' : 'REPROBADO. Debe reforzar conocimientos.'}`);
+          // Crear RESULTADO INVASIVO ESTÉTICO
+          const resultDiv = document.createElement('div');
+          resultDiv.id = 'pt-custom-result';
+          resultDiv.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.95); backdrop-filter:blur(15px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px;';
+          
+          const icon = pct >= 80 ? '🏆' : '❌';
+          const color = pct >= 80 ? '#34d399' : '#f87171';
+          const title = pct >= 80 ? '¡APROBADO!' : 'REPROBADO';
+          const msg = pct >= 80 ? 'Has completado el refuerzo de conocimientos exitosamente.' : 'Deberás reforzar tus conocimientos y mejorar tu atención al plan de trabajo.';
+          
+          resultDiv.innerHTML = `
+            <div style="background:linear-gradient(145deg, #1e1b4b, #0f172a); border:2px solid ${color}; border-radius:24px; padding:40px; max-width:500px; text-align:center; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); transform: scale(0.9); animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;">
+              <style>@keyframes popIn { to { transform: scale(1); } }</style>
+              <div style="font-size:4rem; margin-bottom:20px;">${icon}</div>
+              <h2 style="font-size:2rem; color:${color}; font-weight:900; margin:0 0 10px; text-transform:uppercase;">${title}</h2>
+              <div style="font-size:3rem; font-weight:900; color:#fff; margin:20px 0;">${pct.toFixed(1)}%</div>
+              <p style="color:#94a3b8; font-size:1.1rem; line-height:1.5; margin-bottom:30px;">
+                Respondiste correctamente <b>${correctas} de ${numPreguntas}</b> preguntas.<br><br>${msg}
+              </p>
+              <button id="pt-btn-close-result" style="background:linear-gradient(135deg, ${color}, #0f172a); border:1px solid ${color}; color:white; padding:16px 32px; font-size:1.2rem; font-weight:800; border-radius:14px; cursor:pointer; width:100%; text-transform:uppercase; letter-spacing:2px; transition:0.3s;" onmouseover="this.style.filter='brightness(1.2)';" onmouseout="this.style.filter='brightness(1)';">
+                Entendido
+              </button>
+            </div>
+          `;
+          
+          document.body.appendChild(resultDiv);
+          
+          document.getElementById('pt-btn-close-result').onclick = () => {
+            document.body.removeChild(resultDiv);
+          };
           
           if (PT._currentTrainingOp) {
              const key = PT._logKey(name);

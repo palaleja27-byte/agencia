@@ -5472,10 +5472,6 @@
         <option value="Noche">🌙 Noche</option>
         <option value="Completo">🔄 Completo</option>
       </select>
-      <button class="grupo-manager-btn" id="btn-grupo-manager" onclick="abrirGrupoManager()" style="display:none;">⚙️
-        Grupos</button>
-      <button class="novedades-btn" onclick="abrirNovedades()">📋 Novedades</button>
-      <button class="reset-btn" onclick="resetData()">Reiniciar datos</button>
     </div>
     <div class="operators-list" id="operatorsList"></div>
   </div>
@@ -11168,7 +11164,17 @@
       <div class="op-header">
         <div>
           <div class="op-name">${op.name}</div>
-          <div class="group-label">Grupo ${op.group} · ${turnoIcon} ${op.turno || '—'}${_novBadge}</div>
+          <div class="group-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span>Grupo ${op.group} · ${turnoIcon} ${op.turno || '—'}${_novBadge}</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <select
+                onchange="opCambiarGrupo('${op.name.replace(/'/g,"\\'").replace(/"/g,'&quot;')}', this.value)"
+                style="font-size:.6rem;padding:2px 5px;border-radius:6px;border:1px solid rgba(168,85,247,.4);background:rgba(168,85,247,.1);color:#a78bfa;cursor:pointer;max-width:90px;"
+                title="Cambiar grupo">
+                ${getGrupos().map(g => `<option value="${g}"${String(g)===String(op.group)?'selected':''}>Grp ${g}</option>`).join('')}
+              </select>
+            </span>
+          </div>
         </div>
         <div class="growth-badge ${growthCls}">
           ${growthSign}${growth.toFixed(1)}%
@@ -11247,6 +11253,16 @@
     // ══════════════════════════════════════════
     const GRUPOS_KEY = 'rr_prime_grupos_v1';
     const GRUPOS_DEFAULT = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', 'G4'];
+
+    // Cambiar grupo de un operador desde el selector inline de la card
+    function opCambiarGrupo(opName, nuevoGrupo) {
+      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+      if (!op || String(op.group) === String(nuevoGrupo)) return;
+      op.group = nuevoGrupo;
+      saveData();
+      buildGroupSelect();
+      renderOperators();
+    }
 
     function getGrupos() {
       const s = localStorage.getItem(GRUPOS_KEY);
@@ -15272,6 +15288,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       <div class="asi-management-controls" style="display:flex; gap:10px;">
         <button onclick="purgarCortesMes()" style="padding:10px 18px;border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:#fbbf24;display:none;" id="btn-purgar-mes">⚡️ Consolidar Bridge</button>
         <button id="btn-add-op" class="btn-add-op-rk" onclick="abrirAgregarOp()" style="padding:10px 18px;border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.4);color:#34d399;">＋ Operador</button>
+        <button onclick="abrirGrupoManager()" style="padding:10px 18px;border-radius:12px;font-size:.82rem;font-weight:700;cursor:pointer;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#a78bfa;">⚙️ Grupos</button>
       </div>
       <div class="asi-action-btns">
         <button class="btn-asi-save" onclick="asiGuardar()">💾 Guardar Asistencia</button>

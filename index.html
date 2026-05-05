@@ -11658,19 +11658,31 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       }
     };
 
-    window.asiPerfilRemove = function (opName, pIdx) {
+    window.asiPerfilRemove = async function (opName, pIdx) {
       if (!confirm('¿Eliminar este perfil?')) return;
       const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
       if (!op || !op.profiles) return;
+      // Eliminar el perfil del array en memoria
       op.profiles.splice(pIdx, 1);
+      // Guardar en localStorage inmediatamente
       saveData();
-      if (typeof _sb !== 'undefined' && _sb) {
-        const val = JSON.stringify(operatorsData);
-        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+      // Marcar timestamp para que el Realtime listener ignore esta actualización
+      if (typeof _localSaveTs !== 'undefined') {
+        _localSaveTs['primeOperatorsData2026'] = Date.now();
       }
+      // Subir a Supabase y ESPERAR confirmación (evita que Realtime revierte el cambio)
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const val = JSON.stringify(operatorsData);
+          await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+        } catch(e) {
+          console.warn('[asiPerfilRemove] Supabase error:', e.message);
+        }
+      }
+      // Re-renderizar DESPUÉS de confirmar el upsert
       asiRender();
       if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
-        renderVistaOperador(currentOpName);
+        renderOpDashboard(currentOpName);
       }
     };
 

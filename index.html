@@ -17432,26 +17432,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
         _opRtRenderWidget();
 
-        // ── Actualizar métricas del dashboard en tiempo real (sin re-render completo) ──
-        // FUENTE MAESTRA: consultar TODOS los turnos de hoy en Supabase para obtener el
-        // total diario real (igual que renderOpStats) y NO solo el turno activo
-        let _hoyTotal = 0;
-        try {
-          const { data: _opsAll } = await _sb
-            .from('operaciones')
-            .select('puntos_neto, jornada')
-            .in('id_perfil', ids)
-            .eq('fecha_dia', hoy)
-            .neq('jornada', 'Auto');
-          if (_opsAll && _opsAll.length > 0) {
-            _hoyTotal = _opsAll.reduce((s, r) => s + (r.puntos_neto || 0), 0);
-          } else {
-            // Fallback: solo turno activo
-            _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
-          }
-        } catch(_e) {
-          _hoyTotal = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
-        }
+        // _opRtPtosSesion ya tiene el neto correcto del turno actual:
+        // es la suma de (puntos_total - baseline_turno) por perfil → solo producción de esta jornada.
+        // No sumar todos los turnos del día para evitar atribuir producción de otros turnos compartidos.
+        let _hoyTotal = _opRtPtosSesion > 0 ? _opRtPtosSesion : Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
 
         // 1. Actualizar Stats Card
         const _hoyEl = document.getElementById('op-dash-hoy-val');

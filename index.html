@@ -7581,8 +7581,6 @@
     async function cargarTodasNoticias() {
       // Clear cache to force refresh
       Object.keys(_newsCache).forEach(k => delete _newsCache[k]);
-      // Render skeleton acordeón
-      renderNewsAcordeon();
       // Fetch all open ones + first one by default
       const openKeys = NEWS_SOURCES.filter((s, i) => i === 0 || _newsOpen[s.key]).map(s => s.key);
       openKeys.forEach(key => fetchNewsItem(key));
@@ -7642,7 +7640,7 @@
           <div style="font-weight:700;margin-bottom:6px;">Cargando tendencias...</div>
           <div style="font-size:0.6rem;">Actualiza para ver las noticias más recientes</div>
         </div>`;
-        cargarTodasNoticias();
+        // ⚠️ NO llamar cargarTodasNoticias() aquí — causaba recursión infinita
         return;
       }
 
@@ -7696,7 +7694,19 @@
       }).join('');
     }
 
-    function renderNewsAcordeon() { renderNewsCarousel(); }
+    // renderNewsAcordeon: iniciar carga de noticias sin recursión
+    function renderNewsAcordeon() {
+      const track = document.getElementById('op-news-acordeon');
+      if (track && Object.keys(_newsCache).every(k => !_newsCache[k]?.length)) {
+        // Solo mostrar skeleton, NO llamar renderNewsCarousel (evita loop)
+        track.innerHTML = `<div style="padding:30px;text-align:center;color:#475569;font-size:0.75rem;width:100%;">
+          <div style="font-size:2rem;margin-bottom:10px;">🌍</div>
+          <div style="font-weight:700;margin-bottom:6px;">Cargando tendencias...</div>
+        </div>`;
+        return;
+      }
+      renderNewsCarousel();
+    }
 
     // Legacy alias so setTimeout hook still works
     function cargarNoticias() { cargarTodasNoticias(); }

@@ -11539,7 +11539,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const options = allMasterPerfs.map(p => `<option value="${p.id}">${p.modelo} (${p.id})</option>`).join('');
       
       return `
-        <div id="asi-add-form-${safeId}" class="add-form" style="display:none;gap:8px;flex-direction:column;margin-top:10px;padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(99,102,241,0.2);">
+        <div id="asi-add-form-${safeId}" class="add-form" data-opname="${opName}" data-safeid="${safeId}" style="display:none;gap:8px;flex-direction:column;margin-top:10px;padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(99,102,241,0.2);">
           <div style="font-size:0.65rem;color:#64748b;text-transform:uppercase;font-weight:800;letter-spacing:1px;">Elegir Perfil Maestro:</div>
           <select id="asi-master-${safeId}" onchange="handleAsiProfileSelect('${safeId}', this.value)"
                   style="font-size:.75rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.3);background:#0d1526;color:#e2e8f0;width:100%;outline:none;">
@@ -11552,7 +11552,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
             <input id="asi-nmod-${safeId}" type="text" placeholder="Modelo"
               style="font-size:.75rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.2);background:#0d1526;color:#e2e8f0;flex:2;outline:none;"/>
           </div>
-          <select id="asi-tipo-${safeId}" onchange="asiPerfilToggleCubre('${opName}')"
+          <select id="asi-tipo-${safeId}" onchange="asiPerfilToggleCubreBySafeId('${safeId}')"
             style="font-size:.7rem;padding:8px;border-radius:8px;border:1px solid rgba(99,102,241,.3);background:#0d1526;color:#e2e8f0;width:100%;">
             <option value="propio">🟢 Perfil Propio</option>
             <option value="cobertura">🔴 Cubriendo otro grupo</option>
@@ -11560,9 +11560,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           <input id="asi-cubre-${safeId}" type="text" placeholder="¿A quién cubre? (Obligatorio si es cobertura)" 
                  style="display:none;font-size:.75rem;padding:8px;border-radius:8px;border:1px solid rgba(248,113,113,.3);background:#0d1526;color:#f87171;width:100%;outline:none;margin-top:2px;" />
           <div style="display:flex;gap:6px;margin-top:6px;">
-            <button onclick="asiPerfilAdd('${opName}')"
+            <button onclick="asiPerfilAddBySafeId('${safeId}')"
               style="flex:1;padding:10px;font-size:.75rem;font-weight:800;border-radius:10px;cursor:pointer;border:none;background:linear-gradient(135deg,#34d399,#10b981);color:#0d1526;">✓ ASIGNAR PERFIL</button>
-            <button onclick="asiPerfilToggleForm('${opName}')"
+            <button onclick="asiPerfilToggleBySafeId('${safeId}')"
               style="padding:10px 15px;font-size:.75rem;font-weight:700;border-radius:10px;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#64748b;">✕</button>
           </div>
         </div>`;
@@ -11594,7 +11594,30 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (cubreEl) cubreEl.style.display = tipo === 'cobertura' ? 'block' : 'none';
     };
 
-    window.asiPerfilAdd = function (opName) {
+    // ── Helpers sin-escaping para los botones del formulario de perfiles ────────────────────────────────
+    // Leen el opName del atributo data-opname del form div en vez de recibirlo como string
+    window.asiPerfilAddBySafeId = function(safeId) {
+      const form = document.getElementById('asi-add-form-' + safeId);
+      if (!form) return;
+      let opName = form.getAttribute('data-opname') || '';
+      // Resolver __OP_CURRENT__
+      if (opName === '__OP_CURRENT__' && typeof currentOpName !== 'undefined' && currentOpName) {
+        opName = currentOpName;
+      }
+      asiPerfilAdd(opName);
+    };
+    window.asiPerfilToggleBySafeId = function(safeId) {
+      const form = document.getElementById('asi-add-form-' + safeId);
+      if (!form) return;
+      form.style.display = form.style.display === 'flex' ? 'none' : 'flex';
+    };
+    window.asiPerfilToggleCubreBySafeId = function(safeId) {
+      const tipo = document.getElementById('asi-tipo-' + safeId)?.value;
+      const cubreEl = document.getElementById('asi-cubre-' + safeId);
+      if (cubreEl) cubreEl.style.display = tipo === 'cobertura' ? 'block' : 'none';
+    };
+
+    window.asiPerfilAdd = async function (opName) {
       // Resolver __OP_CURRENT__ para la vista de operador (evita escaping de nombres especiales)
       if (opName === '__OP_CURRENT__' && typeof currentOpName !== 'undefined' && currentOpName) {
         opName = currentOpName;
@@ -11629,12 +11652,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       }
 
       op.profiles.push({ id: idVal, model: modVal, tipo, cubreA, ptsBase });
-      saveData();
-      // Subir a Supabase
-      if (typeof _sb !== 'undefined' && _sb) {
-        const val = JSON.stringify(operatorsData);
-        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
-      }
 
       // ── Reclamo automático del cajón PSA ──────────────────────
       // Si había puntos sin asignar para este ID, moverlos al operador
@@ -11656,9 +11673,24 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
       // ──────────────────────────────────────────────────────────
+      saveData();
+      // Marcar timestamp (evita que Realtime revierta el cambio)
+      if (typeof _localSaveTs !== 'undefined') {
+        _localSaveTs['primeOperatorsData2026'] = Date.now();
+      }
+      // Subir a Supabase y ESPERAR (sin esto el Realtime revierte el perfil)
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const val = JSON.stringify(operatorsData);
+          await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+        } catch(e) {
+          console.warn('[asiPerfilAdd] Supabase error:', e.message);
+        }
+      }
+      // Refrescar panel de asistencia + vista de operador
       asiRender();
       if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
-        renderVistaOperador(currentOpName);
+        renderOpDashboard(currentOpName);
       }
     };
 

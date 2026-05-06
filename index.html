@@ -9845,38 +9845,72 @@
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
 
-      // Mock Data Generation for the Pedagogical Action Map
       const granularidades = ['10 min', 'Hora', 'Día', 'Semana', 'Mes'];
       const activeGran = window._actionMapGran || 'Hora';
       
       const columnasHoras = [];
       let d = new Date();
-      d.setHours(d.getHours() - 14); // Start 14 hours ago
-      for (let i=0; i<15; i++) {
-        columnasHoras.push({
-          dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
-          hora: String(d.getHours()).padStart(2,'0') + 'h'
-        });
-        d.setHours(d.getHours() + 1);
+      
+      if (activeGran === 'Hora') {
+        d.setHours(d.getHours() - 11); // Últimas 12 horas
+        for (let i=0; i<12; i++) {
+          columnasHoras.push({
+            tsStart: new Date(d).setMinutes(0,0,0),
+            tsEnd: new Date(d).setMinutes(59,59,999),
+            dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
+            label: String(d.getHours()).padStart(2,'0') + 'h'
+          });
+          d.setHours(d.getHours() + 1);
+        }
+      } else {
+        // Fallback simple para otras granularidades, mostramos horas para el demo
+        d.setHours(d.getHours() - 11);
+        for (let i=0; i<12; i++) {
+          columnasHoras.push({
+            tsStart: new Date(d).setMinutes(0,0,0),
+            tsEnd: new Date(d).setMinutes(59,59,999),
+            dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
+            label: String(d.getHours()).padStart(2,'0') + 'h'
+          });
+          d.setHours(d.getHours() + 1);
+        }
       }
 
-      const mockClients = [
-        { name: 'Scott', age: 55, id: '51327631742', total: 354.36, spend: [null, null, 12.00, 14.38, 20.00, 18.00, 2.00, null, 14.00, null, null, null, 10.00, 10.00, 24.00] },
-        { name: 'Jeremy', age: 28, id: '112768691531', total: 18.00, spend: [null, null, null, null, null, null, null, null, 10.00, null, null, null, null, null, null] },
-        { name: 'philip', age: 75, id: '10845168531', total: 14.66, spend: [null, null, null, null, null, null, null, null, null, null, 3.90, 10.76, null, null, null] },
-        { name: 'Ben', age: 70, id: '54623665542', total: 14.04, spend: [null, null, null, null, null, null, null, null, null, 12.60, 1.32, null, null, null, null] },
-        { name: 'mark', age: 68, id: '11188547931', total: 9.18, spend: [null, null, null, null, null, null, null, null, null, null, null, null, null, 0.84, null] },
-        { name: 'Cliente sin nombre', age: null, id: '41546642142', total: 8.94, spend: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null] },
-        { name: 'Tom', age: 81, id: '11182814731', total: 7.92, spend: [null, null, null, null, null, null, 2.76, 5.16, null, null, null, null, null, null, null] },
-        { name: 'Michael', age: 77, id: '20662462431', total: 5.76, spend: [0.24, 4.44, null, null, 1.08, null, null, null, null, null, null, null, null, null, null] },
-        { name: 'Cliente sin nombre', age: null, id: '68436385331', total: 4.44, spend: [0.96, 1.80, null, null, null, null, null, null, null, null, null, 0.84, 0.84, null, null] }
-      ];
+      // Preparar datos reales de operadores
+      const realData = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').map(op => {
+        const cortes = (typeof getCortesOp === 'function' ? getCortesOp(op.name) : []).map(c => ({
+          ...c,
+          ts: c.ts || c.timestamp || new Date(c.fecha + 'T' + (c.hora || '12:00')).getTime()
+        }));
+        
+        const profile = op.profiles && op.profiles.length ? op.profiles[0] : { id: 'N/A', model: op.name };
+        
+        // Puntos totales del día actual (basado en el último corte de hoy)
+        const hoy = localDateStr();
+        const cortesHoy = cortes.filter(c => c.fecha === hoy);
+        const total = cortesHoy.length ? Math.max(...cortesHoy.map(c => Number(c.puntos)||0)) : 0;
+
+        const spend = columnasHoras.map(col => {
+          const inTime = cortes.filter(c => c.ts >= col.tsStart && c.ts <= col.tsEnd);
+          if (!inTime.length) return null;
+          
+          const before = cortes.filter(c => c.ts < col.tsStart);
+          const maxBefore = before.length ? Math.max(...before.map(c => Number(c.puntos)||0)) : 0;
+          const maxIn = Math.max(...inTime.map(c => Number(c.puntos)||0));
+          
+          const delta = maxIn - maxBefore;
+          return delta > 0.5 ? delta : null; // Mostrar solo si hay un incremento real > 0.5
+        });
+
+        return { name: op.name, id: profile.id, total, spend };
+      }).sort((a,b) => b.total - a.total).slice(0, 20); // Top 20 operadores
 
       const renderGridRows = () => {
-        return mockClients.map(c => `
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+        if (!realData.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">No hay datos de cortes registrados hoy.</td></tr>`;
+        return realData.map(c => `
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.03); transition: background 0.2s; cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
             <td style="padding:10px 15px; min-width:180px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              <div style="font-weight:800; color:#f1f5f9; font-size:0.8rem;">${c.name} ${c.age ? '- '+c.age : ''}</div>
+              <div style="font-weight:800; color:#f1f5f9; font-size:0.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px;">${c.name.split(' ').slice(0,2).join(' ')}</div>
               <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">IDC ${c.id}</div>
             </td>
             <td style="padding:10px 15px; font-weight:800; color:#34d399; font-size:0.85rem; text-align:right; min-width:80px; position:sticky; left:180px; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
@@ -9884,11 +9918,10 @@
             </td>
             ${c.spend.map(val => {
               if (!val) return `<td style="min-width:60px; border-right:1px solid rgba(255,255,255,0.03);"></td>`;
-              // Some random mock states: mostly green (1), sometimes yellow (2) or red (3)
-              const state = Math.random() > 0.9 ? (Math.random() > 0.5 ? '#fbbf24' : '#ef4444') : '#10b981';
+              // Color verde Datame si hay puntos reales ganados
               return `
               <td style="min-width:60px; padding:4px; text-align:center; border-right:1px solid rgba(255,255,255,0.03);">
-                <div style="background:${state}; color:#fff; font-size:0.6rem; font-weight:800; padding:4px 6px; border-radius:4px; display:inline-block;">
+                <div style="background:#10b981; color:#fff; font-size:0.6rem; font-weight:800; padding:4px 6px; border-radius:4px; display:inline-block; box-shadow:0 0 5px rgba(16,185,129,0.3);">
                   $${val.toFixed(2)}
                 </div>
               </td>`;
@@ -9898,103 +9931,84 @@
       };
 
       wrap.innerHTML = `
-      <div style="background:#0f172a; border:1px solid rgba(148, 163, 184, 0.1); border-radius:12px; padding:20px; font-family: 'Inter', sans-serif; overflow:hidden;">
+      <details class="action-map-accordion" open style="background:#0f172a; border:1px solid rgba(148, 163, 184, 0.1); border-radius:12px; margin-bottom:20px; font-family:'Inter',sans-serif; overflow:hidden;">
         
-        <!-- HEADER -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
-          <div>
-            <div style="font-size:0.7rem; font-weight:800; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-              📖 MAPA DE ACCIÓN
-            </div>
-            <div style="font-size:1.4rem; font-weight:900; color:#f8fafc; margin-bottom:4px;">
-              Anaya · 31
-            </div>
-            <div style="font-size:0.7rem; color:#94a3b8;">
-              Filas: clientes que han gastado con este perfil - Columnas: períodos
-            </div>
-          </div>
-          <button style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:6px 12px; border-radius:8px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
-            ✕ Cerrar
-          </button>
-        </div>
-
-        <!-- CONTROLS -->
-        <div style="display:flex; align-items:center; gap:20px; padding:15px 0; border-top:1px solid rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.05); margin-bottom:15px; flex-wrap:wrap;">
+        <!-- HEADER ACORDEÓN -->
+        <summary style="padding:15px 20px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); outline:none; border-bottom:1px solid rgba(255,255,255,0.05); list-style:none;">
           <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:0.65rem; font-weight:800; color:#64748b; letter-spacing:1px;">GRANULARIDAD:</span>
-            <div style="display:flex; gap:2px;">
-              ${granularidades.map(g => `
-                <button onclick="window._actionMapGran='${g}'; renderAlertas();" 
-                        style="background:${activeGran === g ? 'rgba(16, 185, 129, 0.15)' : 'transparent'}; 
-                               color:${activeGran === g ? '#10b981' : '#94a3b8'}; 
-                               border:none; border-radius:6px; padding:4px 10px; font-size:0.7rem; font-weight:700; cursor:pointer;">
-                  ${g}
-                </button>
-              `).join('')}
+            <div style="font-size:1.1rem; color:#2dd4bf;">📖</div>
+            <div>
+              <div style="font-size:0.8rem; font-weight:900; color:#f8fafc; letter-spacing:0.5px;">MAPA DE ACCIÓN DATAME (EN VIVO)</div>
+              <div style="font-size:0.65rem; color:#94a3b8; margin-top:2px;">Despliega para ver la cuadrícula de puntos reales por operador</div>
             </div>
           </div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:0.65rem; font-weight:800; color:#64748b; letter-spacing:1px;">RANGO:</span>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <input type="text" value="04/05/2026" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:4px 8px; border-radius:4px; font-size:0.7rem; width:80px; text-align:center;">
-              <span style="color:#64748b;">→</span>
-              <input type="text" value="05/05/2026" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:4px 8px; border-radius:4px; font-size:0.7rem; width:80px; text-align:center;">
-              <button style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); color:#10b981; padding:4px 12px; border-radius:6px; font-size:0.7rem; font-weight:700; cursor:pointer;">Aplicar</button>
-            </div>
-          </div>
-        </div>
+          <div style="color:#64748b; font-size:0.8rem;">▼</div>
+        </summary>
 
-        <!-- LEGEND -->
-        <div style="display:flex; align-items:center; gap:20px; font-size:0.65rem; color:#cbd5e1; margin-bottom:20px;">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <div style="width:10px; height:10px; background:#10b981; border-radius:2px;"></div> Gastó con este perfil
-          </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <div style="width:10px; height:10px; background:#fbbf24; border-radius:2px;"></div> Gastó con otro perfil mismo (MOWA)
-          </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <div style="width:10px; height:10px; background:#ef4444; border-radius:2px;"></div> Gastó con otra agencia
-          </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <div style="width:10px; height:10px; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:2px;"></div> Sin actividad
-          </div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-          <div style="font-size:0.75rem; color:#94a3b8;">Mostrando 1–20 de 34 clientes</div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <button style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#64748b; padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer;">← Anterior</button>
-            <span style="font-size:0.75rem; font-weight:800; color:#f1f5f9;">1 / 2</span>
-            <button style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); color:#10b981; padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer; font-weight:700;">Siguiente →</button>
-          </div>
-        </div>
-
-        <!-- TABLE GRID -->
-        <div style="overflow-x:auto; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding-bottom:5px;" class="custom-scrollbar">
-          <table style="width:100%; border-collapse:collapse; min-width:1200px;">
-            <thead>
-              <tr>
-                <th style="padding:12px 15px; text-align:left; font-size:0.7rem; font-weight:800; color:#cbd5e1; position:sticky; left:0; background:#0f172a; z-index:3; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05);">
-                  🌟 Cliente
-                </th>
-                <th style="padding:12px 15px; text-align:right; font-size:0.7rem; font-weight:800; color:#cbd5e1; position:sticky; left:180px; background:#0f172a; z-index:3; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05);">
-                  Total
-                </th>
-                ${columnasHoras.map(col => `
-                  <th style="padding:10px 4px; text-align:center; font-size:0.6rem; color:#94a3b8; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05); min-width:60px;">
-                    <div>${col.dia}</div>
-                    <div style="font-weight:800; color:#f1f5f9; font-size:0.7rem; margin-top:2px;">${col.hora}</div>
-                  </th>
+        <div style="padding:20px;">
+          <!-- CONTROLS -->
+          <div style="display:flex; align-items:center; gap:20px; padding-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); margin-bottom:15px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:0.65rem; font-weight:800; color:#64748b; letter-spacing:1px;">GRANULARIDAD:</span>
+              <div style="display:flex; gap:2px;">
+                ${granularidades.map(g => `
+                  <button onclick="window._actionMapGran='${g}'; renderAlertas();" 
+                          style="background:${activeGran === g ? 'rgba(16, 185, 129, 0.15)' : 'transparent'}; 
+                                 color:${activeGran === g ? '#10b981' : '#94a3b8'}; 
+                                 border:none; border-radius:6px; padding:4px 10px; font-size:0.7rem; font-weight:700; cursor:pointer;">
+                    ${g}
+                  </button>
                 `).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${renderGridRows()}
-            </tbody>
-          </table>
-        </div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:0.65rem; font-weight:800; color:#64748b; letter-spacing:1px;">RANGO:</span>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <input type="text" value="${localDateStr()}" readonly style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:4px 8px; border-radius:4px; font-size:0.7rem; width:85px; text-align:center;">
+                <button style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); color:#10b981; padding:4px 12px; border-radius:6px; font-size:0.7rem; font-weight:700; cursor:pointer;">Hoy</button>
+              </div>
+            </div>
+          </div>
 
-      </div>
+          <!-- LEGEND -->
+          <div style="display:flex; align-items:center; gap:20px; font-size:0.65rem; color:#cbd5e1; margin-bottom:15px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:10px; height:10px; background:#10b981; border-radius:2px;"></div> Incremento de Puntos (Corte Detectado)
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <div style="width:10px; height:10px; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:2px;"></div> Sin variación en este periodo
+            </div>
+          </div>
+
+          <!-- TABLE GRID -->
+          <div style="overflow-x:auto; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding-bottom:5px; max-height:450px;" class="custom-scrollbar">
+            <table style="width:100%; border-collapse:collapse; min-width:900px;">
+              <thead style="position:sticky; top:0; z-index:10;">
+                <tr>
+                  <th style="padding:12px 15px; text-align:left; font-size:0.7rem; font-weight:800; color:#cbd5e1; position:sticky; left:0; background:#1e293b; z-index:11; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05);">
+                    🌟 Operador / Perfil
+                  </th>
+                  <th style="padding:12px 15px; text-align:right; font-size:0.7rem; font-weight:800; color:#cbd5e1; position:sticky; left:180px; background:#1e293b; z-index:11; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05);">
+                    Puntos Hoy
+                  </th>
+                  ${columnasHoras.map(col => `
+                    <th style="padding:10px 4px; text-align:center; font-size:0.6rem; color:#94a3b8; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05); min-width:60px;">
+                      <div>${col.dia}</div>
+                      <div style="font-weight:800; color:#f1f5f9; font-size:0.7rem; margin-top:2px;">${col.label}</div>
+                    </th>
+                  `).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${renderGridRows()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+      <style>
+        .action-map-accordion summary::-webkit-details-marker { display:none; }
+      </style>
       `;
     }
 

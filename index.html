@@ -9942,35 +9942,46 @@
         globalMesActual += totalMesActual;
         globalMesAnterior += (op.abr || 0);
 
+        // Para el modo Hora: construir eventos por bloque de forma directa
+        const eventosHora = [];
+        if (activeGran === 'Hora') {
+          BLOQUES_H.forEach(h => {
+            for (let i=1; i<=diaHoy; i++) {
+              let dStr = String(i).padStart(2,'0');
+              let fechaStr = `${mesActualStr}-${dStr}`;
+              const inBlock = cortesMesActual.filter(c => c.fecha === fechaStr && c.tsObj.getHours() >= h && c.tsObj.getHours() < h + 3);
+              const total = inBlock.reduce((s, c) => s + c.val, 0);
+              if (total > 0.1) {
+                // Distribuir entre perfiles del operador
+                const perfiles = op.profiles && op.profiles.length > 0 ? op.profiles : [{ id: 'N/A', model: 'General' }];
+                const ptsPorPerfil = total / perfiles.length;
+                eventosHora.push({
+                  fecha: fechaStr, dia: i, hora: h,
+                  horaLabel: String(h).padStart(2,'0') + 'h',
+                  total, perfiles, ptsPorPerfil
+                });
+              }
+            }
+          });
+        }
+
         let prevVal = 0;
-        const spend = columnas.map((col, idx) => {
+        const spend = activeGran !== 'Hora' ? columnas.map((col, idx) => {
           let totalInTime = 0;
-          if (activeGran === 'Hora') {
-            const [cFecha, cHoraStr] = col.id.split('T');
-            const cHora = parseInt(cHoraStr, 10);
-            const inBlock = cortesMesActual.filter(c => c.fecha === cFecha && c.tsObj.getHours() >= cHora && c.tsObj.getHours() < cHora + 3);
-            totalInTime = inBlock.reduce((s, c) => s + c.val, 0);
-          } else if (activeGran === 'Día') {
+          if (activeGran === 'Día') {
             const inDay = cortesMesActual.filter(c => c.fecha === col.id);
             totalInTime = inDay.reduce((s, c) => s + c.val, 0);
           } else if (activeGran === 'Mes') {
             totalInTime = op[col.id] || 0;
           }
-          
-          // Calcular color de calor dinámico basado en el máximo real del operador
           let isDrop = false;
-          if (idx > 0 && prevVal > 1 && totalInTime > 0 && totalInTime < prevVal * 0.4) {
-             isDrop = true;
-          }
-          if (idx > 0 && prevVal > 1 && totalInTime === 0) {
-             isDrop = true; // celda vacía después de actividad = caída
-          }
-          prevVal = totalInTime > 0 ? totalInTime : prevVal * 0.5; // decay suave
-          
+          if (idx > 0 && prevVal > 1 && totalInTime > 0 && totalInTime < prevVal * 0.4) isDrop = true;
+          if (idx > 0 && prevVal > 1 && totalInTime === 0) isDrop = true;
+          prevVal = totalInTime > 0 ? totalInTime : prevVal * 0.5;
           return { val: totalInTime, isDrop };
-        });
+        }) : [];
 
-        return { name: op.name, profileIds, profileNames, totalMes: totalMesActual, spend };
+        return { name: op.name, profileIds, profileNames, totalMes: totalMesActual, spend, eventosHora };
       }).sort((a,b) => b.totalMes - a.totalMes).slice(0, 30);
 
       // Calcular el valor máximo global del heatmap para escala dinámica
@@ -10003,29 +10014,98 @@
       
       let insightText = `El viernes <b>1 de mayo (Día del Trabajador)</b> la agencia no operó. Esto generó un hueco algorítmico y dejamos de ganar un estimado de <b style="color:#f87171;">${ptsPerdidos.toLocaleString(undefined,{maximumFractionDigits:0})} pts</b>, afectando directamente el 'Warm-up' del mes.<br><br>Al calcular la matemática excluyendo ese día inactivo, nuestro ritmo operativo ajustado es de <b>${velActual.toFixed(1)} pts/día</b>. ${isGrowth ? `A pesar del bache inicial, la proyección ajustada de cierre (${proyMensual.toLocaleString(undefined,{maximumFractionDigits:0})} pts) logrará superar a abril.` : `Aún ajustando el día perdido, el ritmo no alcanza para superar a abril. Se deben atacar urgentemente las <b>casillas marcadas en rojo</b> (caídas bruscas de ganancia por hora) en el timeline.`}`;
 
+      // Solo para Día/Mes: filtrar columnas que tengan al menos un valor
+      const columnasFiltradas = activeGran !== 'Hora' ? columnas.filter((col, ci) =>
+        realData.some(op => op.spend[ci] && op.spend[ci].val > 0.1)
+      ) : [];
+
       const renderGridRows = () => {
-        if (!realData.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">No hay datos en vivo registrados.</td></tr>`;
-        return realData.map(c => `
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.02); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+        if (!realData.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">No hay datos registrados.</td></tr>`;
+
+        if (activeGran === 'Hora') {
+          // ── MODO HORA: Event Log sin celdas vacías ──────────────────────────────
+          // Unificar todos los eventos y ordenar por fecha+hora desc
+          const allEvents = [];
+          realData.forEach(op => {
+            op.eventosHora.forEach(ev => {
+              allEvents.push({ ...ev, opName: op.name, opTotal: op.totalMes, profileNames: op.profileNames });
+            });
+          });
+          allEvents.sort((a, b) => {
+            const dA = a.fecha + String(a.hora).padStart(2,'0');
+            const dB = b.fecha + String(b.hora).padStart(2,'0');
+            return dB.localeCompare(dA);
+          });
+
+          if (!allEvents.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">Sin actividad registrada este mes.</td></tr>`;
+
+          return allEvents.map((ev, ei) => {
+            const ratio = ev.total / globalMaxCell;
+            const bgRow = ratio > 0.7 ? 'rgba(45,212,191,0.06)' : ratio > 0.4 ? 'rgba(5,150,105,0.05)' : 'transparent';
+            const dropMarker = ei > 0 && allEvents[ei-1].opName === ev.opName && ev.total < allEvents[ei-1].total * 0.4
+              ? `<span style="background:rgba(185,28,28,0.7); color:#fca5a5; font-size:0.45rem; padding:1px 5px; border-radius:4px; margin-left:4px;">▼ CAÍDA</span>` : '';
+            const heatBadge = ratio > 0.8 ? '#2dd4bf' : ratio > 0.5 ? '#10b981' : ratio > 0.2 ? '#065f46' : '#1e3a4a';
+
+            const perfilRows = ev.perfiles.map(p => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:2px 6px; background:rgba(255,255,255,0.03); border-radius:4px; margin-top:2px;">
+                <span style="font-size:0.55rem; color:#38bdf8; font-weight:700;">${p.model || 'Fijo'}</span>
+                <span style="font-size:0.55rem; color:#94a3b8;">ID: ${p.id}</span>
+                <span style="font-size:0.6rem; color:#2dd4bf; font-weight:900;">$${ev.ptsPorPerfil.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</span>
+              </div>
+            `).join('');
+
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.03); background:${bgRow}; transition:background 0.2s;"
+                      onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='${bgRow}'">
+              <td style="padding:8px 12px; min-width:180px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
+                <div style="font-weight:900; color:#e2e8f0; font-size:0.72rem;">${ev.opName.split(' ').slice(0,2).join(' ')}</div>
+                <div style="font-size:0.5rem; color:#64748b; margin-top:1px;">${ev.profileNames}</div>
+              </td>
+              <td style="padding:8px 10px; text-align:center; min-width:70px;">
+                <div style="background:${heatBadge}; border-radius:6px; padding:4px 8px; display:inline-block;">
+                  <div style="font-size:0.65rem; font-weight:900; color:#f8fafc;">${ev.horaLabel}</div>
+                  <div style="font-size:0.5rem; color:rgba(255,255,255,0.7);">${ev.fecha.slice(8)}/05</div>
+                </div>
+              </td>
+              <td style="padding:8px 12px; text-align:right; min-width:80px;">
+                <div style="font-size:0.8rem; font-weight:900; color:#2dd4bf;">$${ev.total.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} ${dropMarker}</div>
+                <div style="font-size:0.5rem; color:#64748b;">Total bloque</div>
+              </td>
+              <td style="padding:8px 12px; min-width:220px;">
+                ${perfilRows}
+              </td>
+            </tr>`;
+          }).join('');
+        }
+
+        // ── MODO DÍA / MES: Tabla filtrada sin columnas vacías ─────────────────
+        return realData.map(c => {
+          const spendFiltrado = columnasFiltradas.map(col => {
+            const ci = columnas.indexOf(col);
+            return c.spend[ci] || { val: 0, isDrop: false };
+          });
+          return `
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.02); transition:background 0.2s;"
+              onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
             <td style="padding:8px 12px; min-width:180px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              <div style="font-weight:900; color:#e2e8f0; font-size:0.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name.split(' ').slice(0,2).join(' ')}</div>
+              <div style="font-weight:900; color:#e2e8f0; font-size:0.75rem;">${c.name.split(' ').slice(0,2).join(' ')}</div>
               <div style="font-size:0.55rem; color:#38bdf8; font-weight:700; margin-top:2px;">${c.profileNames}</div>
-              <div style="font-size:0.5rem; color:#64748b; margin-top:1px;">IDs: ${c.profileIds}</div>
+              <div style="font-size:0.5rem; color:#64748b;">IDs: ${c.profileIds}</div>
             </td>
             <td style="padding:8px 12px; font-weight:900; color:#2dd4bf; font-size:0.8rem; text-align:right; min-width:80px; position:sticky; left:180px; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              $${c.totalMes.toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1})}
+              $${c.totalMes.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}
             </td>
-            ${c.spend.map(s => {
-              const bgColor = s.isDrop ? 'rgba(185, 28, 28, 0.45)' : getHeatColor(s.val, globalMaxCell);
+            ${spendFiltrado.map(s => {
+              const bgColor = s.isDrop ? 'rgba(185,28,28,0.45)' : getHeatColor(s.val, globalMaxCell);
               const textCol = s.isDrop ? '#fca5a5' : (s.val > globalMaxCell * 0.7 ? '#0f172a' : '#e2e8f0');
-              const borderGlow = s.val > globalMaxCell * 0.8 ? 'box-shadow: inset 0 0 6px rgba(45,212,191,0.5);' : '';
-              return `
-              <td style="min-width:65px; padding:2px; text-align:center; background:${bgColor}; border-right:1px solid rgba(255,255,255,0.02); transition: all 0.3s; ${borderGlow}" title="${s.isDrop ? '⚠️ Caída brusca' : s.val > 0.1 ? '$'+s.val.toFixed(1)+' pts' : 'Sin actividad'}">
-                ${s.val > 0.1 ? `<span style="font-size:0.6rem; font-weight:900; color:${textCol}; text-shadow: 0 1px 3px rgba(0,0,0,0.7); display:block; padding:4px 0;">$${s.val.toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1})}</span>` : `<span style="font-size:0.5rem; color:rgba(100,116,139,0.5);">—</span>`}
+              const glow = s.val > globalMaxCell * 0.8 ? 'box-shadow:inset 0 0 6px rgba(45,212,191,0.5);' : '';
+              return `<td style="min-width:60px; padding:2px; text-align:center; background:${bgColor}; border-right:1px solid rgba(255,255,255,0.02); ${glow}">
+                ${ s.val > 0.1
+                  ? `<span style="font-size:0.6rem; font-weight:900; color:${textCol}; display:block; padding:4px 0;">$${s.val.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</span>`
+                  : '' }
               </td>`;
             }).join('')}
-          </tr>
-        `).join('');
+          </tr>`;
+        }).join('');
       };
 
       wrap.innerHTML = `
@@ -10155,14 +10235,21 @@
             <table style="width:100%; border-collapse:collapse; min-width:850px;">
               <thead>
                 <tr>
-                  <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">OPERADOR / PERFILES FIJOS</th>
-                  <th style="padding:15px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:180px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL ${activeGran === 'Hora' || activeGran === 'Día' ? 'MES' : 'HISTÓRICO'}</th>
-                  ${columnas.map(col => `
-                    <th style="padding:10px 5px; text-align:center; font-size:0.6rem; color:#94a3b8; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.05); border-left:1px solid rgba(255,255,255,0.02); min-width:65px;">
-                      <div style="color:#f1f5f9; font-weight:900;">${col.label}</div>
-                      <div style="font-size:0.5rem; color:#64748b; margin-top:2px; text-transform:uppercase;">${col.sub}</div>
-                    </th>
-                  `).join('')}
+                  ${activeGran === 'Hora' ? `
+                    <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:180px;">OPERADOR</th>
+                    <th style="padding:15px; text-align:center; font-size:0.65rem; font-weight:800; color:#94a3b8; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:70px;">HORA / FECHA</th>
+                    <th style="padding:15px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:80px;">TOTAL BLOQUE</th>
+                    <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:220px;">DESGLOSE POR PERFIL</th>
+                  ` : `
+                    <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">OPERADOR / PERFILES FIJOS</th>
+                    <th style="padding:15px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:180px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL ${activeGran === 'Día' ? 'MES' : 'HISTÓRICO'}</th>
+                    ${columnasFiltradas.map(col => `
+                      <th style="padding:10px 5px; text-align:center; font-size:0.6rem; color:#94a3b8; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.05); border-left:1px solid rgba(255,255,255,0.02); min-width:60px;">
+                        <div style="color:#f1f5f9; font-weight:900;">${col.label}</div>
+                        <div style="font-size:0.5rem; color:#64748b; margin-top:2px; text-transform:uppercase;">${col.sub}</div>
+                      </th>
+                    `).join('')}
+                  `}
                 </tr>
               </thead>
               <tbody>

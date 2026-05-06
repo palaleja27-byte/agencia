@@ -5800,7 +5800,7 @@
     let operatorsData = [
       { name: "ANAZARED RODRIGUEZ CAMPOS", group: "2", plataforma: "Prime", ene: 5733.78, feb: 2738.16, mar: 1767.90, abr: 1767.90, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-12" },
       { name: "ANDREINA DE LOS ANGELES YSSA MORENO", group: "2", plataforma: "Prime", ene: 467.63, feb: 938.28, mar: 0, abr: 0, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "91733663", "model": "DANIEL 68" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-11-19" },
-      { name: "ANDRI JOSUE CALDERON PEREZ", group: "8", plataforma: "Prime", ene: 0, feb: 553.73, mar: 0, abr: 0, profiles: [{ "id": "156881990", "model": "RALPH" }, { "id": "139245989", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-07" },
+      { name: "ANDRI JOSUE CALDERON PEREZ", group: "8", plataforma: "Prime", ene: 0, feb: 553.73, mar: 0, abr: 0, profiles: [{ "id": "156831990", "model": "RALPH" }, { "id": "139245988", "model": "ALFREDO" }, { "id": "120275229", "model": "GERMAN" }, { "id": "101652076", "model": "CARINA" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-07" },
       { name: "BORIS JUVENAL PATIÑO ESCORIHUELA", group: "5", plataforma: "Prime", ene: 2649.76, feb: 1758.55, mar: 0, abr: 0, profiles: [{ "id": "118179794", "model": "HORACIO" }, { "id": "137163229", "model": "SEBASTIAN" }, { "id": "130338853", "model": "IVALDO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-14" },
       { name: "BRANDON MIGUEL FERNANDEZ MORA", group: "9", plataforma: "Prime", ene: 1097.84, feb: 1071.72, mar: 0, abr: 0, profiles: [{ "id": "133085188", "model": "MARCOS" }, { "id": "132062039", "model": "BEATRIZ" }, { "id": "138130329", "model": "AGUSTIN" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-01-05" },
       { name: "BRIGITH DE LOS ANGELES FERNANDEZ MORA", group: "4", plataforma: "Prime", ene: 2987.1, feb: 2064.66, mar: 0, abr: 0, profiles: [{ "id": "95955130", "model": "HECTOR" }, { "id": "108018336", "model": "LUCAS" }, { "id": "103289167", "model": "LUIS" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-02-06" },
@@ -17013,6 +17013,52 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       consoleEl.prepend(div);
       if (consoleEl.children.length > 50) consoleEl.lastElementChild.remove();
     }
+
+    // ══════════════════════════════════════════════════════════
+    // CALIBRAR BASELINE TARDE — llamar desde consola del admin:
+    //   calibrarTarde()
+    // Usa los valores exactos del corte manual de las 6 PM para
+    // corregir el baseline de cada perfil en Supabase y obtener
+    // puntos_neto precisos.
+    // ══════════════════════════════════════════════════════════
+    window.calibrarTarde = async function(fecha) {
+      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
+      const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      // Baselines exactos del corte manual (Comienza = valor acumulado a las 2 PM inicio Tarde)
+      const baselines = {
+        '88243516': 799.02,  '95956014': 407.76,  '91360720': 290.76,
+        '143017065': 130.68, '91733663': 960.12,  '150039388': 43.92,
+        '79679899': 39.96,   '109551682': 130.38, '131130713': 154.62,
+        '101652076': 12.12,  '108019387': 813.36, '103023767': 546.12,
+        '118179794': 401.88, '130338853': 418.68, '160352260': 21.72,
+        '145834230': 51.60,  '120720195': 284.04, '139247498': 432.60,
+        '120275229': 58.20,  '157067734': 335.70, '103231980': 107.40,
+        '130431310': 223.86, '98389135':  130.74,  '139245988': 267.96,
+        '98540781':  65.88,  '156831990': 164.28, '151070498': 34.44,
+        '130422416': 525.18, '138130329': 340.68, '133085188': 379.50,
+        '118692242': 39.24,  '143014129': 18.36,  '95955130':  69.48,
+        '145211163': 31.38,  '144863124': 475.98, '145844971': 605.22,
+        '156716207': 85.92,  '137163229': 43.08,  '157112125': 529.02,
+      };
+      let ok = 0, fail = 0;
+      for (const [id_perfil, pb] of Object.entries(baselines)) {
+        const { data } = await _sb.from('operaciones')
+          .select('puntos_total, puntos_neto')
+          .eq('id_perfil', id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Tarde')
+          .maybeSingle();
+        if (!data) { console.warn(`⚠️ Sin registro Tarde: ${id_perfil}`); fail++; continue; }
+        const pt = data.puntos_total || 0;
+        if (pt <= pb) { console.warn(`⚠️ ${id_perfil}: total(${pt}) <= baseline(${pb})`); fail++; continue; }
+        const nuevoNeto = +(pt - pb).toFixed(2);
+        const { error } = await _sb.from('operaciones')
+          .update({ puntos_baseline: pb, puntos_neto: nuevoNeto })
+          .eq('id_perfil', id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Tarde');
+        if (error) { console.error(`❌ ${id_perfil}:`, error.message); fail++; }
+        else { console.log(`✅ ${id_perfil}: baseline=${pb} → neto=${nuevoNeto}`); ok++; }
+      }
+      console.log(`\n🎯 Calibración completada: ${ok} OK, ${fail} fallidos. Haz ↻ Sync para ver datos actualizados.`);
+      if (ok > 0) setTimeout(sincronizarDatamePaneles, 1500);
+    };
 
     async function sincronizarDatamePaneles() {
 

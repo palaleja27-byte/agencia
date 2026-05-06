@@ -9845,87 +9845,155 @@
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
 
-      // Generar alertas dinámicas basadas en operadores con bajo rendimiento
-      // Como no hay ID de cliente en Supabase, simulamos el análisis de tráfico VIP para la UI.
-      const timeframes = ['Última Hora (1H)', 'Turno Actual (4H)', 'Día (12H)'];
-      const activeTimeframe = window._actionMapTimeframe || 'Turno Actual (4H)';
+      // Mock Data Generation for the Pedagogical Action Map
+      const granularidades = ['10 min', 'Hora', 'Día', 'Semana', 'Mes'];
+      const activeGran = window._actionMapGran || 'Hora';
       
-      const opsConBaja = operatorsData.filter(o => {
-        const c = getCortesOp(o.name);
-        if(!c.length) return false;
-        const last = c[0].puntos || 0;
-        return last >= 0 && last < 50; // Operadores con baja producción reciente
-      }).slice(0, 5); // Tomar hasta 5 para el mapa de acción
+      const columnasHoras = [];
+      let d = new Date();
+      d.setHours(d.getHours() - 14); // Start 14 hours ago
+      for (let i=0; i<15; i++) {
+        columnasHoras.push({
+          dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
+          hora: String(d.getHours()).padStart(2,'0') + 'h'
+        });
+        d.setHours(d.getHours() + 1);
+      }
 
-      const generateClientAlert = (op) => {
-        const profile = op.profiles && op.profiles.length ? op.profiles[0] : { id: 'N/A', model: op.name };
-        const randomClientId = 'CL-' + Math.floor(Math.random() * 90000 + 10000);
-        const randomHour = new Date(Date.now() - Math.floor(Math.random() * 10000000)).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        const dropPct = Math.floor(Math.random() * 40) + 30; // 30% a 70% drop
+      const mockClients = [
+        { name: 'Scott', age: 55, id: '51327631742', total: 354.36, spend: [null, null, 12.00, 14.38, 20.00, 18.00, 2.00, null, 14.00, null, null, null, 10.00, 10.00, 24.00] },
+        { name: 'Jeremy', age: 28, id: '112768691531', total: 18.00, spend: [null, null, null, null, null, null, null, null, 10.00, null, null, null, null, null, null] },
+        { name: 'philip', age: 75, id: '10845168531', total: 14.66, spend: [null, null, null, null, null, null, null, null, null, null, 3.90, 10.76, null, null, null] },
+        { name: 'Ben', age: 70, id: '54623665542', total: 14.04, spend: [null, null, null, null, null, null, null, null, null, 12.60, 1.32, null, null, null, null] },
+        { name: 'mark', age: 68, id: '11188547931', total: 9.18, spend: [null, null, null, null, null, null, null, null, null, null, null, null, null, 0.84, null] },
+        { name: 'Cliente sin nombre', age: null, id: '41546642142', total: 8.94, spend: [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null] },
+        { name: 'Tom', age: 81, id: '11182814731', total: 7.92, spend: [null, null, null, null, null, null, 2.76, 5.16, null, null, null, null, null, null, null] },
+        { name: 'Michael', age: 77, id: '20662462431', total: 5.76, spend: [0.24, 4.44, null, null, 1.08, null, null, null, null, null, null, null, null, null, null] },
+        { name: 'Cliente sin nombre', age: null, id: '68436385331', total: 4.44, spend: [0.96, 1.80, null, null, null, null, null, null, null, null, null, 0.84, 0.84, null, null] }
+      ];
 
-        return `
-        <div style="background:rgba(248, 113, 113, 0.05); border:1px solid rgba(248, 113, 113, 0.15); border-left:3px solid #f87171; border-radius:8px; padding:12px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div style="font-size:0.75rem; font-weight:800; color:#f87171; display:flex; align-items:center; gap:4px;">
-              ⚠️ Caída de Patrón VIP
-            </div>
-            <div style="font-size:0.65rem; color:#94a3b8; font-family:monospace;">🕒 ${randomHour}</div>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px;">
-            <div style="background:rgba(0,0,0,0.2); padding:6px; border-radius:6px;">
-              <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase;">ID Perfil / Modelo</div>
-              <div style="font-size:0.7rem; font-weight:700; color:#e2e8f0; font-family:monospace;">${profile.id} <span style="color:#94a3b8;font-weight:400;">(${profile.model})</span></div>
-            </div>
-            <div style="background:rgba(0,0,0,0.2); padding:6px; border-radius:6px;">
-              <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase;">ID Cliente (Spender)</div>
-              <div style="font-size:0.7rem; font-weight:700; color:#fbbf24; font-family:monospace;">${randomClientId}</div>
-            </div>
-          </div>
-          <div style="font-size:0.65rem; color:#cbd5e1; margin-top:4px; line-height:1.4;">
-            <span style="color:#f87171; font-weight:700;">-${dropPct}%</span> en volumen de mensajes recibidos comparado con su frecuencia habitual. Requiere retención inmediata (Pin / Icebreaker).
-          </div>
-        </div>
-        `;
+      const renderGridRows = () => {
+        return mockClients.map(c => `
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+            <td style="padding:10px 15px; min-width:180px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
+              <div style="font-weight:800; color:#f1f5f9; font-size:0.8rem;">${c.name} ${c.age ? '- '+c.age : ''}</div>
+              <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">IDC ${c.id}</div>
+            </td>
+            <td style="padding:10px 15px; font-weight:800; color:#34d399; font-size:0.85rem; text-align:right; min-width:80px; position:sticky; left:180px; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
+              $${c.total.toFixed(2)}
+            </td>
+            ${c.spend.map(val => {
+              if (!val) return `<td style="min-width:60px; border-right:1px solid rgba(255,255,255,0.03);"></td>`;
+              // Some random mock states: mostly green (1), sometimes yellow (2) or red (3)
+              const state = Math.random() > 0.9 ? (Math.random() > 0.5 ? '#fbbf24' : '#ef4444') : '#10b981';
+              return `
+              <td style="min-width:60px; padding:4px; text-align:center; border-right:1px solid rgba(255,255,255,0.03);">
+                <div style="background:${state}; color:#fff; font-size:0.6rem; font-weight:800; padding:4px 6px; border-radius:4px; display:inline-block;">
+                  $${val.toFixed(2)}
+                </div>
+              </td>`;
+            }).join('')}
+          </tr>
+        `).join('');
       };
 
-      const emptyState = `
-        <div style="text-align:center; padding:20px; color:#64748b; font-size:0.8rem;">
-          <div style="font-size:2rem; margin-bottom:10px;">🛡️</div>
-          Sin anomalías críticas en el patrón de gasto para el periodo seleccionado.
-        </div>
-      `;
-
       wrap.innerHTML = `
-      <div style="background:rgba(15, 23, 42, 0.5); border:1px solid rgba(148, 163, 184, 0.1); border-radius:16px; padding:18px 20px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+      <div style="background:#0f172a; border:1px solid rgba(148, 163, 184, 0.1); border-radius:12px; padding:20px; font-family: 'Inter', sans-serif; overflow:hidden;">
+        
+        <!-- HEADER -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
           <div>
-            <div style="font-size:0.75rem; font-weight:900; color:#a78bfa; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:6px;">
-              🗺️ Mapa de Acción (Radar de Gastos)
+            <div style="font-size:0.7rem; font-weight:800; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+              📖 MAPA DE ACCIÓN
             </div>
-            <div style="font-size:0.6rem; color:#64748b; margin-top:4px;">
-              Detección de anomalías en temporalidades granuladas
+            <div style="font-size:1.4rem; font-weight:900; color:#f8fafc; margin-bottom:4px;">
+              Anaya · 31
+            </div>
+            <div style="font-size:0.7rem; color:#94a3b8;">
+              Filas: clientes que han gastado con este perfil - Columnas: períodos
             </div>
           </div>
-          <div style="display:flex; background:rgba(255,255,255,0.03); border-radius:8px; padding:3px; border:1px solid rgba(255,255,255,0.05);">
-            ${timeframes.map(tf => `
-              <button onclick="window._actionMapTimeframe='${tf}'; renderAlertas();" 
-                      style="background:${activeTimeframe === tf ? 'rgba(167, 139, 250, 0.15)' : 'transparent'}; 
-                             color:${activeTimeframe === tf ? '#a78bfa' : '#64748b'}; 
-                             border:none; border-radius:6px; padding:4px 10px; font-size:0.6rem; font-weight:700; cursor:pointer; transition:all 0.2s;">
-                ${tf}
-              </button>
-            `).join('')}
+          <button style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:6px 12px; border-radius:8px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+            ✕ Cerrar
+          </button>
+        </div>
+
+        <!-- CONTROLS -->
+        <div style="display:flex; align-items:center; gap:20px; padding:15px 0; border-top:1px solid rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.05); margin-bottom:15px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:0.65rem; font-weight:800; color:#64748b; letter-spacing:1px;">GRANULARIDAD:</span>
+            <div style="display:flex; gap:2px;">
+              ${granularidades.map(g => `
+                <button onclick="window._actionMapGran='${g}'; renderAlertas();" 
+                        style="background:${activeGran === g ? 'rgba(16, 185, 129, 0.15)' : 'transparent'}; 
+                               color:${activeGran === g ? '#10b981' : '#94a3b8'}; 
+                               border:none; border-radius:6px; padding:4px 10px; font-size:0.7rem; font-weight:700; cursor:pointer;">
+                  ${g}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:0.65rem; font-weight:800; color:#64748b; letter-spacing:1px;">RANGO:</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="text" value="04/05/2026" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:4px 8px; border-radius:4px; font-size:0.7rem; width:80px; text-align:center;">
+              <span style="color:#64748b;">→</span>
+              <input type="text" value="05/05/2026" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:4px 8px; border-radius:4px; font-size:0.7rem; width:80px; text-align:center;">
+              <button style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); color:#10b981; padding:4px 12px; border-radius:6px; font-size:0.7rem; font-weight:700; cursor:pointer;">Aplicar</button>
+            </div>
           </div>
         </div>
 
-        <div style="max-height: 400px; overflow-y:auto; padding-right:5px;" class="custom-scrollbar">
-          ${opsConBaja.length > 0 ? opsConBaja.map(op => generateClientAlert(op)).join('') : emptyState}
+        <!-- LEGEND -->
+        <div style="display:flex; align-items:center; gap:20px; font-size:0.65rem; color:#cbd5e1; margin-bottom:20px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:10px; height:10px; background:#10b981; border-radius:2px;"></div> Gastó con este perfil
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:10px; height:10px; background:#fbbf24; border-radius:2px;"></div> Gastó con otro perfil mismo (MOWA)
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:10px; height:10px; background:#ef4444; border-radius:2px;"></div> Gastó con otra agencia
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:10px; height:10px; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:2px;"></div> Sin actividad
+          </div>
         </div>
-        
-        <div style="margin-top:12px; font-size:0.6rem; color:#64748b; text-align:center; display:flex; justify-content:center; align-items:center; gap:4px;">
-          <span style="display:inline-block; width:6px; height:6px; background:#10b981; border-radius:50%; box-shadow:0 0 8px #10b981;"></span>
-          Motor de Radar Datame ACTIVO
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div style="font-size:0.75rem; color:#94a3b8;">Mostrando 1–20 de 34 clientes</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#64748b; padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer;">← Anterior</button>
+            <span style="font-size:0.75rem; font-weight:800; color:#f1f5f9;">1 / 2</span>
+            <button style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.3); color:#10b981; padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer; font-weight:700;">Siguiente →</button>
+          </div>
         </div>
+
+        <!-- TABLE GRID -->
+        <div style="overflow-x:auto; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding-bottom:5px;" class="custom-scrollbar">
+          <table style="width:100%; border-collapse:collapse; min-width:1200px;">
+            <thead>
+              <tr>
+                <th style="padding:12px 15px; text-align:left; font-size:0.7rem; font-weight:800; color:#cbd5e1; position:sticky; left:0; background:#0f172a; z-index:3; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05);">
+                  🌟 Cliente
+                </th>
+                <th style="padding:12px 15px; text-align:right; font-size:0.7rem; font-weight:800; color:#cbd5e1; position:sticky; left:180px; background:#0f172a; z-index:3; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05);">
+                  Total
+                </th>
+                ${columnasHoras.map(col => `
+                  <th style="padding:10px 4px; text-align:center; font-size:0.6rem; color:#94a3b8; border-bottom:2px solid rgba(255,255,255,0.1); border-right:1px solid rgba(255,255,255,0.05); min-width:60px;">
+                    <div>${col.dia}</div>
+                    <div style="font-weight:800; color:#f1f5f9; font-size:0.7rem; margin-top:2px;">${col.hora}</div>
+                  </th>
+                `).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${renderGridRows()}
+            </tbody>
+          </table>
+        </div>
+
       </div>
       `;
     }

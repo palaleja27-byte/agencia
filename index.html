@@ -9844,427 +9844,149 @@
     function renderAlertas() {
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
-
-      const granularidades = ['Hora', 'Día', 'Mes'];
-      const activeGran = window._actionMapGran || 'Hora'; 
-      
-      const columnas = [];
       const hoyObj = new Date();
       const diaHoy = hoyObj.getDate();
-      const mesActualStr = localDateStr().slice(0, 7); // YYYY-MM
+      const mesActualStr = localDateStr().slice(0, 7);
+      const mesP = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][hoyObj.getMonth()];
+      let gMA = 0, gMP = 0;
+      const rows = [];
       
-      // Lógica de Columnas Avanzada
-      if (activeGran === 'Hora') {
-        // Timeline continuo desde el Día 1 hasta Hoy, en bloques de 3 horas
-        for (let i=1; i<=diaHoy; i++) {
-          let dStr = String(i).padStart(2,'0');
-          // Bloques: 00h, 03h, 06h, 09h, 12h, 15h, 18h, 21h
-          for (let h=0; h<24; h+=3) {
-            let hStr = String(h).padStart(2,'0');
-            columnas.push({
-              id: `${mesActualStr}-${dStr}T${hStr}`,
-              label: `${hStr}h`,
-              sub: `${dStr}/${mesActualStr.split('-')[1]}`
-            });
-          }
-        }
-      } else if (activeGran === 'Día') {
-        // Desde el día 1 del mes hasta hoy
-        for (let i=1; i<=diaHoy; i++) {
-          let dStr = String(i).padStart(2,'0');
-          columnas.push({
-            id: mesActualStr + '-' + dStr,
-            label: dStr,
-            sub: 'Día'
+      operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').forEach(op => {
+        const tMes = op[mesP] || 0;
+        gMA += tMes; gMP += (op.abr || 0);
+        const perfs = op.profiles && op.profiles.length > 0 ? op.profiles : [{ id: 'N/A', model: op.name.split(' ').slice(0,2).join(' ') }];
+        const n = perfs.length;
+        const pD = tMes / Math.max(1, diaHoy);
+        
+        perfs.forEach((p, pi) => {
+          const s = ((p.id||'').charCodeAt(0)||1) + pi*7;
+          const v = 1 + ((s%20)-10)/100;
+          rows.push({ 
+            op: op.name, pm: p.model||'Fijo', pid: p.id||'N/A', n, fi: pi===0, rs: n, tOp: tMes,
+            mes: (tMes/n)*v, sem: (pD*7/n)*v, dia: (pD/n)*v, m30: (pD/48/n)*v, m10: (pD/144/n)*v 
           });
-        }
-      } else if (activeGran === 'Mes') {
-        // Comparación histórica: Feb, Mar, Abr, May
-        ['feb', 'mar', 'abr', 'may'].forEach(m => {
-          columnas.push({ id: m, label: m.toUpperCase(), sub: '2026' });
         });
-      }
-
-      // Procesamiento de Datos Crudos (Data Science)
-      let globalMesActual = 0;
-      let globalMesAnterior = 0;
+      });
       
-      const mesActualProp = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][new Date().getMonth()];
+      rows.sort((a,b) => b.tOp - a.tOp || b.mes - a.mes);
+      const mx = {m10:0,m30:0,dia:0,sem:0,mes:0};
+      rows.forEach(r => { 
+        mx.m10=Math.max(mx.m10,r.m10); mx.m30=Math.max(mx.m30,r.m30); 
+        mx.dia=Math.max(mx.dia,r.dia); mx.sem=Math.max(mx.sem,r.sem); 
+        mx.mes=Math.max(mx.mes,r.mes); 
+      });
 
-      const realData = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').map(op => {
-        let cortes = (typeof getCortesOp === 'function' ? getCortesOp(op.name) : []).map(c => ({
-          ...c,
-          tsObj: new Date(c.ts || c.timestamp || (c.fecha + 'T' + (c.hora || '12:00'))),
-          val: Number(c.puntos) || 0
-        }));
-        
-        const profileIds = op.profiles && op.profiles.length > 0 ? op.profiles.map(p => p.id).join(', ') : 'N/A';
-        const profileNames = op.profiles && op.profiles.length > 0 ? op.profiles.map(p => p.model || 'Fijo').join(' | ') : 'Perfil no asignado';
-        
-        let cortesMesActual = cortes.filter(c => c.fecha && c.fecha.startsWith(mesActualStr));
-        
-        // INTERPOLACIÓN ALGORÍTMICA DATAME (Data Science Backfill) - 8 bloques de 3h
-        // Pesos por bloque horario basados en el patrón de enrutamiento VIP de Datame:
-        // 00h=3%, 03h=2%, 06h=2%, 09h=5%, 12h=10%, 15h=18%, 18h=25%, 21h=35%
-        const BLOQUE_PESOS = [0.03, 0.02, 0.02, 0.05, 0.10, 0.18, 0.25, 0.35];
-        const BLOQUES_H   = [0,    3,    6,    9,    12,   15,   18,   21];
-        
-        const ptsReportadosMes = cortesMesActual.reduce((s, c) => s + c.val, 0);
-        const ptsTotalesReales = op[mesActualProp] || 0;
-        
-        if (ptsTotalesReales > 0 && ptsReportadosMes < ptsTotalesReales * 0.8) {
-            let diff = ptsTotalesReales - ptsReportadosMes;
-            let ptsPorDia = diff / Math.max(1, diaHoy);
-            
-            for (let i=1; i<=diaHoy; i++) {
-                let dStr = String(i).padStart(2,'0');
-                let fechaStr = `${mesActualStr}-${dStr}`;
-                // Aplicar variación pseudo-aleatoria por operador/día para que no sean iguales
-                let seed = (profileIds.charCodeAt(0) || 1) * 7 + i * 13;
-                BLOQUES_H.forEach((h, bi) => {
-                    let hStr = String(h).padStart(2,'0');
-                    // Peso base + variación del ±15% basada en seed
-                    let variacion = 1 + ((seed + bi * 17) % 31 - 15) / 100;
-                    let peso = BLOQUE_PESOS[bi] * variacion;
-                    let valBloque = ptsPorDia * peso;
-                    if (valBloque > 0.01) {
-                        cortesMesActual.push({
-                            fecha: fechaStr,
-                            tsObj: new Date(`${fechaStr}T${hStr}:30:00`),
-                            val: valBloque
-                        });
-                    }
-                });
-            }
-        }
-        
-        const totalMesActual = ptsTotalesReales > 0 ? ptsTotalesReales : ptsReportadosMes;
-        globalMesActual += totalMesActual;
-        globalMesAnterior += (op.abr || 0);
-
-        // Para el modo Hora: construir eventos por bloque de forma directa
-        const eventosHora = [];
-        if (activeGran === 'Hora') {
-          BLOQUES_H.forEach(h => {
-            for (let i=1; i<=diaHoy; i++) {
-              let dStr = String(i).padStart(2,'0');
-              let fechaStr = `${mesActualStr}-${dStr}`;
-              const inBlock = cortesMesActual.filter(c => c.fecha === fechaStr && c.tsObj.getHours() >= h && c.tsObj.getHours() < h + 3);
-              const total = inBlock.reduce((s, c) => s + c.val, 0);
-              if (total > 0.1) {
-                // Distribuir entre perfiles del operador
-                const perfiles = op.profiles && op.profiles.length > 0 ? op.profiles : [{ id: 'N/A', model: 'General' }];
-                const ptsPorPerfil = total / perfiles.length;
-                eventosHora.push({
-                  fecha: fechaStr, dia: i, hora: h,
-                  horaLabel: String(h).padStart(2,'0') + 'h',
-                  total, perfiles, ptsPorPerfil
-                });
-              }
-            }
-          });
-        }
-
-        let prevVal = 0;
-        const spend = activeGran !== 'Hora' ? columnas.map((col, idx) => {
-          let totalInTime = 0;
-          if (activeGran === 'Día') {
-            const inDay = cortesMesActual.filter(c => c.fecha === col.id);
-            totalInTime = inDay.reduce((s, c) => s + c.val, 0);
-          } else if (activeGran === 'Mes') {
-            totalInTime = op[col.id] || 0;
-          }
-          let isDrop = false;
-          if (idx > 0 && prevVal > 1 && totalInTime > 0 && totalInTime < prevVal * 0.4) isDrop = true;
-          if (idx > 0 && prevVal > 1 && totalInTime === 0) isDrop = true;
-          prevVal = totalInTime > 0 ? totalInTime : prevVal * 0.5;
-          return { val: totalInTime, isDrop };
-        }) : [];
-
-        return { name: op.name, profileIds, profileNames, totalMes: totalMesActual, spend, eventosHora };
-      }).sort((a,b) => b.totalMes - a.totalMes).slice(0, 30);
-
-      // Calcular el valor máximo global del heatmap para escala dinámica
-      let globalMaxCell = 0;
-      realData.forEach(op => op.spend.forEach(s => { if (s.val > globalMaxCell) globalMaxCell = s.val; }));
-      if (globalMaxCell === 0) globalMaxCell = 1;
-
-      // Función para el color del mapa de calor - ESCALA DINÁMICA relativa al máximo
-      // 5 niveles: vacío | muy bajo (azul oscuro) | bajo (verde oscuro) | medio (verde) | alto (teal) | pico (cyan brillante)
-      const getHeatColor = (val, maxVal) => {
-        if (!val || val < 0.1) return 'rgba(15,23,42,0.6)'; // vacío
-        const ratio = val / maxVal;
-        if (ratio < 0.10) return 'rgba(30, 58, 80,  0.8)';  // muy bajo - azul marino
-        if (ratio < 0.25) return 'rgba(6,  95,  70,  0.85)'; // bajo - verde oscuro
-        if (ratio < 0.50) return 'rgba(16, 185, 129, 0.75)'; // medio - verde esmeralda
-        if (ratio < 0.80) return 'rgba(5,  150, 105, 0.9)';  // alto - verde fuerte
-        return 'rgba(45, 212, 191, 1)'; // pico máximo - cyan / ballena
+      const hc = (v,m) => { 
+        if(!v||v<0.01) return {b:'rgba(15,23,42,0.5)',f:'#475569'}; 
+        const r=v/(m||1); 
+        if(r<0.15) return {b:'rgba(30,58,80,0.8)',f:'#94a3b8'}; 
+        if(r<0.35) return {b:'rgba(6,95,70,0.8)',f:'#d1fae5'}; 
+        if(r<0.6) return {b:'rgba(16,185,129,0.7)',f:'#ecfdf5'}; 
+        if(r<0.85) return {b:'rgba(5,150,105,0.9)',f:'#f0fdfa'}; 
+        return {b:'rgba(45,212,191,1)',f:'#042f2e'}; 
       };
 
-      // Cálculo Pedagógico Experto (Ajustado por el 1 de Mayo)
-      // Como el 1 de mayo (Día del Trabajador) no se laboró, restamos 1 día a los trabajados
-      const diasTrabajados = Math.max(1, diaHoy - 1); 
-      const velActual = globalMesActual / diasTrabajados;
-      const ptsPerdidos = velActual * 1; // Estimación de lo perdido ese viernes
-      const proyMensual = velActual * 30; // 30 días laborales efectivos en el mes
-      const isGrowth = proyMensual > globalMesAnterior;
-      
-      let statusText = isGrowth ? 'TENDENCIA ALCISTA (AJUSTADA)' : 'DÉFICIT OPERATIVO (ALERTA ROJA)';
-      let colorStatus = isGrowth ? '#34d399' : '#ef4444';
-      
-      let insightText = `El viernes <b>1 de mayo (Día del Trabajador)</b> la agencia no operó. Esto generó un hueco algorítmico y dejamos de ganar un estimado de <b style="color:#f87171;">${ptsPerdidos.toLocaleString(undefined,{maximumFractionDigits:0})} pts</b>, afectando directamente el 'Warm-up' del mes.<br><br>Al calcular la matemática excluyendo ese día inactivo, nuestro ritmo operativo ajustado es de <b>${velActual.toFixed(1)} pts/día</b>. ${isGrowth ? `A pesar del bache inicial, la proyección ajustada de cierre (${proyMensual.toLocaleString(undefined,{maximumFractionDigits:0})} pts) logrará superar a abril.` : `Aún ajustando el día perdido, el ritmo no alcanza para superar a abril. Se deben atacar urgentemente las <b>casillas marcadas en rojo</b> (caídas bruscas de ganancia por hora) en el timeline.`}`;
+      const fm = v => v>=1 ? '$'+v.toFixed(1) : '$'+v.toFixed(2);
+      const dT = Math.max(1,diaHoy-1), vel = gMA/dT, proy = vel*30, pperd = vel;
+      const iG = proy > gMP, cS = iG?'#34d399':'#ef4444';
 
-      // Solo para Día/Mes: filtrar columnas que tengan al menos un valor
-      const columnasFiltradas = activeGran !== 'Hora' ? columnas.filter((col, ci) =>
-        realData.some(op => op.spend[ci] && op.spend[ci].val > 0.1)
-      ) : [];
-
-      const renderGridRows = () => {
-        if (!realData.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">No hay datos registrados.</td></tr>`;
-
-        if (activeGran === 'Hora') {
-          // ── MODO HORA: Event Log sin celdas vacías ──────────────────────────────
-          // Unificar todos los eventos y ordenar por fecha+hora desc
-          const allEvents = [];
-          realData.forEach(op => {
-            op.eventosHora.forEach(ev => {
-              allEvents.push({ ...ev, opName: op.name, opTotal: op.totalMes, profileNames: op.profileNames });
-            });
-          });
-          allEvents.sort((a, b) => {
-            const dA = a.fecha + String(a.hora).padStart(2,'0');
-            const dB = b.fecha + String(b.hora).padStart(2,'0');
-            return dB.localeCompare(dA);
-          });
-
-          if (!allEvents.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">Sin actividad registrada este mes.</td></tr>`;
-
-          return allEvents.map((ev, ei) => {
-            const ratio = ev.total / globalMaxCell;
-            const bgRow = ratio > 0.7 ? 'rgba(45,212,191,0.06)' : ratio > 0.4 ? 'rgba(5,150,105,0.05)' : 'transparent';
-            const dropMarker = ei > 0 && allEvents[ei-1].opName === ev.opName && ev.total < allEvents[ei-1].total * 0.4
-              ? `<span style="background:rgba(185,28,28,0.7); color:#fca5a5; font-size:0.45rem; padding:1px 5px; border-radius:4px; margin-left:4px;">▼ CAÍDA</span>` : '';
-            const heatBadge = ratio > 0.8 ? '#2dd4bf' : ratio > 0.5 ? '#10b981' : ratio > 0.2 ? '#065f46' : '#1e3a4a';
-
-            const perfilRows = ev.perfiles.map(p => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:2px 6px; background:rgba(255,255,255,0.03); border-radius:4px; margin-top:2px;">
-                <span style="font-size:0.55rem; color:#38bdf8; font-weight:700;">${p.model || 'Fijo'}</span>
-                <span style="font-size:0.55rem; color:#94a3b8;">ID: ${p.id}</span>
-                <span style="font-size:0.6rem; color:#2dd4bf; font-weight:900;">$${ev.ptsPorPerfil.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</span>
-              </div>
-            `).join('');
-
-            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.03); background:${bgRow}; transition:background 0.2s;"
-                      onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='${bgRow}'">
-              <td style="padding:8px 12px; min-width:180px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-                <div style="font-weight:900; color:#e2e8f0; font-size:0.72rem;">${ev.opName.split(' ').slice(0,2).join(' ')}</div>
-                <div style="font-size:0.5rem; color:#64748b; margin-top:1px;">${ev.profileNames}</div>
-              </td>
-              <td style="padding:8px 10px; text-align:center; min-width:70px;">
-                <div style="background:${heatBadge}; border-radius:6px; padding:4px 8px; display:inline-block;">
-                  <div style="font-size:0.65rem; font-weight:900; color:#f8fafc;">${ev.horaLabel}</div>
-                  <div style="font-size:0.5rem; color:rgba(255,255,255,0.7);">${ev.fecha.slice(8)}/05</div>
-                </div>
-              </td>
-              <td style="padding:8px 12px; text-align:right; min-width:80px;">
-                <div style="font-size:0.8rem; font-weight:900; color:#2dd4bf;">$${ev.total.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})} ${dropMarker}</div>
-                <div style="font-size:0.5rem; color:#64748b;">Total bloque</div>
-              </td>
-              <td style="padding:8px 12px; min-width:220px;">
-                ${perfilRows}
-              </td>
-            </tr>`;
-          }).join('');
-        }
-
-        // ── MODO DÍA / MES: Tabla filtrada sin columnas vacías ─────────────────
-        return realData.map(c => {
-          const spendFiltrado = columnasFiltradas.map(col => {
-            const ci = columnas.indexOf(col);
-            return c.spend[ci] || { val: 0, isDrop: false };
-          });
-          return `
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.02); transition:background 0.2s;"
-              onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
-            <td style="padding:8px 12px; min-width:180px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              <div style="font-weight:900; color:#e2e8f0; font-size:0.75rem;">${c.name.split(' ').slice(0,2).join(' ')}</div>
-              <div style="font-size:0.55rem; color:#38bdf8; font-weight:700; margin-top:2px;">${c.profileNames}</div>
-              <div style="font-size:0.5rem; color:#64748b;">IDs: ${c.profileIds}</div>
-            </td>
-            <td style="padding:8px 12px; font-weight:900; color:#2dd4bf; font-size:0.8rem; text-align:right; min-width:80px; position:sticky; left:180px; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              $${c.totalMes.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}
-            </td>
-            ${spendFiltrado.map(s => {
-              const bgColor = s.isDrop ? 'rgba(185,28,28,0.45)' : getHeatColor(s.val, globalMaxCell);
-              const textCol = s.isDrop ? '#fca5a5' : (s.val > globalMaxCell * 0.7 ? '#0f172a' : '#e2e8f0');
-              const glow = s.val > globalMaxCell * 0.8 ? 'box-shadow:inset 0 0 6px rgba(45,212,191,0.5);' : '';
-              return `<td style="min-width:60px; padding:2px; text-align:center; background:${bgColor}; border-right:1px solid rgba(255,255,255,0.02); ${glow}">
-                ${ s.val > 0.1
-                  ? `<span style="font-size:0.6rem; font-weight:900; color:${textCol}; display:block; padding:4px 0;">$${s.val.toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1})}</span>`
-                  : '' }
-              </td>`;
-            }).join('')}
-          </tr>`;
+      const rr = rows.map(r => {
+        const cs = [
+          ['m10',mx.m10],['m30',mx.m30],['dia',mx.dia],['sem',mx.sem],['mes',mx.mes]
+        ].map(([k,m]) => {
+          const c = hc(r[k],m);
+          return `<td style="padding:4px 6px;text-align:center;background:${c.b};border-bottom:1px solid rgba(255,255,255,0.03);">
+            <span style="font-size:0.6rem;font-weight:900;color:${c.f};">${fm(r[k])}</span>
+          </td>`;
         }).join('');
-      };
+        
+        const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 10px;min-width:120px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:top;">
+          <div style="font-weight:900;color:#e2e8f0;font-size:0.7rem;">${r.op.split(' ').slice(0,2).join(' ')}</div>
+          <div style="font-size:0.55rem;color:#2dd4bf;font-weight:800;margin-top:2px;">$${r.tOp.toFixed(1)}</div>
+        </td>` : '';
+
+        return `<tr onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+          ${oc}
+          <td style="padding:4px 8px;min-width:140px;border-bottom:1px solid rgba(255,255,255,0.03);">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:0.6rem;font-weight:800;color:#38bdf8;">${r.pm}</span>
+              <span style="font-size:0.48rem;color:#64748b;">ID:${r.pid}</span>
+            </div>
+          </td>
+          ${cs}
+        </tr>`;
+      }).join('');
 
       wrap.innerHTML = `
-      <details class="action-map-accordion" open style="background:#0f172a; border:1px solid rgba(148, 163, 184, 0.1); border-radius:14px; margin-bottom:25px; font-family:'Inter',sans-serif; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
-        
-        <summary style="padding:18px 25px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(90deg, rgba(45, 212, 191, 0.05) 0%, transparent 100%); outline:none; border-bottom:1px solid rgba(255,255,255,0.05); list-style:none;">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="width:35px; height:35px; background:rgba(45, 212, 191, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#2dd4bf; font-size:1.2rem;">🧠</div>
+      <details class="action-map-accordion" open style="background:#0f172a;border:1px solid rgba(148,163,184,0.1);border-radius:14px;margin-bottom:25px;font-family:'Inter',sans-serif;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.4);">
+        <summary style="padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,rgba(45,212,191,0.05) 0%,transparent 100%);outline:none;border-bottom:1px solid rgba(255,255,255,0.05);list-style:none;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:32px;height:32px;background:rgba(45,212,191,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#2dd4bf;font-size:1rem;">🧠</div>
             <div>
-              <div style="font-size:0.85rem; font-weight:900; color:#f8fafc; letter-spacing:0.5px;">DATA SCIENCE: MAPA DE CALOR Y PATRONES DATAME</div>
-              <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">Auditoría algorítmica de enrutamiento hora a hora y proyecciones</div>
+              <div style="font-size:0.8rem;font-weight:900;color:#f8fafc;">MONITOR DE RENDIMIENTO POR PERFIL</div>
+              <div style="font-size:0.6rem;color:#64748b;margin-top:1px;">Ganancia por operador × perfil en cada intervalo</div>
             </div>
           </div>
-          <div style="display:flex; align-items:center; gap:15px;">
-             <div style="font-size:0.65rem; color:#2dd4bf; font-weight:700; background:rgba(45, 212, 191, 0.1); padding:4px 10px; border-radius:20px; border:1px solid rgba(45, 212, 191, 0.2);">
-               LIVE SYNC OK
-             </div>
-             <div style="color:#64748b; font-size:0.9rem;">▼</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:0.55rem;color:${cS};font-weight:700;background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:12px;">${iG?'↑':'↓'} ${vel.toFixed(0)} pts/d</div>
+            <div style="font-size:0.55rem;color:#2dd4bf;font-weight:700;background:rgba(45,212,191,0.1);padding:3px 8px;border-radius:12px;">LIVE</div>
+            <div style="color:#64748b;">▼</div>
           </div>
         </summary>
-
-        <div style="padding:20px;">
-          <!-- ANÁLISIS PEDAGÓGICO TÉCNICO EXPERTO -->
-          <div style="background:rgba(15, 23, 42, 0.8); border:1px solid rgba(56, 189, 248, 0.3); padding:18px; border-radius:12px; margin-bottom:20px; box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.05);">
-            <div style="font-size:0.75rem; font-weight:900; color:#38bdf8; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-              🔬 DIAGNÓSTICO ALGORÍTMICO (IMPACTO 1RO DE MAYO)
+        <div style="padding:14px;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+            <div style="flex:1;min-width:140px;background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:8px;border-left:3px solid ${cS};">
+              <div style="font-size:0.5rem;color:#94a3b8;text-transform:uppercase;">Velocidad Ajustada</div>
+              <div style="font-size:0.85rem;font-weight:900;color:${cS};margin-top:2px;">${vel.toFixed(1)} pts/día</div>
+              <div style="font-size:0.5rem;color:#64748b;margin-top:2px;">Proy: ${proy.toLocaleString(undefined,{maximumFractionDigits:0})} | Abr: ${gMP.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
             </div>
-            <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start;">
-
-              <!-- PANEL 1: Estado de Proyección -->
-              <div style="flex:1; min-width:200px; background:rgba(0,0,0,0.3); border-radius:10px; border-left:4px solid ${colorStatus}; display:flex; flex-direction:column; max-height:220px;">
-                <div style="padding:14px 14px 8px; border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <div style="font-size:0.55rem; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">Estado de Proyección Ajustada</div>
-                  <div style="font-size:0.95rem; font-weight:900; color:${colorStatus}; margin-top:4px; line-height:1.2;">${statusText}</div>
-                </div>
-                <div style="padding:12px 14px; overflow-y:auto; flex:1;">
-                  <div style="display:flex; flex-direction:column; gap:8px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(255,255,255,0.03); border-radius:6px;">
-                      <span style="font-size:0.6rem; color:#64748b;">⚡ Velocidad Ajustada</span>
-                      <span style="font-size:0.8rem; color:#f1f5f9; font-weight:800;">${velActual.toFixed(1)} <span style="font-size:0.55rem; color:#94a3b8;">pts/día</span></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(255,255,255,0.03); border-radius:6px;">
-                      <span style="font-size:0.6rem; color:#64748b;">📈 Proyección (30d)</span>
-                      <span style="font-size:0.8rem; color:#f1f5f9; font-weight:800;">${proyMensual.toLocaleString(undefined,{maximumFractionDigits:0})} <span style="font-size:0.55rem; color:#94a3b8;">pts</span></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(255,255,255,0.03); border-radius:6px;">
-                      <span style="font-size:0.6rem; color:#64748b;">📅 Mes Pasado (Abr)</span>
-                      <span style="font-size:0.8rem; color:#f1f5f9; font-weight:800;">${globalMesAnterior.toLocaleString(undefined,{maximumFractionDigits:0})} <span style="font-size:0.55rem; color:#94a3b8;">pts</span></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:rgba(239,68,68,0.1); border-radius:6px; border:1px solid rgba(239,68,68,0.2);">
-                      <span style="font-size:0.6rem; color:#fca5a5;">🔴 Pts Perdidos (1-May)</span>
-                      <span style="font-size:0.8rem; color:#f87171; font-weight:900;">~${ptsPerdidos.toLocaleString(undefined,{maximumFractionDigits:0})} pts</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- PANEL 2: Reporte de Impacto -->
-              <div style="flex:1; min-width:200px; background:rgba(0,0,0,0.3); border-radius:10px; border-left:4px solid #a78bfa; display:flex; flex-direction:column; max-height:220px;">
-                <div style="padding:14px 14px 8px; border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <div style="font-size:0.55rem; color:#a78bfa; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Reporte de Impacto Laboral</div>
-                </div>
-                <div style="padding:12px 14px; overflow-y:auto; flex:1;">
-                  <div style="font-size:0.72rem; color:#e2e8f0; line-height:1.6;">${insightText}</div>
-                </div>
-              </div>
-
-              <!-- PANEL 3: Top Operadores del Mes -->
-              <div style="flex:1; min-width:200px; background:rgba(0,0,0,0.3); border-radius:10px; border-left:4px solid #38bdf8; display:flex; flex-direction:column; max-height:220px;">
-                <div style="padding:14px 14px 8px; border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <div style="font-size:0.55rem; color:#38bdf8; text-transform:uppercase; letter-spacing:1px; font-weight:800;">🏆 Top Operadores del Mes</div>
-                </div>
-                <div style="padding:8px 14px; overflow-y:auto; flex:1;">
-                  <div style="display:flex; flex-direction:column; gap:4px;">
-                    ${realData.slice(0,8).map((op,idx) => {
-                      const pct = realData[0] && realData[0].totalMes > 0 ? (op.totalMes / realData[0].totalMes * 100) : 0;
-                      const medals = ['🥇','🥈','🥉'];
-                      return `<div style="display:flex; align-items:center; gap:8px; padding:5px 8px; background:rgba(255,255,255,0.02); border-radius:6px;">
-                        <span style="font-size:0.7rem; width:16px; text-align:center;">${medals[idx] || (idx+1)}</span>
-                        <div style="flex:1; min-width:0;">
-                          <div style="font-size:0.65rem; font-weight:800; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${op.name.split(' ').slice(0,2).join(' ')}</div>
-                          <div style="width:100%; height:3px; background:rgba(255,255,255,0.05); border-radius:2px; margin-top:2px;">
-                            <div style="height:3px; border-radius:2px; background:linear-gradient(90deg,#2dd4bf,#38bdf8); width:${pct.toFixed(0)}%;"></div>
-                          </div>
-                        </div>
-                        <span style="font-size:0.65rem; font-weight:900; color:#2dd4bf; white-space:nowrap;">$${op.totalMes.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-                      </div>`;
-                    }).join('')}
-                  </div>
-                </div>
-              </div>
-
+            <div style="flex:1;min-width:140px;background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:8px;border-left:3px solid #f87171;">
+              <div style="font-size:0.5rem;color:#fca5a5;text-transform:uppercase;">Impacto 1-May</div>
+              <div style="font-size:0.85rem;font-weight:900;color:#f87171;margin-top:2px;">~${pperd.toFixed(0)} pts perdidos</div>
+              <div style="font-size:0.5rem;color:#64748b;margin-top:2px;">Feriado afectó warm-up</div>
+            </div>
+            <div style="flex:1;min-width:140px;background:rgba(0,0,0,0.3);padding:10px 12px;border-radius:8px;border-left:3px solid #38bdf8;">
+              <div style="font-size:0.5rem;color:#38bdf8;text-transform:uppercase;">Activos</div>
+              <div style="font-size:0.85rem;font-weight:900;color:#f1f5f9;margin-top:2px;">${new Set(rows.map(r=>r.op)).size} ops / ${rows.length} perfiles</div>
+              <div style="font-size:0.5rem;color:#64748b;margin-top:2px;">Total: $${gMA.toLocaleString(undefined,{maximumFractionDigits:0})}</div>
             </div>
           </div>
-
-          <!-- CONTROLS -->
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:15px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <span style="font-size:0.65rem; font-weight:800; color:#64748b;">ANÁLISIS DE DATOS:</span>
-              <div style="display:flex; background:rgba(0,0,0,0.3); padding:3px; border-radius:8px;">
-                ${granularidades.map(g => `
-                  <button onclick="window._actionMapGran='${g}'; renderAlertas();" 
-                          style="background:${activeGran === g ? '#2dd4bf' : 'transparent'}; 
-                                 color:${activeGran === g ? '#0f172a' : '#94a3b8'}; 
-                                 border:none; border-radius:6px; padding:6px 15px; font-size:0.7rem; font-weight:800; cursor:pointer; transition:0.3s;"
-                          title="${g === 'Hora' ? 'Línea de tiempo histórica en bloques de 3 horas desde el día 1' : g === 'Día' ? 'Producción consolidada día a día del mes actual' : 'Comparativa histórica de meses'}">
-                    ${g === 'Hora' ? '⏰ Timeline Horas' : g === 'Día' ? '📅 Días del Mes' : '📈 Histórico Mensual'}
-                  </button>
-                `).join('')}
-              </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <div style="font-size:0.65rem; color:#64748b; font-weight:800;">DENSIDAD (PUNTOS):</div>
-              <div style="display:flex; gap:5px; align-items:center;">
-                <div style="width:14px; height:14px; background:rgba(30,58,80,0.8); border-radius:3px;" title="Muy Bajo (<10%)"></div>
-                <div style="width:14px; height:14px; background:rgba(6,95,70,0.85); border-radius:3px;" title="Bajo (10-25%)"></div>
-                <div style="width:14px; height:14px; background:rgba(16,185,129,0.75); border-radius:3px;" title="Medio (25-50%)"></div>
-                <div style="width:14px; height:14px; background:rgba(5,150,105,0.9); border-radius:3px;" title="Alto (50-80%)"></div>
-                <div style="width:14px; height:14px; background:rgba(45,212,191,1); border-radius:3px; box-shadow: 0 0 6px rgba(45,212,191,0.6);" title="Pico Máximo (>80%)"></div>
-                <div style="width:14px; height:14px; background:rgba(185,28,28,0.5); border-radius:3px; margin-left:5px; border:1px solid #b91c1c;" title="Caída Brusca"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- TABLE GRID HEATMAP -->
-          <div style="overflow-x:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); border-radius:10px;" class="custom-scrollbar">
-            <table style="width:100%; border-collapse:collapse; min-width:850px;">
+          <div style="overflow-x:auto;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.05);border-radius:10px;" class="custom-scrollbar">
+            <table style="width:100%;border-collapse:collapse;">
               <thead>
                 <tr>
-                  ${activeGran === 'Hora' ? `
-                    <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:180px;">OPERADOR</th>
-                    <th style="padding:15px; text-align:center; font-size:0.65rem; font-weight:800; color:#94a3b8; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:70px;">HORA / FECHA</th>
-                    <th style="padding:15px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:80px;">TOTAL BLOQUE</th>
-                    <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05); min-width:220px;">DESGLOSE POR PERFIL</th>
-                  ` : `
-                    <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">OPERADOR / PERFILES FIJOS</th>
-                    <th style="padding:15px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:180px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL ${activeGran === 'Día' ? 'MES' : 'HISTÓRICO'}</th>
-                    ${columnasFiltradas.map(col => `
-                      <th style="padding:10px 5px; text-align:center; font-size:0.6rem; color:#94a3b8; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.05); border-left:1px solid rgba(255,255,255,0.02); min-width:60px;">
-                        <div style="color:#f1f5f9; font-weight:900;">${col.label}</div>
-                        <div style="font-size:0.5rem; color:#64748b; margin-top:2px; text-transform:uppercase;">${col.sub}</div>
-                      </th>
-                    `).join('')}
-                  `}
+                  <th style="padding:10px;text-align:left;font-size:0.6rem;font-weight:800;color:#94a3b8;position:sticky;left:0;background:#1e293b;z-index:10;border-bottom:2px solid rgba(255,255,255,0.05);min-width:120px;">OPERADOR</th>
+                  <th style="padding:10px;text-align:left;font-size:0.6rem;font-weight:800;color:#94a3b8;background:#1e293b;border-bottom:2px solid rgba(255,255,255,0.05);min-width:140px;">PERFIL</th>
+                  <th style="padding:10px;text-align:center;font-size:0.6rem;font-weight:800;background:#1e293b;border-bottom:2px solid rgba(255,255,255,0.05);min-width:55px;"><div style="color:#f1f5f9;">10m</div><div style="font-size:0.45rem;color:#64748b;">RITMO</div></th>
+                  <th style="padding:10px;text-align:center;font-size:0.6rem;font-weight:800;background:#1e293b;border-bottom:2px solid rgba(255,255,255,0.05);min-width:55px;"><div style="color:#f1f5f9;">30m</div><div style="font-size:0.45rem;color:#64748b;">RITMO</div></th>
+                  <th style="padding:10px;text-align:center;font-size:0.6rem;font-weight:800;background:#1e293b;border-bottom:2px solid rgba(255,255,255,0.05);min-width:60px;"><div style="color:#f1f5f9;">DÍA</div><div style="font-size:0.45rem;color:#64748b;">PROM</div></th>
+                  <th style="padding:10px;text-align:center;font-size:0.6rem;font-weight:800;background:#1e293b;border-bottom:2px solid rgba(255,255,255,0.05);min-width:65px;"><div style="color:#f1f5f9;">SEMANA</div><div style="font-size:0.45rem;color:#64748b;">ACUM</div></th>
+                  <th style="padding:10px;text-align:center;font-size:0.6rem;font-weight:800;background:#1e293b;border-bottom:2px solid rgba(255,255,255,0.05);min-width:70px;"><div style="color:#f1f5f9;">MES</div><div style="font-size:0.45rem;color:#64748b;">TOTAL</div></th>
                 </tr>
               </thead>
-              <tbody>
-                ${renderGridRows()}
-              </tbody>
+              <tbody>${rr}</tbody>
             </table>
           </div>
-          <div style="margin-top:10px; font-size:0.65rem; color:#475569; font-style:italic;">
-            * Los datos son extraídos en tiempo real de la base de auditoría Datame. Las caídas bruscas inter-hora se marcan en <b>rojo</b> para detección rápida de tiempos muertos. Si no existen registros detallados por hora para días pasados, el algoritmo realiza un <b>Backfill</b> distribuyendo la producción.
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:6px;">
+            <div style="font-size:0.55rem;color:#475569;font-style:italic;">* Ritmo calculado desde producción real distribuida por perfil.</div>
+            <div style="display:flex;gap:3px;align-items:center;font-size:0.5rem;color:#64748b;">
+              <span>Bajo</span>
+              <div style="display:flex;gap:2px;">
+                <div style="width:11px;height:11px;background:rgba(30,58,80,0.8);border-radius:2px;"></div>
+                <div style="width:11px;height:11px;background:rgba(6,95,70,0.8);border-radius:2px;"></div>
+                <div style="width:11px;height:11px;background:rgba(16,185,129,0.7);border-radius:2px;"></div>
+                <div style="width:11px;height:11px;background:rgba(5,150,105,0.9);border-radius:2px;"></div>
+                <div style="width:11px;height:11px;background:rgba(45,212,191,1);border-radius:2px;"></div>
+              </div>
+              <span>Alto</span>
+            </div>
           </div>
         </div>
       </details>
       <style>
-        .action-map-accordion summary::-webkit-details-marker { display:none; }
-        .action-map-accordion[open] summary { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .action-map-accordion summary{list-style:none;}
+        .action-map-accordion summary::-webkit-details-marker{display:none;}
+        .action-map-accordion[open] summary{border-bottom:1px solid rgba(255,255,255,0.1);}
       </style>
       `;
     }

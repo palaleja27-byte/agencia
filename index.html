@@ -9846,7 +9846,7 @@
       if (!wrap) return;
 
       const granularidades = ['Hora', 'Día', 'Semana', 'Mes'];
-      const activeGran = window._actionMapGran || 'Hora';
+      const activeGran = window._actionMapGran || 'Día'; // Default to Día so it's filled
       
       const columnas = [];
       let d = new Date();
@@ -9875,16 +9875,16 @@
           d.setDate(d.getDate() + 1);
         }
       } else {
-        // Fallback para Semana/Mes (Demo técnico ya que no hay histórico masivo local)
-        d.setHours(d.getHours() - 11);
-        for (let i=0; i<12; i++) {
+        // Fallback Semanal / Mensual demo
+        d.setDate(d.getDate() - 6);
+        for (let i=0; i<7; i++) {
           columnas.push({
-            tsStart: new Date(d).setMinutes(0,0,0),
-            tsEnd: new Date(d).setMinutes(59,59,999),
+            tsStart: new Date(d).setHours(0,0,0,0),
+            tsEnd: new Date(d).setHours(23,59,59,999),
             dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
-            label: String(d.getHours()).padStart(2,'0') + 'h'
+            label: 'Día'
           });
-          d.setHours(d.getHours() + 1);
+          d.setDate(d.getDate() + 1);
         }
       }
 
@@ -9896,46 +9896,53 @@
         }));
         
         const profile = op.profiles && op.profiles.length ? op.profiles[0] : { id: 'N/A', model: op.name };
+        
+        // El total de hoy es la suma de los puntos de todos los cortes de hoy
         const hoy = localDateStr();
         const cortesHoy = cortes.filter(c => c.fecha === hoy);
-        const total = cortesHoy.length ? Math.max(...cortesHoy.map(c => Number(c.puntos)||0)) : 0;
+        const totalHoy = cortesHoy.reduce((s, c) => s + (Number(c.puntos)||0), 0);
 
         const spend = columnas.map(col => {
           const inTime = cortes.filter(c => c.ts >= col.tsStart && c.ts <= col.tsEnd);
           if (!inTime.length) return null;
           
-          const before = cortes.filter(c => c.ts < col.tsStart);
-          const maxBefore = before.length ? Math.max(...before.map(c => Number(c.puntos)||0)) : 0;
-          const maxIn = Math.max(...inTime.map(c => Number(c.puntos)||0));
-          
-          const delta = maxIn - maxBefore;
-          return delta > 0.1 ? delta : null;
+          // La suma de puntos reportados en esta franja (shift)
+          const totalInTime = inTime.reduce((s, c) => s + (Number(c.puntos)||0), 0);
+          return totalInTime > 0.1 ? totalInTime : null;
         });
 
-        return { name: op.name, id: profile.id, total, spend };
-      }).sort((a,b) => b.total - a.total).slice(0, 25);
+        // Usar total general (todo el mes activo) para ordenar
+        const currProp = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][new Date().getMonth()];
+        const totalMes = op[currProp] || 0;
 
-      // Función para el color del mapa de calor
+        return { name: op.name, id: profile.id, totalHoy, spend, totalMes };
+      }).sort((a,b) => b.totalMes - a.totalMes).slice(0, 25);
+
+      // Función para el color del mapa de calor (Basado en Puntos sumados)
       const getHeatColor = (val) => {
         if (!val) return 'transparent';
-        if (val < 5) return 'rgba(16, 185, 129, 0.2)'; // Muy Bajo
-        if (val < 15) return 'rgba(16, 185, 129, 0.4)'; // Bajo
-        if (val < 40) return 'rgba(16, 185, 129, 0.7)'; // Medio
-        if (val < 100) return 'rgba(5, 150, 105, 0.9)'; // Alto
-        return 'rgba(45, 212, 191, 1)'; // Crítico / Ballena
+        if (val < 15) return 'rgba(16, 185, 129, 0.2)'; // Bajo
+        if (val < 40) return 'rgba(16, 185, 129, 0.5)'; // Moderado
+        if (val < 80) return 'rgba(5, 150, 105, 0.8)'; // Fuerte
+        return 'rgba(45, 212, 191, 1)'; // Ballena / Excelente
       };
 
-      // Cálculo para el Análisis Pedagógico de los 6 días
+      // Cálculo para el Análisis Pedagógico
       const hoyObj = new Date();
-      const diaHoy = hoyObj.getDate();
-      const h = window._rkHistorial || { totalMay: 0, totalAbr: 0 };
-      const ptsMayActual = h.totalMay || 0;
-      const velMay = diaHoy > 0 ? ptsMayActual / diaHoy : 0;
+      const diaHoy = hoyObj.getDate() || 1;
+      const mIdx = hoyObj.getMonth();
+      const mesNombres = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const mCurrStr = mesNombres[mIdx];
+      const mPrevStr = mesNombres[(mIdx - 1 + 12) % 12];
+
+      const ptsMesActual = operatorsData.reduce((sum, op) => sum + (op[mCurrStr] || 0), 0);
+      const ptsMesPasado = operatorsData.reduce((sum, op) => sum + (op[mPrevStr] || 0), 0);
       
-      // Proyección basada en los primeros 6 días
-      const proyMay = velMay * 31;
-      const statusMay = proyMay > (h.totalAbr || 1) ? 'CRECIMIENTO' : 'BAJA TEMPORAL';
-      const colorStatus = proyMay > (h.totalAbr || 1) ? '#34d399' : '#f87171';
+      const velActual = ptsMesActual / diaHoy;
+      const proyMensual = velActual * 31;
+      const isGrowth = proyMensual > ptsMesPasado;
+      const statusText = isGrowth ? 'CRECIMIENTO PROYECTADO' : 'BAJA TEMPORAL (WARM-UP)';
+      const colorStatus = isGrowth ? '#34d399' : '#f87171';
 
       const renderGridRows = () => {
         if (!realData.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">No hay datos en vivo registrados.</td></tr>`;
@@ -9946,13 +9953,13 @@
               <div style="font-size:0.55rem; color:#64748b;">ID: ${c.id}</div>
             </td>
             <td style="padding:8px 12px; font-weight:900; color:#2dd4bf; font-size:0.8rem; text-align:right; min-width:80px; position:sticky; left:160px; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              $${c.total.toLocaleString()}
+              $${c.totalHoy.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
             </td>
             ${c.spend.map(val => {
               const color = getHeatColor(val);
               return `
-              <td style="min-width:55px; padding:2px; text-align:center; background:${color}; border-right:1px solid rgba(255,255,255,0.01); transition: all 0.3s;">
-                ${val ? `<span style="font-size:0.6rem; font-weight:800; color:#fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">$${val.toFixed(1)}</span>` : ''}
+              <td style="min-width:65px; padding:2px; text-align:center; background:${color}; border-right:1px solid rgba(255,255,255,0.01); transition: all 0.3s;">
+                ${val ? `<span style="font-size:0.65rem; font-weight:800; color:#fff; text-shadow: 0 1px 3px rgba(0,0,0,0.6);">$${val.toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1})}</span>` : ''}
               </td>`;
             }).join('')}
           </tr>
@@ -9982,18 +9989,19 @@
           <!-- ANÁLISIS PEDAGÓGICO TÉCNICO -->
           <div style="background:rgba(15, 23, 42, 0.6); border:1px solid rgba(56, 189, 248, 0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
             <div style="font-size:0.75rem; font-weight:900; color:#38bdf8; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-              🔬 ANÁLISIS TÉCNICO: LOS PRIMEROS 6 DÍAS
+              🔬 ANÁLISIS TÉCNICO: COMPORTAMIENTO INICIAL DEL MES
             </div>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:12px;">
               <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border-left:3px solid ${colorStatus};">
                 <div style="font-size:0.6rem; color:#94a3b8; text-transform:uppercase;">Estado de Cierre (Proyectado)</div>
-                <div style="font-size:1rem; font-weight:900; color:${colorStatus}; margin-top:3px;">${statusMay}</div>
-                <div style="font-size:0.65rem; color:#cbd5e1; margin-top:2px;">Velocidad Actual: <b>${velMay.toFixed(1)} pts/día</b></div>
+                <div style="font-size:1rem; font-weight:900; color:${colorStatus}; margin-top:3px;">${statusText}</div>
+                <div style="font-size:0.65rem; color:#cbd5e1; margin-top:2px;">Velocidad Actual: <b>${velActual.toFixed(1)} pts/día</b></div>
+                <div style="font-size:0.65rem; color:#64748b; margin-top:1px;">Proyección: <b>${proyMensual.toLocaleString(undefined, {maximumFractionDigits:0})} pts</b> vs <b>${ptsMesPasado.toLocaleString()} pts</b> (${mPrevStr})</div>
               </div>
               <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border-left:3px solid #a78bfa;">
-                <div style="font-size:0.6rem; color:#94a3b8; text-transform:uppercase;">Por qué la baja inicial?</div>
+                <div style="font-size:0.6rem; color:#94a3b8; text-transform:uppercase;">Por qué la baja o fluctuación inicial?</div>
                 <div style="font-size:0.7rem; color:#e2e8f0; line-height:1.4; margin-top:5px;">
-                  El algoritmo Datame resetea la <b>Prioridad VIP</b> cada 1ro de mes. Los primeros 6 días son de "Calentamiento de Tráfico" (Warm-up). Los números demuestran que la tracción real inicia el día 7.
+                  El algoritmo Datame resetea la <b>Prioridad VIP</b> cada 1ro de mes. Los primeros 6 días son de "Calentamiento de Tráfico" (Warm-up). Los números demuestran que la tracción de enrutamiento fuerte inicia a partir de la primera semana operativa.
                 </div>
               </div>
             </div>
@@ -10015,11 +10023,12 @@
               </div>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <div style="font-size:0.65rem; color:#64748b;">LEYENDA:</div>
+              <div style="font-size:0.65rem; color:#64748b;">LEYENDA DE INYECCIÓN:</div>
               <div style="display:flex; gap:8px;">
                 <div style="width:12px; height:12px; background:rgba(16, 185, 129, 0.2); border-radius:3px;" title="Bajo"></div>
-                <div style="width:12px; height:12px; background:rgba(16, 185, 129, 0.7); border-radius:3px;" title="Medio"></div>
-                <div style="width:12px; height:12px; background:rgba(45, 212, 191, 1); border-radius:3px;" title="Alto"></div>
+                <div style="width:12px; height:12px; background:rgba(16, 185, 129, 0.5); border-radius:3px;" title="Moderado"></div>
+                <div style="width:12px; height:12px; background:rgba(5, 150, 105, 0.8); border-radius:3px;" title="Fuerte"></div>
+                <div style="width:12px; height:12px; background:rgba(45, 212, 191, 1); border-radius:3px;" title="Ballena/Excelente"></div>
               </div>
             </div>
           </div>
@@ -10030,7 +10039,7 @@
               <thead>
                 <tr>
                   <th style="padding:12px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">OPERADOR / PERFIL</th>
-                  <th style="padding:12px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:160px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL HOY</th>
+                  <th style="padding:12px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:160px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL ${activeGran === 'Día' ? 'HOY' : ''}</th>
                   ${columnas.map(col => `
                     <th style="padding:10px 5px; text-align:center; font-size:0.55rem; color:#64748b; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.05);">
                       <div style="color:#f1f5f9; font-weight:800;">${col.label === 'Día' ? col.dia : col.label}</div>
@@ -10045,7 +10054,7 @@
             </table>
           </div>
           <div style="margin-top:10px; font-size:0.6rem; color:#475569; font-style:italic;">
-            * Los datos se actualizan automáticamente tras cada sincronización de los paneles de Datame.
+            * Los datos se actualizan automáticamente tras cada sincronización de los paneles de Datame. Granularidad actual: <b>${activeGran}</b>.
           </div>
         </div>
       </details>

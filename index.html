@@ -9845,120 +9845,127 @@
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
 
-      const granularidades = ['Hora', 'Día', 'Semana', 'Mes'];
-      const activeGran = window._actionMapGran || 'Día'; // Default to Día so it's filled
+      const granularidades = ['Hora', 'Día', 'Mes'];
+      const activeGran = window._actionMapGran || 'Hora'; 
       
       const columnas = [];
-      let d = new Date();
+      const hoyObj = new Date();
+      const diaHoy = hoyObj.getDate();
+      const mesActualStr = localDateStr().slice(0, 7); // YYYY-MM
       
-      // Lógica de Columnas según Granularidad
+      // Lógica de Columnas Avanzada
       if (activeGran === 'Hora') {
-        d.setHours(d.getHours() - 11);
-        for (let i=0; i<12; i++) {
+        // Agrupación de 24 horas para identificar el patrón del mes
+        for (let i=0; i<24; i++) {
           columnas.push({
-            tsStart: new Date(d).setMinutes(0,0,0),
-            tsEnd: new Date(d).setMinutes(59,59,999),
-            dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
-            label: String(d.getHours()).padStart(2,'0') + 'h'
+            id: i,
+            label: String(i).padStart(2,'0') + 'h',
+            sub: 'Prom. Mes'
           });
-          d.setHours(d.getHours() + 1);
         }
       } else if (activeGran === 'Día') {
-        d.setDate(d.getDate() - 6);
-        for (let i=0; i<7; i++) {
+        // Desde el día 1 del mes hasta hoy
+        for (let i=1; i<=diaHoy; i++) {
+          let dStr = String(i).padStart(2,'0');
           columnas.push({
-            tsStart: new Date(d).setHours(0,0,0,0),
-            tsEnd: new Date(d).setHours(23,59,59,999),
-            dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
-            label: 'Día'
+            id: mesActualStr + '-' + dStr,
+            label: dStr,
+            sub: 'Día'
           });
-          d.setDate(d.getDate() + 1);
         }
-      } else {
-        // Fallback Semanal / Mensual demo
-        d.setDate(d.getDate() - 6);
-        for (let i=0; i<7; i++) {
-          columnas.push({
-            tsStart: new Date(d).setHours(0,0,0,0),
-            tsEnd: new Date(d).setHours(23,59,59,999),
-            dia: String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'),
-            label: 'Día'
-          });
-          d.setDate(d.getDate() + 1);
-        }
+      } else if (activeGran === 'Mes') {
+        // Comparación histórica: Feb, Mar, Abr, May
+        ['feb', 'mar', 'abr', 'may'].forEach(m => {
+          columnas.push({ id: m, label: m.toUpperCase(), sub: '2026' });
+        });
       }
 
-      // Preparar datos reales de operadores con Mapa de Calor
+      // Procesamiento de Datos Crudos (Data Science)
+      let globalMesActual = 0;
+      let globalMesAnterior = 0;
+
       const realData = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').map(op => {
         const cortes = (typeof getCortesOp === 'function' ? getCortesOp(op.name) : []).map(c => ({
           ...c,
-          ts: c.ts || c.timestamp || new Date(c.fecha + 'T' + (c.hora || '12:00')).getTime()
+          tsObj: new Date(c.ts || c.timestamp || (c.fecha + 'T' + (c.hora || '12:00'))),
+          val: Number(c.puntos) || 0
         }));
         
         const profile = op.profiles && op.profiles.length ? op.profiles[0] : { id: 'N/A', model: op.name };
         
-        // El total de hoy es la suma de los puntos de todos los cortes de hoy
-        const hoy = localDateStr();
-        const cortesHoy = cortes.filter(c => c.fecha === hoy);
-        const totalHoy = cortesHoy.reduce((s, c) => s + (Number(c.puntos)||0), 0);
+        // Calcular los totales reales sumando los cortes
+        const cortesMesActual = cortes.filter(c => c.fecha && c.fecha.startsWith(mesActualStr));
+        const totalMesActual = cortesMesActual.reduce((s, c) => s + c.val, 0) || (op.may || 0);
+        
+        globalMesActual += totalMesActual;
+        globalMesAnterior += (op.abr || 0);
 
         const spend = columnas.map(col => {
-          const inTime = cortes.filter(c => c.ts >= col.tsStart && c.ts <= col.tsEnd);
-          if (!inTime.length) return null;
-          
-          // La suma de puntos reportados en esta franja (shift)
-          const totalInTime = inTime.reduce((s, c) => s + (Number(c.puntos)||0), 0);
-          return totalInTime > 0.1 ? totalInTime : null;
+          let totalInTime = 0;
+          if (activeGran === 'Hora') {
+            // Filtrar cortes del mes actual que ocurrieron en esta hora (0-23)
+            const inHour = cortesMesActual.filter(c => c.tsObj.getHours() === col.id);
+            totalInTime = inHour.reduce((s, c) => s + c.val, 0);
+          } else if (activeGran === 'Día') {
+            // Filtrar cortes del día específico
+            const inDay = cortesMesActual.filter(c => c.fecha === col.id);
+            totalInTime = inDay.reduce((s, c) => s + c.val, 0);
+          } else if (activeGran === 'Mes') {
+            totalInTime = op[col.id] || 0;
+          }
+          return totalInTime > 0 ? totalInTime : null;
         });
 
-        // Usar total general (todo el mes activo) para ordenar
-        const currProp = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][new Date().getMonth()];
-        const totalMes = op[currProp] || 0;
+        return { name: op.name, id: profile.id, totalMes: totalMesActual, spend };
+      }).sort((a,b) => b.totalMes - a.totalMes).slice(0, 30);
 
-        return { name: op.name, id: profile.id, totalHoy, spend, totalMes };
-      }).sort((a,b) => b.totalMes - a.totalMes).slice(0, 25);
-
-      // Función para el color del mapa de calor (Basado en Puntos sumados)
-      const getHeatColor = (val) => {
+      // Función para el color del mapa de calor (Basado en intensidad)
+      const getHeatColor = (val, gran) => {
         if (!val) return 'transparent';
-        if (val < 15) return 'rgba(16, 185, 129, 0.2)'; // Bajo
-        if (val < 40) return 'rgba(16, 185, 129, 0.5)'; // Moderado
-        if (val < 80) return 'rgba(5, 150, 105, 0.8)'; // Fuerte
+        let umbral = gran === 'Mes' ? 1000 : (gran === 'Día' ? 50 : 15);
+        
+        if (val < umbral * 0.3) return 'rgba(16, 185, 129, 0.2)'; // Bajo
+        if (val < umbral * 0.7) return 'rgba(16, 185, 129, 0.5)'; // Moderado
+        if (val < umbral * 1.5) return 'rgba(5, 150, 105, 0.8)'; // Fuerte
         return 'rgba(45, 212, 191, 1)'; // Ballena / Excelente
       };
 
-      // Cálculo para el Análisis Pedagógico
-      const hoyObj = new Date();
-      const diaHoy = hoyObj.getDate() || 1;
-      const mIdx = hoyObj.getMonth();
-      const mesNombres = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-      const mCurrStr = mesNombres[mIdx];
-      const mPrevStr = mesNombres[(mIdx - 1 + 12) % 12];
-
-      const ptsMesActual = operatorsData.reduce((sum, op) => sum + (op[mCurrStr] || 0), 0);
-      const ptsMesPasado = operatorsData.reduce((sum, op) => sum + (op[mPrevStr] || 0), 0);
-      
-      const velActual = ptsMesActual / diaHoy;
+      // Cálculo Pedagógico Experto
+      const velActual = globalMesActual / (diaHoy || 1);
       const proyMensual = velActual * 31;
-      const isGrowth = proyMensual > ptsMesPasado;
-      const statusText = isGrowth ? 'CRECIMIENTO PROYECTADO' : 'BAJA TEMPORAL (WARM-UP)';
-      const colorStatus = isGrowth ? '#34d399' : '#f87171';
+      const isGrowth = proyMensual > globalMesAnterior;
+      
+      let statusText = 'ANÁLISIS INSUFICIENTE';
+      let colorStatus = '#94a3b8';
+      let insightText = '';
+
+      if (diaHoy <= 6) {
+        statusText = 'FASE DE WARM-UP (CALENTAMIENTO)';
+        colorStatus = '#f59e0b';
+        insightText = `El algoritmo de Datame ha reseteado la <b>Prioridad VIP</b> (ocurre los días 1 de cada mes). Durante estos primeros ${diaHoy} días, el tráfico es inestable mientras el sistema evalúa la retención. Las caídas actuales son <b>técnicamente normales</b>. La verdadera curva de crecimiento exponencial inicia en la segunda semana.`;
+      } else {
+        statusText = isGrowth ? 'TENDENCIA ALCISTA (CRECIMIENTO)' : 'DÉFICIT DE RITMO OPERATIVO';
+        colorStatus = isGrowth ? '#34d399' : '#f87171';
+        insightText = isGrowth 
+          ? `Tras superar la fase de Warm-up, el algoritmo ha consolidado el tráfico VIP. La proyección actual de <b>${proyMensual.toLocaleString(undefined, {maximumFractionDigits:0})} pts</b> superará el cierre del mes pasado (${globalMesAnterior.toLocaleString()} pts).`
+          : `Alerta algorítmica: La velocidad de <b>${velActual.toFixed(1)} pts/día</b> es insuficiente para superar el mes anterior. Se requiere una auditoría inmediata en las horas marcadas en rojo/vacío en el mapa de calor para recuperar la tracción perdida.`;
+      }
 
       const renderGridRows = () => {
         if (!realData.length) return `<tr><td colspan="100%" style="text-align:center; padding:20px; color:#64748b;">No hay datos en vivo registrados.</td></tr>`;
         return realData.map(c => `
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.02);">
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.02); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
             <td style="padding:8px 12px; min-width:160px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
               <div style="font-weight:800; color:#e2e8f0; font-size:0.75rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name.split(' ').slice(0,2).join(' ')}</div>
               <div style="font-size:0.55rem; color:#64748b;">ID: ${c.id}</div>
             </td>
             <td style="padding:8px 12px; font-weight:900; color:#2dd4bf; font-size:0.8rem; text-align:right; min-width:80px; position:sticky; left:160px; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);">
-              $${c.totalHoy.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}
+              $${c.totalMes.toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1})}
             </td>
             ${c.spend.map(val => {
-              const color = getHeatColor(val);
+              const color = getHeatColor(val, activeGran);
               return `
-              <td style="min-width:65px; padding:2px; text-align:center; background:${color}; border-right:1px solid rgba(255,255,255,0.01); transition: all 0.3s;">
+              <td style="min-width:60px; padding:2px; text-align:center; background:${color}; border-right:1px solid rgba(255,255,255,0.01); transition: all 0.3s;">
                 ${val ? `<span style="font-size:0.65rem; font-weight:800; color:#fff; text-shadow: 0 1px 3px rgba(0,0,0,0.6);">$${val.toLocaleString(undefined, {minimumFractionDigits:1, maximumFractionDigits:1})}</span>` : ''}
               </td>`;
             }).join('')}
@@ -9967,14 +9974,14 @@
       };
 
       wrap.innerHTML = `
-      <details class="action-map-accordion" open style="background:#0f172a; border:1px solid rgba(148, 163, 184, 0.1); border-radius:14px; margin-bottom:25px; font-family:'Inter',sans-serif; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+      <details class="action-map-accordion" open style="background:#0f172a; border:1px solid rgba(148, 163, 184, 0.1); border-radius:14px; margin-bottom:25px; font-family:'Inter',sans-serif; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
         
         <summary style="padding:18px 25px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(90deg, rgba(45, 212, 191, 0.05) 0%, transparent 100%); outline:none; border-bottom:1px solid rgba(255,255,255,0.05); list-style:none;">
           <div style="display:flex; align-items:center; gap:12px;">
-            <div style="width:35px; height:35px; background:rgba(45, 212, 191, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#2dd4bf; font-size:1.2rem;">📊</div>
+            <div style="width:35px; height:35px; background:rgba(45, 212, 191, 0.1); border-radius:10px; display:flex; align-items:center; justify-content:center; color:#2dd4bf; font-size:1.2rem;">🧠</div>
             <div>
-              <div style="font-size:0.85rem; font-weight:900; color:#f8fafc; letter-spacing:0.5px;">MAPA DE CALOR Y ACCIÓN DATAME (REAL-TIME)</div>
-              <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">Monitoreo granular de inyección de capital por perfil</div>
+              <div style="font-size:0.85rem; font-weight:900; color:#f8fafc; letter-spacing:0.5px;">DATA SCIENCE: MAPA DE CALOR Y PATRONES DATAME</div>
+              <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">Análisis experto de rendimiento, horarios calientes y proyecciones</div>
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:15px;">
@@ -9986,22 +9993,34 @@
         </summary>
 
         <div style="padding:20px;">
-          <!-- ANÁLISIS PEDAGÓGICO TÉCNICO -->
-          <div style="background:rgba(15, 23, 42, 0.6); border:1px solid rgba(56, 189, 248, 0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
-            <div style="font-size:0.75rem; font-weight:900; color:#38bdf8; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-              🔬 ANÁLISIS TÉCNICO: COMPORTAMIENTO INICIAL DEL MES
+          <!-- ANÁLISIS PEDAGÓGICO TÉCNICO EXPERTO -->
+          <div style="background:rgba(15, 23, 42, 0.8); border:1px solid rgba(56, 189, 248, 0.3); padding:18px; border-radius:12px; margin-bottom:20px; box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.05);">
+            <div style="font-size:0.75rem; font-weight:900; color:#38bdf8; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+              🔬 DIAGNÓSTICO ALGORÍTMICO (MES ACTUAL vs HISTÓRICO)
             </div>
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:12px;">
-              <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border-left:3px solid ${colorStatus};">
-                <div style="font-size:0.6rem; color:#94a3b8; text-transform:uppercase;">Estado de Cierre (Proyectado)</div>
-                <div style="font-size:1rem; font-weight:900; color:${colorStatus}; margin-top:3px;">${statusText}</div>
-                <div style="font-size:0.65rem; color:#cbd5e1; margin-top:2px;">Velocidad Actual: <b>${velActual.toFixed(1)} pts/día</b></div>
-                <div style="font-size:0.65rem; color:#64748b; margin-top:1px;">Proyección: <b>${proyMensual.toLocaleString(undefined, {maximumFractionDigits:0})} pts</b> vs <b>${ptsMesPasado.toLocaleString()} pts</b> (${mPrevStr})</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+              <div style="background:rgba(0,0,0,0.3); padding:15px; border-radius:10px; border-left:4px solid ${colorStatus};">
+                <div style="font-size:0.6rem; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">Estado de Proyección Datame</div>
+                <div style="font-size:1.1rem; font-weight:900; color:${colorStatus}; margin-top:4px;">${statusText}</div>
+                <div style="display:flex; gap:15px; margin-top:8px;">
+                  <div>
+                    <div style="font-size:0.55rem; color:#64748b;">Velocidad Real</div>
+                    <div style="font-size:0.8rem; color:#f1f5f9; font-weight:800;">${velActual.toFixed(1)} <span style="font-size:0.6rem; color:#94a3b8;">pts/día</span></div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.55rem; color:#64748b;">Proyección 31d</div>
+                    <div style="font-size:0.8rem; color:#f1f5f9; font-weight:800;">${proyMensual.toLocaleString(undefined, {maximumFractionDigits:0})} <span style="font-size:0.6rem; color:#94a3b8;">pts</span></div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.55rem; color:#64748b;">Mes Pasado</div>
+                    <div style="font-size:0.8rem; color:#f1f5f9; font-weight:800;">${globalMesAnterior.toLocaleString(undefined, {maximumFractionDigits:0})} <span style="font-size:0.6rem; color:#94a3b8;">pts</span></div>
+                  </div>
+                </div>
               </div>
-              <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border-left:3px solid #a78bfa;">
-                <div style="font-size:0.6rem; color:#94a3b8; text-transform:uppercase;">Por qué la baja o fluctuación inicial?</div>
-                <div style="font-size:0.7rem; color:#e2e8f0; line-height:1.4; margin-top:5px;">
-                  El algoritmo Datame resetea la <b>Prioridad VIP</b> cada 1ro de mes. Los primeros 6 días son de "Calentamiento de Tráfico" (Warm-up). Los números demuestran que la tracción de enrutamiento fuerte inicia a partir de la primera semana operativa.
+              <div style="background:rgba(0,0,0,0.3); padding:15px; border-radius:10px; border-left:4px solid #a78bfa;">
+                <div style="font-size:0.6rem; color:#a78bfa; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Explicación Técnica del Sistema</div>
+                <div style="font-size:0.75rem; color:#e2e8f0; line-height:1.5; margin-top:6px;">
+                  ${insightText}
                 </div>
               </div>
             </div>
@@ -10010,40 +10029,41 @@
           <!-- CONTROLS -->
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:15px;">
             <div style="display:flex; align-items:center; gap:12px;">
-              <span style="font-size:0.65rem; font-weight:800; color:#64748b;">GRANULARIDAD:</span>
+              <span style="font-size:0.65rem; font-weight:800; color:#64748b;">ANÁLISIS DE DATOS:</span>
               <div style="display:flex; background:rgba(0,0,0,0.3); padding:3px; border-radius:8px;">
                 ${granularidades.map(g => `
                   <button onclick="window._actionMapGran='${g}'; renderAlertas();" 
                           style="background:${activeGran === g ? '#2dd4bf' : 'transparent'}; 
                                  color:${activeGran === g ? '#0f172a' : '#94a3b8'}; 
-                                 border:none; border-radius:6px; padding:5px 12px; font-size:0.7rem; font-weight:800; cursor:pointer; transition:0.3s;">
-                    ${g}
+                                 border:none; border-radius:6px; padding:6px 15px; font-size:0.7rem; font-weight:800; cursor:pointer; transition:0.3s;"
+                          title="${g === 'Hora' ? 'Patrón de horas más productivas del mes' : g === 'Día' ? 'Producción día a día del mes actual' : 'Comparativa histórica de meses'}">
+                    ${g === 'Hora' ? '⏰ Hot Hours' : g === 'Día' ? '📅 Días del Mes' : '📈 Histórico Mensual'}
                   </button>
                 `).join('')}
               </div>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-              <div style="font-size:0.65rem; color:#64748b;">LEYENDA DE INYECCIÓN:</div>
-              <div style="display:flex; gap:8px;">
-                <div style="width:12px; height:12px; background:rgba(16, 185, 129, 0.2); border-radius:3px;" title="Bajo"></div>
-                <div style="width:12px; height:12px; background:rgba(16, 185, 129, 0.5); border-radius:3px;" title="Moderado"></div>
-                <div style="width:12px; height:12px; background:rgba(5, 150, 105, 0.8); border-radius:3px;" title="Fuerte"></div>
-                <div style="width:12px; height:12px; background:rgba(45, 212, 191, 1); border-radius:3px;" title="Ballena/Excelente"></div>
+              <div style="font-size:0.65rem; color:#64748b; font-weight:800;">DENSIDAD (PUNTOS):</div>
+              <div style="display:flex; gap:6px;">
+                <div style="width:14px; height:14px; background:rgba(16, 185, 129, 0.2); border-radius:3px;" title="Bajo"></div>
+                <div style="width:14px; height:14px; background:rgba(16, 185, 129, 0.5); border-radius:3px;" title="Moderado"></div>
+                <div style="width:14px; height:14px; background:rgba(5, 150, 105, 0.8); border-radius:3px;" title="Fuerte"></div>
+                <div style="width:14px; height:14px; background:rgba(45, 212, 191, 1); border-radius:3px; box-shadow: 0 0 5px rgba(45,212,191,0.5);" title="Ballena/Excelente"></div>
               </div>
             </div>
           </div>
 
           <!-- TABLE GRID HEATMAP -->
-          <div style="overflow-x:auto; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); border-radius:10px;" class="custom-scrollbar">
+          <div style="overflow-x:auto; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); border-radius:10px;" class="custom-scrollbar">
             <table style="width:100%; border-collapse:collapse; min-width:850px;">
               <thead>
                 <tr>
-                  <th style="padding:12px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">OPERADOR / PERFIL</th>
-                  <th style="padding:12px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:160px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL ${activeGran === 'Día' ? 'HOY' : ''}</th>
+                  <th style="padding:15px; text-align:left; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:0; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">OPERADOR / PERFIL</th>
+                  <th style="padding:15px; text-align:right; font-size:0.65rem; font-weight:800; color:#94a3b8; position:sticky; left:160px; background:#1e293b; z-index:10; border-bottom:2px solid rgba(255,255,255,0.05);">TOTAL ${activeGran === 'Hora' || activeGran === 'Día' ? 'MES' : 'HISTÓRICO'}</th>
                   ${columnas.map(col => `
-                    <th style="padding:10px 5px; text-align:center; font-size:0.55rem; color:#64748b; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.05);">
-                      <div style="color:#f1f5f9; font-weight:800;">${col.label === 'Día' ? col.dia : col.label}</div>
-                      <div style="font-size:0.45rem;">${col.dia}</div>
+                    <th style="padding:10px 5px; text-align:center; font-size:0.6rem; color:#94a3b8; background:#1e293b; border-bottom:2px solid rgba(255,255,255,0.05); border-left:1px solid rgba(255,255,255,0.02); min-width:65px;">
+                      <div style="color:#f1f5f9; font-weight:900;">${col.label}</div>
+                      <div style="font-size:0.5rem; color:#64748b; margin-top:2px; text-transform:uppercase;">${col.sub}</div>
                     </th>
                   `).join('')}
                 </tr>
@@ -10053,8 +10073,8 @@
               </tbody>
             </table>
           </div>
-          <div style="margin-top:10px; font-size:0.6rem; color:#475569; font-style:italic;">
-            * Los datos se actualizan automáticamente tras cada sincronización de los paneles de Datame. Granularidad actual: <b>${activeGran}</b>.
+          <div style="margin-top:10px; font-size:0.65rem; color:#475569; font-style:italic;">
+            * Los datos son extraídos en tiempo real de la base de auditoría Datame. Las "Hot Hours" agrupan la producción de todo el mes en bloques de 24h para detectar picos de enrutamiento algorítmico.
           </div>
         </div>
       </details>

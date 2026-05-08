@@ -4859,12 +4859,30 @@
               const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
               const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '📋';
               
-              return `<div style="font-size:0.52rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:4px 0;">
-                <span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                  <span style="font-size:0.6rem;opacity:0.6;">${icon}</span>${displayKey}
-                </span>
-                <div style="text-align:right;">${valDisplay}</div>
-              </div>`;
+              const svcInfoMap = {
+                'MAILS': 'Campo mails del JSON en el endpoint /stats del servidor UK. Cada mail procesado por el perfil genera puntos que Datame acumula en puntos_total. Fuente: tabla operaciones, campo data_json[mails]. Impacto: es el servicio de mayor volumen promedio ($0.80-$2.50 por mail respondido).',
+                'STICKERS': 'Stickers enviados en conversaciones. Extraído de data_json del endpoint /profile/activity. Genera micro-puntos (< $0.10 c/u) pero indica engagement activo del cliente, precursor de conversiones en regalos.',
+                'CHAT AUDIO': 'Mensajes de audio en chat. Alto valor unitario ($1.20-$3.00). El scraper lo extrae del campo chat_audio en el JSON de stats del servidor UK. Indica conversación profunda = mayor retenci\u00f3n de cliente.',
+                'CHAT POSTS': 'Posts privados en el feed del perfil. Extraído de data_json → chat_posts. Fuente UK API endpoint /wall. Valor medio-alto. Clientes que pagan por posts privados tienen LTV (Life-Time Value) superior.',
+                'MAIL READS': 'Lecturas de mails (el cliente abre el mail). Generan puntos menores pero confirman que el cliente est\u00e1 activo. Fuente: endpoint /mail-reads del servidor UK → data_json.',
+                'GIFTS': 'Regalos virtuales enviados por clientes. Mayor ticket promedio ($3.00-$15.00 por regalo). Fuente: endpoint /gifts del servidor UK. Indicador clave de monetizaci\u00f3n profunda.',
+                'VIRTUAL GIFTS': 'Regalos virtuales premium. Mismo endpoint que GIFTS pero con SKU premium. Extraídos del campo virtual_gifts en data_json del servidor UK.',
+                'PHOTOS': 'Fotos privadas vendidas. Fuente: endpoint /photos del servidor UK → data_json[photos]. Generan puntos por foto vendida. Alta rentabilidad por unidad ($0.50-$2.00).',
+                'VOICE': 'Mensajes de voz privados. Extraídos de data_json → voice. Similar a CHAT AUDIO pero desde perfil. Genera puntos por minuto.',
+                'VIDEO': 'Videos privados. Extraídos de data_json → video. Mayor valor por unidad que fotos.',
+                'PRIME': 'Suscripciones PRIME. Ingresos recurrentes mensuales. Fuente: endpoint /subscriptions del servidor UK.',
+                'DEFAULT': 'Campo extra del JSON de stats del servidor UK (endpoint /profile/summary de la plataforma). Extraído por el scraper Python → almacenado en operaciones.data_json → renderizado en tiempo real por renderTableauPanel().'
+              };
+              const kUp2 = k.toUpperCase().replace(/_/g,' ');
+              const infoText = svcInfoMap[kUp2] || svcInfoMap['DEFAULT'];
+              const infoBtn = '<button onclick="alert(\'' + displayKey + ' — ORIGEN T\u00c9CNICO DEL DATO\\n\\n' + infoText.replace(/'/g,"\\'") + '\')" style="margin-left:4px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;width:12px;height:12px;border-radius:50%;font-size:0.4rem;cursor:pointer;flex-shrink:0;line-height:1;" title="Origen del dato">\u2139</button>';
+              
+              return '<div style="font-size:0.52rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:4px 0;">' +
+                '<span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+                  '<span style="font-size:0.6rem;opacity:0.6;">' + icon + '</span>' + displayKey + infoBtn +
+                '</span>' +
+                '<div style="text-align:right;">' + valDisplay + '</div>' +
+              '</div>';
             }).join('');
 
           const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
@@ -6528,15 +6546,16 @@
       '<div class="stat-lbl" style="color:#5eead4; font-weight: 700; opacity: 0.8; font-size: 8px;">GLOBAL ' + currLabel.toUpperCase() + '</div>' +
       '<div id="rk-val-cop" style="font-size:.65rem;color:#34d399;margin-top:1px; font-weight: 600;">$' + copTotal + '</div>' +
     '</div>' +
-    '<div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px;">' +
+    '<div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px; position:relative;">' +
       '<div id="rk-header-live-feed" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">' +
          '<div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">' +
             '<span class="dp-live-dot"></span>' +
             '<div class="stat-lbl" style="font-size: 8px; color: #818cf8; font-weight: 800; text-transform: uppercase;">Actividad en Vivo</div>' +
          '</div>' +
-         '<div id="rk-header-live-msg" style="font-size: 0.65rem; color: #e2e8f0; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Esperando eventos...</div>' +
+         '<div id="rk-header-live-msg" style="font-size: 0.65rem; color: #e2e8f0; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Cargando...</div>' +
          '<div id="rk-header-live-time" style="font-size: 0.5rem; color: #475569; margin-top: 2px;">—</div>' +
       '</div>' +
+      '<button onclick="(function(){var t=\'ACTIVIDAD EN VIVO — DELTA-SHIFT\u2122\\n\\nPAR\u00c1METRO 1 — QU\u00c9 ES:\\nMonitor en tiempo real de la producci\u00f3n de puntos de cada operador. Lee directamente desde la tabla \"operaciones\" en Supabase, donde el watcher deposita cada lectura del servidor Datame.\\n\\nPAR\u00c1METRO 2 — C\u00d3MO FUNCIONA (DELTA-SHIFT\u2122):\\nCada 30 segundos consulta Supabase filtrando fecha=hoy y ordenando por ID descendente. El campo \"puntos_neto\" = puntos_total (acumulado Datame) MENOS puntos_baseline (fijado al inicio del turno). Esto garantiza que el operador ve 0.0 al iniciar y crece seg\u00fan produzca.\\n\\nPAR\u00c1METRO 3 — POR QU\u00c9 NOS HACE RENTABLES:\\nElimina el lag de reportes manuales. El monitor ve en segundos qu\u00e9 perfil est\u00e1 generando dinero ahora mismo, detecta perfiles en 0 pts para intervenir, y puede correlacionar el ritmo de puntos con eventos del chat en tiempo real para tomar decisiones t\u00e1cticas.\';alert(t);})()" style="position:absolute;top:4px;right:4px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:16px;height:16px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;" title="Info t\u00e9cnico">\u2139</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="position:relative;">' +
       '<div class="stat-val" id="rk-val-growth" style="color:' + crecOpColor + '; font-size: 16px;">' + crecOpIcon + crecOpSign + crecOp.toFixed(1) + '%</div>' +
@@ -6545,17 +6564,98 @@
       '<button id="btn-crec-info" onclick="toggleCrecTooltip(event)" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#64748b;font-size:8px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>' +
     '</div>';
 
-  // --- RECONECTAR INTERVALO SI NO EXISTE ---
-  if (!window._rkHeaderLiveTimer) {
-     window._rkHeaderLiveTimer = setInterval(() => {
-        const feed = window._rrLiveFeed || [];
+  // =======================================================
+  // MOTOR ACTIVIDAD EN VIVO — DELTA-SHIFT™ Real-Time Feed
+  // Lee tabla operaciones de Supabase cada 30s
+  // =======================================================
+  if (!window._rkLiveEngine) {
+    window._rrLiveFeed = [];
+    window._rkLiveEngine = setInterval(async () => {
+      try {
+        if (typeof _sb === 'undefined') return;
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const { data: rows } = await _sb
+          .from('operaciones')
+          .select('id_perfil, puntos_neto, puntos_total, jornada, agencia, fecha_dia')
+          .eq('fecha_dia', hoy)
+          .order('id', { ascending: false })
+          .limit(10);
+
+        if (!rows || !rows.length) return;
+
+        // Mapear a feed unificado con nombre de operador
+        window._rrLiveFeed = rows.map(r => {
+          // Buscar nombre del operador via DP_PERFILES_MAP
+          let opName = r.agencia || r.id_perfil || '—';
+          if (typeof DP_PERFILES_MAP !== 'undefined') {
+            for (const [op, perfiles] of Object.entries(DP_PERFILES_MAP)) {
+              if (perfiles.some(p => String(p.id).trim() === String(r.id_perfil).trim())) {
+                opName = op;
+                break;
+              }
+            }
+          }
+          const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+          return {
+            op: opName,
+            perfil: r.id_perfil,
+            pts: Number(r.puntos_neto) || 0,
+            total: Number(r.puntos_total) || 0,
+            turno: r.jornada || '—',
+            time: hora
+          };
+        });
+
+        // Actualizar el widget en el header
         const msgEl = document.getElementById('rk-header-live-msg');
         const timeEl = document.getElementById('rk-header-live-time');
-        if (!msgEl || feed.length === 0) return;
-        const last = feed[0];
-        msgEl.innerHTML = '<span style="color:#2dd4bf;">+' + last.pts.toFixed(1) + '</span> ' + last.op;
-        timeEl.innerText = last.time;
-     }, 3000);
+        if (!msgEl) return;
+        const last = window._rrLiveFeed[0];
+        if (!last || last.pts <= 0) {
+          msgEl.innerHTML = '<span style="color:#475569">Sin actividad reciente</span>';
+          if (timeEl) timeEl.innerText = '— hoy';
+          return;
+        }
+        const ptsColor = last.pts >= 20 ? '#34d399' : last.pts >= 5 ? '#2dd4bf' : '#818cf8';
+        msgEl.innerHTML =
+          '<span style="color:' + ptsColor + ';font-weight:900">+' + last.pts.toFixed(1) + ' pts</span> ' +
+          '<span style="color:#e2e8f0">' + last.op + '</span>' +
+          '<span style="color:#475569;font-size:0.45rem;margin-left:4px">[' + last.turno + ']</span>';
+        if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
+      } catch(e) { console.warn('[LIVE-FEED]', e); }
+    }, 30000); // Cada 30 segundos
+
+    // Primera ejecución inmediata
+    setTimeout(async () => {
+      try {
+        if (typeof _sb === 'undefined') return;
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const { data: rows } = await _sb
+          .from('operaciones')
+          .select('id_perfil, puntos_neto, puntos_total, jornada, agencia, fecha_dia')
+          .eq('fecha_dia', hoy)
+          .order('id', { ascending: false })
+          .limit(10);
+        if (!rows || !rows.length) return;
+        window._rrLiveFeed = rows.map(r => {
+          let opName = r.agencia || r.id_perfil || '—';
+          if (typeof DP_PERFILES_MAP !== 'undefined') {
+            for (const [op, perfiles] of Object.entries(DP_PERFILES_MAP)) {
+              if (perfiles.some(p => String(p.id).trim() === String(r.id_perfil).trim())) { opName = op; break; }
+            }
+          }
+          return { op: opName, perfil: r.id_perfil, pts: Number(r.puntos_neto)||0, total: Number(r.puntos_total)||0, turno: r.jornada||'—', time: new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) };
+        });
+        const msgEl = document.getElementById('rk-header-live-msg');
+        const timeEl = document.getElementById('rk-header-live-time');
+        if (!msgEl) return;
+        const last = window._rrLiveFeed[0];
+        if (!last || last.pts <= 0) { msgEl.innerHTML = '<span style="color:#475569">Sin actividad reciente</span>'; return; }
+        const ptsColor = last.pts >= 20 ? '#34d399' : last.pts >= 5 ? '#2dd4bf' : '#818cf8';
+        msgEl.innerHTML = '<span style="color:' + ptsColor + ';font-weight:900">+' + last.pts.toFixed(1) + ' pts</span> <span style="color:#e2e8f0">' + last.op + '</span><span style="color:#475569;font-size:0.45rem;margin-left:4px">[' + last.turno + ']</span>';
+        if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
+      } catch(e) {}
+    }, 1500);
   }
 
   // --- FIN DE FILA DE ESTADÍSTICAS ---

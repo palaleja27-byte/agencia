@@ -9724,34 +9724,20 @@
       const cortesAll = getCortesOp(opName);
       const cortes = jornada ? cortesAll.filter(c => (c.jornada || '') === jornada) : cortesAll;
       const now = new Date();
-      const hoy = localDateStr(now);
+      const hoy2 = localDateStr(now);
       const totals = {};
       cortes.forEach(c => {
-        let key;
-        if (periodo === 'dia') key = c.fecha;
-        else if (periodo === 'semana') key = getWeekKey(c.fecha);
-        else key = getMonthKey(c.fecha);
-        
+        let key = periodo === 'dia' ? c.fecha : periodo === 'semana' ? getWeekKey(c.fecha) : getMonthKey(c.fecha);
         const pts = (Number(c.puntos) || 0);
         totals[key] = (totals[key] || 0) + (pts > 1500 ? 0 : pts);
       });
-
-      let current = 0, previous = 0, currKey, prevKey;
+      let current = 0, previous = 0, currKey = hoy2, prevKey;
       if (periodo === 'dia') {
-        currKey = hoy; current = totals[hoy] || 0;
-        const diasPasados = [];
-        for (let d = 1; d <= 7; d++) {
-          const fd = new Date(now); fd.setDate(fd.getDate() - d);
-          const fk = localDateStr(fd);
-          if (totals[fk] > 0) diasPasados.push(totals[fk]);
-        }
-        if (diasPasados.length > 0) {
-          previous = diasPasados.reduce((s, v) => s + v, 0) / diasPasados.length;
-          prevKey = 'prom7d';
-        } else {
-          const ayer = new Date(now); ayer.setDate(ayer.getDate() - 1);
-          prevKey = localDateStr(ayer); previous = totals[prevKey] || 0;
-        }
+        current = totals[hoy2] || 0;
+        const dp = [];
+        for (let d = 1; d <= 7; d++) { const fd = new Date(now); fd.setDate(fd.getDate()-d); const fk = localDateStr(fd); if (totals[fk] > 0) dp.push(totals[fk]); }
+        if (dp.length > 0) { previous = dp.reduce((s,v)=>s+v,0)/dp.length; prevKey = 'prom7d'; }
+        else { const ay = new Date(now); ay.setDate(ay.getDate()-1); prevKey = localDateStr(ay); previous = totals[prevKey]||0; }
       }
       return { current, previous, currKey, prevKey };
     }
@@ -9761,142 +9747,98 @@
       renderAlertas();
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // ANÁLISIS DE CRECIMIENTO DE LA OPERACIÓN — solo monitor/admin
-    // ══════════════════════════════════════════════════════════════
+    // ══ ANÁLISIS CRECIMIENTO + HEATMAP ══
     function renderCrecimientoAnalisis() {
       const panel = document.getElementById('crec-tooltip-panel');
       if (!panel) return;
-
-      const { prev, curr } = getActivePair();
-      const MONTH_LABELS_MAP = {};
-      MONTH_KEYS.forEach((k, i) => { MONTH_LABELS_MAP[k] = MONTH_LABELS[i]; });
-      const prevLabel = MONTH_LABELS_MAP[prev] || prev;
-      const currLabel = MONTH_LABELS_MAP[curr] || curr;
       const mesActual = localDateStr().slice(0, 7);
-
-      const h = window._rkHistorial || { 
-        m0Total: 0, m1Total: 0, m2Total: 0, 
-        m0Name: 'Hace 2 Meses', m1Name: 'Mes Pasado', m2Name: 'Mes Actual', 
-        crec: 0 
-      };
-      const totalCurr = h.m2Total;
-      const totalAnt = h.m1Total;
-      
-      const hoy = new Date();
-      const diaHoy = hoy.getDate();
-      const diasMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
-      
-      const promDia = diaHoy > 0 ? totalCurr / diaHoy : 0;
+      const h = window._rkHistorial || { m0Total:0, m1Total:0, m2Total:0, m0Name:'Hace 2 Meses', m1Name:'Mes Pasado', m2Name:'Mes Actual', crec:0 };
+      const hoyD = new Date();
+      const diaHoy = hoyD.getDate();
+      const diasMes = new Date(hoyD.getFullYear(), hoyD.getMonth()+1, 0).getDate();
+      const promDia = diaHoy > 0 ? h.m2Total / diaHoy : 0;
       const proyecc = Math.round(promDia * diasMes);
-
       const crec = h.crec;
       const crecColor = crec >= 0 ? '#10b981' : '#f87171';
       const crecSign = crec > 0 ? '+' : '';
+      const fmtB = (pct) => { if (!pct) return '<span style="color:#64748b">—</span>'; const c = pct>0?'#34d399':'#f87171'; return '<span style="color:'+c+';font-weight:700;font-size:0.6rem;">'+(pct>0?'+':'')+pct.toFixed(1)+'%</span>'; };
+      const crecM1 = h.m0Total > 0 ? ((h.m1Total-h.m0Total)/h.m0Total*100) : 0;
+      const crecM2 = h.m1Total > 0 ? ((h.m2Total-h.m1Total)/h.m1Total*100) : 0;
+      const top3 = operatorsData.filter(o=>o.group!=='SP')
+        .map(o => { const p=getCortesOp(o.name).filter(x=>x.fecha&&x.fecha.slice(0,7)===mesActual).reduce((s,x)=>s+(Number(x.puntos)||0),0); return {name:o.name.split(' ').slice(0,2).join(' '),pts:p}; })
+        .filter(o=>o.pts>0).sort((a,b)=>b.pts-a.pts).slice(0,3);
 
-      let warningSanidad = "";
-      if (crec > 1000) {
-        warningSanidad = `
-          <div style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.3); padding:10px; border-radius:10px; margin-top:10px; color:#f87171; font-size:0.75rem;">
-            ⚠️ <b>Aviso de Sanidad:</b> El crecimiento detectado (+${crec.toFixed(0)}%) es inusualmente alto. 
-          </div>
-        `;
-      }
+      panel.innerHTML =
+        '<div style="padding:18px;position:relative;background:#0f172a;color:#f1f5f9;border-radius:16px;max-height:80vh;overflow-y:auto;">'+
+        '<button onclick="window.toggleCrecTooltip(event)" style="position:absolute;top:12px;right:12px;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1.4rem;">&times;</button>'+
+        '<div style="color:#2dd4bf;font-weight:900;margin-bottom:15px;font-size:0.85rem;">📈 ¿CÓMO VAMOS ESTE MES?</div>'+
+        '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:3rem;font-weight:900;color:'+crecColor+';">'+crecSign+crec.toFixed(1)+'%</div>'+
+        '<div style="color:#64748b;font-size:0.8rem;margin-top:6px;font-weight:700;">vs '+h.m1Name+'</div></div>'+
+        '<div style="margin:12px 0;background:rgba(255,255,255,0.03);border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,0.06);">'+
+        '<div style="font-size:0.65rem;color:#475569;margin-bottom:6px;font-weight:800;">📅 HISTORIAL '+hoyD.getFullYear()+'</div>'+
+        '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;">'+
+        '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:4px 0;font-size:0.6rem;color:#475569;">MES</td><td style="text-align:right;font-size:0.6rem;color:#475569;">PUNTOS</td><td style="text-align:right;font-size:0.6rem;color:#475569;padding-left:8px;">VS ANT.</td></tr>'+
+        '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:5px 0;color:#94a3b8;">'+h.m0Name+'</td><td style="text-align:right;font-weight:700;color:#a78bfa;">'+h.m0Total.toLocaleString()+' pts</td><td style="text-align:right;padding-left:8px;">—</td></tr>'+
+        '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:5px 0;color:#94a3b8;">'+h.m1Name+'</td><td style="text-align:right;font-weight:700;color:#a78bfa;">'+h.m1Total.toLocaleString()+' pts</td><td style="text-align:right;padding-left:8px;">'+fmtB(crecM1)+'</td></tr>'+
+        '<tr style="background:rgba(52,211,153,0.05);"><td style="padding:5px 0;color:#34d399;font-weight:800;">'+h.m2Name+' (Actual)</td><td style="text-align:right;font-weight:800;color:#34d399;">'+h.m2Total.toLocaleString()+' pts</td><td style="text-align:right;padding-left:8px;">'+fmtB(crecM2)+'</td></tr>'+
+        '</table></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'+
+        '<div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem;color:#94a3b8;font-weight:800;">RITMO ACTUAL ✨</div><div style="font-weight:900;font-size:1rem;">'+proyecc.toLocaleString()+' <small style="font-size:0.55rem;opacity:0.6;">pts</small></div></div>'+
+        '<div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem;color:#94a3b8;font-weight:800;">PROMEDIO DÍA 📅</div><div style="font-weight:900;font-size:1rem;">'+Math.round(promDia).toLocaleString()+' <small style="font-size:0.55rem;opacity:0.6;">pts</small></div></div>'+
+        '</div>'+
+        '<div style="margin-bottom:16px;"><div style="font-size:0.65rem;font-weight:900;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px;">🔥 Mapa de Calor — Día a Día</div>'+
+        '<div id="rk-heatmap-container"><span style="color:#475569;font-size:0.7rem;">Cargando datos de Supabase...</span></div>'+
+        '<div id="rk-heatmap-insight" style="margin-top:8px;font-size:0.66rem;line-height:1.6;color:#94a3b8;"></div></div>'+
+        '<div><div style="font-size:0.65rem;font-weight:900;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px;">🏆 Líderes de Mes</div>'+
+        top3.map((o,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;"><span style="font-size:0.85rem;"><span style="color:#64748b;">'+(i+1)+'.</span> '+o.name+'</span><span style="font-weight:900;color:#2dd4bf;">'+o.pts.toLocaleString()+'</span></div>').join('')+
+        '</div></div>';
 
-      const fmtCrecBadge = (pct) => {
-        if (pct === 0) return '<span style="font-size:0.6rem;color:#64748b;">—</span>';
-        const c = pct > 0 ? '#34d399' : '#f87171';
-        const s = pct > 0 ? '+' : '';
-        return `<span style="font-size:0.6rem;color:${c};font-weight:700;background:${c}15;padding:1px 6px;border-radius:4px;">${s}${pct.toFixed(1)}%</span>`;
-      };
-
-      const crecM0 = 0; 
-      const crecM1 = h.m0Total > 0 ? ((h.m1Total - h.m0Total) / h.m0Total * 100) : 0;
-      const crecM2 = h.m1Total > 0 ? ((h.m2Total - h.m1Total) / h.m1Total * 100) : 0;
-
-      const tablaHist = `
-        <div style="margin: 15px 0; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.06);">
-          <div style="font-size: 0.7rem; color: #475569; margin-bottom: 8px; text-transform: uppercase; font-weight: 800;">📅 Historial de Operación ${hoy.getFullYear()}</div>
-          <table style="width: 100%; font-size: 0.8rem; border-collapse: collapse;">
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.08);">
-              <td style="padding:4px 0;font-size:0.6rem;color:#475569;font-weight:700;">MES</td>
-              <td style="text-align:right;font-size:0.6rem;color:#475569;font-weight:700;">PUNTOS</td>
-              <td style="text-align:right;font-size:0.6rem;color:#475569;font-weight:700;padding-left:8px;">VS ANT.</td>
-            </tr>
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-              <td style="padding: 6px 0; color: #94a3b8;">${h.m0Name}</td>
-              <td style="text-align: right; font-weight: 700; color: #a78bfa;">${h.m0Total.toLocaleString()} pts</td>
-              <td style="text-align:right;padding-left:8px;">${fmtCrecBadge(crecM0)}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-              <td style="padding: 6px 0; color: #94a3b8;">${h.m1Name}</td>
-              <td style="text-align: right; font-weight: 700; color: #a78bfa;">${h.m1Total.toLocaleString()} pts</td>
-              <td style="text-align:right;padding-left:8px;">${fmtCrecBadge(crecM1)}</td>
-            </tr>
-            <tr style="background: rgba(52,211,153,0.05);">
-              <td style="padding: 6px 0; color: #34d399; font-weight: 800;">${h.m2Name} (Actual)</td>
-              <td style="text-align: right; font-weight: 800; color: #34d399;">${h.m2Total.toLocaleString()} pts</td>
-              <td style="text-align:right;padding-left:8px;">${fmtCrecBadge(crecM2)}</td>
-            </tr>
-          </table>
-        </div>
-      `;
-
-      const opsConPts = operatorsData
-        .filter(o => o.group !== 'SP')
-        .map(o => {
-          const c = getCortesOp(o.name);
-          const p = c.filter(x => x.fecha && x.fecha.slice(0, 7) === mesActual)
-            .reduce((s, x) => s + (Number(x.puntos) || 0), 0);
-          return { name: o.name.split(' ').slice(0, 2).join(' '), pts: p };
-        })
-        .filter(o => o.pts > 0)
-        .sort((a, b) => b.pts - a.pts);
-
-      const top3 = opsConPts.slice(0, 3);
-
-      panel.innerHTML = `
-        <div style="padding:18px; position:relative; min-height:450px; background:#0f172a; color:#f1f5f9; border-radius:16px;">
-          <button onclick="window.toggleCrecTooltip(event)" style="position:absolute; top:12px; right:12px; background:none; border:none; color:#94a3b8; cursor:pointer; font-size:1.4rem;">&times;</button>
-          
-          <div style="color:#2dd4bf; font-weight:900; margin-bottom:15px; font-size:0.85rem; letter-spacing:1px; display:flex; align-items:center; gap:8px;">
-            📈 ¿CÓMO VAMOS ESTE MES?
-          </div>
-          
-          <div style="text-align:center; margin-bottom:20px;">
-            <div style="font-size:3.5rem; font-weight:900; color:${crecColor}; line-height:1; filter: drop-shadow(0 0 10px ${crecColor}44);">
-              ${crecSign}${crec.toFixed(1)}%
-            </div>
-            <div style="color:#64748b; font-size:0.8rem; margin-top:8px; font-weight:700; text-transform:uppercase;">
-              Comparado con ${h.m1Name}
-            </div>
-          </div>
-
-          ${warningSanidad}
-          ${tablaHist}
-
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
-            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
-              <div style="font-size:0.65rem; color:#94a3b8; font-weight:800; margin-bottom:4px;">RITMO ACTUAL ✨</div>
-              <div style="font-weight:900; color:#f1f5f9; font-size:1.1rem;">${proyecc.toLocaleString()} <small style="font-size:0.6rem; opacity:0.6;">pts</small></div>
-            </div>
-            <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
-              <div style="font-size:0.65rem; color:#94a3b8; font-weight:800; margin-bottom:4px;">PROMEDIO DÍA 📅</div>
-              <div style="font-weight:900; color:#f1f5f9; font-size:1.1rem;">${Math.round(promDia).toLocaleString()} <small style="font-size:0.6rem; opacity:0.6;">pts</small></div>
-            </div>
-          </div>
-
-          <div style="margin-bottom:20px;">
-            <div style="font-size:0.7rem; font-weight:900; color:#94a3b8; margin-bottom:10px; text-transform:uppercase; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:5px;">🏆 Líderes de Mes</div>
-            ${top3.map((o,i) => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0;">
-                <span style="font-size:0.85rem;"><span style="color:#64748b; width:15px; display:inline-block;">${i+1}.</span> ${o.name}</span>
-                <span style="font-weight:900; color:#2dd4bf; font-size:0.85rem;">${o.pts.toLocaleString()}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      `;
+      (async () => {
+        try {
+          const hEl = document.getElementById('rk-heatmap-container');
+          const iEl = document.getElementById('rk-heatmap-insight');
+          if (!hEl || typeof _sb === 'undefined') return;
+          const m = String(hoyD.getMonth()+1).padStart(2,'0');
+          const desde = hoyD.getFullYear()+'-'+m+'-01';
+          const hasta  = hoyD.getFullYear()+'-'+m+'-'+String(diaHoy).padStart(2,'0');
+          const { data: rows } = await _sb.from('operaciones')
+            .select('fecha_dia,puntos_neto,id_perfil,agencia').gte('fecha_dia',desde).lte('fecha_dia',hasta).gt('puntos_neto',0);
+          if (!rows || !rows.length) { hEl.innerHTML = '<span style="color:#475569;font-size:0.7rem;">Sin datos Supabase este mes.</span>'; return; }
+          const pd = {};
+          rows.forEach(r => {
+            if (!pd[r.fecha_dia]) pd[r.fecha_dia] = { t:0, n:0, ops: new Set() };
+            pd[r.fecha_dia].t += Number(r.puntos_neto)||0;
+            pd[r.fecha_dia].n++;
+            pd[r.fecha_dia].ops.add(r.agencia||r.id_perfil);
+          });
+          const dias = Object.keys(pd).sort();
+          const vals = dias.map(d=>pd[d].t);
+          const maxV = Math.max(...vals,1);
+          const promG = vals.reduce((a,b)=>a+b,0)/vals.length;
+          let html = '<div style="display:flex;flex-wrap:wrap;gap:3px;">';
+          dias.forEach(d => {
+            const v=pd[d].t, pct=v/maxV, dn=parseInt(d.slice(8));
+            const bg = pct>=0.8?'#10b981':pct>=0.5?'#34d399':pct>=0.25?'#fbbf24':'#f87171';
+            const lbl = pct>=0.8?'🔥':pct>=0.5?'✅':pct>=0.25?'⚡':'📉';
+            html += '<div title="Día '+dn+': '+v.toFixed(1)+' pts | '+pd[d].n+' reg | '+pd[d].ops.size+' perfiles" style="width:28px;height:28px;border-radius:5px;background:'+bg+';opacity:'+(0.4+pct*0.6).toFixed(2)+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;">'+
+              '<span style="font-size:0.5rem;font-weight:900;color:#000;">'+dn+'</span><span style="font-size:0.42rem;">'+lbl+'</span></div>';
+          });
+          html += '</div><div style="display:flex;gap:8px;margin-top:5px;font-size:0.52rem;color:#64748b;"><span>📉 Bajo</span><span>⚡ Medio</span><span>✅ Alto</span><span>🔥 Pico</span><span style="margin-left:auto;">Prom: '+promG.toFixed(0)+' pts/día</span></div>';
+          hEl.innerHTML = html;
+          const mejor = dias[vals.indexOf(Math.max(...vals))];
+          const peor  = dias[vals.indexOf(Math.min(...vals))];
+          const bajos = dias.filter(d=>pd[d].t < promG*0.5);
+          const altos = dias.filter(d=>pd[d].t >= promG*1.5);
+          const tend  = vals.length>=3 && vals[vals.length-1]>vals[Math.floor(vals.length/2)] ? 'ASCENDENTE 📈' : 'DESCENDENTE 📉';
+          if (iEl) iEl.innerHTML =
+            '<strong style="color:#e2e8f0;">📊 Análisis:</strong><br>'+
+            '<span style="color:#10b981">🔥 Mejor: día '+mejor.slice(8)+'</span> — '+pd[mejor].t.toFixed(1)+' pts ('+pd[mejor].n+' eventos, '+pd[mejor].ops.size+' perfiles). Alta densidad operativa.<br>'+
+            '<span style="color:#f87171">📉 Peor: día '+peor.slice(8)+'</span> — '+pd[peor].t.toFixed(1)+' pts. Baja cobertura ('+pd[peor].ops.size+' perfil'+(pd[peor].ops.size!==1?'es':'')+') o jornada incompleta.<br>'+
+            (bajos.length?'<span style="color:#fbbf24">⚠️ '+bajos.length+' día(s) bajo el 50% del promedio</span> — Revisar asistencia.<br>':'')+
+            (altos.length?'<span style="color:#34d399">✅ '+altos.length+' día(s) con rendimiento >150%</span> — Replicar condiciones de esos días.<br>':'')+
+            '<strong>Tendencia 2a mitad: '+tend+'</strong>';
+        } catch(e) { console.warn('[HEATMAP]',e); }
+      })();
     }
 
     function _generarInsights(rows, vel, proy, totalPtsPrev) {

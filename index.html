@@ -6596,17 +6596,24 @@
   if (!window._rkLiveEngine) {
     window._rrLiveFeed = [];
 
-    // Funcion auxiliar: resuelve nombre del operador desde DP_PERFILES_MAP
+    // Funcion auxiliar: resuelve nombre del operador Y del perfil
     function _rrResolveName(id_perfil, agencia) {
+      let opName = agencia || String(id_perfil) || '—';
+      let modeloName = 'ID ' + id_perfil;
       if (typeof DP_PERFILES_MAP !== 'undefined') {
         for (const [op, perfiles] of Object.entries(DP_PERFILES_MAP)) {
-          if (perfiles.some(p => String(p.id).trim() === String(id_perfil).trim())) return op;
+          const match = perfiles.find(p => String(p.id).trim() === String(id_perfil).trim());
+          if (match) {
+            opName = op;
+            modeloName = match.modelo || match.nombre || match.model || ('ID ' + id_perfil);
+            break;
+          }
         }
       }
-      return agencia || id_perfil || '—';
+      return { op: opName, modelo: modeloName };
     }
 
-    // Funcion para pintar el widget
+    // Funcion para pintar el widget con operador + perfil
     function _rrPintarLiveFeed() {
       const msgEl = document.getElementById('rk-header-live-msg');
       const timeEl = document.getElementById('rk-header-live-time');
@@ -6614,14 +6621,17 @@
       const last = (window._rrLiveFeed || [])[0];
       if (!last || last.pts <= 0) {
         msgEl.innerHTML = '<span style="color:#475569">Sin actividad reciente hoy</span>';
-        if (timeEl) timeEl.innerText = '— esperando datos del watcher';
+        if (timeEl) timeEl.innerHTML = '<span style="color:#334155">— esperando watcher</span>';
         return;
       }
       const ptsColor = last.pts >= 30 ? '#34d399' : last.pts >= 10 ? '#2dd4bf' : '#818cf8';
       msgEl.innerHTML =
-        '<span style="color:' + ptsColor + ';font-weight:900">+' + last.pts.toFixed(1) + ' pts</span> ' +
-        '<span style="color:#f1f5f9;font-weight:700">' + last.op + '</span>' +
-        '<span style="color:#64748b;font-size:0.45rem;margin-left:5px">[' + last.turno + ']</span>';
+        '<span style="color:' + ptsColor + ';font-weight:900;font-size:0.7rem">+' + last.pts.toFixed(1) + ' pts</span>' +
+        '<span style="color:#64748b;font-size:0.45rem;margin-left:4px;vertical-align:middle">[' + last.turno + ']</span>' +
+        '<br>' +
+        '<span style="color:#818cf8;font-weight:700;font-size:0.58rem">👤 ' + last.op + '</span>' +
+        '<span style="color:#475569;font-size:0.45rem;margin:0 3px">/</span>' +
+        '<span style="color:#2dd4bf;font-size:0.55rem;font-weight:600">🪪 ' + last.modelo + '</span>';
       if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
     }
 
@@ -6638,14 +6648,18 @@
           .order('id', { ascending: false })
           .limit(20);
         if (!rows || !rows.length) return;
-        window._rrLiveFeed = rows.map(r => ({
-          op: _rrResolveName(r.id_perfil, r.agencia),
-          perfil: r.id_perfil,
-          pts: Number(r.puntos_neto) || 0,
-          total: Number(r.puntos_total) || 0,
-          turno: r.jornada || '—',
-          time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-        }));
+        window._rrLiveFeed = rows.map(r => {
+          const resolved = _rrResolveName(r.id_perfil, r.agencia);
+          return {
+            op: resolved.op,
+            modelo: resolved.modelo,
+            perfil: r.id_perfil,
+            pts: Number(r.puntos_neto) || 0,
+            total: Number(r.puntos_total) || 0,
+            turno: r.jornada || '—',
+            time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+          };
+        });
         _rrPintarLiveFeed();
       } catch(e) { console.warn('[LIVE-INIT]', e); }
     }, 1500);
@@ -6665,8 +6679,10 @@
             if (r.fecha_dia !== hoy) return;
             const neto = Number(r.puntos_neto) || 0;
             if (neto <= 0) return;
+            const resolved = _rrResolveName(r.id_perfil, r.agencia);
             const entry = {
-              op: _rrResolveName(r.id_perfil, r.agencia),
+              op: resolved.op,
+              modelo: resolved.modelo,
               perfil: r.id_perfil,
               pts: neto,
               total: Number(r.puntos_total) || 0,

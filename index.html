@@ -4828,10 +4828,11 @@
           const nombreReal = idToModelo[String(id).trim()] || 'Perfil ' + id;
           const opAsignado = idToOp[String(id).trim()] || dj['Admin'] || dj['admin'] || 'No Asignado';
 
-          // Procesar métricas de servicios
+          // Procesar métricas de servicios desglosados (Audit Oficial UK)
           const metricasExtra = Object.entries(dj)
             .filter(([k, v]) => {
                const kUp = k.toUpperCase();
+               // Filtrar solo lo que sea relevante a servicios/puntos
                return !kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER')
                  && !kUp.includes('TYPE') && kUp !== 'ADMIN' && kUp !== 'REVENUE'
                  && kUp !== 'MAX HOUR' && !kUp.includes('TITLE') && !kUp.includes('SOURCE')
@@ -4846,7 +4847,12 @@
               }
               const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
               const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '▸';
-              return `<div style="font-size:0.55rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:2px 0;"><span style="color:#64748b;font-weight:600;display:flex;align-items:center;gap:4px;" title="${displayKey}"><span style="font-size:0.65rem;">${icon}</span>${displayKey}</span><span style="color:#34d399;font-weight:700;">${valStr}</span></div>`;
+              return `<div style="font-size:0.55rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:3px 0;" title="Monto oficial extraído de Tableau UK">
+                <span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;">
+                  <span style="font-size:0.65rem;filter:grayscale(0.5);">${icon}</span>${displayKey}
+                </span>
+                <span style="color:#2dd4bf;font-weight:800;">${valStr}</span>
+              </div>`;
             }).join('');
 
           const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
@@ -4859,9 +4865,13 @@
               <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
             <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${nombreReal}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-              <div style="font-size:0.75rem;">👤</div>
-              <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;">${opAsignado}</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <div style="font-size:0.75rem;">👤</div>
+                <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;">${opAsignado}</div>
+              </div>
+              <button onclick="alert('🧠 EXPLICACIÓN TÉCNICA - PERFIL ${id}\\n\\n¿PARA QUÉ SIRVE?\\nEste botón muestra los datos oficiales auditados directamente desde el servidor UK. Sirve para validar que el revenue generado en los servicios coincide con lo que el operador reporta localmente.\\n\\n¿CÓMO FUNCIONA?\\nUn robot (Scraper en Python) se conecta cada 1-2 horas al panel oficial, extrae la tabla de servicios desglosada y la sincroniza con Supabase. Luego, la aplicación cruza el ID de perfil con nuestra base de datos para asignarlo al operador correspondiente.\\n\\n¿CÓMO AYUDA?\\nElimina la duda sobre los montos reales, permitiendo ver exactamente cuánto se ha ganado en Mails, Chats, Regalos, etc., sin errores de cálculo manual.')" 
+                style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
                <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}</div>

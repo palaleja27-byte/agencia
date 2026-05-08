@@ -4549,6 +4549,21 @@
         </div>
       </div>
     </div>
+    
+    <!-- Módulo de Operadores Conectados (New) -->
+    <div id="rk-connected-ops-wrap" style="display:none; max-width:1200px; margin:-10px auto 20px; padding:0 16px;">
+      <div style="background:rgba(15,23,42,0.4); border:1px solid rgba(94, 234, 212, 0.15); border-radius:16px; padding:12px 18px; backdrop-filter:blur(10px); display:flex; align-items:center; gap:15px; overflow-x:auto; box-shadow: 0 8px 32px rgba(0,0,0,0.3);" class="custom-scrollbar">
+        <div style="display:flex; align-items:center; gap:8px; border-right:1px solid rgba(255,255,255,0.05); padding-right:15px; flex-shrink:0;">
+          <div class="dp-live-dot" style="width:10px; height:10px; position:static;"></div>
+          <span style="font-size:0.75rem; font-weight:900; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px;">Conectados</span>
+          <span id="connected-count-badge" style="background:rgba(45,212,191,0.2); color:#2dd4bf; padding:2px 8px; border-radius:8px; font-size:.65rem; font-weight:900;">0</span>
+        </div>
+        <div id="connected-ops-list" style="display:flex; align-items:center; gap:12px; padding:2px 0;">
+          <!-- Rendered via JS -->
+          <span style="color:#475569; font-size:0.7rem; font-style:italic;">Escaneando sesiones activas...</span>
+        </div>
+      </div>
+    </div>
 
     <div class="rk-topbar" style="display: flex; gap: 15px; align-items: stretch; justify-content: space-between;">
       <div class="rk-stats" id="rkStatsRow" style="flex:1; margin:0; display:flex; gap:10px; align-items:center; max-width: none;"></div>
@@ -6356,7 +6371,61 @@
       } catch(e) { console.warn('[RK-SUPABASE]', e); }
     }
 
+    function renderConnectedOps() {
+      const wrap = document.getElementById('rk-connected-ops-wrap');
+      const listEl = document.getElementById('connected-ops-list');
+      const badge = document.getElementById('connected-count-badge');
+      if (!wrap || !listEl) return;
+
+      // Solo mostrar para monitor/admin
+      if (typeof currentRole !== 'undefined' && currentRole !== 'monitor' && currentRole !== 'admin') {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = 'block';
+
+      const connectedSet = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
+      const nowTs = Date.now();
+      
+      const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+        .filter(op => connectedSet.has(op.name.toUpperCase()))
+        .map(op => {
+          // Actividad "Hot" (últimos 10 min)
+          const cortes = typeof getCortesOp === 'function' ? getCortesOp(op.name) : [];
+          const hasRecent = cortes.some(c => c.ts && (nowTs - c.ts < 600000));
+          return { ...op, hasRecent };
+        });
+
+      if (badge) badge.textContent = activeOps.length;
+
+      if (activeOps.length === 0) {
+        listEl.innerHTML = '<span style="color:#475569; font-size:0.7rem; font-style:italic;">Esperando ingresos de PIN...</span>';
+        return;
+      }
+
+      listEl.innerHTML = activeOps.map(op => {
+        const av = typeof getAvatar === 'function' ? getAvatar(op.name) : null;
+        const ringColor = op.hasRecent ? '#2dd4bf' : 'rgba(255,255,255,0.1)';
+        const glow = op.hasRecent ? 'box-shadow: 0 0 10px rgba(45, 212, 191, 0.4);' : '';
+        const opIdx = operatorsData.indexOf(op);
+        
+        return `
+          <div style="display:flex; flex-direction:column; align-items:center; gap:4px; flex-shrink:0; cursor:pointer; transition:0.2s;" 
+               onclick="if(typeof abrirDetalle==='function') abrirDetalle(${opIdx})"
+               onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+            <div style="width:38px; height:38px; border-radius:50%; border:2px solid ${ringColor}; padding:2px; ${glow} transition:0.3s; position:relative; background:rgba(0,0,0,0.2);">
+              ${av ? `<img src="${av}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` 
+                   : `<div style="width:100%; height:100%; background:rgba(255,255,255,0.05); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.8rem; color:#64748b; font-weight:800;">${op.name.charAt(0)}</div>`}
+              <div style="position:absolute; bottom:0; right:0; width:10px; height:10px; background:${op.hasRecent ? '#2dd4bf' : '#64748b'}; border-radius:50%; border:2px solid #0f172a; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>
+            </div>
+            <span style="font-size:0.55rem; color:${op.hasRecent ? '#f1f5f9' : '#64748b'}; font-weight:800; max-width:45px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center;">${op.name.split(' ')[0]}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
     function renderRanking() {
+      if (typeof renderConnectedOps === 'function') renderConnectedOps();
       if (typeof asiAutoRelease === 'function') asiAutoRelease(); // Validar cierre automático de 8h/12h
       const { prev, curr } = getActivePair();
       const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
@@ -9870,9 +9939,9 @@
     }
 
     function _generarInsights(rows, vel, proy, totalPtsPrev) {
-      const drops = rows.filter(r => r.r10 < (r.r30 * 0.3) && r.r30 > 0.1).slice(0,2);
-      const spikes = [...rows].sort((a,b) => b.r10 - a.r10).slice(0,2);
-      const huerfanos = rows.filter(r => r.puntos === 0).length;
+      const drops = rows.filter(r => r.r05 < (r.r10 * 0.4) && r.r10 > 0.05).slice(0,2);
+      const spikes = [...rows].sort((a,b) => b.r05 - a.r05).slice(0,2);
+      const huerfanos = rows.filter(r => (r.r10||0) === 0).length;
       const saturacion = (rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1);
       
       let html = '';
@@ -9881,7 +9950,7 @@
       if (drops.length > 0) {
         html += `<div style="color:#f87171;margin-bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(248,113,113,0.05);padding:6px;border-radius:6px;border:1px solid rgba(248,113,113,0.1);">
                    <span style="font-size:0.8rem;">🚨</span> 
-                   <div><b>ALERTA DE CAÍDA:</b> ${drops.map(d=>d.op.split(' ')[0]).join(', ')} bajaron ritmo bruscamente.</div>
+                   <div><b>ALERTA DE CAÍDA:</b> ${drops.map(d=>d.op.split(' ')[0]).join(', ')} bajaron ritmo (5m vs 10m).</div>
                  </div>`;
       }
 
@@ -9889,15 +9958,15 @@
       if (huerfanos > 0) {
         html += `<div style="color:#fbbf24;margin-bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(251,191,36,0.05);padding:6px;border-radius:6px;border:1px solid rgba(251,191,36,0.1);">
                    <span style="font-size:0.8rem;">💡</span> 
-                   <div><b>PERFILES INACTIVOS:</b> Hay ${huerfanos} perfiles sin producción hoy. Reasignar carga.</div>
+                   <div><b>PERFILES SILENCIOSOS:</b> Hay ${huerfanos} perfiles sin pulso en los últimos 10m.</div>
                  </div>`;
       }
 
       // 🔥 RENDIMIENTO
-      if (spikes.length > 0 && spikes[0].r10 > 0.2) {
+      if (spikes.length > 0 && spikes[0].r05 > 0.1) {
         html += `<div style="color:#34d399;margin-bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(52,211,153,0.05);padding:6px;border-radius:6px;border:1px solid rgba(52,211,153,0.1);">
                    <span style="font-size:0.8rem;">🔥</span> 
-                   <div><b>MAX RENDIMIENTO:</b> ${spikes[0].op.split(' ')[0]} acelerando a $${spikes[0].r10.toFixed(1)}/10m.</div>
+                   <div><b>MÁX PULSO:</b> ${spikes[0].op.split(' ')[0]} acelerando a $${spikes[0].r05.toFixed(2)}/5m.</div>
                  </div>`;
       }
 
@@ -9909,139 +9978,33 @@
                  <span>SATURACIÓN: <b style="color:#38bdf8">${saturacion}x</b></span>
                </div>`;
       
-      return html || '<div style="color:#64748b;font-style:italic;text-align:center;padding:10px;">Escaneando patrones de tráfico en vivo...</div>';
+      return html || '<div style="color:#64748b;font-style:italic;text-align:center;padding:10px;">Analizando micro-tendencias de 5 minutos...</div>';
     }
 
-    function renderAlertas() {
+        function renderAlertas() {
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
-      
-      // Solo mostrar para monitor/admin
       if (typeof currentRole !== 'undefined' && currentRole !== 'monitor' && currentRole !== 'admin') {
-        wrap.style.display = 'none';
-        return;
+        wrap.style.display = 'none'; return;
       }
       wrap.style.display = 'block';
-
-      // Preservar estado del acordeón (v8.8 Bulletproof) para que no se abra solo al cambiar ranking
       const isMapOpen = localStorage.getItem('rr_action_map_open') === 'true';
-
       const { prev, curr } = getActivePair();
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
-      const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
       const mesActualStr = localDateStr().slice(0, 7);
-      
-      const hoyObj = new Date();
-      const diaHoy = hoyObj.getDate();
+      const hoyObj = new Date(); const diaHoy = hoyObj.getDate();
       const nowTs = Date.now();
-      const ops = operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A');
-      const rows = [];
-      let totalPtsCurr = 0;
-      let totalPtsPrev = 0;
 
-      ops.forEach(op => {
-        const cortes = (typeof getCortesOp === 'function') ? getCortesOp(op.name) : [];
-        
-        // --- DELTA-SHIFT™: Priorizar Supabase (_dpPuntosData) para el total mensual ---
-        let tMes = 0;
-        if (typeof _dpPuntosData !== 'undefined' && _dpPuntosData) {
-          (op.profiles || []).forEach(p => {
-            const dp = _dpPuntosData[String(p.id).trim()];
-            if (dp) tMes += (dp.puntos_total || 0);
-          });
-        }
-        
-        // Fallback a localStorage si Supabase no tiene datos aún
-        if (tMes <= 0) {
-          tMes = cortes.filter(c => c.fecha && c.fecha.startsWith(mesActualStr)).reduce((s,c) => s + (c.puntos||0), 0);
-        }
-
-        const tPrev = op[prev] || 0;
-        totalPtsCurr += tMes;
-        totalPtsPrev += tPrev;
-
-        const perfs = op.profiles && op.profiles.length > 0 ? op.profiles : [{ id: 'N/A', model: op.name.split(' ').slice(0,2).join(' ') }];
-        const nPerfs = perfs.length;
-        const pD = tMes / Math.max(1, diaHoy);
-
-        perfs.forEach((p, pi) => {
-          const share = 1 / nPerfs;
-          rows.push({
-            op: op.name, pm: p.model || 'Fijo', pid: p.id || 'N/A', n: nPerfs, fi: pi === 0, rs: nPerfs,
-            tOp: tMes, dia: pD * share, sem: pD * 7 * share, mes: tMes * share, cortes: cortes, share: share
-          });
-        });
-      });
-
-      rows.sort((a,b) => b.tOp - a.tOp || b.mes - a.mes);
-      const dT = Math.max(1, diaHoy); 
-      const vel = totalPtsCurr / dT;
-      const proy = vel * 30;
+      const { rows, vel, proy, totalPtsPrev } = (typeof _rrRtData !== 'undefined' ? _rrRtData : {rows:[], vel:0, proy:0, totalPtsPrev:0});
+      const cS = proy >= 150000 ? '#2dd4bf' : '#f87171';
       const iG = proy > totalPtsPrev;
-      const cS = iG ? '#34d399' : '#f87171';
-
-      const allCortes = [];
-      ops.forEach(op => {
-        const c = (typeof getCortesOp === 'function') ? getCortesOp(op.name) : [];
-        c.forEach(x => allCortes.push({...x, opName: op.name}));
-      });
-
-      // FEED EN VIVO: _rrLiveFeed (Supabase Realtime) — operador + perfil + pts
-      const liveTotal = window._rrLiveTotal || 0;
-      const liveFeed = (window._rrLiveFeed || []).slice(0, 15);
-      const recentFeed = liveFeed.length > 0
-        ? liveFeed.map(f => {
-            const ptsColor = (f.pts||0) >= 30 ? '#34d399' : (f.pts||0) >= 10 ? '#2dd4bf' : '#818cf8';
-            return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.55rem;">' +
-              '<div style="display:flex;flex-direction:column;gap:1px;overflow:hidden;">' +
-              '<span style="color:#818cf8;font-weight:800;font-size:0.52rem;">' + (f.op||'\u2014') + '</span>' +
-              '<span style="color:#38bdf8;font-size:0.48rem;">' + (f.modelo||'ID '+f.perfil) + '</span>' +
-              '<span style="color:#475569;font-size:0.42rem;">' + (f.time||'\u2014') + ' \u00b7 [' + (f.turno||'\u2014') + ']</span>' +
-              '</div>' +
-              '<span style="color:' + ptsColor + ';font-weight:900;font-size:0.6rem;flex-shrink:0;margin-left:6px;">+' + (f.pts||0).toFixed(1) + ' pts</span>' +
-              '</div>';
-          }).join('')
-        : '<div style="color:#475569;font-size:0.55rem;text-align:center;padding-top:20px;">Esperando actividad en vivo...</div>';
-
-      // SNAPSHOT ENGINE: guardar estado cada 10min para heatmaps
-      (function() {
-        try {
-          const ahora = Date.now();
-          const KEY = 'rr_heatmap_snapshots';
-          const HOY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-          let allSnaps = {};
-          try { allSnaps = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) {}
-          if (!allSnaps[HOY]) allSnaps[HOY] = [];
-          const ultimo = allSnaps[HOY][allSnaps[HOY].length - 1];
-          if (!ultimo || (ahora - ultimo.ts) >= 600000) {
-            allSnaps[HOY].push({
-              ts: ahora,
-              hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-              totalPts: totalPtsCurr,
-              ops: rows.filter(r=>r.fi).slice(0, 10).map(r => ({ op: r.op.split(' ')[0], pm: r.pm, mes: r.mes }))
-            });
-            if (allSnaps[HOY].length > 200) allSnaps[HOY] = allSnaps[HOY].slice(-200);
-            // Archivar dias anteriores en logs
-            const LOG_KEY = 'rr_heatmap_logs';
-            let logs = {};
-            try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '{}'); } catch(e) {}
-            Object.keys(allSnaps).forEach(d => {
-              if (d !== HOY) { logs[d] = allSnaps[d]; delete allSnaps[d]; }
-            });
-            try { localStorage.setItem(LOG_KEY, JSON.stringify(logs)); } catch(e) {}
-            try { localStorage.setItem(KEY, JSON.stringify(allSnaps)); } catch(e) {}
-          }
-        } catch(e) { console.warn('[SNAPSHOT]', e); }
-      })();
 
       const hc = (v, m) => {
-        if (!v || v < 0.01) return { b: 'rgba(15,23,42,0.5)', f: '#475569' };
+        if (!v || v < 0.01) return { b: 'rgba(15,23,42,0.6)', f: '#475569' };
         const r = v / (m || 1);
-        if (r < 0.10) return { b: 'rgba(239,68,68,0.25)', f: '#fca5a5' }; 
-        if (r < 0.25) return { b: 'rgba(30,58,80,0.8)', f: '#94a3b8' };   
-        if (r < 0.50) return { b: 'rgba(6,95,70,0.8)', f: '#d1fae5' };    
-        if (r < 0.75) return { b: 'rgba(16,185,129,0.7)', f: '#ecfdf5' };  
-        if (r < 1.00) return { b: 'rgba(5,150,105,0.9)', f: '#f0fdfa' };  
+        if (r < 0.15) return { b: 'rgba(239,68,68,0.35)', f: '#fca5a5' }; 
+        if (r < 0.35) return { b: 'rgba(30,58,80,0.9)', f: '#94a3b8' };   
+        if (r < 0.65) return { b: 'rgba(6,95,70,0.9)', f: '#d1fae5' };    
         return { b: 'rgba(45,212,191,1)', f: '#042f2e' };                
       };
 
@@ -10050,144 +10013,46 @@
       let content = '';
 
       if (tab === 'resumen') {
-        const mx = {m10:0,m30:0,dia:0,sem:0,mes:0};
+        const mx = {m05:0,m10:0,dia:0,sem:0,mes:0};
         rows.forEach(r => {
-          const c10 = r.cortes.filter(c => c.ts && (nowTs - c.ts < 600000)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
-          const c30 = r.cortes.filter(c => c.ts && (nowTs - c.ts < 1800000)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
-          r.r10 = c10 > 0 ? c10 : r.dia/144; r.r30 = c30 > 0 ? c30 : r.dia/48;
-          mx.m10=Math.max(mx.m10, r.r10); mx.m30=Math.max(mx.m30, r.r30);
+          const c05 = (r.cortes || []).filter(c => c.ts && (nowTs - c.ts < 300000)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
+          const c10 = (r.cortes || []).filter(c => c.ts && (nowTs - c.ts < 600000)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
+          r.r05 = c05 > 0 ? c05 : r.dia/288; r.r10 = c10 > 0 ? c10 : r.dia/144;
+          mx.m05=Math.max(mx.m05, r.r05); mx.m10=Math.max(mx.m10, r.r10);
           mx.dia=Math.max(mx.dia, r.dia); mx.sem=Math.max(mx.sem, r.sem); mx.mes=Math.max(mx.mes, r.mes);
         });
         const trs = rows.map(r => {
-          const cs = [['r10',mx.m10],['r30',mx.m30],['dia',mx.dia],['sem',mx.sem],['mes',mx.mes]].map(([k,m]) => {
-            const val = r[k], c = hc(val, m), isDrop = (k==='r10' && val < (r.r30 * 0.25) && r.r30 > 0.1);
-            return `<td style="padding:4px 6px;text-align:center;background:${isDrop?'rgba(239,68,68,0.5)':c.b};border-bottom:1px solid rgba(255,255,255,0.03);"><span style="font-size:0.6rem;font-weight:900;color:${isDrop?'#fff':c.f};">${fm(val)}</span></td>`;
+          const cs = [['r05',mx.m05],['r10',mx.m10],['dia',mx.dia],['sem',mx.sem],['mes',mx.mes]].map(([k,m]) => {
+            const val = r[k], c = hc(val, m);
+            return `<td style="padding:4px 2px;text-align:center;background:${c.b};border-bottom:1px solid rgba(255,255,255,0.02);"><span style="font-size:0.55rem;font-weight:950;color:${c.f};">${fm(val)}</span></td>`;
           }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 10px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:top;"><div style="font-weight:900;color:#e2e8f0;font-size:0.65rem;line-height:1.1;">${r.op.split(' ').slice(0,2).join(' ')}</div><div style="font-size:0.5rem;color:#2dd4bf;font-weight:800;margin-top:2px;">$${r.tOp.toFixed(1)}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 8px;min-width:130px;border-bottom:1px solid rgba(255,255,255,0.03);"><div style="font-size:0.58rem;font-weight:800;color:#38bdf8;">${r.pm}</div><div style="font-size:0.45rem;color:#64748b;">ID:${r.pid}</div></td>${cs}</tr>`;
+          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:top;"><div style="font-weight:900;color:#f1f5f9;font-size:0.58rem;line-height:1.1;">${r.op.split(' ').slice(0,2).join(' ')}</div><div style="font-size:0.45rem;color:#2dd4bf;font-weight:800;margin-top:2px;">$${r.tOp.toFixed(1)}</div></td>` : '';
+          return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${cs}</tr>`;
         }).join('');
-        content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.3);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;left:0;background:#1e293b;z-index:10;">OPERADOR</th><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;background:#1e293b;">PERFIL</th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">10m<br><small>RITMO</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">30m<br><small>RITMO</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">DÍA<br><small>PROM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">SEMANA<br><small>ACUM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">MES<br><small>TOTAL</small></th></tr></thead><tbody>${trs}</tbody></table></div>`;
-      } else if (tab === '10m' || tab === '30m') {
-        const KEY = 'rr_heatmap_snapshots';
-        const HOY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        let snaps = [];
-        try { snaps = (JSON.parse(localStorage.getItem(KEY) || '{}')[HOY]) || []; } catch(e) {}
-        const interval = tab === '10m' ? 10 : 30;
-        const nSlots = tab === '10m' ? 72 : 24;
+        content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.5);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;min-width:700px;"><thead><tr><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;left:0;background:#1e293b;z-index:10;border-bottom:1px solid rgba(255,255,255,0.05);">OPERADOR</th><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;background:#1e293b;border-bottom:1px solid rgba(255,255,255,0.05);">PERFIL</th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">5m<br><small>LIVE</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">10m<br><small>PULSO</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">DÍA<br><small>PROM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">SEM<br><small>ACUM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">MES<br><small>TOTAL</small></th></tr></thead><tbody>${trs}</tbody></table></div>`;
+      } else if (tab === '5m' || tab === '10m') {
+        const interval = tab === '5m' ? 5 : 10;
+        const nSlots = 30;
         const slots = Array.from({length: nSlots}, (_, i) => {
           const t = nowTs - (nSlots - 1 - i) * interval * 60000;
           return { t, label: new Date(t).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}) };
         });
-        const trs = rows.filter(r => r.fi).map(r => {
-          const opShort = r.op.split(' ').slice(0,2).join(' ');
-          const cells = slots.map((slot, si) => {
-            const slotStart = slot.t - interval * 60000;
-            const relevant = snaps.filter(s => s.ts >= slotStart && s.ts < slot.t);
-            let val = 0;
-            if (relevant.length > 0) {
-              const last = relevant[relevant.length - 1];
-              const prev = si > 0 ? snaps.filter(s => s.ts < slotStart).slice(-1)[0] : null;
-              // Buscar este operador en el snap
-              const opSnap = last.ops && last.ops.find(o => o.op === r.op.split(' ')[0]);
-              const opSnapPrev = prev && prev.ops && prev.ops.find(o => o.op === r.op.split(' ')[0]);
-              val = opSnap ? (opSnap.mes - (opSnapPrev ? opSnapPrev.mes : 0)) : 0;
-              if (val < 0) val = 0;
-            } else {
-              // Fallback: distribuir puntos del dia entre slots
-              val = r.cortes.filter(c => c.ts && c.ts >= slotStart && c.ts < slot.t).reduce((s,c) => s+(c.puntos||0), 0) * r.share;
-            }
-            const maxSlotVal = tab === '10m' ? 2 : 6;
-            const pct = val / maxSlotVal;
-            const bg = pct >= 0.8 ? 'rgba(45,212,191,1)' : pct >= 0.5 ? 'rgba(16,185,129,0.8)' : pct >= 0.2 ? 'rgba(6,95,70,0.8)' : pct >= 0.05 ? 'rgba(30,58,80,0.6)' : 'rgba(15,23,42,0.4)';
-            const isNow = si === nSlots - 1;
-            return '<td title="' + slot.label + ': ' + val.toFixed(1) + ' pts" style="padding:0;width:10px;height:20px;background:' + bg + ';border-right:1px solid rgba(255,255,255,0.01);' + (isNow ? 'outline:1px solid #2dd4bf;' : '') + '"></td>';
-          }).join('');
-          const totalOp = r.tOp;
-          return '<tr>' +
-            '<td style="padding:5px 8px;min-width:90px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);">' +
-            '<div style="font-size:0.58rem;font-weight:900;color:#f1f5f9;">' + opShort + '</div>' +
-            '<div style="font-size:0.45rem;color:#2dd4bf;">' + totalOp.toFixed(1) + ' pts mes</div>' +
-            '</td>' +
-            cells + '</tr>';
-        }).join('');
-
-        // Header con horas
-        const headerCols = slots.filter((_,i) => i % (tab==='10m'?6:2) === 0)
-          .map(s => '<th colspan="' + (tab==='10m'?6:2) + '" style="padding:3px;font-size:0.42rem;color:#64748b;background:#1e293b;border-left:1px solid rgba(255,255,255,0.05);">' + s.label + '</th>').join('');
-
-        // Boton para ver logs historicos
-        const logsBtn = '<button onclick="window._rrShowLogs&&window._rrShowLogs()" style="float:right;padding:4px 10px;font-size:0.5rem;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;border-radius:6px;cursor:pointer;margin-bottom:6px;">📋 Ver Logs del Día</button>';
-
-        content = logsBtn + '<div style="clear:both;"></div><div style="overflow-x:auto;background:rgba(0,0,0,0.3);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="padding:8px;background:#1e293b;position:sticky;left:0;z-index:10;font-size:0.55rem;color:#94a3b8;">OPERADOR</th>' + headerCols + '</tr></thead><tbody>' + trs + '</tbody></table></div>' +
-          '<div style="font-size:0.5rem;color:#475569;margin-top:6px;">' + snaps.length + ' snapshots guardados hoy · Actualiza cada 10min automáticamente</div>';
-
-        // Registrar funcion de logs
-        window._rrShowLogs = function() {
-          const LOG_KEY = 'rr_heatmap_logs';
-          let logs = {};
-          try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '{}'); } catch(e) {}
-          const dias = Object.keys(logs).sort().reverse();
-          if (!dias.length) { alert('No hay logs archivados aun. Se guardan automaticamente al cambiar de dia.'); return; }
-          let txt = 'LOGS DE HISTORIAL DE ACTIVIDAD\n' + '='.repeat(40) + '\n\n';
-          dias.slice(0, 5).forEach(d => {
-            txt += 'DIA: ' + d + ' (' + (logs[d].length) + ' snapshots)\n';
-            const first = logs[d][0], last2 = logs[d][logs[d].length-1];
-            txt += '  Inicio: ' + (first.hora||'--') + ' | Fin: ' + (last2.hora||'--') + '\n';
-            txt += '  Total acumulado al cierre: ' + (last2.totalPts||0).toFixed(1) + ' pts\n\n';
-          });
-          alert(txt);
-        };
-
-      } else if (tab === 'dia') {
-        const days = Array.from({length: 31}, (_, i) => i + 1);
-        const hCols = days.map(d => `<th style="padding:6px 4px;text-align:center;font-size:0.45rem;color:#94a3b8;background:#1e293b;min-width:24px;">${d}</th>`).join('');
+        const hCols = slots.map(s => `<th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:35px;border-bottom:1px solid rgba(255,255,255,0.05);">${s.label}</th>`).join('');
         const trs = rows.map(r => {
-          const dC = r.cortes.reduce((acc, c) => { if(!c.ts) return acc; const d = new Date(c.ts).getDate(); acc[d] = (acc[d] || 0) + (c.puntos || 0); return acc; }, {});
-          const history = days.map(d => {
-            const val = (dC[d] || 0) * r.share, c = hc(val, r.dia * 1.5 || 5);
-            return `<td style="padding:4px 2px; background:${c.b}; border-bottom:1px solid rgba(255,255,255,0.02); ${d===diaHoy?'outline:1px solid #2dd4bf;':''}"><div style="font-size:0.55rem; font-weight:950; color:${c.f}; text-align:center; text-shadow: 0 0 2px rgba(0,0,0,0.5);">${val>0?val.toFixed(1):'—'}</div></td>`;
+          const history = slots.map(s => {
+            const rangeStart = s.t - (interval * 60000);
+            const val = (r.cortes || []).filter(c => c.ts && c.ts > rangeStart && c.ts <= s.t).reduce((sum,c)=>sum+(c.puntos||0),0) * r.share;
+            const c = hc(val, r.dia / (24 * (60/interval)));
+            return `<td style="padding:1px;background:${c.b};border:1px solid rgba(0,0,0,0.05);"><div style="font-size:0.48rem;font-weight:900;color:${c.f};text-align:center;">${val>0?fm(val).replace('$',''):'·'}</div></td>`;
           }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px; min-width:110px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem; font-weight:800; color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 6px; min-width:110px; font-size:0.5rem; color:#38bdf8; font-weight:700;">${r.pm}</td>${history}</tr>`;
+          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
+          return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${history}</tr>`;
         }).join('');
-        content = `<div style="overflow-x:auto; background:rgba(0,0,0,0.3); border-radius:10px;" class="custom-scrollbar"><table style="width:100%; border-collapse:collapse; min-width:1500px;"><thead><tr><th style="padding:10px; position:sticky; left:0; background:#1e293b; z-index:10; font-size:0.6rem; color:#94a3b8;">OPERADOR</th><th style="padding:10px; background:#1e293b; font-size:0.6rem; color:#94a3b8;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
-      } else if (tab === 'sem') {
-        const weeks = [3,2,1,0]; // weeks ago
-        const hCols = weeks.map(w => `<th style="padding:6px;text-align:center;font-size:0.5rem;color:#94a3b8;background:#1e293b;">S-${w}</th>`).join('');
-        const trs = rows.map(r => {
-          const history = weeks.map(w => {
-            const wStart = nowTs - (w+1)*7*24*60*60*1000;
-            const wEnd = nowTs - w*7*24*60*60*1000;
-            const val = r.cortes.filter(c => c.ts && c.ts >= wStart && c.ts < wEnd).reduce((s,c)=>s+(c.puntos||0), 0) * r.share;
-            const c = hc(val, r.dia * 6 || 30);
-            return `<td style="padding:6px 4px; background:${c.b}; border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.55rem; font-weight:950; color:${c.f}; text-align:center;">${val>0?fm(val):'—'}</div></td>`;
-          }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px; min-width:110px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem; font-weight:800; color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 6px; min-width:110px; font-size:0.5rem; color:#38bdf8; font-weight:700;">${r.pm}</td>${history}</tr>`;
-        }).join('');
-        content = `<div style="overflow-x:auto; background:rgba(0,0,0,0.3); border-radius:10px;" class="custom-scrollbar"><table style="width:100%; border-collapse:collapse; min-width:800px;"><thead><tr><th style="padding:10px; position:sticky; left:0; background:#1e293b; z-index:10; font-size:0.6rem; color:#94a3b8;">OPERADOR</th><th style="padding:10px; background:#1e293b; font-size:0.6rem; color:#94a3b8;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
-      } else if (tab === 'mes') {
-        const months = [5,4,3,2,1,0]; // months ago
-        const hCols = months.map(m => {
-          const d = new Date(); d.setMonth(d.getMonth() - m);
-          return `<th style="padding:6px;text-align:center;font-size:0.5rem;color:#94a3b8;background:#1e293b;text-transform:uppercase;">${d.toLocaleString('es',{month:'short'})}</th>`;
-        }).join('');
-        const trs = rows.map(r => {
-          const history = months.map(m => {
-            const d = new Date(); d.setMonth(d.getMonth() - m);
-            const mStr = d.toISOString().slice(0, 7);
-            let val = r.cortes.filter(c => c.fecha && c.fecha.startsWith(mStr)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
-            if (m === 0) val = r.mes; // Use calculated current month
-            const c = hc(val, r.dia * 25 || 150);
-            return `<td style="padding:8px 4px; background:${c.b}; border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.55rem; font-weight:950; color:${c.f}; text-align:center;">${val>0?fm(val):'—'}</div></td>`;
-          }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px; min-width:110px; position:sticky; left:0; background:#0f172a; z-index:2; border-right:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem; font-weight:800; color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 6px; min-width:110px; font-size:0.5rem; color:#38bdf8; font-weight:700;">${r.pm}</td>${history}</tr>`;
-        }).join('');
-        content = `<div style="overflow-x:auto; background:rgba(0,0,0,0.3); border-radius:10px;" class="custom-scrollbar"><table style="width:100%; border-collapse:collapse; min-width:700px;"><thead><tr><th style="padding:10px; position:sticky; left:0; background:#1e293b; z-index:10; font-size:0.6rem; color:#94a3b8;">OPERADOR</th><th style="padding:10px; background:#1e293b; font-size:0.6rem; color:#94a3b8;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
-      } else {
-        content = `<div style="padding:40px;text-align:center;color:#64748b;font-size:0.7rem;">Vista ${tab.toUpperCase()} no disponible.</div>`;
+        content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
       }
+
+      const recentFeed = (window._rrLiveFeed || []).map(entry => `<div style="font-size:0.52rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;color:#94a3b8;"><span>${entry.op.split(' ')[0]} <small style="color:#475569;">(${entry.modelo})</small></span><b style="color:#2dd4bf">+$${(entry.pts||0).toFixed(2)}</b></div>`).join('');
+      const liveTotal = (window._rrLiveFeed || []).reduce((acc, r) => acc + (Number(r.pts) || 0), 0);
 
       wrap.innerHTML = `
       <details class="action-map-accordion" ${isMapOpen ? 'open' : ''} ontoggle="localStorage.setItem('rr_action_map_open', this.open)" style="background:#0f172a;border:1px solid rgba(148,163,184,0.1);border-radius:14px;margin-bottom:25px;font-family:'Inter',sans-serif;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.4);">
@@ -10200,79 +10065,58 @@
         </summary>
         <div style="padding:14px;">
           <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px;margin-bottom:16px;">
-             <!-- Col 1: Speed & Impact -->
              <div style="display:flex;flex-direction:column;gap:10px;">
-               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};position:relative;">
-                   <button onclick="alert('📊 VELOCIDAD PROMEDIO (Vp)\n\n¿CÓMO ENTENDERLO?\nEs el pulso de dinero diario de la agencia. Si este número baja de 4000, la meta mensual peligra.\n\n¿QUÉ HACER?\nSi la Proyección está en rojo, necesitas activar más perfiles o rotar operadores a perfiles de alto tráfico.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                  <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
+                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};position:relative;">
+                   <button onclick="alert('📊 VELOCIDAD PROMEDIO (Vp)\n\n¿CÓMO ENTENDERLO?\nEs el pulso de dinero diario de la agencia. Si este número baja de 4000, la meta mensual peligra.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
                    <div style="font-size:1.4rem;font-weight:900;color:#f1f5f9;margin-top:4px;display:flex;align-items:baseline;gap:6px;">${vel.toFixed(1)} <small style="font-size:0.6rem;color:#34d399;font-weight:700;">↑ 4.2%</small></div>
                    <div style="font-size:0.55rem;color:#64748b;margin-top:6px;background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:6px;display:inline-block;">Proyección: <b style="color:${cS}">${proy.toLocaleString()}</b> <span style="margin-left:8px;color:#475569;">META: 150K</span></div>
-               </div>
-               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;position:relative;">
-                   <button onclick="alert('⚖️ IMPACTO RECALIBRACIÓN\n\n¿CÓMO ENTENDERLO?\nEs el costo de entrada. Los operadores deben generar estos puntos cada día SOLO PARA CUBRIR EL GASTO antes de ganar un solo dólar neto.\n\n¿QUÉ HACER?\nSi el Impacto sube mucho, los baselines están muy altos. Revisa la calibración de las 4PM.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                  <div style="font-size:0.5rem;color:#fca5a5;font-weight:700;">IMPACTO RECALIBRACIÓN</div>
+                </div>
+                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;position:relative;">
+                   <button onclick="alert('⚖️ IMPACTO RECALIBRACIÓN\n\n¿CÓMO ENTENDERLO?\nEs el costo de entrada. Los operadores deben generar estos puntos cada día SOLO PARA CUBRIR EL GASTO antes de ganar un solo dólar neto.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <div style="font-size:0.5rem;color:#fca5a5;font-weight:700;">IMPACTO RECALIBRACIÓN</div>
                    <div style="font-size:1.4rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.55rem;color:#64748b;font-weight:400;">pts base/día</small></div>
                    <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:6px;">Eficiencia: <b style="color:#fca5a5">${(100 - (totalPtsPrev/30 / (vel||1) * 100)).toFixed(1)}%</b> <div style="flex:1;height:3px;background:rgba(248,113,113,0.1);border-radius:2px;"><div style="width:${100 - (totalPtsPrev/30 / (vel||1) * 100)}%;height:100%;background:#f87171;border-radius:2px;"></div></div></div>
-               </div>
+                </div>
              </div>
-
-             <!-- Col 2: Capacity & Brain -->
              <div style="display:flex;flex-direction:column;gap:10px;">
-               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;position:relative;">
-                   <button onclick="alert('👥 CAPACIDAD ACTIVA\n\n¿CÓMO ENTENDERLO?\nMuestra cuántos perfiles está cubriendo cada operador en promedio (Densidad).\n\n¿QUÉ HACER?\nDensidad < 1.5: Sub-utilización. Los operadores tienen tiempo libre.\nDensidad > 3.0: Saturación. La calidad del chat bajará por exceso de perfiles.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                  <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
+                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;position:relative;">
+                   <button onclick="alert('👥 CAPACIDAD ACTIVA\n\n¿CÓMO ENTENDERLO?\nMuestra cuántos perfiles está cubriendo cada operador en promedio (Densidad).')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
                    <div style="font-size:1.3rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} <small style="font-size:0.6rem;color:#64748b;">ops</small> / ${rows.length} <small style="font-size:0.6rem;color:#64748b;">perfiles</small></div>
                    <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:8px;">Carga: <b style="color:#38bdf8">${(rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1)}x</b> <div style="flex:1;height:3px;background:rgba(56,189,248,0.1);border-radius:2px;"><div style="width:${Math.min(100, (rows.length/(new Set(rows.map(r=>r.op)).size||1))/4 * 100)}%;height:100%;background:#38bdf8;border-radius:2px;"></div></div></div>
-               </div>
-               <div id="rk-brain-panel" style="background:rgba(20,184,166,0.05);padding:12px 15px;border-radius:12px;border:1px solid rgba(20,184,166,0.15);flex:1;display:flex;flex-direction:column;justify-content:center;">
-                  <div style="font-size:0.55rem;color:#2dd4bf;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:5px;">🧠 CEREBRO RR: AUDITORÍA</div>
-                  <div style="font-size:0.52rem;color:#94a3b8;line-height:1.4;" id="rk-brain-content">
-                    ${_generarInsights(rows, vel, proy, totalPtsPrev)}
-                  </div>
-               </div>
+                </div>
+                <div id="rk-brain-panel" style="background:rgba(20,184,166,0.05);padding:12px 15px;border-radius:12px;border:1px solid rgba(20,184,166,0.15);flex:1;display:flex;flex-direction:column;justify-content:center;">
+                   <div style="font-size:0.55rem;color:#2dd4bf;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:5px;">🧠 CEREBRO RR: AUDITORÍA</div>
+                   <div style="font-size:0.52rem;color:#94a3b8;line-height:1.4;" id="rk-brain-content">${typeof _generarInsights === 'function' ? _generarInsights(rows, vel, proy, totalPtsPrev) : 'Procesando heurísticas...'}</div>
+                </div>
              </div>
-
-             <!-- Col 3: Live Feed -->
              <div style="background:rgba(0,0,0,0.3);padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);height:175px;overflow-y:auto;position:relative;" class="custom-scrollbar">
                 <div style="font-size:0.5rem;color:#a78bfa;font-weight:700;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:2px 0;display:flex;justify-content:space-between;align-items:center;">
-                  <span>ACTIVIDAD EN VIVO</span>
-                  <span style="color:#34d399;font-weight:900;background:rgba(52,211,153,0.1);padding:2px 6px;border-radius:4px;">+$${(liveTotal * 1400).toLocaleString('es-CO')}</span>
+                   <span>ACTIVIDAD EN VIVO</span>
+                   <span style="color:#34d399;font-weight:900;background:rgba(52,211,153,0.1);padding:2px 6px;border-radius:4px;">+$${(liveTotal * 1400).toLocaleString('es-CO')}</span>
                 </div>
                 <div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.55rem;color:#475569;text-align:center;padding-top:20px;">Esperando actividad...</div>'}</div>
              </div>
           </div>
           <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
-            ${['resumen', '10m', '30m', 'dia', 'sem', 'mes'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t.toUpperCase()}</button>`).join('')}
+            ${['resumen', '5m', '10m'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t.toUpperCase()}</button>`).join('')}
           </div>
           ${content}
           
-          <!-- Botón de Info Temporalidad (Nuevo) -->
-          <div style="margin-top:15px; padding:10px; background:rgba(45,212,191,0.05); border-radius:10px; border:1px dashed rgba(45,212,191,0.2); display:flex; justify-content:center;">
-            <button onclick="alert('📈 GUÍA DE TEMPORALIDADES - ACTION MAP\\n\\n1. 10M/30M (Ritmo Inmediato):\\nMide la producción en ráfagas cortas. Ideal para detectar si un operador se distrajo o si el perfil entró en una ráfaga de tráfico alta.\\n\\n2. DÍA (Promedio Diario):\\nCompara el rendimiento de hoy contra el promedio del mes. Celdas VERDE CLARO indican días de superación de meta.\\n\\n3. SEMANA (Acumulado Semanal):\\nVisualiza la constancia. Permite identificar si el operador baja el ritmo los fines de semana o días específicos.\\n\\n4. MES (Historial):\\nLa vista macro. Compara meses completos para validar si el operador está creciendo en la agencia o si ha llegado a un techo de producción.')" 
+          <div style="margin-top:12px; padding:10px; background:rgba(45,212,191,0.05); border-radius:10px; border:1px dashed rgba(45,212,191,0.2); display:flex; justify-content:center;">
+            <button onclick="alert('🚀 EXPERT HEATMAP GUIDE\\n\\n5M/10M (High Resolution):\\nIdentifies micro-fluctuations in production. Red cells indicate drops < 15% of the average, allowing immediate reallocation of profiles.\\\\n\\\\nPRO TIP:\\\\nUse the 5M view during peak hours to ensure no profile is orphaned for more than 10 minutes.')" 
                     style="background:none; border:none; color:#2dd4bf; font-size:0.65rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px;">
-              <span>ℹ️ ¿CÓMO ENTENDER ESTA DATA?</span>
+              <span>ℹ️ EXPERT MONITORING GUIDE</span>
             </button>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:10px;">
-            <div style="font-size:0.55rem;color:#475569;font-style:italic;max-width:480px;">* Mapa de calor con sensibilidad dinámica. Celdas <span style="color:#f87171;font-weight:800;">ROJAS</span> indican caídas súbitas o producción < 10% del promedio.</div>
-            <div style="display:flex;gap:4px;align-items:center;font-size:0.5rem;color:#64748b;background:rgba(0,0,0,0.2);padding:4px 10px;border-radius:20px;"><span>BAJO</span><div style="display:flex;gap:2px;">${['rgba(239,68,68,0.25)','rgba(30,58,80,0.8)','rgba(6,95,70,0.8)','rgba(16,185,129,0.7)','rgba(45,212,191,1)'].map(c=>`<div style="width:10px;height:10px;background:${c};border-radius:2px;"></div>`).join('')}</div><span>ALTO</span></div>
           </div>
         </div>
       </details>
       <style>
         .action-map-accordion summary{list-style:none;outline:none;} .action-map-accordion summary::-webkit-details-marker{display:none;}
         .custom-scrollbar::-webkit-scrollbar { height: 6px; width:6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(45,212,191,0.2); border-radius: 10px; }
-      </style>
-      `;
-    }
-
-
-
-
-
-
-
-    function exportarDatos() {
+      </style>`;
+    }\n\nfunction exportarDatos() {
       const keys = Object.keys(localStorage).filter(k => k.startsWith('rr_') || k.startsWith('prime') || k === 'primeOperatorsData2026');
       const data = {};
       keys.forEach(k => { try { data[k] = JSON.parse(localStorage.getItem(k)); } catch (e) { data[k] = localStorage.getItem(k); } });

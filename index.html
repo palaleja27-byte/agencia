@@ -4659,6 +4659,26 @@
       // ── Cache global para datos de Tableau (debe existir ANTES de renderTableauPanel) ──
       if (typeof _dpTableauData === 'undefined') { var _dpTableauData = {}; }
 
+      // ── Funcion global para mostrar info de servicios Tableau (evita comillas rotas) ──
+      window.rrSvcInfo = function(key) {
+        var data = window._rrSvcInfoData || {};
+        var text = data[key] || 'Dato del servidor UK. Cada numero aqui es dinero real generado por este perfil.';
+        alert('\u2139 ' + key.toUpperCase() + '\n\n' + text);
+      };
+
+      // ── Funcion global para el boton info de Actividad en Vivo ──
+      window.rrInfoLive = function() {
+        alert(
+          'ACTIVIDAD EN VIVO - Como funciona\n\n' +
+          'QUE ES:\n' +
+          'Es una pantalla que muestra en tiempo real quien esta produciendo puntos AHORITA MISMO en la agencia. Cada vez que el robot detecta un cambio en los puntos de un operador, este modulo lo muestra al instante.\n\n' +
+          'COMO FUNCIONA (DELTA-SHIFT):\n' +
+          'El robot (watcher) lee el servidor de la plataforma cada ciertos minutos. Cuando detecta que un perfil subio sus puntos, guarda esa diferencia en nuestra base de datos. Este modulo escucha esa base de datos en tiempo real y muestra el cambio de inmediato, sin que el monitor tenga que hacer nada.\n\n' +
+          'POR QUE NOS HACE MAS RENTABLES:\n' +
+          'Antes habia que esperar al cierre del turno para saber quien produjo que. Ahora el monitor puede ver en segundos si algun perfil lleva horas sin generar puntos, actuar a tiempo, reasignar clientes y maximizar el ingreso del turno. Es la diferencia entre reaccionar y anticiparse.'
+        );
+      };
+
       function toggleTableauPanel() {
         const body = document.getElementById('tableau-body');
         const chev = document.getElementById('tableau-chevron');
@@ -4859,23 +4879,29 @@
               const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
               const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '📋';
               
+              // Textos coloquiales por servicio
               const svcInfoMap = {
-                'MAILS': 'Campo mails del JSON en el endpoint /stats del servidor UK. Cada mail procesado por el perfil genera puntos que Datame acumula en puntos_total. Fuente: tabla operaciones, campo data_json[mails]. Impacto: es el servicio de mayor volumen promedio ($0.80-$2.50 por mail respondido).',
-                'STICKERS': 'Stickers enviados en conversaciones. Extraído de data_json del endpoint /profile/activity. Genera micro-puntos (< $0.10 c/u) pero indica engagement activo del cliente, precursor de conversiones en regalos.',
-                'CHAT AUDIO': 'Mensajes de audio en chat. Alto valor unitario ($1.20-$3.00). El scraper lo extrae del campo chat_audio en el JSON de stats del servidor UK. Indica conversación profunda = mayor retenci\u00f3n de cliente.',
-                'CHAT POSTS': 'Posts privados en el feed del perfil. Extraído de data_json → chat_posts. Fuente UK API endpoint /wall. Valor medio-alto. Clientes que pagan por posts privados tienen LTV (Life-Time Value) superior.',
-                'MAIL READS': 'Lecturas de mails (el cliente abre el mail). Generan puntos menores pero confirman que el cliente est\u00e1 activo. Fuente: endpoint /mail-reads del servidor UK → data_json.',
-                'GIFTS': 'Regalos virtuales enviados por clientes. Mayor ticket promedio ($3.00-$15.00 por regalo). Fuente: endpoint /gifts del servidor UK. Indicador clave de monetizaci\u00f3n profunda.',
-                'VIRTUAL GIFTS': 'Regalos virtuales premium. Mismo endpoint que GIFTS pero con SKU premium. Extraídos del campo virtual_gifts en data_json del servidor UK.',
-                'PHOTOS': 'Fotos privadas vendidas. Fuente: endpoint /photos del servidor UK → data_json[photos]. Generan puntos por foto vendida. Alta rentabilidad por unidad ($0.50-$2.00).',
-                'VOICE': 'Mensajes de voz privados. Extraídos de data_json → voice. Similar a CHAT AUDIO pero desde perfil. Genera puntos por minuto.',
-                'VIDEO': 'Videos privados. Extraídos de data_json → video. Mayor valor por unidad que fotos.',
-                'PRIME': 'Suscripciones PRIME. Ingresos recurrentes mensuales. Fuente: endpoint /subscriptions del servidor UK.',
-                'DEFAULT': 'Campo extra del JSON de stats del servidor UK (endpoint /profile/summary de la plataforma). Extraído por el scraper Python → almacenado en operaciones.data_json → renderizado en tiempo real por renderTableauPanel().'
+                'MAILS': 'MAILS - Los correos que le mandamos al cliente.\n\nCada vez que el operador responde un correo dentro del chat del perfil, la plataforma UK registra ese correo y le asigna puntos. Esos puntos llegan a nuestra base de datos cada ciclo del robot.\n\nPOR QUE NOS PAGAN: Porque el cliente pago para recibir ese correo. A mas correos respondidos = mas plata. Es el servicio de mayor volumen en la agencia.',
+                'STICKERS': 'STICKERS - Los stickers que mandamos en el chat.\n\nSon los emojis animados o figuras que se envian en conversacion. Cada sticker que el cliente compra genera una fraccion de punto. Vale poquito individualmente pero muestra que el cliente esta activo y metido en la conversacion.\n\nPOR QUE IMPORTA: Un cliente que manda stickers es un cliente caliente. Los clientes activos son los que terminan comprando regalos o fotos. Es un indicador de engagement.',
+                'CHAT AUDIO': 'CHAT AUDIO - Los audios que mandamos en el chat privado.\n\nCuando el operador graba y envia un audio en el chat, la plataforma lo cobra al cliente. Es uno de los servicios que mas vale por unidad porque el cliente siente mayor conexion emocional.\n\nPOR QUE NOS PAGAN MAS: El audio crea intimidad. Un cliente que escucha la voz del perfil esta mucho mas enganchado y tiene mas probabilidad de seguir gastando.',
+                'CHAT POSTS': 'CHAT POSTS - Las publicaciones privadas que ponemos en el muro del cliente.\n\nSon como posts exclusivos que solo ese cliente puede ver porque pago por ellos. Cada post genera puntos al perfil.\n\nPOR QUE IMPORTA: El cliente que paga por contenido exclusivo es el cliente mas leal. Suele gastar mas con el tiempo y cancela menos.',
+                'MAIL READS': 'MAIL READS - Los correos que el cliente abre y lee.\n\nCada vez que un cliente abre un correo que le mandamos, la plataforma registra esa lectura y genera unos puntitos pequenos.\n\nPOR QUE IMPORTA: Si el cliente abre el correo, esta activo y le interesa el perfil. Es una senal de que podemos convertirlo en una venta mayor como un regalo o una foto privada.',
+                'GIFTS': 'GIFTS - Los regalos que el cliente le manda al perfil.\n\nCuando un cliente decide enviar un regalo virtual al perfil, eso genera bastantes puntos de una sola vez. Es el servicio de mayor valor por transaccion individual.\n\nPOR QUE NOS PAGAN MAS: Un regalo puede valer entre $3 y $15 dolares de una. Los clientes que regalan son los VIP de la agencia. Hay que identificarlos y cuidarlos.',
+                'VIRTUAL GIFTS': 'VIRTUAL GIFTS - Los regalos virtuales premium del catalogo.\n\nSon regalos especiales de mayor precio dentro de la plataforma. Igual que los GIFTS pero del catalogo premium.\n\nPOR QUE IMPORTA: Igual que GIFTS pero el cliente gasto aun mas. Son los clientes de mayor ticket promedio.',
+                'PHOTOS': 'PHOTOS - Las fotos privadas que el cliente compra.\n\nCuando el operador le manda una foto privada al cliente y este la compra para verla, eso genera puntos al perfil.\n\nPOR QUE NOS PAGAN: Porque el cliente pago para ver esa foto. Es contenido exclusivo. A mas fotos vendidas = mas ingresos directos.',
+                'VOICE': 'VOICE - Los mensajes de voz del perfil.\n\nSon audios que se mandan desde el perfil como contenido. El cliente paga para escucharlos.\n\nPOR QUE IMPORTA: Similar al CHAT AUDIO pero va al buzzon del cliente. Crea conexion y fideliza.',
+                'VIDEO': 'VIDEO - Los videos privados que el cliente compra.\n\nCuando el operador envia un video privado y el cliente lo compra, eso genera puntos. Es el contenido de mayor valor por pieza.\n\nPOR QUE NOS PAGAN MAS: Un video es lo que mas cuesta en la plataforma por unidad. Un cliente que compra videos es oro puro.',
+                'PRIME': 'PRIME - Las suscripciones mensuales del cliente al perfil.\n\nEl cliente paga una cuota mensual para tener acceso especial al perfil. Eso genera ingresos recurrentes automaticamente.\n\nPOR QUE ES LO MAS VALIOSO: Es plata que entra sola cada mes sin que el operador tenga que vender nada extra. Un cliente PRIME es el mas rentable de todos.',
+                'DEFAULT': 'DATO DEL SERVIDOR UK.\n\nEste numero viene directamente del servidor oficial de la plataforma. El robot lo lee automaticamente y lo trae a nuestra pantalla.\n\nPOR QUE IMPORTA: Cada numero que ves aqui es dinero real que genero ese perfil. La suma de todos estos servicios es lo que se le paga al operador al final del turno.'
               };
               const kUp2 = k.toUpperCase().replace(/_/g,' ');
               const infoText = svcInfoMap[kUp2] || svcInfoMap['DEFAULT'];
-              const infoBtn = '<button onclick="alert(\'' + displayKey + ' — ORIGEN T\u00c9CNICO DEL DATO\\n\\n' + infoText.replace(/'/g,"\\'") + '\')" style="margin-left:4px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;width:12px;height:12px;border-radius:50%;font-size:0.4rem;cursor:pointer;flex-shrink:0;line-height:1;" title="Origen del dato">\u2139</button>';
+              // Usar funcion global para evitar problemas de comillas
+              const safeKey = displayKey.replace(/'/g, '');
+              const infoBtn = '<button onclick="rrSvcInfo(\'' + safeKey + '\')" style="margin-left:4px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;width:12px;height:12px;border-radius:50%;font-size:0.4rem;cursor:pointer;flex-shrink:0;line-height:1;" title="De donde viene este dato">\u2139</button>';
+              // Guardar texto en mapa global
+              if (!window._rrSvcInfoData) window._rrSvcInfoData = {};
+              window._rrSvcInfoData[safeKey] = infoText;
               
               return '<div style="font-size:0.52rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:4px 0;">' +
                 '<span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
@@ -6527,15 +6553,15 @@
       // Promedio real exacto de la operación
       const avgPts = rkDataFiltered.length ? totalPtsCurr / rkDataFiltered.length : 0;
 
-      // % operadores individuales en crecimiento (se mantiene como métrica secundaria)
+      // % operadores individuales en crecimiento
       const mejoraCount = rkDataFiltered.filter(o => o.growth > 0).length;
       const mejoraPct = rkDataFiltered.length
         ? Math.round((mejoraCount / rkDataFiltered.length) * 100) : 0;
 
-      // COP total operación (suma real de todos los ops + PSA)
+      // COP total operación
       const copTotal = Math.round(totalPtsCurr * 1400).toLocaleString('es-CO');
 
-      document.getElementById('rkStatsRow').innerHTML = 
+      document.getElementById('rkStatsRow').innerHTML =
     '<div class="rk-stat-card">' +
       '<div class="stat-val">' + rkDataFiltered.length + '</div>' +
       '<div class="stat-lbl">Ops</div>' +
@@ -6555,7 +6581,7 @@
          '<div id="rk-header-live-msg" style="font-size: 0.65rem; color: #e2e8f0; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Cargando...</div>' +
          '<div id="rk-header-live-time" style="font-size: 0.5rem; color: #475569; margin-top: 2px;">—</div>' +
       '</div>' +
-      '<button onclick="(function(){var t=\'ACTIVIDAD EN VIVO — DELTA-SHIFT\u2122\\n\\nPAR\u00c1METRO 1 — QU\u00c9 ES:\\nMonitor en tiempo real de la producci\u00f3n de puntos de cada operador. Lee directamente desde la tabla \"operaciones\" en Supabase, donde el watcher deposita cada lectura del servidor Datame.\\n\\nPAR\u00c1METRO 2 — C\u00d3MO FUNCIONA (DELTA-SHIFT\u2122):\\nCada 30 segundos consulta Supabase filtrando fecha=hoy y ordenando por ID descendente. El campo \"puntos_neto\" = puntos_total (acumulado Datame) MENOS puntos_baseline (fijado al inicio del turno). Esto garantiza que el operador ve 0.0 al iniciar y crece seg\u00fan produzca.\\n\\nPAR\u00c1METRO 3 — POR QU\u00c9 NOS HACE RENTABLES:\\nElimina el lag de reportes manuales. El monitor ve en segundos qu\u00e9 perfil est\u00e1 generando dinero ahora mismo, detecta perfiles en 0 pts para intervenir, y puede correlacionar el ritmo de puntos con eventos del chat en tiempo real para tomar decisiones t\u00e1cticas.\';alert(t);})()" style="position:absolute;top:4px;right:4px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:16px;height:16px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;" title="Info t\u00e9cnico">\u2139</button>' +
+      '<button onclick="rrInfoLive()" style="position:absolute;top:4px;right:4px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:16px;height:16px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;" title="Info del modulo">ℹ</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="position:relative;">' +
       '<div class="stat-val" id="rk-val-growth" style="color:' + crecOpColor + '; font-size: 16px;">' + crecOpIcon + crecOpSign + crecOp.toFixed(1) + '%</div>' +
@@ -6564,98 +6590,97 @@
       '<button id="btn-crec-info" onclick="toggleCrecTooltip(event)" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#64748b;font-size:8px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>' +
     '</div>';
 
-  // =======================================================
-  // MOTOR ACTIVIDAD EN VIVO — DELTA-SHIFT™ Real-Time Feed
-  // Lee tabla operaciones de Supabase cada 30s
-  // =======================================================
+  // =================================================================
+  // MOTOR ACTIVIDAD EN VIVO — Supabase Realtime (por fila, al instante)
+  // =================================================================
   if (!window._rkLiveEngine) {
     window._rrLiveFeed = [];
-    window._rkLiveEngine = setInterval(async () => {
-      try {
-        if (typeof _sb === 'undefined') return;
-        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const { data: rows } = await _sb
-          .from('operaciones')
-          .select('id_perfil, puntos_neto, puntos_total, jornada, agencia, fecha_dia')
-          .eq('fecha_dia', hoy)
-          .order('id', { ascending: false })
-          .limit(10);
 
-        if (!rows || !rows.length) return;
-
-        // Mapear a feed unificado con nombre de operador
-        window._rrLiveFeed = rows.map(r => {
-          // Buscar nombre del operador via DP_PERFILES_MAP
-          let opName = r.agencia || r.id_perfil || '—';
-          if (typeof DP_PERFILES_MAP !== 'undefined') {
-            for (const [op, perfiles] of Object.entries(DP_PERFILES_MAP)) {
-              if (perfiles.some(p => String(p.id).trim() === String(r.id_perfil).trim())) {
-                opName = op;
-                break;
-              }
-            }
-          }
-          const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-          return {
-            op: opName,
-            perfil: r.id_perfil,
-            pts: Number(r.puntos_neto) || 0,
-            total: Number(r.puntos_total) || 0,
-            turno: r.jornada || '—',
-            time: hora
-          };
-        });
-
-        // Actualizar el widget en el header
-        const msgEl = document.getElementById('rk-header-live-msg');
-        const timeEl = document.getElementById('rk-header-live-time');
-        if (!msgEl) return;
-        const last = window._rrLiveFeed[0];
-        if (!last || last.pts <= 0) {
-          msgEl.innerHTML = '<span style="color:#475569">Sin actividad reciente</span>';
-          if (timeEl) timeEl.innerText = '— hoy';
-          return;
+    // Funcion auxiliar: resuelve nombre del operador desde DP_PERFILES_MAP
+    function _rrResolveName(id_perfil, agencia) {
+      if (typeof DP_PERFILES_MAP !== 'undefined') {
+        for (const [op, perfiles] of Object.entries(DP_PERFILES_MAP)) {
+          if (perfiles.some(p => String(p.id).trim() === String(id_perfil).trim())) return op;
         }
-        const ptsColor = last.pts >= 20 ? '#34d399' : last.pts >= 5 ? '#2dd4bf' : '#818cf8';
-        msgEl.innerHTML =
-          '<span style="color:' + ptsColor + ';font-weight:900">+' + last.pts.toFixed(1) + ' pts</span> ' +
-          '<span style="color:#e2e8f0">' + last.op + '</span>' +
-          '<span style="color:#475569;font-size:0.45rem;margin-left:4px">[' + last.turno + ']</span>';
-        if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
-      } catch(e) { console.warn('[LIVE-FEED]', e); }
-    }, 30000); // Cada 30 segundos
+      }
+      return agencia || id_perfil || '—';
+    }
 
-    // Primera ejecución inmediata
+    // Funcion para pintar el widget
+    function _rrPintarLiveFeed() {
+      const msgEl = document.getElementById('rk-header-live-msg');
+      const timeEl = document.getElementById('rk-header-live-time');
+      if (!msgEl) return;
+      const last = (window._rrLiveFeed || [])[0];
+      if (!last || last.pts <= 0) {
+        msgEl.innerHTML = '<span style="color:#475569">Sin actividad reciente hoy</span>';
+        if (timeEl) timeEl.innerText = '— esperando datos del watcher';
+        return;
+      }
+      const ptsColor = last.pts >= 30 ? '#34d399' : last.pts >= 10 ? '#2dd4bf' : '#818cf8';
+      msgEl.innerHTML =
+        '<span style="color:' + ptsColor + ';font-weight:900">+' + last.pts.toFixed(1) + ' pts</span> ' +
+        '<span style="color:#f1f5f9;font-weight:700">' + last.op + '</span>' +
+        '<span style="color:#64748b;font-size:0.45rem;margin-left:5px">[' + last.turno + ']</span>';
+      if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
+    }
+
+    // 1. Carga inicial desde Supabase (ultimos 20 eventos del dia)
     setTimeout(async () => {
       try {
         if (typeof _sb === 'undefined') return;
         const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         const { data: rows } = await _sb
           .from('operaciones')
-          .select('id_perfil, puntos_neto, puntos_total, jornada, agencia, fecha_dia')
+          .select('id_perfil, puntos_neto, puntos_total, jornada, agencia')
           .eq('fecha_dia', hoy)
+          .gt('puntos_neto', 0)
           .order('id', { ascending: false })
-          .limit(10);
+          .limit(20);
         if (!rows || !rows.length) return;
-        window._rrLiveFeed = rows.map(r => {
-          let opName = r.agencia || r.id_perfil || '—';
-          if (typeof DP_PERFILES_MAP !== 'undefined') {
-            for (const [op, perfiles] of Object.entries(DP_PERFILES_MAP)) {
-              if (perfiles.some(p => String(p.id).trim() === String(r.id_perfil).trim())) { opName = op; break; }
-            }
-          }
-          return { op: opName, perfil: r.id_perfil, pts: Number(r.puntos_neto)||0, total: Number(r.puntos_total)||0, turno: r.jornada||'—', time: new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) };
-        });
-        const msgEl = document.getElementById('rk-header-live-msg');
-        const timeEl = document.getElementById('rk-header-live-time');
-        if (!msgEl) return;
-        const last = window._rrLiveFeed[0];
-        if (!last || last.pts <= 0) { msgEl.innerHTML = '<span style="color:#475569">Sin actividad reciente</span>'; return; }
-        const ptsColor = last.pts >= 20 ? '#34d399' : last.pts >= 5 ? '#2dd4bf' : '#818cf8';
-        msgEl.innerHTML = '<span style="color:' + ptsColor + ';font-weight:900">+' + last.pts.toFixed(1) + ' pts</span> <span style="color:#e2e8f0">' + last.op + '</span><span style="color:#475569;font-size:0.45rem;margin-left:4px">[' + last.turno + ']</span>';
-        if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
-      } catch(e) {}
+        window._rrLiveFeed = rows.map(r => ({
+          op: _rrResolveName(r.id_perfil, r.agencia),
+          perfil: r.id_perfil,
+          pts: Number(r.puntos_neto) || 0,
+          total: Number(r.puntos_total) || 0,
+          turno: r.jornada || '—',
+          time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+        }));
+        _rrPintarLiveFeed();
+      } catch(e) { console.warn('[LIVE-INIT]', e); }
     }, 1500);
+
+    // 2. Suscripcion Realtime: reacciona INSTANTANEAMENTE a cada INSERT o UPDATE
+    setTimeout(() => {
+      try {
+        if (typeof _sb === 'undefined') return;
+        window._rkLiveEngine = _sb
+          .channel('rr-live-ops')
+          .on('postgres_changes', {
+            event: '*', schema: 'public', table: 'operaciones'
+          }, (payload) => {
+            const r = payload.new || payload.record;
+            if (!r) return;
+            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            if (r.fecha_dia !== hoy) return;
+            const neto = Number(r.puntos_neto) || 0;
+            if (neto <= 0) return;
+            const entry = {
+              op: _rrResolveName(r.id_perfil, r.agencia),
+              perfil: r.id_perfil,
+              pts: neto,
+              total: Number(r.puntos_total) || 0,
+              turno: r.jornada || '—',
+              time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+            };
+            // Insertar al inicio del feed, mantener max 20
+            window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 20);
+            _rrPintarLiveFeed();
+          })
+          .subscribe();
+        console.log('[LIVE-RT] Supabase Realtime activo en tabla operaciones');
+      } catch(e) { console.warn('[LIVE-RT]', e); }
+    }, 3000);
   }
 
   // --- FIN DE FILA DE ESTADÍSTICAS ---

@@ -9192,6 +9192,15 @@
         draft[k].perfiles.push({ id: idPerfil, name: String(idPerfil) });
       }
       localStorage.setItem(draftKey, JSON.stringify(draft));
+      
+      // 🛰️ Sincronizar a Supabase para que el operador lo vea en su dashboard
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }).then(() => {
+          console.info('[PSA] Asignación sincronizada:', opName, idPerfil);
+          if (typeof renderRanking === 'function') renderRanking();
+        });
+      }
+      
       renderPSASmartPanel();
     }
 
@@ -17320,8 +17329,23 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     };
 
     async function sincronizarDatamePaneles() {
-
       if (typeof _sb === 'undefined') return;
+
+      // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
+      // Esto asegura que las asignaciones hechas por monitores se distribuyan a todos los usuarios
+      const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const jornadaAct = typeof _opRtJornada === 'function' ? _opRtJornada() : 'Mañana';
+      const shKeyAct = jornadaAct === 'Mañana' ? 'manana' : jornadaAct === 'Tarde' ? 'tarde' : 'noche';
+      const draftKeyAct = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKeyAct;
+      
+      try {
+        const { data: remoteDraft } = await _sb.from('kv_store').select('value').eq('key', draftKeyAct).maybeSingle();
+        if (remoteDraft && remoteDraft.value) {
+           localStorage.setItem(draftKeyAct, remoteDraft.value);
+           console.log('[SYNC] Draft de perfiles distribuido desde Supabase');
+        }
+      } catch(e) { console.warn('[SYNC] Error al distribuir draft:', e); }
+
       const tsEl = document.getElementById('dp-last-update');
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
@@ -17722,9 +17746,12 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const opData = (typeof operatorsData !== 'undefined' ? operatorsData : [])
           .find(o => o.name.toUpperCase() === opName?.toUpperCase());
         _opRtPerfilesNeto = Object.entries(porPerfil).map(([id, v]) => {
-          // Usar el baseline del watcher (6am) como referencia fija del turno
-          if (_opRtBaselineMap[id] === undefined) {
-            _opRtBaselineMap[id] = v.baseline > 0 ? v.baseline : v.total;
+          // DELTA-SHIFT™: Priorizar siempre el baseline que viene de Supabase (calibrado)
+          // Si el baseline en DB es > 0, lo usamos; si no, inicializamos con el total actual.
+          if (v.baseline > 0) {
+            _opRtBaselineMap[id] = v.baseline;
+          } else if (_opRtBaselineMap[id] === undefined) {
+            _opRtBaselineMap[id] = v.total;
           }
           const neto = Math.max(0, v.total - _opRtBaselineMap[id]);
           const nombrePerfil = opData?.profiles?.find(p => String(p.id) === String(id))?.name || v.agencia || id;

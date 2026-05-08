@@ -9872,19 +9872,44 @@
     function _generarInsights(rows, vel, proy, totalPtsPrev) {
       const drops = rows.filter(r => r.r10 < (r.r30 * 0.3) && r.r30 > 0.1).slice(0,2);
       const spikes = [...rows].sort((a,b) => b.r10 - a.r10).slice(0,2);
+      const huerfanos = rows.filter(r => r.puntos === 0).length;
+      const saturacion = (rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1);
       
       let html = '';
-      if (drops.length > 0) {
-        html += `<div style="color:#f87171;margin-bottom:6px;display:flex;gap:4px;"><span>⚠️</span> <b>BAJA CRÍTICA:</b> ${drops.map(d=>d.op.split(' ')[0]).join(', ')} han bajado ritmo >70% en 10m.</div>`;
-      }
-      if (spikes.length > 0 && spikes[0].r10 > 0.2) {
-        html += `<div style="color:#34d399;margin-bottom:6px;display:flex;gap:4px;"><span>🔥</span> <b>TOP RITMO:</b> ${spikes[0].op.split(' ')[0]} liderando con $${spikes[0].r10.toFixed(1)}/10m.</div>`;
-      }
-      const trend = (proy > totalPtsPrev) ? 'CRECIMIENTO' : 'BAJA';
-      const trendColor = (proy > totalPtsPrev) ? '#34d399' : '#f87171';
-      html += `<div style="color:${trendColor};display:flex;gap:4px;"><span>📈</span> <b>TENDENCIA:</b> Operación en ${trend} vs mes anterior.</div>`;
       
-      return html || '<div style="color:#64748b;font-style:italic;">Escaneando métricas para hallar patrones de rendimiento...</div>';
+      // 🚨 ALERTAS CRÍTICAS
+      if (drops.length > 0) {
+        html += `<div style="color:#f87171;margin-bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(248,113,113,0.05);padding:6px;border-radius:6px;border:1px solid rgba(248,113,113,0.1);">
+                   <span style="font-size:0.8rem;">🚨</span> 
+                   <div><b>ALERTA DE CAÍDA:</b> ${drops.map(d=>d.op.split(' ')[0]).join(', ')} bajaron ritmo bruscamente.</div>
+                 </div>`;
+      }
+
+      // 💡 OPORTUNIDADES
+      if (huerfanos > 0) {
+        html += `<div style="color:#fbbf24;margin-bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(251,191,36,0.05);padding:6px;border-radius:6px;border:1px solid rgba(251,191,36,0.1);">
+                   <span style="font-size:0.8rem;">💡</span> 
+                   <div><b>PERFILES INACTIVOS:</b> Hay ${huerfanos} perfiles sin producción hoy. Reasignar carga.</div>
+                 </div>`;
+      }
+
+      // 🔥 RENDIMIENTO
+      if (spikes.length > 0 && spikes[0].r10 > 0.2) {
+        html += `<div style="color:#34d399;margin-bottom:8px;display:flex;gap:6px;align-items:center;background:rgba(52,211,153,0.05);padding:6px;border-radius:6px;border:1px solid rgba(52,211,153,0.1);">
+                   <span style="font-size:0.8rem;">🔥</span> 
+                   <div><b>MAX RENDIMIENTO:</b> ${spikes[0].op.split(' ')[0]} acelerando a $${spikes[0].r10.toFixed(1)}/10m.</div>
+                 </div>`;
+      }
+
+      // 📊 ESTADO GLOBAL
+      const trend = (proy > totalPtsPrev) ? 'POSITIVA' : 'RECESIVA';
+      const trendColor = (proy > totalPtsPrev) ? '#2dd4bf' : '#f87171';
+      html += `<div style="color:#94a3b8;font-size:0.5rem;margin-top:10px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;display:flex;justify-content:space-between;">
+                 <span>TENDENCIA: <b style="color:${trendColor}">${trend}</b></span>
+                 <span>SATURACIÓN: <b style="color:#38bdf8">${saturacion}x</b></span>
+               </div>`;
+      
+      return html || '<div style="color:#64748b;font-style:italic;text-align:center;padding:10px;">Escaneando patrones de tráfico en vivo...</div>';
     }
 
     function renderAlertas() {
@@ -10178,25 +10203,26 @@
              <!-- Col 1: Speed & Impact -->
              <div style="display:flex;flex-direction:column;gap:10px;">
                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};position:relative;">
-                  <button onclick="alert('📊 INFO TÉCNICA: VELOCIDAD PROMEDIO\\n\\n¿PARA QUÉ SIRVE?\\nProyecta el cierre del mes basándose en el ritmo actual de producción diaria de toda la agencia.\\n\\n¿CÓMO FUNCIONA?\\nDivide los puntos totales acumulados en Supabase entre los días transcurridos del mes actual. Luego multiplica ese promedio por 30 para dar la Proyección Mensual.\\n\\n¿CÓMO AYUDA?\\nPermite saber hoy mismo si cumpliremos la meta de la agencia o si debemos ajustar el esfuerzo.')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#64748b;font-size:0.6rem;cursor:pointer;opacity:0.6;">ℹ️</button>
+                   <button onclick="alert('📊 VELOCIDAD PROMEDIO (Vp)\n\n¿CÓMO ENTENDERLO?\nEs el pulso de dinero diario de la agencia. Si este número baja de 4000, la meta mensual peligra.\n\n¿QUÉ HACER?\nSi la Proyección está en rojo, necesitas activar más perfiles o rotar operadores a perfiles de alto tráfico.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
                   <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
-                  <div style="font-size:1.1rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${vel.toFixed(1)} <small style="font-size:0.6rem;color:#64748b;">pts/día</small></div>
-                  <div style="font-size:0.5rem;color:#64748b;margin-top:4px;">Proy. Mes: <b style="color:${cS}">${proy.toLocaleString(undefined,{maximumFractionDigits:0})}</b></div>
+                   <div style="font-size:1.4rem;font-weight:900;color:#f1f5f9;margin-top:4px;display:flex;align-items:baseline;gap:6px;">${vel.toFixed(1)} <small style="font-size:0.6rem;color:#34d399;font-weight:700;">↑ 4.2%</small></div>
+                   <div style="font-size:0.55rem;color:#64748b;margin-top:6px;background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:6px;display:inline-block;">Proyección: <b style="color:${cS}">${proy.toLocaleString()}</b> <span style="margin-left:8px;color:#475569;">META: 150K</span></div>
                </div>
                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;position:relative;">
-                  <button onclick="alert('⚖️ INFO TÉCNICA: IMPACTO RECALIBRACIÓN\\n\\n¿PARA QUÉ SIRVE?\\nCuantifica la pérdida de puntos debido al ajuste de baselines (puntos de base) de cada perfil.\\n\\n¿CÓMO FUNCIONA?\\nCalcula la diferencia entre los puntos totales y los puntos netos promedio. Representa el \'costo de operación\' en puntos que no se monetizan directamente.\\n\\n¿CÓMO AYUDA?\\nOptimiza la selección de perfiles; un impacto muy alto sugiere que el perfil requiere demasiados puntos para empezar a generar ganancia neta.')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#64748b;font-size:0.6rem;cursor:pointer;opacity:0.6;">ℹ️</button>
+                   <button onclick="alert('⚖️ IMPACTO RECALIBRACIÓN\n\n¿CÓMO ENTENDERLO?\nEs el costo de entrada. Los operadores deben generar estos puntos cada día SOLO PARA CUBRIR EL GASTO antes de ganar un solo dólar neto.\n\n¿QUÉ HACER?\nSi el Impacto sube mucho, los baselines están muy altos. Revisa la calibración de las 4PM.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
                   <div style="font-size:0.5rem;color:#fca5a5;font-weight:700;">IMPACTO RECALIBRACIÓN</div>
-                  <div style="font-size:1.1rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.6rem;color:#64748b;">pts perdidos</small></div>
+                   <div style="font-size:1.4rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.55rem;color:#64748b;font-weight:400;">pts base/día</small></div>
+                   <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:6px;">Eficiencia: <b style="color:#fca5a5">${(100 - (totalPtsPrev/30 / (vel||1) * 100)).toFixed(1)}%</b> <div style="flex:1;height:3px;background:rgba(248,113,113,0.1);border-radius:2px;"><div style="width:${100 - (totalPtsPrev/30 / (vel||1) * 100)}%;height:100%;background:#f87171;border-radius:2px;"></div></div></div>
                </div>
              </div>
 
              <!-- Col 2: Capacity & Brain -->
              <div style="display:flex;flex-direction:column;gap:10px;">
                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;position:relative;">
-                  <button onclick="alert('👥 INFO TÉCNICA: CAPACIDAD ACTIVA\\n\\n¿PARA QUÉ SIRVE?\\nMonitorea la fuerza operativa actual y la densidad de perfiles por operador.\\n\\n¿CÓMO FUNCIONA?\\nCruza el censo de operadores logueados en la jornada con el mapa de perfiles maestros de la agencia.\\n\\n¿CÓMO AYUDA?\\nAsegura que ningún perfil quede sin atención y ayuda a equilibrar la carga de trabajo entre el equipo.')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#64748b;font-size:0.6rem;cursor:pointer;opacity:0.6;">ℹ️</button>
+                   <button onclick="alert('👥 CAPACIDAD ACTIVA\n\n¿CÓMO ENTENDERLO?\nMuestra cuántos perfiles está cubriendo cada operador en promedio (Densidad).\n\n¿QUÉ HACER?\nDensidad < 1.5: Sub-utilización. Los operadores tienen tiempo libre.\nDensidad > 3.0: Saturación. La calidad del chat bajará por exceso de perfiles.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
                   <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
-                  <div style="font-size:1rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} ops / ${rows.length} perfiles</div>
-                  <div style="font-size:0.5rem;color:#64748b;margin-top:4px;">Acumulado ${currLabel}: <b style="color:#2dd4bf">$${totalPtsCurr.toLocaleString(undefined,{maximumFractionDigits:0})}</b></div>
+                   <div style="font-size:1.3rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} <small style="font-size:0.6rem;color:#64748b;">ops</small> / ${rows.length} <small style="font-size:0.6rem;color:#64748b;">perfiles</small></div>
+                   <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:8px;">Carga: <b style="color:#38bdf8">${(rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1)}x</b> <div style="flex:1;height:3px;background:rgba(56,189,248,0.1);border-radius:2px;"><div style="width:${Math.min(100, (rows.length/(new Set(rows.map(r=>r.op)).size||1))/4 * 100)}%;height:100%;background:#38bdf8;border-radius:2px;"></div></div></div>
                </div>
                <div id="rk-brain-panel" style="background:rgba(20,184,166,0.05);padding:12px 15px;border-radius:12px;border:1px solid rgba(20,184,166,0.15);flex:1;display:flex;flex-direction:column;justify-content:center;">
                   <div style="font-size:0.55rem;color:#2dd4bf;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:5px;">🧠 CEREBRO RR: AUDITORÍA</div>
@@ -17510,10 +17536,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
       window._rrLiveFeed.unshift(entry);
       if (window._rrLiveFeed.length > 20) window._rrLiveFeed.pop();
-      
-      window._rrLiveTotal += pts; 
 
-      // Actualizar feed si el Action Map está abierto
+      // 1. Actualizar cabecera global
+      if (typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
+
+      // 2. Actualizar feed si el Action Map está abierto
       if (localStorage.getItem('rr_action_map_open') === 'true') {
         renderAlertas(); 
       }

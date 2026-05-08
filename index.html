@@ -4705,18 +4705,25 @@
         const tsEl = document.getElementById('tableau-sync-time');
         const lastSyncText = tsEl ? tsEl.textContent : 'Sin datos';
 
-        // Calcular Totales por Turno
+        // Calcular Totales por Turno y Mapa de Operadores
         const turnosTotal = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Sin Turno': 0 };
         const idToTurno = {};
+        const idToOp = {};
         if (typeof operatorsData !== 'undefined') {
           operatorsData.forEach(op => {
-            if (op.perfiles) op.perfiles.forEach(pid => { idToTurno[String(pid)] = op.turno || 'Sin Turno'; });
+            const plist = op.profiles || op.perfiles || [];
+            plist.forEach(p => {
+              const pid = String(typeof p === 'object' ? p.id : p).trim();
+              idToTurno[pid] = op.turno || 'Sin Turno';
+              idToOp[pid] = op.name;
+            });
           });
         }
 
         filteredEntries.forEach(([id, d]) => {
           const val = typeof d === 'object' ? Number(d.valor||0) : Number(d||0);
-          const turno = idToTurno[String(id)] || 'Sin Turno';
+          const pid = String(id).trim();
+          const turno = idToTurno[pid] || 'Sin Turno';
           if (turnosTotal[turno] !== undefined) turnosTotal[turno] += val;
           else turnosTotal['Sin Turno'] += val;
         });
@@ -4819,7 +4826,7 @@
           const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
 
           const nombreReal = idToModelo[String(id).trim()] || 'Perfil ' + id;
-          const opAsignado = dj['Admin'] || dj['admin'] || 'No Asignado';
+          const opAsignado = idToOp[String(id).trim()] || dj['Admin'] || dj['admin'] || 'No Asignado';
 
           // Procesar métricas de servicios
           const metricasExtra = Object.entries(dj)
@@ -9734,6 +9741,24 @@
       `;
     }
 
+    function _generarInsights(rows, vel, proy, totalPtsPrev) {
+      const drops = rows.filter(r => r.r10 < (r.r30 * 0.3) && r.r30 > 0.1).slice(0,2);
+      const spikes = [...rows].sort((a,b) => b.r10 - a.r10).slice(0,2);
+      
+      let html = '';
+      if (drops.length > 0) {
+        html += `<div style="color:#f87171;margin-bottom:6px;display:flex;gap:4px;"><span>⚠️</span> <b>BAJA CRÍTICA:</b> ${drops.map(d=>d.op.split(' ')[0]).join(', ')} han bajado ritmo >70% en 10m.</div>`;
+      }
+      if (spikes.length > 0 && spikes[0].r10 > 0.2) {
+        html += `<div style="color:#34d399;margin-bottom:6px;display:flex;gap:4px;"><span>🔥</span> <b>TOP RITMO:</b> ${spikes[0].op.split(' ')[0]} liderando con $${spikes[0].r10.toFixed(1)}/10m.</div>`;
+      }
+      const trend = (proy > totalPtsPrev) ? 'CRECIMIENTO' : 'BAJA';
+      const trendColor = (proy > totalPtsPrev) ? '#34d399' : '#f87171';
+      html += `<div style="color:${trendColor};display:flex;gap:4px;"><span>📈</span> <b>TENDENCIA:</b> Operación en ${trend} vs mes anterior.</div>`;
+      
+      return html || '<div style="color:#64748b;font-style:italic;">Escaneando métricas para hallar patrones de rendimiento...</div>';
+    }
+
     function renderAlertas() {
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
@@ -9809,10 +9834,30 @@
         const c = (typeof getCortesOp === 'function') ? getCortesOp(op.name) : [];
         c.forEach(x => allCortes.push({...x, opName: op.name}));
       });
-      allCortes.sort((a,b) => (b.ts||0) - (a.ts||0));
-      const recentFeed = allCortes.slice(0, 10).map(c => {
+
+      // 🧠 ACTIVIDAD HÍBRIDA: Combinar LocalStorage + Realtime en vivo
+      let rawLive = (window._liveActivityFeed || []).map(f => ({
+        opName: f.opName,
+        puntos: f.pts,
+        ts: f.ts,
+        isRT: true
+      }));
+
+      const combinedFeed = [...rawLive, ...allCortes]
+        .sort((a,b) => (b.ts||0) - (a.ts||0))
+        .slice(0, 12);
+
+      const recentFeed = combinedFeed.map(c => {
         const time = c.ts ? new Date(c.ts).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}) : '--:--';
-        return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.55rem;"><div style="display:flex;gap:5px;overflow:hidden;"><span style="color:#64748b;font-weight:700;">${time}</span><span style="color:#f1f5f9;font-weight:700;">${c.opName.split(' ')[0]}</span></div><span style="color:#34d399;font-weight:900;">+$${(c.puntos||0).toFixed(1)}</span></div>`;
+        const label = c.isRT ? '🛰️' : '⏱';
+        return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.58rem;animation: fadeIn 0.3s ease;">
+          <div style="display:flex;gap:6px;overflow:hidden;align-items:center;">
+            <span style="color:#64748b;font-weight:700;font-size:0.5rem;">${time}</span>
+            <span style="font-size:0.5rem;">${label}</span>
+            <span style="color:#f1f5f9;font-weight:800;white-space:nowrap;">${c.opName.split(' ')[0]}</span>
+          </div>
+          <span style="color:#34d399;font-weight:900;letter-spacing:0.5px;">+${(c.puntos||0).toFixed(1)}</span>
+        </div>`;
       }).join('');
 
       const hc = (v, m) => {
@@ -9929,7 +9974,8 @@
           <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:0.55rem;color:${cS};font-weight:700;background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:12px;">${iG?'↑':'↓'} ${vel.toFixed(0)} pts/d</div><div style="font-size:0.55rem;color:#2dd4bf;font-weight:700;background:rgba(45,212,191,0.1);padding:3px 8px;border-radius:12px;">LIVE</div></div>
         </summary>
         <div style="padding:14px;">
-          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:12px;margin-bottom:16px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px;margin-bottom:16px;">
+             <!-- Col 1: Speed & Impact -->
              <div style="display:flex;flex-direction:column;gap:10px;">
                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};">
                   <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
@@ -9941,12 +9987,27 @@
                   <div style="font-size:1.1rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.6rem;color:#64748b;">pts perdidos</small></div>
                </div>
              </div>
-             <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;display:flex;flex-direction:column;justify-content:center;">
-                <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
-                <div style="font-size:1.1rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} ops / ${rows.length} perfiles</div>
-                <div style="font-size:0.5rem;color:#64748b;margin-top:4px;">Acumulado ${currLabel}: <b style="color:#2dd4bf">$${totalPtsCurr.toLocaleString(undefined,{maximumFractionDigits:0})}</b></div>
+
+             <!-- Col 2: Capacity & Brain -->
+             <div style="display:flex;flex-direction:column;gap:10px;">
+               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;">
+                  <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
+                  <div style="font-size:1rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} ops / ${rows.length} perfiles</div>
+                  <div style="font-size:0.5rem;color:#64748b;margin-top:4px;">Acumulado ${currLabel}: <b style="color:#2dd4bf">$${totalPtsCurr.toLocaleString(undefined,{maximumFractionDigits:0})}</b></div>
+               </div>
+               <div id="rk-brain-panel" style="background:rgba(20,184,166,0.05);padding:12px 15px;border-radius:12px;border:1px solid rgba(20,184,166,0.15);flex:1;display:flex;flex-direction:column;justify-content:center;">
+                  <div style="font-size:0.55rem;color:#2dd4bf;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:5px;">🧠 CEREBRO RR: AUDITORÍA</div>
+                  <div style="font-size:0.52rem;color:#94a3b8;line-height:1.4;" id="rk-brain-content">
+                    ${_generarInsights(rows, vel, proy, totalPtsPrev)}
+                  </div>
+               </div>
              </div>
-             <div style="background:rgba(0,0,0,0.3);padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);max-height:160px;overflow-y:auto;" class="custom-scrollbar"><div style="font-size:0.5rem;color:#a78bfa;font-weight:700;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.9);">ACTIVIDAD EN VIVO</div><div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.55rem;color:#475569;text-align:center;">...</div>'}</div></div>
+
+             <!-- Col 3: Live Feed -->
+             <div style="background:rgba(0,0,0,0.3);padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);height:175px;overflow-y:auto;position:relative;" class="custom-scrollbar">
+                <div style="font-size:0.5rem;color:#a78bfa;font-weight:700;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:2px 0;">ACTIVIDAD EN VIVO</div>
+                <div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.55rem;color:#475569;text-align:center;padding-top:20px;">Esperando actividad...</div>'}</div>
+             </div>
           </div>
           <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
             ${['resumen', '10m', '30m', 'dia', 'sem', 'mes'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t.toUpperCase()}</button>`).join('')}
@@ -17192,20 +17253,50 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       } catch(e) { console.error('[DP] Excepción:', e); }
     }
 
-    function dpIniciarRealtime() {
+    window._liveActivityFeed = [];
+    function _capturarActividadViva(row) {
+      if (!row || !row.id_perfil) return;
+      const pId = String(row.id_perfil);
+      const pts = row.puntos_neto || 0;
+      if (pts <= 0) return;
+      
+      const op = operatorsData.find(o => (o.profiles || []).some(p => String(p.id) === pId));
+      if (!op) return;
 
+      const entry = {
+        opName: op.name,
+        pts: pts,
+        ts: Date.now(),
+        model: row.modelo || 'Perfil'
+      };
+
+      window._liveActivityFeed.unshift(entry);
+      if (window._liveActivityFeed.length > 15) window._liveActivityFeed.pop();
+      
+      // Actualizar feed si el Action Map está abierto
+      if (document.querySelector('.action-map-accordion')?.hasAttribute('open')) {
+        renderAlertas(); 
+      }
+    }
+
+    function dpIniciarRealtime() {
       if (typeof _sb === 'undefined' || _dpRealtimeSub) return;
       let _dpDebounceTimer = null;
       _dpRealtimeSub = _sb
         .channel('datame-operaciones-rt')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' },
           (payload) => {
+            // Captura inmediata de actividad para el feed en vivo
+            if (payload.new && payload.new.puntos_neto > 0) {
+              _capturarActividadViva(payload.new);
+            }
+
             clearTimeout(_dpDebounceTimer);
             _dpDebounceTimer = setTimeout(() => {
               console.log('[DP] 🔴 Cambio en operaciones detectado — actualizando panel...');
               dpLog('Datos recibidos del Watcher. Sincronizando...', 'info');
               sincronizarDatamePaneles();
-            }, 4000); // Esperar 4s a que el watcher termine el bloque de inserts
+            }, 5000); 
           })
         .subscribe();
       console.log('[DP] Realtime activado en tabla operaciones');

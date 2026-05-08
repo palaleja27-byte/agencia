@@ -9836,7 +9836,7 @@
             const v=pd[d].t, pct=v/maxV, dn=parseInt(d.slice(8));
             const bg = pct>=0.8?'#10b981':pct>=0.5?'#34d399':pct>=0.25?'#fbbf24':'#f87171';
             const lbl = pct>=0.8?'🔥':pct>=0.5?'✅':pct>=0.25?'⚡':'📉';
-            html += '<div title="Día '+dn+': '+v.toFixed(1)+' pts | '+pd[d].n+' reg | '+pd[d].ops.size+' perfiles" style="width:28px;height:28px;border-radius:5px;background:'+bg+';opacity:'+(0.4+pct*0.6).toFixed(2)+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;">'+
+            html += '<div title="Día '+dn+': '+v.toFixed(1)+' pts | '+pd[d].n+' reg | '+pd[d].ops.size+' perfiles" style="width:28px;height:28px;border-radius:5px;background:'+bg+';opacity:'+(0.4+pct*0.6).toFixed(2)+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;">' +
               '<span style="font-size:0.5rem;font-weight:900;color:#000;">'+dn+'</span><span style="font-size:0.42rem;">'+lbl+'</span></div>';
           });
           html += '</div><div style="display:flex;gap:8px;margin-top:5px;font-size:0.52rem;color:#64748b;"><span>📉 Bajo</span><span>⚡ Medio</span><span>✅ Alto</span><span>🔥 Pico</span><span style="margin-left:auto;">Prom: '+promG.toFixed(0)+' pts/día</span></div>';
@@ -9951,30 +9951,52 @@
         c.forEach(x => allCortes.push({...x, opName: op.name}));
       });
 
-      // 🧠 ACTIVIDAD HÍBRIDA: Combinar LocalStorage + Realtime en vivo
-      let rawLive = (window._liveActivityFeed || []).map(f => ({
-        opName: f.opName,
-        puntos: f.pts,
-        ts: f.ts,
-        isRT: true
-      }));
+      // FEED EN VIVO: _rrLiveFeed (Supabase Realtime) — operador + perfil + pts
+      const liveFeed = (window._rrLiveFeed || []).slice(0, 15);
+      const recentFeed = liveFeed.length > 0
+        ? liveFeed.map(f => {
+            const ptsColor = (f.pts||0) >= 30 ? '#34d399' : (f.pts||0) >= 10 ? '#2dd4bf' : '#818cf8';
+            return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.55rem;">' +
+              '<div style="display:flex;flex-direction:column;gap:1px;overflow:hidden;">' +
+              '<span style="color:#818cf8;font-weight:800;font-size:0.52rem;">' + (f.op||'\u2014') + '</span>' +
+              '<span style="color:#38bdf8;font-size:0.48rem;">' + (f.modelo||'ID '+f.perfil) + '</span>' +
+              '<span style="color:#475569;font-size:0.42rem;">' + (f.time||'\u2014') + ' \u00b7 [' + (f.turno||'\u2014') + ']</span>' +
+              '</div>' +
+              '<span style="color:' + ptsColor + ';font-weight:900;font-size:0.6rem;flex-shrink:0;margin-left:6px;">+' + (f.pts||0).toFixed(1) + ' pts</span>' +
+              '</div>';
+          }).join('')
+        : '<div style="color:#475569;font-size:0.55rem;text-align:center;padding-top:20px;">Esperando actividad en vivo...</div>';
 
-      const combinedFeed = [...rawLive, ...allCortes]
-        .sort((a,b) => (b.ts||0) - (a.ts||0))
-        .slice(0, 12);
-
-      const recentFeed = combinedFeed.map(c => {
-        const time = c.ts ? new Date(c.ts).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}) : '--:--';
-        const label = c.isRT ? '🛰️' : '⏱';
-        return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.58rem;animation: fadeIn 0.3s ease;">
-          <div style="display:flex;gap:6px;overflow:hidden;align-items:center;">
-            <span style="color:#64748b;font-weight:700;font-size:0.5rem;">${time}</span>
-            <span style="font-size:0.5rem;">${label}</span>
-            <span style="color:#f1f5f9;font-weight:800;white-space:nowrap;">${c.opName.split(' ')[0]}</span>
-          </div>
-          <span style="color:#34d399;font-weight:900;letter-spacing:0.5px;">+${(c.puntos||0).toFixed(1)}</span>
-        </div>`;
-      }).join('');
+      // SNAPSHOT ENGINE: guardar estado cada 10min para heatmaps
+      (function() {
+        try {
+          const ahora = Date.now();
+          const KEY = 'rr_heatmap_snapshots';
+          const HOY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+          let allSnaps = {};
+          try { allSnaps = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) {}
+          if (!allSnaps[HOY]) allSnaps[HOY] = [];
+          const ultimo = allSnaps[HOY][allSnaps[HOY].length - 1];
+          if (!ultimo || (ahora - ultimo.ts) >= 600000) {
+            allSnaps[HOY].push({
+              ts: ahora,
+              hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+              totalPts: totalPtsCurr,
+              ops: rows.filter(r=>r.fi).slice(0, 10).map(r => ({ op: r.op.split(' ')[0], pm: r.pm, mes: r.mes }))
+            });
+            if (allSnaps[HOY].length > 200) allSnaps[HOY] = allSnaps[HOY].slice(-200);
+            // Archivar dias anteriores en logs
+            const LOG_KEY = 'rr_heatmap_logs';
+            let logs = {};
+            try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '{}'); } catch(e) {}
+            Object.keys(allSnaps).forEach(d => {
+              if (d !== HOY) { logs[d] = allSnaps[d]; delete allSnaps[d]; }
+            });
+            try { localStorage.setItem(LOG_KEY, JSON.stringify(logs)); } catch(e) {}
+            try { localStorage.setItem(KEY, JSON.stringify(allSnaps)); } catch(e) {}
+          }
+        } catch(e) { console.warn('[SNAPSHOT]', e); }
+      })();
 
       const hc = (v, m) => {
         if (!v || v < 0.01) return { b: 'rgba(15,23,42,0.5)', f: '#475569' };
@@ -10010,25 +10032,82 @@
         }).join('');
         content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.3);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;left:0;background:#1e293b;z-index:10;">OPERADOR</th><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;background:#1e293b;">PERFIL</th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">10m<br><small>RITMO</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">30m<br><small>RITMO</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">DÍA<br><small>PROM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">SEMANA<br><small>ACUM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;">MES<br><small>TOTAL</small></th></tr></thead><tbody>${trs}</tbody></table></div>`;
       } else if (tab === '10m' || tab === '30m') {
+        // Heatmap 10m/30m: leer desde localStorage snaps del dia actual
+        const KEY = 'rr_heatmap_snapshots';
+        const HOY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        let snaps = [];
+        try { snaps = (JSON.parse(localStorage.getItem(KEY) || '{}')[HOY]) || []; } catch(e) {}
+
         const interval = tab === '10m' ? 10 : 30;
-        const nBlocks = tab === '10m' ? 72 : 24; 
-        const blocks = Array.from({length: nBlocks}, (_, i) => i);
-        const hCols = blocks.filter(i => i % (tab==='10m'?6:2) === 0).map(i => {
-          const t = new Date(nowTs - (nBlocks-i)*interval*60000);
-          return `<th colspan="${tab==='10m'?6:2}" style="padding:4px;font-size:0.45rem;color:#64748b;background:#1e293b;border-left:1px solid rgba(255,255,255,0.05);">${t.getHours()}h</th>`;
-        }).join('');
-        const trs = rows.map(r => {
-          const timeline = blocks.map(i => {
-            const bEnd = nowTs - (nBlocks-1-i)*interval*60000;
-            const bStart = bEnd - interval*60000;
-            const val = r.cortes.filter(c => c.ts && c.ts >= bStart && c.ts < bEnd).reduce((s,c)=>s+(c.puntos||0), 0) * r.share;
-            const c = hc(val, (tab==='10m'?0.8:2));
-            return `<td style="padding:0;width:12px;height:18px;background:${c.b};border-right:1px solid rgba(255,255,255,0.01);border-bottom:1px solid rgba(255,255,255,0.01);"></td>`;
+        // Generar slots de tiempo para las ultimas 12 horas
+        const nSlots = tab === '10m' ? 72 : 24;
+        const slots = Array.from({length: nSlots}, (_, i) => {
+          const t = nowTs - (nSlots - 1 - i) * interval * 60000;
+          return { t, label: new Date(t).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}) };
+        });
+
+        // Para cada operador, calcular puntos por slot usando snaps
+        const trs = rows.filter(r => r.fi).map(r => {
+          const opShort = r.op.split(' ').slice(0,2).join(' ');
+          const cells = slots.map((slot, si) => {
+            // Buscar snaps dentro de este slot
+            const slotStart = slot.t - interval * 60000;
+            const relevant = snaps.filter(s => s.ts >= slotStart && s.ts < slot.t);
+            let val = 0;
+            if (relevant.length > 0) {
+              const last = relevant[relevant.length - 1];
+              const prev = si > 0 ? snaps.filter(s => s.ts < slotStart).slice(-1)[0] : null;
+              // Buscar este operador en el snap
+              const opSnap = last.ops && last.ops.find(o => o.op === r.op.split(' ')[0]);
+              const opSnapPrev = prev && prev.ops && prev.ops.find(o => o.op === r.op.split(' ')[0]);
+              val = opSnap ? (opSnap.mes - (opSnapPrev ? opSnapPrev.mes : 0)) : 0;
+              if (val < 0) val = 0;
+            } else {
+              // Fallback: distribuir puntos del dia entre slots
+              val = r.cortes.filter(c => c.ts && c.ts >= slotStart && c.ts < slot.t).reduce((s,c) => s+(c.puntos||0), 0) * r.share;
+            }
+            const maxSlotVal = tab === '10m' ? 2 : 6;
+            const pct = val / maxSlotVal;
+            const bg = pct >= 0.8 ? 'rgba(45,212,191,1)' : pct >= 0.5 ? 'rgba(16,185,129,0.8)' : pct >= 0.2 ? 'rgba(6,95,70,0.8)' : pct >= 0.05 ? 'rgba(30,58,80,0.6)' : 'rgba(15,23,42,0.4)';
+            const isNow = si === nSlots - 1;
+            return '<td title="' + slot.label + ': ' + val.toFixed(1) + ' pts" style="padding:0;width:10px;height:20px;background:' + bg + ';border-right:1px solid rgba(255,255,255,0.01);' + (isNow ? 'outline:1px solid #2dd4bf;' : '') + '"></td>';
           }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:100px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem;font-weight:800;color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 6px;min-width:100px;font-size:0.5rem;color:#38bdf8;font-weight:700;">${r.pm}</td>${timeline}</tr>`;
+          const totalOp = r.tOp;
+          return '<tr>' +
+            '<td style="padding:5px 8px;min-width:90px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);">' +
+            '<div style="font-size:0.58rem;font-weight:900;color:#f1f5f9;">' + opShort + '</div>' +
+            '<div style="font-size:0.45rem;color:#2dd4bf;">' + totalOp.toFixed(1) + ' pts mes</div>' +
+            '</td>' +
+            cells + '</tr>';
         }).join('');
-        content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.3);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="padding:10px;background:#1e293b;position:sticky;left:0;z-index:10;">OP</th><th style="padding:10px;background:#1e293b;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
+
+        // Header con horas
+        const headerCols = slots.filter((_,i) => i % (tab==='10m'?6:2) === 0)
+          .map(s => '<th colspan="' + (tab==='10m'?6:2) + '" style="padding:3px;font-size:0.42rem;color:#64748b;background:#1e293b;border-left:1px solid rgba(255,255,255,0.05);">' + s.label + '</th>').join('');
+
+        // Boton para ver logs historicos
+        const logsBtn = '<button onclick="window._rrShowLogs&&window._rrShowLogs()" style="float:right;padding:4px 10px;font-size:0.5rem;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;border-radius:6px;cursor:pointer;margin-bottom:6px;">📋 Ver Logs del Día</button>';
+
+        content = logsBtn + '<div style="clear:both;"></div><div style="overflow-x:auto;background:rgba(0,0,0,0.3);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="padding:8px;background:#1e293b;position:sticky;left:0;z-index:10;font-size:0.55rem;color:#94a3b8;">OPERADOR</th>' + headerCols + '</tr></thead><tbody>' + trs + '</tbody></table></div>' +
+          '<div style="font-size:0.5rem;color:#475569;margin-top:6px;">' + snaps.length + ' snapshots guardados hoy · Actualiza cada 10min automáticamente</div>';
+
+        // Registrar funcion de logs
+        window._rrShowLogs = function() {
+          const LOG_KEY = 'rr_heatmap_logs';
+          let logs = {};
+          try { logs = JSON.parse(localStorage.getItem(LOG_KEY) || '{}'); } catch(e) {}
+          const dias = Object.keys(logs).sort().reverse();
+          if (!dias.length) { alert('No hay logs archivados aun. Se guardan automaticamente al cambiar de dia.'); return; }
+          let txt = 'LOGS DE HISTORIAL DE ACTIVIDAD\n' + '='.repeat(40) + '\n\n';
+          dias.slice(0, 5).forEach(d => {
+            txt += 'DIA: ' + d + ' (' + (logs[d].length) + ' snapshots)\n';
+            const first = logs[d][0], last2 = logs[d][logs[d].length-1];
+            txt += '  Inicio: ' + (first.hora||'--') + ' | Fin: ' + (last2.hora||'--') + '\n';
+            txt += '  Total acumulado al cierre: ' + (last2.totalPts||0).toFixed(1) + ' pts\n\n';
+          });
+          alert(txt);
+        };
+
       } else if (tab === 'dia') {
         const days = Array.from({length: 31}, (_, i) => i + 1);
         const hCols = days.map(d => `<th style="padding:6px 4px;text-align:center;font-size:0.45rem;color:#94a3b8;background:#1e293b;min-width:24px;">${d}</th>`).join('');

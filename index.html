@@ -4829,10 +4829,10 @@
           const opAsignado = idToOp[String(id).trim()] || dj['Admin'] || dj['admin'] || 'No Asignado';
 
           // Procesar métricas de servicios desglosados (Audit Oficial UK)
+          // Mostramos Puntos y USD para cada servicio
           const metricasExtra = Object.entries(dj)
             .filter(([k, v]) => {
                const kUp = k.toUpperCase();
-               // Filtrar solo lo que sea relevante a servicios/puntos
                return !kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER')
                  && !kUp.includes('TYPE') && kUp !== 'ADMIN' && kUp !== 'REVENUE'
                  && kUp !== 'MAX HOUR' && !kUp.includes('TITLE') && !kUp.includes('SOURCE')
@@ -4840,18 +4840,19 @@
                  && v != null && v !== '' && v !== 'N/A' && v !== 0 && v !== '0' && v !== 0.0;
             })
             .map(([k, v]) => {
-              let valStr = v;
               const numV = Number(String(v).replace(/[$ ,]/g, ''));
-              if (!isNaN(numV) && numV !== 0) {
-                valStr = numV.toLocaleString('en-US', {style:'currency', currency:'USD'});
-              }
+              const valPts = numV.toFixed(1) + ' pts';
+              const valUsd = numV.toLocaleString('en-US', {style:'currency', currency:'USD'});
+              
               const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
               const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '▸';
-              return `<div style="font-size:0.55rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:3px 0;" title="Monto oficial extraído de Tableau UK">
-                <span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;">
-                  <span style="font-size:0.65rem;filter:grayscale(0.5);">${icon}</span>${displayKey}
+              
+              return `<div style="font-size:0.55rem;display:grid;grid-template-columns:1fr 0.6fr 0.8fr;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:3px 0;">
+                <span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  <span style="font-size:0.65rem;opacity:0.6;">${icon}</span>${displayKey}
                 </span>
-                <span style="color:#2dd4bf;font-weight:800;">${valStr}</span>
+                <span style="color:#818cf8;font-weight:700;text-align:right;padding-right:5px;">${valPts}</span>
+                <span style="color:#2dd4bf;font-weight:900;text-align:right;">${valUsd}</span>
               </div>`;
             }).join('');
 
@@ -4870,7 +4871,7 @@
                 <div style="font-size:0.75rem;">👤</div>
                 <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;">${opAsignado}</div>
               </div>
-              <button onclick="alert('🧠 EXPLICACIÓN TÉCNICA - PERFIL ${id}\\n\\n¿PARA QUÉ SIRVE?\\nEste botón muestra los datos oficiales auditados directamente desde el servidor UK. Sirve para validar que el revenue generado en los servicios coincide con lo que el operador reporta localmente.\\n\\n¿CÓMO FUNCIONA?\\nUn robot (Scraper en Python) se conecta cada 1-2 horas al panel oficial, extrae la tabla de servicios desglosada y la sincroniza con Supabase. Luego, la aplicación cruza el ID de perfil con nuestra base de datos para asignarlo al operador correspondiente.\\n\\n¿CÓMO AYUDA?\\nElimina la duda sobre los montos reales, permitiendo ver exactamente cuánto se ha ganado en Mails, Chats, Regalos, etc., sin errores de cálculo manual.')" 
+              <button onclick="alert('🧠 AUDITORÍA TABLEAU UK - PERFIL ${id}\\n\\n¿PARA QUÉ SIRVE?\\nEste botón muestra los datos oficiales desglosados (Puntos y USD) directamente desde el servidor UK. Sirve para validar que el revenue coincide con lo reportado localmente.\\n\\n¿CÓMO FUNCIONA?\\nUn Scraper en Python extrae la tabla de servicios cada 1-2 horas y la sincroniza con nuestra base de datos. Cruzamos el ID con el mapa de operadores para la asignación.\\n\\n¿CÓMO AYUDA?\\nElimina errores de cálculo manual y garantiza que el pago se base en la data oficial definitiva.')" 
                 style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
@@ -6632,7 +6633,11 @@
               <input type="file" accept="image/*" class="pos-input-hidden" id="av-input-${globalIndex}"
                 onchange="handleAvatarUpload(event,'${safeName}')">
               <div class="rk-card-info">
-                <div class="rk-card-name">${op.name}</div>
+                <div class="rk-card-name" style="display:flex;align-items:center;gap:6px;">
+                  ${op.name}
+                  <button onclick="alert('👤 PERFIL OPERATIVO: ${safeName}\\n\\n¿PARA QUÉ SIRVE?\\nEste panel centraliza el rendimiento histórico y actual de cada operador, permitiendo un seguimiento del crecimiento real (Cortes + Metas).\\n\\n¿CÓMO FUNCIONA?\\nCruza datos de tres fuentes: 1. Matriz de operadores estática, 2. Cortes diarios guardados en Supabase, y 3. Perfiles activos asignados en el turno actual (DELTA-SHIFT™).\\n\\n¿CÓMO AYUDA?\\nPermite detectar caídas de ritmo en tiempo real y recompensar a los operadores con mayor crecimiento mensual.')" 
+                    style="background:rgba(148,163,184,0.1); border:none; color:#64748b; width:16px; height:16px; border-radius:50%; font-size:0.55rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900;">ℹ️</button>
+                </div>
                 <div class="rk-card-sub">
                   <span class="rk-card-badge">Grupo ${op.group}</span>
                   ${op.plataforma ? `<span style="color:#475569;">· ${op.plataforma}</span>` : ''}
@@ -9987,12 +9992,14 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px;margin-bottom:16px;">
              <!-- Col 1: Speed & Impact -->
              <div style="display:flex;flex-direction:column;gap:10px;">
-               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};">
+               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};position:relative;">
+                  <button onclick="alert('📊 INFO TÉCNICA: VELOCIDAD PROMEDIO\\n\\n¿PARA QUÉ SIRVE?\\nProyecta el cierre del mes basándose en el ritmo actual de producción diaria de toda la agencia.\\n\\n¿CÓMO FUNCIONA?\\nDivide los puntos totales acumulados en Supabase entre los días transcurridos del mes actual. Luego multiplica ese promedio por 30 para dar la Proyección Mensual.\\n\\n¿CÓMO AYUDA?\\nPermite saber hoy mismo si cumpliremos la meta de la agencia o si debemos ajustar el esfuerzo.')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#64748b;font-size:0.6rem;cursor:pointer;opacity:0.6;">ℹ️</button>
                   <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
                   <div style="font-size:1.1rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${vel.toFixed(1)} <small style="font-size:0.6rem;color:#64748b;">pts/día</small></div>
                   <div style="font-size:0.5rem;color:#64748b;margin-top:4px;">Proy. Mes: <b style="color:${cS}">${proy.toLocaleString(undefined,{maximumFractionDigits:0})}</b></div>
                </div>
-               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;">
+               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;position:relative;">
+                  <button onclick="alert('⚖️ INFO TÉCNICA: IMPACTO RECALIBRACIÓN\\n\\n¿PARA QUÉ SIRVE?\\nCuantifica la pérdida de puntos debido al ajuste de baselines (puntos de base) de cada perfil.\\n\\n¿CÓMO FUNCIONA?\\nCalcula la diferencia entre los puntos totales y los puntos netos promedio. Representa el \'costo de operación\' en puntos que no se monetizan directamente.\\n\\n¿CÓMO AYUDA?\\nOptimiza la selección de perfiles; un impacto muy alto sugiere que el perfil requiere demasiados puntos para empezar a generar ganancia neta.')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#64748b;font-size:0.6rem;cursor:pointer;opacity:0.6;">ℹ️</button>
                   <div style="font-size:0.5rem;color:#fca5a5;font-weight:700;">IMPACTO RECALIBRACIÓN</div>
                   <div style="font-size:1.1rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.6rem;color:#64748b;">pts perdidos</small></div>
                </div>
@@ -10000,7 +10007,8 @@
 
              <!-- Col 2: Capacity & Brain -->
              <div style="display:flex;flex-direction:column;gap:10px;">
-               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;">
+               <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;position:relative;">
+                  <button onclick="alert('👥 INFO TÉCNICA: CAPACIDAD ACTIVA\\n\\n¿PARA QUÉ SIRVE?\\nMonitorea la fuerza operativa actual y la densidad de perfiles por operador.\\n\\n¿CÓMO FUNCIONA?\\nCruza el censo de operadores logueados en la jornada con el mapa de perfiles maestros de la agencia.\\n\\n¿CÓMO AYUDA?\\nAsegura que ningún perfil quede sin atención y ayuda a equilibrar la carga de trabajo entre el equipo.')" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#64748b;font-size:0.6rem;cursor:pointer;opacity:0.6;">ℹ️</button>
                   <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
                   <div style="font-size:1rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} ops / ${rows.length} perfiles</div>
                   <div style="font-size:0.5rem;color:#64748b;margin-top:4px;">Acumulado ${currLabel}: <b style="color:#2dd4bf">$${totalPtsCurr.toLocaleString(undefined,{maximumFractionDigits:0})}</b></div>

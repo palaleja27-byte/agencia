@@ -4871,6 +4871,8 @@
                 <div style="font-size:0.75rem;">👤</div>
                 <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;">${opAsignado}</div>
               </div>
+              <button onclick="alert('📋 AUDITORÍA INTEGRAL: PERFIL ${id}\\n\\n1. ¿QUÉ ES?\\nEs un sistema de validación cruzada que extrae la data oficial del servidor UK para auditar la producción real de cada operador.\\n\\n2. ¿CÓMO FUNCIONA?\\nUn Scraper inteligente (Python) lee los endpoints oficiales, desglosa los puntos por servicio (Chat, Mails, Regalos) y los sincroniza con nuestra base de datos cada 1-2 horas.\\n\\n3. ¿CÓMO NOS AYUDA?\\nElimina errores de reporte, asegura pagos exactos basados en la fuente oficial y permite ver el comportamiento detallado de cada perfil y sus clientes.')" 
+                style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
                <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}</div>
@@ -6515,9 +6517,32 @@
       <div class="stat-lbl" style="color:#5eead4; font-weight: 700; opacity: 0.8; font-size: 8px;">GLOBAL ${currLabel.toUpperCase()}</div>
       <div id="rk-val-cop" style="font-size:.65rem;color:#34d399;margin-top:1px; font-weight: 600;">$${copTotal}</div>
     </div>
-    <div class="rk-stat-card">
-      <div class="stat-val" id="rk-val-avg" style="font-size: 18px;">${avgPts.toFixed(1)}</div>
-      <div class="stat-lbl" style="font-size: 8px;">Promedio</div>
+    <div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px;">
+      <div id="rk-header-live-feed" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
+         <div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">
+            <span class="dp-live-dot"></span>
+            <div class="stat-lbl" style="font-size: 8px; color: #818cf8; font-weight: 800; text-transform: uppercase;">Actividad en Vivo</div>
+         </div>
+         <div id="rk-header-live-msg" style="font-size: 0.65rem; color: #e2e8f0; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            Esperando eventos...
+         </div>
+         <div id="rk-header-live-time" style="font-size: 0.5rem; color: #475569; margin-top: 2px;">—</div>
+      </div>
+      <script>
+        (function() {
+          function updateHeaderLive() {
+            const feed = window._rrLiveFeed || [];
+            const msgEl = document.getElementById('rk-header-live-msg');
+            const timeEl = document.getElementById('rk-header-live-time');
+            if (!msgEl || feed.length === 0) return;
+            const last = feed[0];
+            msgEl.innerHTML = `<span style="color:#2dd4bf;">+${last.pts.toFixed(1)}</span> ${last.op}`;
+            timeEl.innerText = last.time;
+          }
+          setInterval(updateHeaderLive, 3000);
+          updateHeaderLive();
+        })();
+      </script>
     </div>
     <div class="rk-stat-card" style="position:relative;">
       <div class="stat-val" id="rk-val-growth" style="color:${crecOpColor}; font-size: 16px;">${crecOpIcon}${crecOpSign}${crecOp.toFixed(1)}%</div>

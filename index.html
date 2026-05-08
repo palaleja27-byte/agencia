@@ -9950,6 +9950,7 @@
       });
 
       // FEED EN VIVO: _rrLiveFeed (Supabase Realtime) — operador + perfil + pts
+      const liveTotal = window._rrLiveTotal || 0;
       const liveFeed = (window._rrLiveFeed || []).slice(0, 15);
       const recentFeed = liveFeed.length > 0
         ? liveFeed.map(f => {
@@ -10201,7 +10202,10 @@
 
              <!-- Col 3: Live Feed -->
              <div style="background:rgba(0,0,0,0.3);padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);height:175px;overflow-y:auto;position:relative;" class="custom-scrollbar">
-                <div style="font-size:0.5rem;color:#a78bfa;font-weight:700;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:2px 0;">ACTIVIDAD EN VIVO</div>
+                <div style="font-size:0.5rem;color:#a78bfa;font-weight:700;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:2px 0;display:flex;justify-content:space-between;align-items:center;">
+                  <span>ACTIVIDAD EN VIVO</span>
+                  <span style="color:#34d399;font-weight:900;background:rgba(52,211,153,0.1);padding:2px 6px;border-radius:4px;">+$${(liveTotal * 1400).toLocaleString('es-CO')}</span>
+                </div>
                 <div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.55rem;color:#475569;text-align:center;padding-top:20px;">Esperando actividad...</div>'}</div>
              </div>
           </div>
@@ -17449,26 +17453,32 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       } catch(e) { console.error('[DP] Excepción:', e); }
     }
 
-    window._liveActivityFeed = [];
+    window._rrLiveFeed = [];
+    window._rrLiveTotal = 0; 
     function _capturarActividadViva(row) {
       if (!row || !row.id_perfil) return;
       const pId = String(row.id_perfil);
-      const pts = row.puntos_neto || 0;
+      const pts = Number(row.puntos_neto) || 0;
       if (pts <= 0) return;
       
       const op = operatorsData.find(o => (o.profiles || []).some(p => String(p.id) === pId));
       if (!op) return;
 
       const entry = {
-        opName: op.name,
+        op: op.name,
         pts: pts,
         ts: Date.now(),
-        model: row.modelo || 'Perfil'
+        modelo: row.modelo || 'Perfil',
+        perfil: pId,
+        time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+        turno: typeof _opRtJornada === 'function' ? _opRtJornada() : '...'
       };
 
-      window._liveActivityFeed.unshift(entry);
-      if (window._liveActivityFeed.length > 15) window._liveActivityFeed.pop();
+      window._rrLiveFeed.unshift(entry);
+      if (window._rrLiveFeed.length > 20) window._rrLiveFeed.pop();
       
+      window._rrLiveTotal += pts; 
+
       // Actualizar feed si el Action Map está abierto
       if (localStorage.getItem('rr_action_map_open') === 'true') {
         renderAlertas(); 

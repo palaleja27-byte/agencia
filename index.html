@@ -5104,7 +5104,10 @@
           <div id="dp-logs-container" style="background:#020617; border-top:1px solid rgba(255,255,255,0.05); padding:8px 14px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
               <span style="font-size:.6rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:1px;">🛰️ Consola de Sincronización</span>
-              <button onclick="document.getElementById('dp-logs-console').innerHTML=''" style="background:none; border:none; color:#475569; font-size:.6rem; cursor:pointer;">Limpiar</button>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button onclick="if(confirm('¿Calibrar puntos con baselines de las 4PM?')) calibrarTarde()" style="background:rgba(45,212,191,0.1); border:1px solid rgba(45,212,191,0.3); color:#2dd4bf; font-size:.55rem; padding:2px 8px; border-radius:4px; cursor:pointer;">🎯 Calibrar 4PM</button>
+                <button onclick="document.getElementById('dp-logs-console').innerHTML=''" style="background:none; border:none; color:#475569; font-size:.6rem; cursor:pointer;">Limpiar</button>
+              </div>
             </div>
             <div id="dp-logs-console" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:.65rem; color:#94a3b8; line-height:1.4;">
               <div style="color:#475569; font-style:italic;">Esperando sincronización...</div>
@@ -17275,21 +17278,21 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     window.calibrarTarde = async function(fecha) {
       if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
       const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      // Baselines exactos del corte manual (Comienza = valor acumulado a las 2 PM inicio Tarde)
+      // Baselines exactos del corte manual (Comienza a las 4:00 PM del 08-Mayo-2026)
       const baselines = {
-        '88243516': 799.02,  '95956014': 407.76,  '91360720': 290.76,
-        '143017065': 130.68, '91733663': 960.12,  '150039388': 43.92,
-        '79679899': 39.96,   '109551682': 130.38, '131130713': 154.62,
-        '101652076': 12.12,  '108019387': 813.36, '103023767': 546.12,
-        '118179794': 401.88, '130338853': 418.68, '160352260': 21.72,
-        '145834230': 51.60,  '120720195': 284.04, '139247498': 432.60,
-        '120275229': 58.20,  '157067734': 335.70, '103231980': 107.40,
-        '130431310': 223.86, '98389135':  130.74,  '139245988': 267.96,
-        '98540781':  65.88,  '156831990': 164.28, '151070498': 34.44,
-        '130422416': 525.18, '138130329': 340.68, '133085188': 379.50,
-        '118692242': 39.24,  '143014129': 18.36,  '95955130':  69.48,
-        '145211163': 31.38,  '144863124': 475.98, '145844971': 605.22,
-        '156716207': 85.92,  '137163229': 43.08,  '157112125': 529.02,
+        '88243516': 1564.86, '95956014': 876.60,  '91360720': 531.36,
+        '143017065': 219.00, '91733663': 2114.70, '153039388': 76.44,
+        '79679899': 271.26,  '109551682': 158.10, '131130713': 519.84,
+        '101652076': 17.52,  '108018336': 1311.90, '103289167': 952.32,
+        '118179794': 632.82, '130338853': 618.30,  '160352260': 39.12,
+        '145834230': 81.72,  '120720195': 399.06,  '139247498': 647.82,
+        '120275229': 108.48, '157067734': 569.34,  '103291980': 151.68,
+        '130431310': 405.30, '98389135': 192.42,   '139245989': 436.08,
+        '98540781': 116.58,  '156881990': 342.00,  '151070498': 65.64,
+        '130422416': 1069.26, '138130329': 533.08, '133085188': 630.18,
+        '118692242': 55.44,  '143014129': 56.16,   '95955130': 136.32,
+        '145211163': 41.94,  '144863124': 771.12,  '145844971': 873.06,
+        '156716207': 134.82, '137163229': 69.48,   '157112125': 704.04,
       };
       let ok = 0, fail = 0;
       for (const [id_perfil, pb] of Object.entries(baselines)) {
@@ -17308,7 +17311,12 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         else { console.log(`✅ ${id_perfil}: baseline=${pb} → neto=${nuevoNeto}`); ok++; }
       }
       console.log(`\n🎯 Calibración completada: ${ok} OK, ${fail} fallidos. Haz ↻ Sync para ver datos actualizados.`);
-      if (ok > 0) setTimeout(sincronizarDatamePaneles, 1500);
+      if (ok > 0) {
+        setTimeout(() => {
+          sincronizarDatamePaneles();
+          if (typeof renderRanking === 'function') renderRanking();
+        }, 1500);
+      }
     };
 
     async function sincronizarDatamePaneles() {

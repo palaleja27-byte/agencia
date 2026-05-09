@@ -9731,6 +9731,88 @@
     // ══════════════════════════════════════════
 
     const RENDIMIENTO_SNAP_KEY = 'rr_rendimiento_snapshots_v2';
+    const HEATMAP_HIST_KEY     = 'rr_heatmap_10m_history_v1';
+
+    function guardarHeatmapSnap10m() {
+      try {
+        const nowTs  = Date.now();
+        const slotMs = 10 * 60 * 1000;
+        const slot   = Math.floor(nowTs / slotMs) * slotMs;
+        const hoy    = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+        const hist   = JSON.parse(localStorage.getItem(HEATMAP_HIST_KEY) || '{}');
+        if (!hist[hoy]) hist[hoy] = {};
+        const snap = {};
+        if (typeof _rrRtData !== 'undefined' && _rrRtData && _rrRtData.rows) {
+          _rrRtData.rows.forEach(r => {
+            const pts10 = (r.cortes || []).filter(c => c.ts && (nowTs - c.ts < slotMs)).reduce((s, c) => s + (c.puntos || 0), 0) * (r.share || 1);
+            if (pts10 > 0) { if (!snap[r.op]) snap[r.op] = 0; snap[r.op] += pts10; }
+          });
+        }
+        if (Object.keys(snap).length > 0) { hist[hoy][slot] = { ts: nowTs, data: snap }; }
+        const cutoff = Date.now() - 7 * 86400000;
+        Object.keys(hist).forEach(d => { if (new Date(d).getTime() < cutoff) delete hist[d]; });
+        localStorage.setItem(HEATMAP_HIST_KEY, JSON.stringify(hist));
+      } catch(e) { console.warn('[HEATMAP10m]', e); }
+    }
+
+    function exportarHeatmapHistorial() {
+      const hist = JSON.parse(localStorage.getItem(HEATMAP_HIST_KEY) || '{}');
+      const hoy  = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+      const blob = new Blob([JSON.stringify(hist, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'heatmap_' + hoy + '.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function renderHeatmap10m(wrap) {
+      if (!wrap) return;
+      const hoy  = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+      const hist = JSON.parse(localStorage.getItem(HEATMAP_HIST_KEY) || '{}');
+      const dayData = hist[hoy] || {};
+      const nowTs   = Date.now();
+      const slotMs  = 10 * 60 * 1000;
+      const startOfDay = new Date(hoy + 'T06:00:00-05:00').getTime();
+      const allSlots = [];
+      for (let t = startOfDay; t <= nowTs; t += slotMs) { allSlots.push(t); }
+      const opsSet = new Set();
+      Object.values(dayData).forEach(snap => { Object.keys(snap.data || {}).forEach(op => opsSet.add(op)); });
+      const ops = [...opsSet].sort();
+      if (allSlots.length === 0 || ops.length === 0) {
+        wrap.innerHTML = `<div style="color:#475569;font-size:0.65rem;text-align:center;padding:20px;">Sin datos registrados hoy aún.</div>`;
+        return;
+      }
+      const opMax = {};
+      ops.forEach(op => { opMax[op] = 0; Object.values(dayData).forEach(snap => { const v = snap.data[op] || 0; if (v > opMax[op]) opMax[op] = v; }); });
+      const fmtTime = ts => new Date(ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' });
+      const heatColor = (v, maxV) => {
+        if (!v || v < 0.001) return { bg: 'rgba(15,23,42,0.6)', fg: '#1e3a5f', txt: '·' };
+        const r = v / (maxV || 1);
+        if (r < 0.15) return { bg: 'rgba(239,68,68,0.5)', fg: '#fca5a5', txt: v.toFixed(1) };
+        if (r < 0.35) return { bg: 'rgba(251,191,36,0.5)', fg: '#fef3c7', txt: v.toFixed(1) };
+        if (r < 0.65) return { bg: 'rgba(52,211,153,0.5)', fg: '#d1fae5', txt: v.toFixed(1) };
+        return { bg: 'rgba(45,212,191,0.85)', fg: '#042f2e', txt: v.toFixed(1) };
+      };
+      let headerCells = `<th style="position:sticky;left:0;z-index:12;background:#0f172a;padding:4px 8px;font-size:0.5rem;color:#64748b;white-space:nowrap;border-right:1px solid rgba(255,255,255,0.06);">OPERADOR</th>`;
+      allSlots.forEach(slot => {
+        const isCur = (slot <= nowTs) && (slot + slotMs > nowTs);
+        headerCells += `<th style="min-width:38px;padding:4px 2px;font-size:0.42rem;background:${isCur ? 'rgba(45,212,191,0.12)' : '#0f172a'};color:${isCur ? '#2dd4bf' : '#94a3b8'};text-align:center;border-right:1px solid rgba(255,255,255,0.03);">${fmtTime(slot)}</th>`;
+      });
+      let dataRows = '';
+      ops.forEach(op => {
+        let cells = `<td style="position:sticky;left:0;z-index:10;background:#0f172a;padding:4px 8px;font-size:0.52rem;font-weight:700;color:#e2e8f0;white-space:nowrap;border-right:1px solid rgba(255,255,255,0.06);">${op.split(' ')[0]}</td>`;
+        let dTot = 0;
+        allSlots.forEach(slot => {
+          const v = dayData[slot] ? (dayData[slot].data[op] || 0) : 0; dTot += v;
+          const { bg, fg, txt } = heatColor(v, opMax[op]);
+          cells += `<td style="padding:1px;background:${bg};border:1px solid rgba(0,0,0,0.08);"><div style="font-size:0.44rem;font-weight:900;color:${fg};text-align:center;">${txt}</div></td>`;
+        });
+        cells += `<td style="position:sticky;right:0;z-index:10;background:#0f172a;padding:4px 8px;font-size:0.5rem;font-weight:900;color:#34d399;border-left:1px solid rgba(255,255,255,0.06);">$${dTot.toFixed(1)}</td>`;
+        dataRows += `<tr style="border-bottom:1px solid rgba(255,255,255,0.02);">${cells}</tr>`;
+      });
+      wrap.innerHTML = `<div style="overflow-x:auto;max-height:320px;border-radius:10px;background:rgba(0,0,0,0.4);" class="custom-scrollbar"><table style="border-collapse:collapse;width:max-content;min-width:100%;"><thead><tr style="background:#0f172a;">${headerCells}<th style="position:sticky;right:0;z-index:12;background:#0f172a;padding:4px 8px;font-size:0.5rem;color:#2dd4bf;border-left:1px solid rgba(255,255,255,0.06);">TOTAL</th></tr></thead><tbody>${dataRows}</tbody></table></div>`;
+    }
+
     let alertasPeriodo = 'dia';
     let alertasJornada = '';
     let _alertasHistorialVisible = false;
@@ -10062,6 +10144,7 @@
         content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
       }
 
+      if (tab === 'mapa') { content = `<div id="heatmap10m-mount" style="min-height:120px;"></div>`; }
       const recentFeed = (window._rrLiveFeed || []).map(entry => `<div style="font-size:0.52rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;color:#94a3b8;"><span>${entry.op.split(' ')[0]} <small style="color:#475569;">(${entry.modelo})</small></span><b style="color:#2dd4bf">+$${(entry.pts||0).toFixed(2)}</b></div>`).join('');
       const liveTotal = (window._rrLiveFeed || []).reduce((acc, r) => acc + (Number(r.pts) || 0), 0);
 
@@ -10111,15 +10194,14 @@
              </div>
           </div>
           <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
-            ${['resumen', '5m', '10m'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t.toUpperCase()}</button>`).join('')}
+            ${['resumen', '5m', '10m', 'mapa'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t.toUpperCase()}</button>`).join('')}
           </div>
           ${content}
           
-          <div style="margin-top:12px; padding:10px; background:rgba(45,212,191,0.05); border-radius:10px; border:1px dashed rgba(45,212,191,0.2); display:flex; justify-content:center;">
-            <button onclick="alert('🚀 EXPERT HEATMAP GUIDE\n\n5M/10M (High Resolution):\nIdentifies micro-fluctuations in production. Red cells indicate drops < 15% of the average, allowing immediate reallocation of profiles.\n\nPRO TIP:\nUse the 5M view during peak hours to ensure no profile is orphaned for more than 10 minutes.')" 
-                    style="background:none; border:none; color:#2dd4bf; font-size:0.65rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px;">
-              <span>ℹ️ EXPERT MONITORING GUIDE</span>
-            </button>
+<div style="margin-top:12px; padding:8px 12px; background:rgba(15,23,42,0.6); border-radius:10px; border:1px solid rgba(255,255,255,0.05); display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button onclick="window.activeAlertaTab='mapa';renderAlertas();" style="background:rgba(45,212,191,0.12);border:1px solid rgba(45,212,191,0.3);color:#2dd4bf;font-size:0.6rem;font-weight:800;cursor:pointer;padding:6px 14px;border-radius:8px;">🔥 MAPA DÍA COMPLETO</button>
+            <button onclick="guardarHeatmapSnap10m();alert('Snapshot guardado');" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size:0.6rem;font-weight:800;cursor:pointer;padding:6px 14px;border-radius:8px;">💾 GUARDAR SNAPSHOT</button>
+            <button onclick="exportarHeatmapHistorial();" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);color:#c084fc;font-size:0.6rem;font-weight:800;cursor:pointer;padding:6px 14px;border-radius:8px;">📥 EXPORTAR</button>
           </div>
         </div>
       </details>
@@ -10127,6 +10209,12 @@
         .action-map-accordion summary{list-style:none;outline:none;} .action-map-accordion summary::-webkit-details-marker{display:none;}
         .custom-scrollbar::-webkit-scrollbar { height: 6px; width:6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(45,212,191,0.2); border-radius: 10px; }
       </style>`;
+      if (tab === 'mapa') {
+        requestAnimationFrame(() => {
+          const mount = document.getElementById('heatmap10m-mount');
+          if (mount && typeof renderHeatmap10m === 'function') renderHeatmap10m(mount);
+        });
+      }
     }
 
 function exportarDatos() {
@@ -17396,6 +17484,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
       // 1. Actualizar cabecera global
       if (typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
+      if (typeof guardarHeatmapSnap10m === 'function') guardarHeatmapSnap10m();
 
       // 2. Actualizar feed si el Action Map está abierto
       if (localStorage.getItem('rr_action_map_open') === 'true') {

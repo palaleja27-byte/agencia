@@ -10241,10 +10241,10 @@
           let h = Math.floor(sIdx * interval / 60);
           let m = (sIdx * interval) % 60;
           if (h < 0) { h += 24; }
-          return { slot: sIdx, label: ${String(h).padStart(2,'0')}: };
+          return { slot: sIdx, label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}` };
         });
         
-        const hCols = slots.map(s => <th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:35px;border-bottom:1px solid rgba(255,255,255,0.05);"></th>).join('');
+        const hCols = slots.map(s => `<th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:35px;border-bottom:1px solid rgba(255,255,255,0.05);">${s.label}</th>`).join('');
         
         const trs = rows.map(r => {
           let prevVal = null;
@@ -10276,15 +10276,14 @@
             }
             if (val > 0) prevVal = val;
             
-            return <td style="padding:1px;background:;border:1px solid rgba(0,0,0,0.05);"><div style="font-size:0.48rem;font-weight:900;color:;text-align:center;"></div></td>;
+            return `<td style="padding:1px;background:${bg};border:1px solid rgba(0,0,0,0.05);"><div style="font-size:0.48rem;font-weight:900;color:${fg};text-align:center;">${val>0?fm(val).replace('$',''):'&middot;'}</div></td>`;
           }).join('');
           
-          const oc = r.fi ? <td rowspan="" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;"></div></td> : '';
-          return <tr><td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;"></div></td></tr>;
+          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
+          return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${history}</tr>`;
         }).join('');
-        content = <div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th></tr></thead><tbody></tbody></table></div>;
+        content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
       }
-
       if (tab === 'mapa') { content = `<div id="heatmap10m-mount" style="min-height:120px;"></div>`; }
       const recentFeed = (window._rrLiveFeed || []).map(entry => `<div style="font-size:0.52rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;color:#94a3b8;"><span>${entry.op.split(' ')[0]} <small style="color:#475569;">(${entry.modelo})</small></span><b style="color:#2dd4bf">+$${(entry.pts||0).toFixed(2)}</b></div>`).join('');
       const liveTotal = (window._rrLiveFeed || []).reduce((acc, r) => acc + (Number(r.pts) || 0), 0);

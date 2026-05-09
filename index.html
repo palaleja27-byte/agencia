@@ -6601,24 +6601,49 @@
             });
           }
 
+          // Calculate historical virtual points for the operator (base from past)
+          const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
+          const cortesAll = typeof getCortesOp === 'function' ? getCortesOp(op.name) : [];
+          const nowTsGlobal = Date.now();
+          const hoyStr = localDateStr();
+
           combinedProfiles.forEach(p => {
-            const ptsDia = _ptsHoyMap[op.name] || 0;
+            // Filter cortes specifically for this profile (or unassigned/legacy if it's the only profile)
+            const isUnico = combinedProfiles.length === 1;
+            const cortesPerfil = cortesAll.filter(c => isUnico || String(c.perfil) === String(p.id) || !c.perfil); 
+            
             let r05 = 0, r10 = 0;
-            const cortes = typeof getCortesOp === 'function' ? getCortesOp(op.name) : [];
             const nowTs = Date.now();
-            r05 = cortes.filter(c => c.ts && (nowTs - c.ts < 300000)).reduce((s,c)=>s+(Number(c.puntos)||0),0);
-            r10 = cortes.filter(c => c.ts && (nowTs - c.ts < 600000)).reduce((s,c)=>s+(Number(c.puntos)||0),0);
+            r05 = cortesPerfil.filter(c => c.ts && (nowTs - c.ts < 300000)).reduce((s,c)=>s+(Number(c.puntos)||0),0);
+            r10 = cortesPerfil.filter(c => c.ts && (nowTs - c.ts < 600000)).reduce((s,c)=>s+(Number(c.puntos)||0),0);
+
+            // Calculate precise metrics per profile using cortes
+            const pCurrVir = cortesPerfil.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActStats).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+            const semTotal = cortesPerfil.filter(c => c.ts && (nowTsGlobal - c.ts < 7 * 86400000)).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+            
+            // For the day, use real-time sync + legacy cortes for this specific profile
+            const legacyDia = cortesPerfil.filter(c => c.fecha === hoyStr).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+            const turnosPerfil = typeof _dpTurnosData !== 'undefined' ? (_dpTurnosData[p.id] || _dpTurnosData[String(p.id)]) : null;
+            let datameDia = 0;
+            if (turnosPerfil) {
+              datameDia = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['manana'] || 0);
+            }
+            const ptsDia = Math.max(datameDia, legacyDia);
+
+            // If it's the first profile, attach the operator's base points to avoid losing them
+            const isFirst = combinedProfiles.indexOf(p) === 0;
+            const mesTotal = (isFirst ? pCurrBase : 0) + pCurrVir;
 
             rtRows.push({
               op: op.name,
               pm: p.model || p.modelo || p.nombre || ('ID ' + p.id),
               dia: ptsDia,
-              sem: (op.sem || 0),
-              mes: (op[curr] || 0),
+              sem: semTotal,
+              mes: mesTotal,
               r05: r05,
               r10: r10,
-              share: 1,
-              cortes: cortes
+              share: 1, // Share no longer needed as we calculate precisely
+              cortes: cortesPerfil
             });
           });
         });

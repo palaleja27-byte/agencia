@@ -10226,22 +10226,63 @@
       } else if (tab === '5m' || tab === '10m') {
         const interval = tab === '5m' ? 5 : 10;
         const nSlots = 30;
+        
+        const key = interval === 5 ? 'rr_heatmap_5m_history_v1' : 'rr_heatmap_10m_history_v1';
+        const historyData = JSON.parse(localStorage.getItem(key) || '{}');
+        const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const dayData = historyData[hoyStr] || [];
+        
+        const now = new Date();
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        const currentSlotIdx = Math.floor(currentMins / interval);
+        
         const slots = Array.from({length: nSlots}, (_, i) => {
-          const t = nowTs - (nSlots - 1 - i) * interval * 60000;
-          return { t, label: new Date(t).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'}) };
+          const sIdx = currentSlotIdx - (nSlots - 1 - i);
+          let h = Math.floor(sIdx * interval / 60);
+          let m = (sIdx * interval) % 60;
+          if (h < 0) { h += 24; }
+          return { slot: sIdx, label: ${String(h).padStart(2,'0')}: };
         });
-        const hCols = slots.map(s => `<th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:35px;border-bottom:1px solid rgba(255,255,255,0.05);">${s.label}</th>`).join('');
+        
+        const hCols = slots.map(s => <th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:35px;border-bottom:1px solid rgba(255,255,255,0.05);"></th>).join('');
+        
         const trs = rows.map(r => {
+          let prevVal = null;
           const history = slots.map(s => {
-            const rangeStart = s.t - (interval * 60000);
-            const val = (r.cortes || []).filter(c => c.ts && c.ts > rangeStart && c.ts <= s.t).reduce((sum,c)=>sum+(c.puntos||0),0) * r.share;
-            const c = hc(val, r.dia / (24 * (60/interval)));
-            return `<td style="padding:1px;background:${c.b};border:1px solid rgba(0,0,0,0.05);"><div style="font-size:0.48rem;font-weight:900;color:${c.f};text-align:center;">${val>0?fm(val).replace('$',''):'·'}</div></td>`;
+            const snap = dayData.find(d => d.slot === s.slot);
+            const entry = snap ? snap.data.find(d => d.pm === r.pm) : null;
+            let val = entry ? entry.pts : 0;
+            
+            if (!entry) {
+               const t = new Date();
+               t.setHours(Math.floor(s.slot * interval / 60));
+               t.setMinutes((s.slot * interval) % 60);
+               const tsEnd = t.getTime();
+               const tsStart = tsEnd - (interval * 60000);
+               val = (r.cortes || []).filter(c => c.ts && c.ts > tsStart && c.ts <= tsEnd).reduce((sum,c)=>sum+(c.puntos||0),0);
+            }
+            
+            let bg = 'rgba(15,23,42,0.6)', fg = '#475569';
+            if (val > 0) {
+               if (prevVal === null) {
+                  bg = 'rgba(30,58,80,0.9)'; fg = '#94a3b8';
+               } else if (val > prevVal) {
+                  bg = 'rgba(16,185,129,0.4)'; fg = '#34d399';
+               } else if (val < prevVal) {
+                  bg = 'rgba(239,68,68,0.4)'; fg = '#fca5a5';
+               } else {
+                  bg = 'rgba(245,158,11,0.4)'; fg = '#fbbf24';
+               }
+            }
+            if (val > 0) prevVal = val;
+            
+            return <td style="padding:1px;background:;border:1px solid rgba(0,0,0,0.05);"><div style="font-size:0.48rem;font-weight:900;color:;text-align:center;"></div></td>;
           }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${history}</tr>`;
+          
+          const oc = r.fi ? <td rowspan="" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;"></div></td> : '';
+          return <tr><td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;"></div></td></tr>;
         }).join('');
-        content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
+        content = <div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th></tr></thead><tbody></tbody></table></div>;
       }
 
       if (tab === 'mapa') { content = `<div id="heatmap10m-mount" style="min-height:120px;"></div>`; }
@@ -17630,6 +17671,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       // 1. Actualizar cabecera global
       if (typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
       if (typeof guardarHeatmapSnap10m === 'function') guardarHeatmapSnap10m();
+      if (typeof guardarHeatmapSnap5m === 'function') guardarHeatmapSnap5m();
 
       // 2. Actualizar feed si el Action Map está abierto
       if (localStorage.getItem('rr_action_map_open') === 'true') {
@@ -18202,7 +18244,39 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     // ══════════════════════════════════════════════════════════════
     // ACTION MAP PRO: HEATMAP 10m PERSISTENCE & RENDERING
     // ══════════════════════════════════════════════════════════════
-    window.guardarHeatmapSnap10m = function() {
+    
+    window.guardarHeatmapSnap5m = function() {
+      try {
+        const key = 'rr_heatmap_5m_history_v1';
+        const raw = localStorage.getItem(key);
+        const history = raw ? JSON.parse(raw) : {};
+        const hoy = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        if (!history[hoy]) history[hoy] = [];
+        
+        const now = new Date();
+        const mins = now.getHours() * 60 + now.getMinutes();
+        const slotIdx = Math.floor(mins / 5);
+        
+        if (!window._rrRtData || !window._rrRtData.rows) return;
+        
+        const snap = {
+          t: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+          ts: now.getTime(),
+          slot: slotIdx,
+          data: window._rrRtData.rows.map(r => ({ op: r.op, pm: r.pm, pts: r.r05 }))
+        };
+        
+        const exists = history[hoy].findIndex(s => s.slot === slotIdx);
+        if (exists !== -1) history[hoy][exists] = snap;
+        else history[hoy].push(snap);
+        
+        const keys = Object.keys(history).sort();
+        if (keys.length > 3) delete history[keys[0]]; // Keep 3 days
+        
+        localStorage.setItem(key, JSON.stringify(history));
+      } catch(e) { console.warn('[HEATMAP-SAVE-5M]', e); }
+    };
+window.guardarHeatmapSnap10m = function() {
       try {
         const key = 'rr_heatmap_10m_history_v1';
         const raw = localStorage.getItem(key);

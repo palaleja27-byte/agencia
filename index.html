@@ -17431,8 +17431,8 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const { data: opsNuevo, error: errNuevo } = await _sb
           .from('operaciones')
           .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
-          .gte('fecha_corte', FECHA_INICIO)
-          .order('fecha_corte', { ascending: false });
+          .gte('fecha_dia', '2026-02-01')
+            .order('id', { ascending: false });
 
         if (!errNuevo && opsNuevo) {
           ops = opsNuevo;
@@ -17443,9 +17443,9 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           dpLog('Error en modo completo, intentando fallback...', 'warn');
           const { data: opsFallback, error: errFallback } = await _sb
             .from('operaciones')
-            .select('id_perfil, puntos, fecha_corte, agencia')
-            .gte('fecha_corte', FECHA_INICIO)
-            .order('fecha_corte', { ascending: false });
+            .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
+            .gte('fecha_dia', '2026-02-01')
+            .order('id', { ascending: false });
           if (errFallback) { 
             dpLog('Error crítico Supabase: ' + errFallback.message, 'error');
             return; 
@@ -17501,17 +17501,26 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
               // Recalcular neto: si tenemos puntos_total y puntos_baseline, usar la diferencia
               let netoReal = netoSano;
               
+              const pt = op.puntos_total || 0;
+              const pb = op.puntos_baseline || 0;
+              
+              if (pt > 0 && pt > pb) {
+                const recalcNeto = pt - pb;
+                // Usar el mayor entre el almacenado y el recalculado (más preciso)
+                if (recalcNeto > netoReal && recalcNeto <= 800) netoReal = recalcNeto;
+              }
+
               // Sync into localStorage for getCortesOp fallback
               if (netoReal > 0) {
                 // --- MAPPING FIX: Find operator name by profile ID or agency prefix ---
                 let opName = op.agencia;
                 const srcOp = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => 
                   (o.profiles && o.profiles.some(p => String(p.id) === String(id))) ||
-                  (op.agencia && o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase()))
+                  (op.agencia && op.agencia.trim().length > 1 && o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase()))
                 ) : null;
                 
                 if (srcOp) opName = srcOp.name;
-                else if (!opName) opName = String(id);
+                else if (!opName || opName.trim() === '') opName = String(id);
 
                 if (!allCortes[opName]) allCortes[opName] = [];
                 const exists = allCortes[opName].some(c => c.fecha === hoy && c.jornada === op.jornada && Math.abs((c.puntos||0) - netoReal) < 0.01);
@@ -17527,13 +17536,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
                   cortesChanged = true;
                 }
               }
-              const pt = op.puntos_total || 0;
-              const pb = op.puntos_baseline || 0;
-              if (pt > 0 && pb > 0 && pt > pb) {
-                const recalcNeto = pt - pb;
-                // Usar el mayor entre el almacenado y el recalculado (más preciso)
-                if (recalcNeto > netoReal && recalcNeto <= 800) netoReal = recalcNeto;
-              }
+
               const netoRealOk = netoReal >= 0 && netoReal <= 800;
               if (netoRealOk) turnosHoy[id][op.jornada] = Math.max(turnosHoy[id][op.jornada], netoReal);
             }

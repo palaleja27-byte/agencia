@@ -6,9 +6,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260313_223019 -->
+  <!-- build:20260509_1355 -->
+  <title>AGENCIA RR — Monitoreo v16.2 [PRO-STABLE]</title>
+  <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.2 — 09-Mayo-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Reporte Enero - Febrero 2026</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -6503,7 +6504,7 @@
       const _horaMap = {};
       const _connectedMap = {};
       
-      const opsEnTurnoDraft = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
+      const opsEnTurnoDraft = (typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : null) || new Set();
       const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
       const _shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
       const _draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoy + '_' + _shKey) || '{}');
@@ -6535,7 +6536,7 @@
             const jornadaLeer = jornadaALeer && jornadaALeer !== 'Completo' ? jornadaALeer : jornadaActual;
 
             combinedProfiles.forEach(p => {
-               const turnosPerfil = _dpTurnosData[p.id];
+               const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                if (turnosPerfil) {
                   // DELTA-SHIFT™: cada puntos_neto es la producción neta de un turno específico.
                   // Solo sumar la jornada del operador para evitar doble conteo entre turnos compartidos.
@@ -6563,12 +6564,93 @@
         }, 0);
 
         // Usamos Datame Realtime si tiene puntos, sino el legacy
-        _ptsHoyMap[op.name] = datamePts > 0 ? datamePts : legacyPts;
+        _ptsHoyMap[op.name] = Math.max(datamePts, legacyPts);
         _connectedMap[op.name.toUpperCase()] = estaLogueado;
 
         const last = hoyCortes[hoyCortes.length - 1];
         _horaMap[op.name] = datamePts > 0 ? '🛰️ Datame Sync' : (last ? (last.hora || null) : null);
       });
+
+      // ── Stats calculation (Moved up to feed Action Map) ────────────────
+      const MARCH_VALOR_FIJO = 78852.5; 
+      const _mesActStats = getMesActualStr(); 
+      const _mesAntStats = getMesAnteriorStr(); 
+
+      const totalPtsCurr = getTotalMesPts(_mesActStats); 
+      let totalPtsAnt = getTotalMesPts(_mesAntStats);
+      
+      if (_mesAntStats === '2026-03' && totalPtsAnt < MARCH_VALOR_FIJO) {
+        totalPtsAnt = MARCH_VALOR_FIJO;
+      }
+
+      // --- CALCULATE GLOBAL ACTION MAP DATA (_rrRtData) ---
+      try {
+        const rtRows = [];
+        const hoyStr = localDateStr();
+        const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+        const dayOfMonth = new Date().getDate();
+
+        const targetOps = (rkViewMode === 'dia') ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : rkDataFiltered;
+        
+        targetOps.forEach(op => {
+          const combinedProfiles = [...(op.profiles || [])];
+          const draftEntry = (typeof _draftFull !== 'undefined') ? _draftFull[op.name + '||operador'] : null;
+          if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+            draftEntry.perfiles.forEach(dp => {
+              if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) combinedProfiles.push(dp);
+            });
+          }
+
+          combinedProfiles.forEach(p => {
+            const ptsDia = _ptsHoyMap[op.name] || 0;
+            let r05 = 0, r10 = 0;
+            const cortes = typeof getCortesOp === 'function' ? getCortesOp(op.name) : [];
+            const nowTs = Date.now();
+            r05 = cortes.filter(c => c.ts && (nowTs - c.ts < 300000)).reduce((s,c)=>s+(Number(c.puntos)||0),0);
+            r10 = cortes.filter(c => c.ts && (nowTs - c.ts < 600000)).reduce((s,c)=>s+(Number(c.puntos)||0),0);
+
+            rtRows.push({
+              op: op.name,
+              pm: p.model || p.modelo || p.nombre || ('ID ' + p.id),
+              dia: ptsDia,
+              sem: (op.sem || 0),
+              mes: (op[curr] || 0),
+              r05: r05,
+              r10: r10,
+              share: 1,
+              cortes: cortes
+            });
+          });
+        });
+
+        // Post-process: add fi (first-in-group), rs (rowspan), tOp (total per op)
+        const opGroups = {};
+        rtRows.forEach(r => {
+          if (!opGroups[r.op]) opGroups[r.op] = { count: 0, total: 0 };
+          opGroups[r.op].count++;
+          opGroups[r.op].total += r.dia;
+        });
+        const opSeen = {};
+        rtRows.forEach(r => {
+          if (!opSeen[r.op]) {
+            r.fi = true;
+            r.rs = opGroups[r.op].count;
+            r.tOp = opGroups[r.op].total;
+            opSeen[r.op] = true;
+          } else {
+            r.fi = false;
+          }
+        });
+
+        window._rrRtData = {
+          rows: rtRows,
+          vel: dayOfMonth > 0 ? totalPtsCurr / dayOfMonth : 0,
+          proy: (dayOfMonth > 0 ? totalPtsCurr / dayOfMonth : 0) * daysInMonth,
+          totalPtsPrev: totalPtsAnt
+        };
+      } catch(e) { console.warn('[RT-CALC] Error:', e); }
+
+
 
       // Sort using dynamic month keys + col 7 = pts hoy
       rkDataFiltered.sort((a, b) => {
@@ -6588,18 +6670,6 @@
       });
 
       // ── Stats cards ──────────────────────────────────────────────
-      // --- Totales Reales de la Operación (Parche de Emergencia de Marzo v11) ---
-      const MARCH_VALOR_FIJO = 78852.5; 
-      const _mesActStats = getMesActualStr(); 
-      const _mesAntStats = getMesAnteriorStr(); 
-
-      const totalPtsCurr = getTotalMesPts(_mesActStats); 
-      let totalPtsAnt = getTotalMesPts(_mesAntStats);
-      
-      // Si el mes anterior es Marzo, usamos el valor que el usuario consolidó
-      if (_mesAntStats === '2026-03' && totalPtsAnt < MARCH_VALOR_FIJO) {
-        totalPtsAnt = MARCH_VALOR_FIJO;
-      }
 
       // Pts visibles en pantalla (para avg por operador del filtro actual)
       const _fut3 = localDateStr(new Date(Date.now() + 3 * 86400000));
@@ -12974,7 +13044,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
            if (combinedProfiles.length > 0) {
               combinedProfiles.forEach(p => {
-                 const turnosPerfil = _dpTurnosData[p.id];
+                 const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                  if (turnosPerfil) {
                     datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
                  }
@@ -17358,6 +17428,8 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const turnosHoy   = {};
         const historialMap= {};
         const diasNeto    = {};
+        const allCortes   = JSON.parse(localStorage.getItem(typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes') || '{}');
+        let cortesChanged = false;
 
         (ops || []).forEach(op => {
           const id = op.id_perfil;
@@ -17398,6 +17470,33 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
               if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
               // Recalcular neto: si tenemos puntos_total y puntos_baseline, usar la diferencia
               let netoReal = netoSano;
+              
+              // Sync into localStorage for getCortesOp fallback
+              if (netoReal > 0) {
+                // --- MAPPING FIX: Find operator name by profile ID or agency prefix ---
+                let opName = op.agencia;
+                const srcOp = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => 
+                  (o.profiles && o.profiles.some(p => String(p.id) === String(id))) ||
+                  (op.agencia && o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase()))
+                ) : null;
+                
+                if (srcOp) opName = srcOp.name;
+                else if (!opName) opName = String(id);
+
+                if (!allCortes[opName]) allCortes[opName] = [];
+                const exists = allCortes[opName].some(c => c.fecha === hoy && c.jornada === op.jornada && Math.abs((c.puntos||0) - netoReal) < 0.01);
+                if (!exists) {
+                  allCortes[opName].push({
+                    fecha: hoy,
+                    hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+                    puntos: netoReal,
+                    jornada: op.jornada,
+                    perfil: String(id),
+                    ts: Date.now()
+                  });
+                  cortesChanged = true;
+                }
+              }
               const pt = op.puntos_total || 0;
               const pb = op.puntos_baseline || 0;
               if (pt > 0 && pb > 0 && pt > pb) {
@@ -17442,6 +17541,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           }
         });
 
+        if (cortesChanged) {
+          localStorage.setItem(typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes', JSON.stringify(allCortes));
+        }
+
         _dpPuntosData    = nuevosDatos;
         _dpTurnosData    = turnosHoy;
         _dpHistorialData = historialMap;
@@ -17466,7 +17569,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const pts = Number(row.puntos_neto) || 0;
       if (pts <= 0) return;
       
-      const op = operatorsData.find(o => (o.profiles || []).some(p => String(p.id) === pId));
+      const op = operatorsData.find(o => 
+        (o.profiles || []).some(p => String(p.id) === pId) ||
+        (row.agencia && o.name.toUpperCase().startsWith(row.agencia.trim().toUpperCase()))
+      );
       if (!op) return;
 
       const entry = {
@@ -18053,6 +18159,114 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         }
       }
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // ACTION MAP PRO: HEATMAP 10m PERSISTENCE & RENDERING
+    // ══════════════════════════════════════════════════════════════
+    window.guardarHeatmapSnap10m = function() {
+      try {
+        const key = 'rr_heatmap_10m_history_v1';
+        const raw = localStorage.getItem(key);
+        const history = raw ? JSON.parse(raw) : {};
+        const hoy = localDateStr();
+        if (!history[hoy]) history[hoy] = [];
+        
+        const now = new Date();
+        const mins = now.getHours() * 60 + now.getMinutes();
+        const slotIdx = Math.floor(mins / 10);
+        
+        if (!window._rrRtData || !window._rrRtData.rows) return;
+        
+        const snap = {
+          t: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+          ts: now.getTime(),
+          slot: slotIdx,
+          data: window._rrRtData.rows.map(r => ({ op: r.op, pm: r.pm, pts: r.r10 }))
+        };
+        
+        // Evitar duplicados en el mismo slot de 10 min
+        const exists = history[hoy].findIndex(s => s.slot === slotIdx);
+        if (exists !== -1) history[hoy][exists] = snap;
+        else history[hoy].push(snap);
+        
+        // Limpieza: solo 7 días
+        const keys = Object.keys(history).sort();
+        if (keys.length > 7) delete history[keys[0]];
+        
+        localStorage.setItem(key, JSON.stringify(history));
+      } catch(e) { console.warn('[HEATMAP-SAVE]', e); }
+    };
+
+    window.renderHeatmap10m = function() {
+      const mount = document.getElementById('heatmap10m-mount');
+      if (!mount) return;
+      
+      const key = 'rr_heatmap_10m_history_v1';
+      const history = JSON.parse(localStorage.getItem(key) || '{}');
+      const hoy = localDateStr();
+      const dayData = history[hoy] || [];
+      
+      if (dayData.length === 0) {
+        mount.innerHTML = `<div style="padding:20px;text-align:center;color:#64748b;font-size:0.7rem;">Esperando primer snapshot de 10 min...</div>`;
+        return;
+      }
+      
+      // Obtener lista única de perfiles (PM)
+      const perfiles = [];
+      dayData.forEach(s => s.data.forEach(d => { if (!perfiles.includes(d.pm)) perfiles.push(d.pm); }));
+      perfiles.sort();
+      
+      // Slots de 06:00 a 22:00 (10 min cada uno)
+      const startSlot = 36; // 06:00
+      const endSlot = 132; // 22:00
+      const slots = [];
+      for (let i = startSlot; i <= endSlot; i++) {
+        const h = Math.floor(i * 10 / 60);
+        const m = (i * 10) % 60;
+        slots.push({ slot: i, label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}` });
+      }
+      
+      let html = `<div style="overflow-x:auto;max-width:100%;" class="custom-scrollbar"><table style="border-collapse:collapse;color:#cbd5e1;font-size:0.55rem;min-width:1000px;">`;
+      html += `<thead><tr><th style="position:sticky;left:0;background:#0f172a;z-index:5;padding:6px;text-align:left;border-bottom:1px solid #1e293b;width:120px;">PERFIL</th>`;
+      slots.forEach(s => { html += `<th style="padding:4px;border-bottom:1px solid #1e293b;min-width:30px;color:#475569;">${s.label}</th>`; });
+      html += `</tr></thead><tbody>`;
+      
+      perfiles.forEach(p => {
+        html += `<tr><td style="position:sticky;left:0;background:#0f172a;z-index:4;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.03);font-weight:800;color:#38bdf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p}</td>`;
+        slots.forEach(s => {
+          const snap = dayData.find(d => d.slot === s.slot);
+          const entry = snap ? snap.data.find(d => d.pm === p) : null;
+          const val = entry ? entry.pts : 0;
+          const bg = val > 0.5 ? '#10b981' : val > 0.2 ? '#34d399' : val > 0.05 ? '#fbbf24' : val > 0 ? '#f87171' : 'transparent';
+          const opacity = val > 0 ? 0.3 + Math.min(val, 1) * 0.7 : 0.05;
+          html += `<td title="${p} @ ${s.label}: ${val.toFixed(2)} pts" style="padding:2px;background:${bg};opacity:${opacity};border:1px solid rgba(255,255,255,0.02);text-align:center;">${val > 0.1 ? val.toFixed(1) : ''}</td>`;
+        });
+        html += `</tr>`;
+      });
+      
+      html += `</tbody></table></div>`;
+      html += `<div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:0.55rem;color:#475569;">Frecuencia: 10 min | Snapshots hoy: ${dayData.length}</div>
+                <button onclick="exportarHeatmapHistorial()" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);color:#c084fc;padding:4px 10px;border-radius:6px;font-size:0.6rem;cursor:pointer;">💾 Exportar Historial (.json)</button>
+               </div>`;
+      
+      mount.innerHTML = html;
+    };
+
+    window.exportarHeatmapHistorial = function() {
+      const data = localStorage.getItem('rr_heatmap_10m_history_v1');
+      if (!data) return alert('No hay historial para exportar');
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `rr_heatmap_10m_${localDateStr()}.json`;
+      a.click();
+    };
+
+    // Auto-render heatmap if visible
+    setInterval(() => {
+      if (document.getElementById('heatmap10m-mount')) renderHeatmap10m();
+    }, 60000);
 
     function cerrarModalHistorial() {
       document.getElementById('modal-historial-produccion').classList.remove('open');

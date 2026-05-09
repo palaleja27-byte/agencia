@@ -6845,6 +6845,11 @@
             // Insertar al inicio del feed, mantener max 20
             window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 20);
             _rrPintarLiveFeed();
+            // Debounce ranking re-render on realtime events
+            clearTimeout(window._rkLiveRenderTimer);
+            window._rkLiveRenderTimer = setTimeout(() => {
+              if (typeof renderRanking === 'function') renderRanking();
+            }, 3000);
           })
           .subscribe();
         console.log('[LIVE-RT] Supabase Realtime activo en tabla operaciones');
@@ -17553,6 +17558,12 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         dpLog(`Procesados ${count} perfiles. Hoy: ${Object.keys(turnosHoy).length} activos.`, 'info');
         
         dpRenderGrid();
+
+        // 🔥 CRITICAL: Re-render ranking now that _dpTurnosData has real points
+        if (typeof renderRanking === 'function') {
+          clearTimeout(window._dpRankingTimer);
+          window._dpRankingTimer = setTimeout(renderRanking, 300);
+        }
 
         const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
         const modo = modoCompleto ? '🛰️' : '⚠️';

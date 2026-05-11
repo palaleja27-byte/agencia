@@ -18272,6 +18272,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     
     window.guardarHeatmapSnap5m = function() {
       try {
+        if (!window._rrRtData || !window._rrRtData.rows || !window._rrRtData.rows.length) {
+          console.warn('[HEATMAP-5M] Sin datos _rrRtData para snapshot');
+          return;
+        }
         const key = 'rr_heatmap_5m_history_v1';
         const raw = localStorage.getItem(key);
         const history = raw ? JSON.parse(raw) : {};
@@ -18281,58 +18285,100 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const now = new Date();
         const mins = now.getHours() * 60 + now.getMinutes();
         const slotIdx = Math.floor(mins / 5);
+        const nowTs = now.getTime();
+        const ms5 = 5 * 60 * 1000;
         
-        if (!window._rrRtData || !window._rrRtData.rows) return;
+        // Calcular puntos reales del intervalo de 5 min para cada fila
+        const snapData = window._rrRtData.rows.map(r => {
+          // 1. Intenta usar cortes con timestamp preciso del último slot de 5 min
+          let pts = 0;
+          if (r.cortes && r.cortes.length) {
+            pts = r.cortes
+              .filter(c => c.ts && (nowTs - c.ts) < ms5)
+              .reduce((s, c) => s + (Number(c.puntos) || 0), 0) * (r.share || 1);
+          }
+          // 2. Si no hay cortes recientes, usa r.r05 si ya fue calculado en renderAlertas
+          if (pts === 0 && r.r05 && r.r05 > 0) pts = r.r05;
+          // 3. Fallback: estimar del ritmo diario (dia / 288 slots de 5 min por día)
+          if (pts === 0 && r.dia && r.dia > 0) pts = r.dia / 288;
+          return { op: r.op, pm: r.pm, pts: Math.max(0, pts) };
+        }).filter(d => d.pts > 0);
+        
+        if (snapData.length === 0) {
+          console.warn('[HEATMAP-5M] Snapshot vacío, omitiendo.');
+          return;
+        }
         
         const snap = {
           t: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-          ts: now.getTime(),
+          ts: nowTs,
           slot: slotIdx,
-          data: window._rrRtData.rows.map(r => ({ op: r.op, pm: r.pm, pts: r.r05 }))
+          data: snapData
         };
         
         const exists = history[hoy].findIndex(s => s.slot === slotIdx);
         if (exists !== -1) history[hoy][exists] = snap;
         else history[hoy].push(snap);
         
-        const keys = Object.keys(history).sort();
-        if (keys.length > 3) delete history[keys[0]]; // Keep 3 days
+        // Mantener solo 3 días
+        const histKeys = Object.keys(history).sort();
+        while (histKeys.length > 3) delete history[histKeys.shift()];
         
         localStorage.setItem(key, JSON.stringify(history));
+        console.log(`[HEATMAP-5M] ✅ Snapshot slot ${slotIdx} (${snap.t}) — ${snapData.length} perfiles guardados.`);
       } catch(e) { console.warn('[HEATMAP-SAVE-5M]', e); }
     };
-window.guardarHeatmapSnap10m = function() {
+    window.guardarHeatmapSnap10m = function() {
       try {
+        if (!window._rrRtData || !window._rrRtData.rows || !window._rrRtData.rows.length) {
+          console.warn('[HEATMAP-10M] Sin datos _rrRtData para snapshot');
+          return;
+        }
         const key = 'rr_heatmap_10m_history_v1';
         const raw = localStorage.getItem(key);
         const history = raw ? JSON.parse(raw) : {};
-        const hoy = localDateStr();
+        const hoy = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         if (!history[hoy]) history[hoy] = [];
         
         const now = new Date();
         const mins = now.getHours() * 60 + now.getMinutes();
         const slotIdx = Math.floor(mins / 10);
+        const nowTs = now.getTime();
+        const ms10 = 10 * 60 * 1000;
         
-        if (!window._rrRtData || !window._rrRtData.rows) return;
+        // Calcular puntos reales del intervalo de 10 min para cada fila
+        const snapData = window._rrRtData.rows.map(r => {
+          let pts = 0;
+          if (r.cortes && r.cortes.length) {
+            pts = r.cortes
+              .filter(c => c.ts && (nowTs - c.ts) < ms10)
+              .reduce((s, c) => s + (Number(c.puntos) || 0), 0) * (r.share || 1);
+          }
+          if (pts === 0 && r.r10 && r.r10 > 0) pts = r.r10;
+          if (pts === 0 && r.dia && r.dia > 0) pts = r.dia / 144;
+          return { op: r.op, pm: r.pm, pts: Math.max(0, pts) };
+        }).filter(d => d.pts > 0);
+        
+        if (snapData.length === 0) { console.warn('[HEATMAP-10M] Snapshot vacío, omitiendo.'); return; }
         
         const snap = {
           t: now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-          ts: now.getTime(),
+          ts: nowTs,
           slot: slotIdx,
-          data: window._rrRtData.rows.map(r => ({ op: r.op, pm: r.pm, pts: r.r10 }))
+          data: snapData
         };
         
-        // Evitar duplicados en el mismo slot de 10 min
         const exists = history[hoy].findIndex(s => s.slot === slotIdx);
         if (exists !== -1) history[hoy][exists] = snap;
         else history[hoy].push(snap);
         
         // Limpieza: solo 7 días
-        const keys = Object.keys(history).sort();
-        if (keys.length > 7) delete history[keys[0]];
+        const histKeys = Object.keys(history).sort();
+        while (histKeys.length > 7) delete history[histKeys.shift()];
         
         localStorage.setItem(key, JSON.stringify(history));
-      } catch(e) { console.warn('[HEATMAP-SAVE]', e); }
+        console.log(`[HEATMAP-10M] ✅ Snapshot slot ${slotIdx} (${snap.t}) — ${snapData.length} perfiles guardados.`);
+      } catch(e) { console.warn('[HEATMAP-SAVE-10M]', e); }
     };
 
     window.renderHeatmap10m = function() {
@@ -18412,14 +18458,27 @@ window.guardarHeatmapSnap10m = function() {
     // ═══════════════════════════════════════════════════════════════
     (function iniciarAutoSnapshot() {
       const _snap = () => {
-        if (typeof guardarHeatmapSnap5m  === 'function') guardarHeatmapSnap5m();
-        if (typeof guardarHeatmapSnap10m === 'function') guardarHeatmapSnap10m();
+        // IMPORTANTE: usar window. para acceder a las versiones correctas
+        if (typeof window.guardarHeatmapSnap5m  === 'function') window.guardarHeatmapSnap5m();
+        if (typeof window.guardarHeatmapSnap10m === 'function') window.guardarHeatmapSnap10m();
+        // Si el tab 5m o 10m está activo, refrescar la vista en tiempo real
+        const tabActivo = window.activeAlertaTab;
+        if (tabActivo === '5m' || tabActivo === '10m') {
+          if (typeof renderAlertas === 'function') renderAlertas();
+        }
       };
-      // Primer snapshot inmediato al cargar
-      setTimeout(_snap, 8000);
-      // Repetir cada 5 minutos
+      // Primer snapshot a los 10s (esperar a que _rrRtData esté cargado)
+      setTimeout(_snap, 10000);
+      // Repetir cada 5 minutos exactos
       setInterval(_snap, 300000);
-      console.log('[AUTO-SNAP] ✅ Heatmap snapshot automático cada 5 min activado.');
+      // Refresco visual liviano cada 30s cuando el tab 5m/10m está abierto
+      setInterval(() => {
+        const t = window.activeAlertaTab;
+        if ((t === '5m' || t === '10m') && typeof renderAlertas === 'function') {
+          renderAlertas();
+        }
+      }, 30000);
+      console.log('[AUTO-SNAP] ✅ Heatmap snapshot automático cada 5 min + refresco visual 30s activado.');
     })();
 
     function cerrarModalHistorial() {

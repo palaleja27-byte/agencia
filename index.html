@@ -6050,11 +6050,10 @@
                   if (historicalMonths.includes(f) && (savedOp[f] === 0 || savedOp[f] === null) && (srcOp[f] || 0) > 0) {
                     merged[f] = srcOp[f]; // preservar dato histórico del source
                   } else if (f === 'profiles') {
-                    // PROTECCIÓN: nunca sobrescribir profiles existentes con array vacío
-                    // Se usa el que tenga MÁS perfiles (el más completo/actualizado)
-                    const savedProfiles = Array.isArray(savedOp.profiles) ? savedOp.profiles : [];
-                    const srcProfiles = Array.isArray(srcOp.profiles) ? srcOp.profiles : [];
-                    merged.profiles = savedProfiles.length >= srcProfiles.length ? savedProfiles : srcProfiles;
+                    // Si el dato guardado tiene perfiles, usarlos (aunque sean menos, permitiendo borrar)
+                    if (Array.isArray(savedOp.profiles)) {
+                      merged.profiles = savedOp.profiles;
+                    }
                   } else {
                     merged[f] = savedOp[f];
                   }
@@ -12178,6 +12177,14 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           console.warn('[asiPerfilAdd] Supabase error:', e.message);
         }
       }
+      // Limpiar campos y cerrar formulario
+      const idInp = document.getElementById('asi-nid-' + safeId);
+      const modInp = document.getElementById('asi-nmod-' + safeId);
+      if (idInp) idInp.value = '';
+      if (modInp) modInp.value = '';
+      const form = document.getElementById('asi-add-form-' + safeId);
+      if (form) form.style.display = 'none';
+
       // Refrescar panel de asistencia + vista de operador
       asiRender();
       if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {

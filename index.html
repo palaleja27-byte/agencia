@@ -6033,26 +6033,25 @@
 
     function loadData() {
       const saved = localStorage.getItem(STORAGE_KEY);
+      const n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+
       if (saved) {
         try {
           const savedArr = JSON.parse(saved);
-          const editableFields = ['group', 'profiles', 'turno', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-          // Campos de meses históricos: si localStorage tiene 0 pero source tiene valor positivo, preservar el source.
+          const editableFields = ['group', 'profiles', 'plataforma', 'turno', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
           const historicalMonths = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-          operatorsData = savedArr.map(savedOp => {
-            const srcOp = OPERATORS_SOURCE.find(s => s.name === savedOp.name);
-            if (srcOp) {
+          
+          // 1. Empezamos con los operadores del CÓDIGO (Source)
+          const mergedList = OPERATORS_SOURCE.map(srcOp => {
+            const savedOp = savedArr.find(s => n(s.name) === n(srcOp.name));
+            if (savedOp) {
               const merged = { ...srcOp };
               editableFields.forEach(f => {
                 if (savedOp[f] !== undefined) {
-                  // Para meses históricos: respetar el valor mayor (source vs saved)
                   if (historicalMonths.includes(f) && (savedOp[f] === 0 || savedOp[f] === null) && (srcOp[f] || 0) > 0) {
-                    merged[f] = srcOp[f]; // preservar dato histórico del source
-                  } else if (f === 'profiles') {
-                    // Si el dato guardado tiene perfiles, usarlos (aunque sean menos, permitiendo borrar)
-                    if (Array.isArray(savedOp.profiles)) {
-                      merged.profiles = savedOp.profiles;
-                    }
+                    merged[f] = srcOp[f]; 
+                  } else if (f === 'profiles' && Array.isArray(savedOp.profiles)) {
+                    merged.profiles = savedOp.profiles;
                   } else {
                     merged[f] = savedOp[f];
                   }
@@ -6060,11 +6059,23 @@
               });
               return merged;
             }
-            return { ...savedOp };
+            return { ...srcOp };
           });
+
+          // 2. Añadimos operadores que están en STORAGE pero NO en el CÓDIGO (Manuales/Nuevos)
+          savedArr.forEach(savedOp => {
+            if (!mergedList.some(m => n(m.name) === n(savedOp.name))) {
+              mergedList.push({ ...savedOp });
+            }
+          });
+
+          operatorsData = mergedList;
         } catch (e) {
+          console.warn('[loadData] Fallback a SOURCE:', e.message);
           operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
         }
+      } else {
+        operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
       }
       recalcGrowth();
     }
@@ -12661,7 +12672,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
     // ── Meta Diaria: pantalla pre-dashboard para operadores ──
     function mostrarMetaDiaria(opName) {
-      const op = operatorsData.find(o => o.name.toUpperCase() === opName?.toUpperCase());
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const op = operatorsData.find(o => _n(o.name) === _n(opName));
       const horas = op?.turno_horas || 6;
       const sugerido = horas * 50; // ~50 pts por hora como sugerencia
 
@@ -12744,6 +12756,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         localStorage.setItem(metaKey, String(meta));
         
         // 🛡️ CAPTURAR PERFILES SELECCIONADOS
+        const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
         const chosen = Array.from(document.querySelectorAll('.login-perfil-chk:checked')).map(el => el.value);
         registrarAutoAsistencia(opName, chosen);
 
@@ -12766,7 +12779,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const k = opName + '||operador';
 
       // 🛡️ Registrar con perfiles si se proporcionaron
-      const op = operatorsData.find(o => o.name.toUpperCase() === opName.toUpperCase());
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const op = operatorsData.find(o => _n(o.name) === _n(opName));
       const baseProfiles = op?.profiles || [];
       const finalProfiles = chosenProfiles.length > 0 
         ? baseProfiles.filter(p => chosenProfiles.includes(String(p.id))) 
@@ -12800,7 +12814,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       const turno = detectarTurno();
       const logs = getLogsEntrada();
-      const reciente = logs.find(l => l.name === opName && (now.getTime() - (l.ts || 0)) < 5 * 60 * 1000);
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const reciente = logs.find(l => _n(l.name) === _n(opName) && (now.getTime() - (l.ts || 0)) < 5 * 60 * 1000);
       if (reciente) return;
       logs.unshift({ name: opName, fecha, hora, turno, ts: now.getTime() });
       if (logs.length > 500) logs.splice(500);
@@ -12864,7 +12879,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
         ${rankedData.map((op, i) => {
-          const isMe = op.name.toUpperCase() === myName;
+          const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+          const isMe = _n(op.name) === _n(myName);
           const ptsActuales = op.puntos;
           const pct = Math.round((ptsActuales / maxPts) * 100);
           const metaPct = op.meta > 0 ? Math.min(Math.round((ptsActuales / op.meta) * 100), 100) : 0;
@@ -12913,7 +12929,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     function finalizarLoginOperador(opName) {
-      const op = operatorsData.find(o => o.name.toUpperCase() === opName?.toUpperCase());
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const op = operatorsData.find(o => _n(o.name) === _n(opName));
       // ── AUTO-ASISTENCIA: marcar presente con hora de ingreso ──
       registrarAutoAsistencia(opName);
       renderOpDashboard(opName);
@@ -13160,7 +13177,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
       let datamePtsHoy = 0;
       if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined') {
-        const opData = operatorsData.find(o => String(o.name).toUpperCase() === String(name).toUpperCase());
+        const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+        const opData = operatorsData.find(o => _n(o.name) === _n(name));
         if (opData) {
            let combinedProfiles = [...(opData.profiles || [])];
            
@@ -13187,15 +13205,17 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
 
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       if (datamePtsHoy > 0) {
          ptsHoy = datamePtsHoy;
-      } else if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _opRtOpName.toUpperCase() === name.toUpperCase()) {
+      } else if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(name)) {
          const rtHoy = Object.values(_opRtTurnos).reduce((s,v)=>s+v,0);
          if (rtHoy > ptsHoy) ptsHoy = rtHoy;
       }
       // ESTE MES: priorizar _opRtTotalMes (total mensual acumulado de Datame, mas preciso)
+      const _n2 = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       if (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&
-          _opRtOpName && _opRtOpName.toUpperCase() === name.toUpperCase()) {
+          _opRtOpName && _n2(_opRtOpName) === _n2(name)) {
         ptsMes = _opRtTotalMes;
       }
 
@@ -13310,7 +13330,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     function renderOpDashboard(name) {
-      const op = operatorsData.find(o => o.name.toUpperCase() === name?.toUpperCase());
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const op = operatorsData.find(o => _n(o.name) === _n(name));
       if (!op) {
         document.getElementById('op-dashboard').innerHTML = '<p style="color:#f87171;text-align:center;padding:40px;">Operador no encontrado en el sistema.</p>';
         return;
@@ -13534,7 +13555,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       baseDaily.sort((a, b) => b.points_hoy - a.points_hoy);
 
       // Posición dentro del turno (entre todos, incluidos con 0 pts)
-      const pos = baseDaily.findIndex(o => o.name.toUpperCase() === op.name.toUpperCase()) + 1;
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const pos = baseDaily.findIndex(o => _n(o.name) === _n(op.name)) + 1;
       const medals = ['🥇', '🥈', '🥉'];
       const activeInShift = baseDaily.filter(o => o.points_hoy > 0).length;
 
@@ -13552,7 +13574,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Lista COMPLETA del turno (todos visibles, no solo top 10)
       const rankHTML = baseDaily.map((o, i) => {
         const displayPos = i + 1;
-        const isMe = o.name.toUpperCase() === op.name.toUpperCase();
+        const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+        const isMe = _n(o.name) === _n(op.name);
         const pts = o.points_hoy > 0 ? o.points_hoy.toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '0';
         const dimmed = o.points_hoy === 0 && !isMe;
         return `
@@ -16035,21 +16058,37 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     }
     // ──────────────────────────────────────────────────────────────
 
-    function asiCambiarPlataforma(name) {
+    window.asiCambiarPlataforma = async function(name) {
       const op = typeof operatorsData !== 'undefined' ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
       if (!op) return;
       const actual = op.plataforma || '';
-      const msg = `Plataforma actual: ${actual || 'Ninguna'}\n\nOpciones:\n1. Prime\n2. AmoLatina\n3. Camilo\n0. Sin Plataforma\n\nIngresa el número:`;
+      const msg = `🎭 CAMBIAR PLATAFORMA - ${op.name}\n\nActual: ${actual || 'Ninguna'}\n\nOpciones:\n1. Prime\n2. AmoLatina\n3. Camilo\n0. Sin Plataforma\n\nIngresa el número:`;
       const res = prompt(msg);
-      if (res !== null) {
-        if (res === '1') op.plataforma = 'Prime';
-        else if (res === '2') op.plataforma = 'AmoLatina';
-        else if (res === '3') op.plataforma = 'Camilo';
-        else if (res === '0' || res === '') op.plataforma = '';
-        else return;
-        saveData();
-        asiRender();
+      if (res === null) return;
+
+      let nueva = actual;
+      if (res === '1') nueva = 'Prime';
+      else if (res === '2') nueva = 'AmoLatina';
+      else if (res === '3') nueva = 'Camilo';
+      else if (res === '0' || res === '') nueva = '';
+      else return alert('⚠️ Opción inválida');
+
+      if (nueva === actual) return;
+      
+      op.plataforma = nueva;
+      saveData();
+      
+      // Marcar timestamp y forzar subida a Supabase para consistencia Realtime
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[STORAGE_KEY] = Date.now();
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          await _sb.from('kv_store').upsert({ key: STORAGE_KEY, value: JSON.stringify(operatorsData) });
+          console.info('[Plat] Sincronización exitosa:', op.name, nueva);
+        } catch(e) { console.warn('[Plat] Error Supabase:', e.message); }
       }
+
+      asiRender();
+      if (typeof renderRanking === 'function') renderRanking();
     }
 
     function asiSetEstado(name, role, estado) {
@@ -18231,8 +18270,9 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
       // 🛡️ FIX PERSISTENCIA: Si el operador es el mismo y el turno no cambió,
       // preservar el baselineMap para que al re-login no vea 0 pts un instante.
+      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const mismoTurno = _opRtOpName &&
-        _opRtOpName.toUpperCase() === opName.toUpperCase() &&
+        _n(_opRtOpName) === _n(opName) &&
         _opRtJornada() === (Object.keys(_opRtTurnos || {}).find(t => _opRtTurnos[t] > 0) || _opRtJornada());
       if (!mismoTurno) {
         _opRtBaselineMap = {};   // solo resetear si es operador diferente o turno nuevo

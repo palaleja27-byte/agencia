@@ -6390,11 +6390,13 @@
       }
       wrap.style.display = 'block';
 
-      const connectedSet = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
+      const connectedSet = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : null;
+      // Guard: si connectedSet es null/undefined, usar Set vacío para evitar TypeError .has()
+      const safeSet = (connectedSet instanceof Set) ? connectedSet : new Set();
       const nowTs = Date.now();
-      
+
       const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
-        .filter(op => connectedSet.has(op.name.toUpperCase()))
+        .filter(op => safeSet.has(op.name.toUpperCase()))
         .map(op => {
           // Actividad "Hot" (últimos 10 min)
           const cortes = typeof getCortesOp === 'function' ? getCortesOp(op.name) : [];
@@ -6429,6 +6431,43 @@
         `;
       }).join('');
     }
+
+    // ══════════════════════════════════════════════════════════
+    // limpiarCortesOp() — llamar desde consola del admin:
+    //   limpiarCortesOp()
+    // Elimina cortes duplicados del localStorage (bug antiguo).
+    // Deja solo 1 corte por operador por jornada por día
+    // conservando el que tiene más puntos.
+    // ══════════════════════════════════════════════════════════
+    window.limpiarCortesOp = function() {
+      const key = typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes';
+      const allCortes = JSON.parse(localStorage.getItem(key) || '{}');
+      let totalAntes = 0, totalDespues = 0;
+
+      Object.keys(allCortes).forEach(opName => {
+        const cortes = allCortes[opName] || [];
+        totalAntes += cortes.length;
+
+        // Agrupar por fecha+jornada, quedarse con el de mayor puntos
+        const mapaUnico = {};
+        cortes.forEach(c => {
+          const k = (c.fecha || '') + '||' + (c.jornada || 'N/A');
+          if (!mapaUnico[k] || (c.puntos || 0) > (mapaUnico[k].puntos || 0)) {
+            mapaUnico[k] = c;
+          }
+        });
+
+        const limpios = Object.values(mapaUnico)
+          .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+        totalDespues += limpios.length;
+        allCortes[opName] = limpios;
+      });
+
+      localStorage.setItem(key, JSON.stringify(allCortes));
+      console.log(`✅ Cortes limpiados: ${totalAntes} → ${totalDespues} (eliminados: ${totalAntes - totalDespues})`);
+      if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
+      if (typeof renderRanking === 'function') setTimeout(renderRanking, 1500);
+    };
 
     function renderRanking() {
       if (typeof renderConnectedOps === 'function') renderConnectedOps();
@@ -17685,17 +17724,32 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
               if (netoReal > 0) {
                 // --- MAPPING FIX: Find operator name by profile ID or agency prefix ---
                 let opName = op.agencia;
-                const srcOp = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => 
+                const srcOp = (typeof operatorsData !== 'undefined') ? operatorsData.find(o =>
                   (o.profiles && o.profiles.some(p => String(p.id) === String(id))) ||
                   (op.agencia && op.agencia.trim().length > 1 && o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase()))
                 ) : null;
-                
+
                 if (srcOp) opName = srcOp.name;
                 else if (!opName || opName.trim() === '') opName = String(id);
 
                 if (!allCortes[opName]) allCortes[opName] = [];
-                const exists = allCortes[opName].some(c => c.fecha === hoy && c.jornada === op.jornada && Math.abs((c.puntos||0) - netoReal) < 0.01);
-                if (!exists) {
+
+                // 🔒 FIX ANTI-DUPLICADO: 1 corte por jornada por día — UPSERT, no push.
+                // El bug anterior creaba un corte nuevo cada vez que netoReal cambiaba
+                // aunque fuera 0.01 pts (63+ cortes en un día = puntos duplicados).
+                const existingIdx = allCortes[opName].findIndex(
+                  c => c.fecha === hoy && c.jornada === op.jornada
+                );
+                if (existingIdx >= 0) {
+                  // ACTUALIZAR el corte existente si los puntos crecieron
+                  if (netoReal > (allCortes[opName][existingIdx].puntos || 0)) {
+                    allCortes[opName][existingIdx].puntos = netoReal;
+                    allCortes[opName][existingIdx].ts     = Date.now();
+                    allCortes[opName][existingIdx].hora   = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                    cortesChanged = true;
+                  }
+                } else {
+                  // CREAR el primer corte para esta jornada
                   allCortes[opName].push({
                     fecha: hoy,
                     hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),

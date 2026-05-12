@@ -6560,13 +6560,13 @@
       rkDataFiltered.forEach(op => {
         // --- 1. Lógica Datame Realtime (Supabase) ---
         let datamePts = 0;
-        const estaLogueado = opsEnTurnoDraft.has(op.name.toUpperCase());
+        const estaLogueado = Array.from(opsEnTurnoDraft).some(n => _n(n) === _n(op.name));
         // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
         let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
 
         // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA
         let combinedProfiles = [...(op.profiles || [])];
-        const draftEntry = _draftFull[op.name + '||operador'];
+        const draftEntry = _draftFull[op.name + '||operador'] || Object.values(_draftFull).find(d => d.autoMarcado && _n(d.name || '') === _n(op.name));
         
         if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
           // 🔥 Si tiene perfiles asignados dinámicamente en ESTA jornada, asumimos que está trabajando en ella
@@ -6903,6 +6903,23 @@
             if (!r) return;
             const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
             if (r.fecha_dia !== hoy) return;
+            
+            // 🔥 ACTUALIZAR CACHÉ GLOBAL DE PUNTOS (_dpTurnosData) 🔥
+            // Esto permite que renderRanking() pinte los puntos nuevos sin esperar al sync de 5min
+            if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada && r.jornada !== 'Auto') {
+              if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = {};
+              
+              const pt = Number(r.puntos_total) || 0;
+              const pb = Number(r.puntos_baseline) || 0;
+              const pn = Number(r.puntos_neto) || 0;
+              
+              // Usar el mayor entre el neto de la DB y el calculado (pt-pb) para máxima precisión
+              let netoReal = pn;
+              if (pt > 0 && pt > pb && (pt - pb) > netoReal) netoReal = pt - pb;
+              
+              _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
+            }
+
             const neto = Number(r.puntos_neto) || 0;
             if (neto <= 0) return;
             const resolved = _rrResolveName(r.id_perfil, r.agencia);
@@ -6922,7 +6939,7 @@
             clearTimeout(window._rkLiveRenderTimer);
             window._rkLiveRenderTimer = setTimeout(() => {
               if (typeof renderRanking === 'function') renderRanking();
-            }, 3000);
+            }, 1500);
           })
           .subscribe();
         console.log('[LIVE-RT] Supabase Realtime activo en tabla operaciones');
@@ -18136,6 +18153,14 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
         // 2c. Guardar total mensual real como fuente de verdad global
         _opRtTotalMes = sumaTotal;
+
+        // 🔥 INYECTAR EN CACHÉ GLOBAL PARA MONITOR/ADMIN 🔥
+        if (typeof _dpTurnosData !== 'undefined') {
+          _opRtPerfilesNeto.forEach(p => {
+            if (!_dpTurnosData[p.id]) _dpTurnosData[p.id] = {};
+            _dpTurnosData[p.id][_opRtJornada()] = p.neto;
+          });
+        }
 
         // 2d. Actualizar la métrica del mes actual en el dashboard
         const mesEl = document.querySelector('#op-dash-metrics .op-dash-metric:nth-child(2) .val');

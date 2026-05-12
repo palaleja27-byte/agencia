@@ -13636,6 +13636,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
     function loginLogout() {
       if (!confirm('¿Cerrar sesión?')) return;
+      // ── Cerrar sesión Realtime del operador (DELTA-SHIFT™) ──────
+      if (typeof opRtDesactivar === 'function') opRtDesactivar();
       clearAutoLogoutTimers(); // también limpia _opDashInterval internamente
       detenerPollingAlertas();
       clearInterval(_opDashInterval);
@@ -17778,6 +17780,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     // Historial permanente en op_sessions de Supabase
     // ══════════════════════════════════════════════════════════════
     let _opRtSub          = null;
+    let _opRtPollInterval = null;   // intervalo de polling de respaldo (cada 5 min)
     let _opRtOpName       = null;
     let _opRtSessionId    = null;
     let _opRtBaseline     = null;
@@ -18086,8 +18089,9 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     function opRtActivar(opName) {
       if (!opName || typeof _sb === 'undefined') return;
 
-      // Limpiar sesión anterior
+      // Limpiar sesión anterior (canal RT + polling de respaldo)
       if (_opRtSub) { _sb.removeChannel(_opRtSub); _opRtSub = null; }
+      if (_opRtPollInterval) { clearInterval(_opRtPollInterval); _opRtPollInterval = null; }
       _opRtOpName     = opName;
       _opRtBaseline   = null;
       _opRtPtosSesion = 0;
@@ -18097,9 +18101,35 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       _opRtBaselineMap  = {};
       _opRtTotalMes     = 0;   // se llenará en el primer sync
 
-      const ids = _opRtGetIds(opName);
-      if (!ids.length) { console.warn('[OP-SESSION] Sin IDs para', opName); return; }
+      let ids = _opRtGetIds(opName);
 
+      // ── Si no hay IDs al login, reintentar hasta 3 veces (puede que operatorsData
+      // aún no haya cargado los perfiles desde Supabase/localStorage)
+      if (!ids.length) {
+        console.warn('[OP-SESSION] Sin IDs para', opName, '— reintentando en 4s...');
+        let retries = 0;
+        const retryInterval = setInterval(() => {
+          retries++;
+          ids = _opRtGetIds(opName);
+          if (ids.length || retries >= 3) {
+            clearInterval(retryInterval);
+            if (ids.length) {
+              console.log('[OP-SESSION] ✅ IDs encontrados en reintento', retries, ':', ids);
+              _opRtIniciarConIds(opName, ids);
+            } else {
+              console.warn('[OP-SESSION] ❌ Sin IDs tras 3 reintentos para', opName,
+                '— el operador no tiene perfiles Datame asignados.');
+            }
+          }
+        }, 4000);
+        return;
+      }
+
+      _opRtIniciarConIds(opName, ids);
+    }
+
+    // ── Lógica central (separada para reutilizar en reintentos) ───
+    function _opRtIniciarConIds(opName, ids) {
       // Primera carga → fija el baseline al momento exacto del login
       _opRtSync(opName);
 
@@ -18117,11 +18147,22 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         })
         .subscribe();
 
-      console.log('[OP-SESSION] ✅ Activo para', opName, '| IDs:', ids);
+      // ── Polling de respaldo cada 5 minutos ─────────────────────
+      // Garantiza actualización aunque el canal Realtime falle o esté inactivo
+      _opRtPollInterval = setInterval(() => {
+        if (_opRtOpName) {
+          console.log('[OP-SESSION] ⏱️ Polling 5min → sync');
+          _opRtSync(_opRtOpName);
+        }
+      }, 5 * 60 * 1000);
+
+      console.log('[OP-SESSION] ✅ Activo para', opName, '| IDs:', ids, '| Polling 5min ON');
     }
 
     // ── Cerrar sesión del operador ────────────────────────────────
     async function opRtDesactivar() {
+      // Detener polling de respaldo
+      if (_opRtPollInterval) { clearInterval(_opRtPollInterval); _opRtPollInterval = null; }
       if (_opRtSessionId && typeof _sb !== 'undefined') {
         await _sb.from('op_sessions')
           .update({ fin_ts: new Date().toISOString(), puntos_sesion: _opRtPtosSesion })

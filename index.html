@@ -17935,8 +17935,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
     function _opRtGetIds(opName) {
       if (!opName) return [];
+      // 🛡️ FIX: usar _normName para tolerar tildes, espacios y capitalización
+      const _n = typeof _normName === 'function' ? _normName : (s => s.toUpperCase().trim());
       const op = (typeof operatorsData !== 'undefined' ? operatorsData : [])
-        .find(o => o.name.toUpperCase() === opName.toUpperCase());
+        .find(o => _n(o.name) === _n(opName));
       
       let combinedProfiles = op ? [...(op.profiles || [])] : [];
       const realName = op ? op.name : opName;
@@ -18226,13 +18228,22 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       // Limpiar sesión anterior (canal RT + polling de respaldo)
       if (_opRtSub) { _sb.removeChannel(_opRtSub); _opRtSub = null; }
       if (_opRtPollInterval) { clearInterval(_opRtPollInterval); _opRtPollInterval = null; }
+
+      // 🛡️ FIX PERSISTENCIA: Si el operador es el mismo y el turno no cambió,
+      // preservar el baselineMap para que al re-login no vea 0 pts un instante.
+      const mismoTurno = _opRtOpName &&
+        _opRtOpName.toUpperCase() === opName.toUpperCase() &&
+        _opRtJornada() === (Object.keys(_opRtTurnos || {}).find(t => _opRtTurnos[t] > 0) || _opRtJornada());
+      if (!mismoTurno) {
+        _opRtBaselineMap = {};   // solo resetear si es operador diferente o turno nuevo
+      }
+
       _opRtOpName     = opName;
       _opRtBaseline   = null;
       _opRtPtosSesion = 0;
       _opRtSessionId  = null;
       _opRtTurnos     = {};
       _opRtPerfilesNeto = [];
-      _opRtBaselineMap  = {};
       _opRtTotalMes     = 0;   // se llenará en el primer sync
 
       let ids = _opRtGetIds(opName);
@@ -18267,15 +18278,26 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       // Primera carga → fija el baseline al momento exacto del login
       _opRtSync(opName);
 
-      // Suscripción Realtime — se dispara cuando el watcher actualiza puntos
+      // 🛡️ FIX REALTIME: escuchar INSERT + UPDATE para capturar la primera fila del turno
+      // (el watcher hace INSERT al inicio del turno, luego UPDATE en cada ciclo).
+      const _chName = 'op-session-' + opName.toLowerCase().replace(/\s+/g, '_');
       _opRtSub = _sb
-        .channel('op-session-' + opName.toLowerCase().replace(/\s+/g, '_'))
+        .channel(_chName)
+        .on('postgres_changes', {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'operaciones',
+          filter: `id_perfil=in.(${ids.join(',')})`
+        }, () => {
+          console.log('[OP-SESSION] 🟢 Nuevo registro del watcher → recalculando');
+          _opRtSync(opName);
+        })
         .on('postgres_changes', {
           event:  'UPDATE',
           schema: 'public',
           table:  'operaciones',
           filter: `id_perfil=in.(${ids.join(',')})`
-        }, (payload) => {
+        }, () => {
           console.log('[OP-SESSION] 🔴 Datame actualizó puntos → recalculando');
           _opRtSync(opName);
         })

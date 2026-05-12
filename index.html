@@ -7608,6 +7608,7 @@
         .toUpperCase()
         .replace(/\s+/g, ' '); 
     }
+    const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
 
     function getCortesOp(name) {
       if (!name) return [];
@@ -12672,7 +12673,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
     // ── Meta Diaria: pantalla pre-dashboard para operadores ──
     function mostrarMetaDiaria(opName) {
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const op = operatorsData.find(o => _n(o.name) === _n(opName));
       const horas = op?.turno_horas || 6;
       const sugerido = horas * 50; // ~50 pts por hora como sugerencia
@@ -12756,9 +12756,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         localStorage.setItem(metaKey, String(meta));
         
         // 🛡️ CAPTURAR PERFILES SELECCIONADOS
-        const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
-        const chosen = Array.from(document.querySelectorAll('.login-perfil-chk:checked')).map(el => el.value);
-        registrarAutoAsistencia(opName, chosen);
+      const chosen = Array.from(document.querySelectorAll('.login-perfil-chk:checked')).map(el => el.value);
+      registrarAutoAsistencia(opName, chosen);
 
         overlay.style.display = 'none';
         finalizarLoginOperador(opName);
@@ -12779,7 +12778,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const k = opName + '||operador';
 
       // 🛡️ Registrar con perfiles si se proporcionaron
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const op = operatorsData.find(o => _n(o.name) === _n(opName));
       const baseProfiles = op?.profiles || [];
       const finalProfiles = chosenProfiles.length > 0 
@@ -12814,7 +12812,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       const turno = detectarTurno();
       const logs = getLogsEntrada();
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const reciente = logs.find(l => _n(l.name) === _n(opName) && (now.getTime() - (l.ts || 0)) < 5 * 60 * 1000);
       if (reciente) return;
       logs.unshift({ name: opName, fecha, hora, turno, ts: now.getTime() });
@@ -12879,7 +12876,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
         ${rankedData.map((op, i) => {
-          const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
           const isMe = _n(op.name) === _n(myName);
           const ptsActuales = op.puntos;
           const pct = Math.round((ptsActuales / maxPts) * 100);
@@ -12929,7 +12925,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     function finalizarLoginOperador(opName) {
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const op = operatorsData.find(o => _n(o.name) === _n(opName));
       // ── AUTO-ASISTENCIA: marcar presente con hora de ingreso ──
       registrarAutoAsistencia(opName);
@@ -13177,7 +13172,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
       let datamePtsHoy = 0;
       if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined') {
-        const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
         const opData = operatorsData.find(o => _n(o.name) === _n(name));
         if (opData) {
            let combinedProfiles = [...(opData.profiles || [])];
@@ -13205,7 +13199,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
 
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+
       if (datamePtsHoy > 0) {
          ptsHoy = datamePtsHoy;
       } else if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(name)) {
@@ -13213,9 +13207,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
          if (rtHoy > ptsHoy) ptsHoy = rtHoy;
       }
       // ESTE MES: priorizar _opRtTotalMes (total mensual acumulado de Datame, mas preciso)
-      const _n2 = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+
       if (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&
-          _opRtOpName && _n2(_opRtOpName) === _n2(name)) {
+          _opRtOpName && _n(_opRtOpName) === _n(name)) {
         ptsMes = _opRtTotalMes;
       }
 
@@ -13330,7 +13324,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     function renderOpDashboard(name) {
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const op = operatorsData.find(o => _n(o.name) === _n(name));
       if (!op) {
         document.getElementById('op-dashboard').innerHTML = '<p style="color:#f87171;text-align:center;padding:40px;">Operador no encontrado en el sistema.</p>';
@@ -13555,7 +13548,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       baseDaily.sort((a, b) => b.points_hoy - a.points_hoy);
 
       // Posición dentro del turno (entre todos, incluidos con 0 pts)
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const pos = baseDaily.findIndex(o => _n(o.name) === _n(op.name)) + 1;
       const medals = ['🥇', '🥈', '🥉'];
       const activeInShift = baseDaily.filter(o => o.points_hoy > 0).length;
@@ -13574,7 +13566,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Lista COMPLETA del turno (todos visibles, no solo top 10)
       const rankHTML = baseDaily.map((o, i) => {
         const displayPos = i + 1;
-        const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
         const isMe = _n(o.name) === _n(op.name);
         const pts = o.points_hoy > 0 ? o.points_hoy.toLocaleString('es-CO', { maximumFractionDigits: 1 }) : '0';
         const dimmed = o.points_hoy === 0 && !isMe;
@@ -17975,7 +17966,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     function _opRtGetIds(opName) {
       if (!opName) return [];
       // 🛡️ FIX: usar _normName para tolerar tildes, espacios y capitalización
-      const _n = typeof _normName === 'function' ? _normName : (s => s.toUpperCase().trim());
+
       const op = (typeof operatorsData !== 'undefined' ? operatorsData : [])
         .find(o => _n(o.name) === _n(opName));
       
@@ -18270,7 +18261,6 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
       // 🛡️ FIX PERSISTENCIA: Si el operador es el mismo y el turno no cambió,
       // preservar el baselineMap para que al re-login no vea 0 pts un instante.
-      const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
       const mismoTurno = _opRtOpName &&
         _n(_opRtOpName) === _n(opName) &&
         _opRtJornada() === (Object.keys(_opRtTurnos || {}).find(t => _opRtTurnos[t] > 0) || _opRtJornada());

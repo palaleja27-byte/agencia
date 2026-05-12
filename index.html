@@ -6041,9 +6041,15 @@
           const editableFields = ['group', 'profiles', 'plataforma', 'turno', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
           const historicalMonths = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
           
+          const safeN = (s) => {
+             if (!s) return '';
+             try { return n(s); } catch(e) { return String(s).toUpperCase().trim(); }
+          };
+
           // 1. Empezamos con los operadores del CÓDIGO (Source)
           const mergedList = OPERATORS_SOURCE.map(srcOp => {
-            const savedOp = savedArr.find(s => n(s.name) === n(srcOp.name));
+            const sn = safeN(srcOp.name);
+            const savedOp = savedArr.find(s => safeN(s.name) === sn && sn !== '');
             if (savedOp) {
               const merged = { ...srcOp };
               editableFields.forEach(f => {
@@ -6063,16 +6069,24 @@
           });
 
           // 2. Añadimos operadores que están en STORAGE pero NO en el CÓDIGO (Manuales/Nuevos)
-          savedArr.forEach(savedOp => {
-            if (!mergedList.some(m => n(m.name) === n(savedOp.name))) {
-              mergedList.push({ ...savedOp });
-            }
-          });
+          if (Array.isArray(savedArr)) {
+             savedArr.forEach(savedOp => {
+               const sn = safeN(savedOp.name);
+               if (sn && !mergedList.some(m => safeN(m.name) === sn)) {
+                 mergedList.push({ ...savedOp });
+               }
+             });
+          }
 
           operatorsData = mergedList;
         } catch (e) {
-          console.warn('[loadData] Fallback a SOURCE:', e.message);
-          operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
+          console.warn('[loadData] Error al fusionar. Conservando datos de KV_STORE para evitar perdida de operadores manuales:', e.message);
+          // Si falla, usar savedArr si es válido, si no, OPERATORS_SOURCE
+          try {
+             operatorsData = Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : OPERATORS_SOURCE.map(o => ({ ...o }));
+          } catch(e2) {
+             operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
+          }
         }
       } else {
         operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
@@ -13531,11 +13545,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const _hoyLabel = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
 
       // HOY: prioridad DELTA-SHIFT™ (Supabase) → suma de todos los turnos de hoy
-      // _opRtTurnos = { Mañana: X, Tarde: Y, Noche: Z } actualizado por _opRtSync
-      const _ptsDiaRT = (typeof _opRtTurnos !== 'undefined' && _opRtOpName?.toUpperCase() === op.name.toUpperCase())
-        ? Object.values(_opRtTurnos).reduce((s, v) => s + v, 0)
-        : 0;
-      const _ptsDia = _ptsDiaRT > 0 ? _ptsDiaRT : getPuntosHoy(op.name, (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
+      let _ptsDia = 0;
+      if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(op.name)) {
+         _ptsDia = Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
+      } else {
+         _ptsDia = getPuntosHoy(op.name, (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
+      }
 
       // PROM/DÍA: dias reales transcurridos en el mes actual
       const _mesStr = localDateStr().slice(0, 7);

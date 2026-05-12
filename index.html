@@ -13025,6 +13025,75 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         _opDashInterval = null;
       }
 
+    function getPuntosHoy(name, shiftFilter = null) {
+      let ptsHoy = 0, ptsAyer = 0, ptsSemana = 0, ptsSemPasada = 0, ptsMes = 0;
+      let ptsFeb = 0, ptsMar = 0;
+      const hoy = localDateStr();
+      const ayer = localDateStr(1);
+      const hace7 = localDateStr(7);
+      const hace14 = localDateStr(14);
+      const mesActual = hoy.slice(0, 7);
+
+      const porDia = {};
+      try {
+        if (typeof _opRtCortesRaw !== 'undefined' && _opRtCortesRaw.length > 0) {
+          _opRtCortesRaw.forEach(c => {
+            const f = c.fecha;
+            // Si hay filtro de jornada, ignorar si no coincide
+            if (shiftFilter && c.jornada && c.jornada !== shiftFilter) return;
+            porDia[f] = (porDia[f] || 0) + (c.puntos || 0);
+          });
+        }
+      } catch(e) { console.warn('[OP-STATS]', e); }
+
+      ptsHoy       = porDia[hoy]  || 0;
+      ptsAyer      = porDia[ayer] || 0;
+      ptsSemana    = Object.entries(porDia).filter(([d]) => d >= hace7  && d <= hoy ).reduce((s,[,v])=>s+v,0);
+      ptsSemPasada = Object.entries(porDia).filter(([d]) => d >= hace14 && d <  hace7).reduce((s,[,v])=>s+v,0);
+      ptsMes       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === mesActual).reduce((s,[,v])=>s+v,0);
+      ptsFeb       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-02').reduce((s,[,v])=>s+v,0);
+      ptsMar       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-03').reduce((s,[,v])=>s+v,0);
+
+      // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
+      let datamePtsHoy = 0;
+      if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined') {
+        const opData = operatorsData.find(o => _n(o.name) === _n(name));
+        if (opData) {
+           let combinedProfiles = [...(opData.profiles || [])];
+           
+           // DELTA-SHIFT™: Agregar perfiles del draft de asistencia si existen
+           const jornadaActual = shiftFilter || (typeof _opRtJornada === 'function' ? _opRtJornada() : '');
+           const _shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
+           const _draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + _shKey) || '{}');
+           const draftEntry = _draftFull[opData.name + '||operador'];
+           
+           if (draftEntry && Array.isArray(draftEntry.perfiles)) {
+              draftEntry.perfiles.forEach(dp => {
+                if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) combinedProfiles.push(dp);
+              });
+           }
+
+           if (combinedProfiles.length > 0) {
+              combinedProfiles.forEach(p => {
+                 const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
+                 if (turnosPerfil) {
+                    if (shiftFilter) {
+                      // Solo sumar la jornada solicitada
+                      const key = shiftFilter === 'Mañana' ? 'Mañana' : shiftFilter;
+                      datamePtsHoy += (turnosPerfil[key] || 0);
+                      if (key === 'Mañana') datamePtsHoy += (turnosPerfil['manana'] || 0);
+                    } else {
+                      // Sumar TODO el día (comportamiento por defecto)
+                      datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                    }
+                 }
+              });
+           }
+        }
+      }
+      return datamePtsHoy > 0 ? datamePtsHoy : ptsHoy;
+    }
+
       // Show/hide dashboard vs operator view
       const tabBar = document.querySelector('.tab-bar');
       const mainTitle = document.querySelector('h1');
@@ -13466,7 +13535,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const _ptsDiaRT = (typeof _opRtTurnos !== 'undefined' && _opRtOpName?.toUpperCase() === op.name.toUpperCase())
         ? Object.values(_opRtTurnos).reduce((s, v) => s + v, 0)
         : 0;
-      const _ptsDia = _ptsDiaRT > 0 ? _ptsDiaRT : getPuntosHoy(op.name);
+      const _ptsDia = _ptsDiaRT > 0 ? _ptsDiaRT : getPuntosHoy(op.name, (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
 
       // PROM/DÍA: dias reales transcurridos en el mes actual
       const _mesStr = localDateStr().slice(0, 7);

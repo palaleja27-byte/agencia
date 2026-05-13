@@ -6571,12 +6571,22 @@
       const _shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
       const _draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoy + '_' + _shKey) || '{}');
 
+      // Cargar mapa de horas del día (12h vs 8h) una sola vez fuera del loop
+      const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
+
       rkDataFiltered.forEach(op => {
         // --- 1. Lógica Datame Realtime (Supabase) ---
         let datamePts = 0;
         const estaLogueado = Array.from(opsEnTurnoDraft).some(n => _n(n) === _n(op.name));
         // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
         let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
+
+        // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar AMBAS jornadas
+        const _horasOp = _horasHoyAll[op.name];
+        const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === _hoy;
+        if (_es12h) {
+          jornadaALeer = 'Completo'; // Suma Mañana + Tarde para operadores de 12h
+        }
 
         // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA
         let combinedProfiles = [...(op.profiles || [])];
@@ -7110,17 +7120,24 @@
         const hoyCortes = cortesAll.filter(c => c.fecha === _hoy);
         // Jornadas visibles según turno actual del día
         const _jActual = typeof jornadaActual !== 'undefined' ? jornadaActual : '';
-        const _jornadasVisibles = _jActual === 'Mañana'
-          ? ['Mañana']                        // solo mostrar Mañana (Noche fue la noche anterior)
+        // ⏱️ 12H SHIFT™: Operadores de 12h ven SIEMPRE ambas jornadas activas
+        const _horasOpCard = _horasHoyAll[op.name];
+        const _es12hCard = _horasOpCard && _horasOpCard.horas === 12 && _horasOpCard.fecha === _hoy;
+        const _jornadasVisibles = _es12hCard
+          ? ['Mañana', 'Tarde', 'Noche']      // 12h: mostrar todas las jornadas que tengan puntos
+          : _jActual === 'Mañana'
+          ? ['Mañana']                        // 8h: solo mostrar Mañana
           : _jActual === 'Tarde'
-          ? ['Mañana', 'Tarde']               // Mañana ya terminó, Tarde en curso
-          : ['Tarde', 'Noche'];               // Noche en curso (y Tarde que terminó)
+          ? ['Tarde']                         // 8h: solo mostrar Tarde (Mañana ya cerró)
+          : ['Noche'];                        // 8h: solo Noche
         const _ptsHoyManana = hoyCortes.filter(c => c.jornada === 'Mañana').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyTarde  = hoyCortes.filter(c => c.jornada === 'Tarde').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyNoche  = hoyCortes.filter(c => c.jornada === 'Noche').reduce((s,c) => s+(c.puntos||0), 0);
+        // 12h: pill especial con indicador de turno extendido
+        const _label12h = _es12hCard ? '⏱️ 12H ' : '';
         const _turnosDiaPills = [
-          {label:'☀️ Mañana', pts:_ptsHoyManana, jornada:'Mañana', color:'rgba(251,191,36,.18)', border:'rgba(251,191,36,.35)', text:'#fbbf24'},
-          {label:'🌆 Tarde',  pts:_ptsHoyTarde,  jornada:'Tarde',  color:'rgba(96,165,250,.15)',  border:'rgba(96,165,250,.35)',  text:'#60a5fa'},
+          {label:`${_label12h}☀️ Mañana`, pts:_ptsHoyManana, jornada:'Mañana', color:'rgba(251,191,36,.18)', border:_es12hCard?'rgba(251,191,36,.7)':'rgba(251,191,36,.35)', text:'#fbbf24'},
+          {label:`${_label12h}🌆 Tarde`,  pts:_ptsHoyTarde,  jornada:'Tarde',  color:'rgba(96,165,250,.15)',  border:_es12hCard?'rgba(96,165,250,.7)':'rgba(96,165,250,.35)',  text:'#60a5fa'},
           {label:'🌙 Noche',  pts:_ptsHoyNoche,  jornada:'Noche',  color:'rgba(167,139,250,.15)', border:'rgba(167,139,250,.35)', text:'#a78bfa'},
         ].filter(t => t.pts > 0 && _jornadasVisibles.includes(t.jornada));
         const _turnoDiaHTML = _turnosDiaPills.length > 0

@@ -17726,38 +17726,60 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       let ok = 0, fail = 0;
 
       for (const [id_perfil, pb] of Object.entries(baselines)) {
-        // Verificar si el registro existe y cuál es su puntos_total actual
-        const { data } = await _sb.from('operaciones')
-          .select('puntos_total, puntos_baseline, puntos_neto')
-          .eq('id_perfil', id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Mañana')
-          .maybeSingle();
+        // Obtenemos el valor "pt" (Total En Curso) de la imagen para forzar sincronización
+        // Si no está en el objeto de baselines (solo pusimos el pb), buscamos el pt correspondiente.
+        // Como el objeto baselines solo tiene PB, voy a inferir el PT sumando el neto de la imagen o 
+        // simplemente usando el objeto que definí en el SQL.
+        // Mejor: redefino el loop para usar un objeto con ambos valores.
+      }
+      
+      // Redefinición para usar pares PB/PT
+      const panel1Full = {
+        '88243516': {pb:3165.84, pt:3289.86}, '95956014': {pb:1047.72, pt:1058.88}, '91360720': {pb:711.00, pt:711.12},
+        '143017065':{pb:276.06, pt:276.90},   '91733663': {pb:3682.98, pt:3730.92}, '153039388':{pb:136.92, pt:142.68},
+        '79679899': {pb:399.66, pt:402.18},   '109551682':{pb:239.10, pt:241.02},  '131130713':{pb:1076.58, pt:1087.92},
+        '101652076':{pb:21.00, pt:21.00},     '108018336':{pb:1830.96, pt:1860.24}, '103289167':{pb:1632.42, pt:1688.28},
+        '118179794':{pb:1019.58, pt:1040.22}, '160352260':{pb:247.44, pt:249.60},  '145834230':{pb:108.12, pt:108.72},
+        '120720195':{pb:669.72, pt:672.96},  '139247498':{pb:1081.44, pt:1128.48}, '120275229':{pb:136.20, pt:136.32},
+        '157067734':{pb:1416.30, pt:1478.34}, '103291980':{pb:283.74, pt:295.38},  '130431310':{pb:628.98, pt:630.54},
+        '98389135': {pb:253.14, pt:265.86},   '139245989':{pb:620.28, pt:639.96},  '98540781': {pb:183.24, pt:185.76},
+        '156881990':{pb:481.50, pt:509.46},  '151070498':{pb:93.72, pt:93.96},    '130422416':{pb:1661.52, pt:1731.90},
+        '138130329':{pb:843.90, pt:851.58},  '133085188':{pb:866.94, pt:872.22},  '118692242':{pb:89.40, pt:90.66},
+        '143014129':{pb:82.68, pt:83.40},     '95955130': {pb:222.42, pt:224.58},   '145211163':{pb:86.16, pt:87.72},
+        '144863124':{pb:1245.78, pt:1261.62}, '145844971':{pb:1398.06, pt:1411.98}, '156716207':{pb:181.74, pt:184.98},
+        '137163229':{pb:133.44, pt:137.88},  '157112125':{pb:1373.52, pt:1415.70},
+      };
+      const panel2Full = {
+        '113579174': {pb:109.26, pt:116.22}, '93461947': {pb:110.94, pt:112.26}, '164812184': {pb:11.40, pt:14.64},
+        '158644203': {pb:80.76, pt:80.88},   '99611942': {pb:7.02, pt:9.54},    '113752797': {pb:259.50, pt:306.54},
+        '101245945': {pb:853.38, pt:854.88}, '114851358': {pb:34.08, pt:45.72},  '151410237': {pb:178.38, pt:191.10},
+        '145839775': {pb:972.60, pt:984.78},
+      };
+      const allData = { ...panel1Full, ...panel2Full };
+      let ok = 0, fail = 0;
 
-        if (!data) {
-          console.warn(`⚠️ Sin registro Mañana: ${id_perfil}`);
-          fail++; continue;
-        }
+      for (const [id, vals] of Object.entries(allData)) {
+        const neto = +(vals.pt - vals.pb).toFixed(2);
+        // FORCE UPSERT (Insertar si no existe, actualizar si existe)
+        const { error } = await _sb.from('operaciones').upsert({
+          id_perfil: id,
+          fecha_dia: fechaDia,
+          jornada: 'Mañana',
+          puntos_baseline: vals.pb,
+          puntos_total: vals.pt,
+          puntos_neto: neto,
+          agencia: panel1Full[id] ? 'Panel 1' : 'Panel 2'
+        }, { onConflict: 'id_perfil,fecha_dia,jornada' });
 
-        const pt = data.puntos_total || 0;
-        // 🔒 REGLA DE SANIDAD: si el baseline existente ya es bueno (>0 y < pt),
-        //    NO lo sobreescribir — respetar el watcher si ya calibró bien.
-        if (data.puntos_baseline > 0 && data.puntos_baseline < pt && Math.abs(data.puntos_baseline - pb) < 5) {
-          console.log(`ℹ️ ${id_perfil}: baseline ya calibrado (${data.puntos_baseline}), skipping`);
-          ok++; continue;
-        }
-
-        const nuevoNeto = pt > pb ? +(pt - pb).toFixed(2) : 0;
-        const { error } = await _sb.from('operaciones')
-          .update({ puntos_baseline: pb, puntos_neto: nuevoNeto })
-          .eq('id_perfil', id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Mañana');
-
-        if (error) { console.error(`❌ ${id_perfil}:`, error.message); fail++; }
-        else { console.log(`✅ ${id_perfil}: baseline=${pb} → total=${pt} → neto=${nuevoNeto}`); ok++; }
+        if (error) { console.error(`❌ ${id}:`, error.message); fail++; }
+        else { console.log(`✅ ${id}: baseline=${vals.pb} | total=${vals.pt} | neto=${neto}`); ok++; }
       }
 
       console.log(`\n🎯 Calibración MAÑANA: ${ok} OK, ${fail} fallidos.`);
       if (ok > 0) {
         setTimeout(() => {
-          sincronizarDatamePaneles();
+          if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
+
           if (typeof renderRanking === 'function') renderRanking();
           if (typeof _opRtSync === 'function' && window._opRtOpName) _opRtSync(window._opRtOpName);
         }, 1500);

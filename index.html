@@ -6620,9 +6620,16 @@
         // --- 2. Lógica Legacy (localStorage) ---
         const cortes = getCortesOp(op.name);
         const hoyCortes = cortes.filter(c => c.fecha === _hoy);
+        // 🔬 DELTA-SHIFT™ FIX: Solo sumar la jornada del operador (o la actual si está logueado).
+        // La Noche de madrugada (00:00-06:00) tiene fecha_dia = HOY pero NO es parte de la jornada
+        // Mañana — sumarla causaría doble conteo en la vista de día.
+        const jornadaParaLegacy = jornadaALeer && jornadaALeer !== 'Completo' ? jornadaALeer : jornadaActual;
         let legacyPts = hoyCortes.reduce((s, c) => {
           const val = (Number(c.puntos) || 0);
-          return s + (val > 1500 ? 0 : val); 
+          if (val > 1500) return s; // sanidad
+          // Filtrar por jornada: incluir si coincide o si no tiene jornada (corte legacy sin etiqueta)
+          const corteMismaJornada = !c.jornada || c.jornada === jornadaParaLegacy;
+          return s + (corteMismaJornada ? val : 0);
         }, 0);
 
         // Usamos Datame Realtime si tiene puntos, sino el legacy
@@ -7095,16 +7102,26 @@
         const ptsCls = hasCorte ? 'has-pts' : 'no-pts';
         const barPctDia = Math.round((pHoy / maxHoy) * 100);
         const copHoy = Math.round(pHoy * 1400).toLocaleString('es-CO');
-        // ── Desglose por turno (hoy) ──
+        // ── Desglose por turno (hoy) ── DELTA-SHIFT™
+        // Regla: solo mostrar jornadas que ya ocurrieron en el día actual.
+        // Noche de fecha_dia=HOY = madrugada (00:00-06:00). En jornada Mañana NO debe
+        // mostrarse como producción de hoy — pertenece al cierre de la noche anterior.
         const hoyCortes = cortesAll.filter(c => c.fecha === _hoy);
+        // Jornadas visibles según turno actual del día
+        const _jActual = typeof jornadaActual !== 'undefined' ? jornadaActual : '';
+        const _jornadasVisibles = _jActual === 'Mañana'
+          ? ['Mañana']                        // solo mostrar Mañana (Noche fue la noche anterior)
+          : _jActual === 'Tarde'
+          ? ['Mañana', 'Tarde']               // Mañana ya terminó, Tarde en curso
+          : ['Tarde', 'Noche'];               // Noche en curso (y Tarde que terminó)
         const _ptsHoyManana = hoyCortes.filter(c => c.jornada === 'Mañana').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyTarde  = hoyCortes.filter(c => c.jornada === 'Tarde').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyNoche  = hoyCortes.filter(c => c.jornada === 'Noche').reduce((s,c) => s+(c.puntos||0), 0);
         const _turnosDiaPills = [
-          {label:'☀️ Mañana', pts:_ptsHoyManana, color:'rgba(251,191,36,.18)', border:'rgba(251,191,36,.35)', text:'#fbbf24'},
-          {label:'🌆 Tarde',  pts:_ptsHoyTarde,  color:'rgba(96,165,250,.15)',  border:'rgba(96,165,250,.35)',  text:'#60a5fa'},
-          {label:'🌙 Noche',  pts:_ptsHoyNoche,  color:'rgba(167,139,250,.15)', border:'rgba(167,139,250,.35)', text:'#a78bfa'},
-        ].filter(t => t.pts > 0);
+          {label:'☀️ Mañana', pts:_ptsHoyManana, jornada:'Mañana', color:'rgba(251,191,36,.18)', border:'rgba(251,191,36,.35)', text:'#fbbf24'},
+          {label:'🌆 Tarde',  pts:_ptsHoyTarde,  jornada:'Tarde',  color:'rgba(96,165,250,.15)',  border:'rgba(96,165,250,.35)',  text:'#60a5fa'},
+          {label:'🌙 Noche',  pts:_ptsHoyNoche,  jornada:'Noche',  color:'rgba(167,139,250,.15)', border:'rgba(167,139,250,.35)', text:'#a78bfa'},
+        ].filter(t => t.pts > 0 && _jornadasVisibles.includes(t.jornada));
         const _turnoDiaHTML = _turnosDiaPills.length > 0
           ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">${_turnosDiaPills.map(t=>`<span style="background:${t.color};border:1px solid ${t.border};color:${t.text};font-size:.6rem;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;">${t.label}: ${t.pts.toFixed(1)}</span>`).join('')}</div>`
           : '';

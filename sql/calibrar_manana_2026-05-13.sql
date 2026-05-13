@@ -103,27 +103,64 @@ WHERE fecha_dia = CURRENT_DATE
 */
 
 -- ──────────────────────────────────────────────────────────────────────
--- PASO 6: IDENTIFICAR REGISTROS NOCHE CON fecha_dia = HOY
--- La jornada Noche 22:00-06:00 puede generar registros con
--- fecha_dia = HOY (fueron escritos entre medianoche y 6 AM).
--- Estos son LEGÍTIMOS y NO deben eliminarse, pero hay que verificar
--- que sus puntos_neto no estén siendo sumados al operador equivocado.
+-- PASO 7: CALIBRACIÓN MASIVA (EJECUTAR PARA REPARAR HOY)
+-- Actualiza el baseline al valor "Comienza" de la imagen de las 12:00 PM
+-- Esto forzará que puntos_neto = puntos_total - baseline_imagen
 -- ──────────────────────────────────────────────────────────────────────
-SELECT
-  o.id_perfil,
-  o.agencia,
-  o.jornada,
-  o.puntos_total,
-  o.puntos_baseline,
-  o.puntos_neto,
-  o.fecha_dia,
-  -- ¿Cuánto produjo el mismo perfil en Mañana hoy?
-  m.puntos_neto AS neto_manana_hoy
-FROM operaciones o
-LEFT JOIN operaciones m
-  ON m.id_perfil = o.id_perfil
-  AND m.fecha_dia = CURRENT_DATE
-  AND m.jornada = 'Mañana'
-WHERE o.fecha_dia = CURRENT_DATE
-  AND o.jornada = 'Noche'
-ORDER BY o.id_perfil;
+-- PANEL 1
+UPDATE operaciones SET puntos_baseline = 3165.84 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '88243516';
+UPDATE operaciones SET puntos_baseline = 1047.72 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '95956014';
+UPDATE operaciones SET puntos_baseline = 711.00  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '91360720';
+UPDATE operaciones SET puntos_baseline = 276.06  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '143017065';
+UPDATE operaciones SET puntos_baseline = 3682.98 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '91733663';
+UPDATE operaciones SET puntos_baseline = 136.92  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '153039388';
+UPDATE operaciones SET puntos_baseline = 399.66  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '79679899';
+UPDATE operaciones SET puntos_baseline = 239.10  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '109551682';
+UPDATE operaciones SET puntos_baseline = 1076.58 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '131130713';
+UPDATE operaciones SET puntos_baseline = 21.00   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '101652076';
+UPDATE operaciones SET puntos_baseline = 1830.96 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '108018336';
+UPDATE operaciones SET puntos_baseline = 1632.42 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '103289167';
+UPDATE operaciones SET puntos_baseline = 1019.58 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '118179794';
+UPDATE operaciones SET puntos_baseline = 247.44  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '160352260';
+UPDATE operaciones SET puntos_baseline = 108.12  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '145834230';
+UPDATE operaciones SET puntos_baseline = 669.72  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '120720195';
+UPDATE operaciones SET puntos_baseline = 1081.44 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '139247498';
+UPDATE operaciones SET puntos_baseline = 136.20  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '120275229';
+UPDATE operaciones SET puntos_baseline = 1416.30 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '157067734';
+UPDATE operaciones SET puntos_baseline = 283.74  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '103291980';
+UPDATE operaciones SET puntos_baseline = 628.98  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '130431310';
+UPDATE operaciones SET puntos_baseline = 253.14  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '98389135';
+UPDATE operaciones SET puntos_baseline = 620.28  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '139245989';
+UPDATE operaciones SET puntos_baseline = 183.24  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '98540781';
+UPDATE operaciones SET puntos_baseline = 481.50  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '156881990';
+UPDATE operaciones SET puntos_baseline = 93.72   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '151070498';
+UPDATE operaciones SET puntos_baseline = 1661.52 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '130422416';
+UPDATE operaciones SET puntos_baseline = 843.90  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '138130329';
+UPDATE operaciones SET puntos_baseline = 866.94  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '133085188';
+UPDATE operaciones SET puntos_baseline = 89.40   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '118692242';
+UPDATE operaciones SET puntos_baseline = 82.68   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '143014129';
+UPDATE operaciones SET puntos_baseline = 222.42  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '95955130';
+UPDATE operaciones SET puntos_baseline = 86.16   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '145211163';
+UPDATE operaciones SET puntos_baseline = 1245.78 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '144863124';
+UPDATE operaciones SET puntos_baseline = 1398.06 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '145844971';
+UPDATE operaciones SET puntos_baseline = 181.74  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '156716207';
+UPDATE operaciones SET puntos_baseline = 133.44  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '137163229';
+UPDATE operaciones SET puntos_baseline = 1373.52 WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '157112125';
+
+-- PANEL 2
+UPDATE operaciones SET puntos_baseline = 109.26  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '113579174';
+UPDATE operaciones SET puntos_baseline = 110.94  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '93461947';
+UPDATE operaciones SET puntos_baseline = 11.40   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '164812184';
+UPDATE operaciones SET puntos_baseline = 80.76   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '158644203';
+UPDATE operaciones SET puntos_baseline = 7.02    WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '99611942';
+UPDATE operaciones SET puntos_baseline = 259.50  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '113752797';
+UPDATE operaciones SET puntos_baseline = 853.38  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '101245945';
+UPDATE operaciones SET puntos_baseline = 34.08   WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '114851358';
+UPDATE operaciones SET puntos_baseline = 178.38  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '151410237';
+UPDATE operaciones SET puntos_baseline = 972.60  WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana' AND id_perfil = '145839775';
+
+-- PASO FINAL: RECALCULAR PUNTOS_NETO PARA TODOS
+UPDATE operaciones
+SET puntos_neto = ROUND((puntos_total - puntos_baseline)::numeric, 2)
+WHERE fecha_dia = '2026-05-13' AND jornada = 'Mañana';
+

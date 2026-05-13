@@ -6594,7 +6594,9 @@
         
         if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
           // 🔥 Si tiene perfiles asignados dinámicamente en ESTA jornada, asumimos que está trabajando en ella
-          jornadaALeer = jornadaActual; 
+          // 🛡️ EXCEPCIÓN 12H: Si es 12h, mantenemos 'Completo' para que no pierda los puntos de la mañana
+          if (!_es12h) jornadaALeer = jornadaActual; 
+          
           draftEntry.perfiles.forEach(dp => {
             if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
               combinedProfiles.push(dp);
@@ -6632,14 +6634,14 @@
         const hoyCortes = cortes.filter(c => c.fecha === _hoy);
         
         // 🔬 DELTA-SHIFT™ FIX: Solo sumar la jornada del operador (o la actual si está logueado).
-        // La Noche de madrugada (00:00-06:00) tiene fecha_dia = HOY pero NO es parte de la jornada
-        // Mañana — sumarla causaría doble conteo en la vista de día.
-        const jornadaParaLegacy = jornadaALeer && jornadaALeer !== 'Completo' ? jornadaALeer : jornadaActual;
+        // ⏱️ 12H SHIFT™: Si es 12h, 'jornadaParaLegacy' será 'Completo', lo que permitirá sumar todo.
+        const jornadaParaLegacy = jornadaALeer && jornadaALeer !== 'Completo' ? jornadaALeer : (jornadaALeer === 'Completo' ? 'Completo' : jornadaActual);
+        
         let legacyPts = hoyCortes.reduce((s, c) => {
           const val = (Number(c.puntos) || 0);
           if (val > 1500) return s; // sanidad
-          // Filtrar por jornada: incluir si coincide o si no tiene jornada (corte legacy sin etiqueta)
-          const corteMismaJornada = !c.jornada || c.jornada === jornadaParaLegacy;
+          // Filtrar por jornada: incluir si coincide, si no tiene jornada, o si es turno 'Completo'
+          const corteMismaJornada = !c.jornada || jornadaParaLegacy === 'Completo' || c.jornada === jornadaParaLegacy;
           return s + (corteMismaJornada ? val : 0);
         }, 0);
 
@@ -7125,11 +7127,7 @@
         const _es12hCard = _horasOpCard && _horasOpCard.horas === 12 && _horasOpCard.fecha === _hoy;
         const _jornadasVisibles = _es12hCard
           ? ['Mañana', 'Tarde', 'Noche']      // 12h: mostrar todas las jornadas que tengan puntos
-          : _jActual === 'Mañana'
-          ? ['Mañana']                        // 8h: solo mostrar Mañana
-          : _jActual === 'Tarde'
-          ? ['Tarde']                         // 8h: solo mostrar Tarde (Mañana ya cerró)
-          : ['Noche'];                        // 8h: solo Noche
+          : [];                               // 8h: NO MOSTRAR PILLS (diferenciador visual)
         const _ptsHoyManana = hoyCortes.filter(c => c.jornada === 'Mañana').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyTarde  = hoyCortes.filter(c => c.jornada === 'Tarde').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyNoche  = hoyCortes.filter(c => c.jornada === 'Noche').reduce((s,c) => s+(c.puntos||0), 0);

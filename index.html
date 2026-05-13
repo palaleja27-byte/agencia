@@ -6603,15 +6603,12 @@
                   // DELTA-SHIFT™: cada puntos_neto es la producción neta de un turno específico.
                   // Solo sumar la jornada del operador para evitar doble conteo entre turnos compartidos.
                   // Si turno = 'Completo' → sumar todos los turnos del día.
-                  let pts = 0;
-                  if (jornadaALeer === 'Completo') {
-                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
-                  } else {
-                    // Normalizar 'Mañana' con/sin tilde
-                    const key = jornadaLeer === 'Mañana' ? 'Mañana' : jornadaLeer;
-                    pts = (turnosPerfil[key] || 0);
-                    if (key === 'Mañana') pts += (turnosPerfil['manana'] || 0);
-                  }
+                  // 🧠 DELTA-SHIFT™ FIX: Sumar TODAS las jornadas del día para el operador
+                  // Si el operador trabajó en Mañana y Tarde, debe ver la suma total de su esfuerzo "Hoy".
+                  pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                  // Normalizar 'manana' si existe
+                  pts += (turnosPerfil['manana'] || 0);
+                  
                   datamePts += pts;
                }
             });
@@ -6620,16 +6617,14 @@
         // --- 2. Lógica Legacy (localStorage) ---
         const cortes = getCortesOp(op.name);
         const hoyCortes = cortes.filter(c => c.fecha === _hoy);
-        // 🔬 DELTA-SHIFT™ FIX: Solo sumar la jornada del operador (o la actual si está logueado).
-        // La Noche de madrugada (00:00-06:00) tiene fecha_dia = HOY pero NO es parte de la jornada
-        // Mañana — sumarla causaría doble conteo en la vista de día.
-        const jornadaParaLegacy = jornadaALeer && jornadaALeer !== 'Completo' ? jornadaALeer : jornadaActual;
+        
+        // 🔬 FIX Tarde/Noche: Sumar TODOS los cortes del día para este operador.
+        // Como 'getCortesOp' ya filtra por 'op.name', es seguro sumar todas sus jornadas
+        // para que no pierdan puntos si trabajaron un turno extendido.
         let legacyPts = hoyCortes.reduce((s, c) => {
           const val = (Number(c.puntos) || 0);
           if (val > 1500) return s; // sanidad
-          // Filtrar por jornada: incluir si coincide o si no tiene jornada (corte legacy sin etiqueta)
-          const corteMismaJornada = !c.jornada || c.jornada === jornadaParaLegacy;
-          return s + (corteMismaJornada ? val : 0);
+          return s + val;
         }, 0);
 
         // Usamos Datame Realtime si tiene puntos, sino el legacy

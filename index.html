@@ -6429,24 +6429,33 @@
         const currentDay = now.getDate() || 1;
         const totalDays  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
-        // Días con actividad real en el mes anterior (para calcular su promedio real)
-        const m1Days = Object.keys(historialMap)
-          .filter(k => k.startsWith(m1Key));
-        // Puntos por día del mes anterior (días con datos)
+        // 🚨 SANITY CHECK: Filtrar anomalías históricas para promedios justos
+        // Ignorar días con < 50 pts (sistema apagado) y topar días en 2500 pts (bugs de data acumulada)
+        const getCleanPace = (diasMap) => {
+          const vals = Object.values(diasMap).map(v => Math.min(v, 2500)).filter(v => v > 50);
+          return vals.length > 0 ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
+        };
+
+        // Puntos por día del mes anterior
         const opsM1 = ops.filter(r => r.fecha_dia.startsWith(m1Key));
         const diasM1Map = {};
         opsM1.forEach(r => { diasM1Map[r.fecha_dia] = (diasM1Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
         const diasM1ConDatos = Object.keys(diasM1Map).length || 1;
-        const m1PromDia = m1Total / diasM1ConDatos;  // promedio real por día con actividad
+        const m1PromDia = getCleanPace(diasM1Map) || 1200; // Fallback a 1200 si no hay días válidos
+        
+        // Normalizar m1Total si está corrupto (ej: 92,000 pts en 8 días)
+        if (m1Total > (m1PromDia * 31 * 1.5)) {
+            m1Total = m1PromDia * new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+        }
 
-        // Días con actividad en el mes actual
+        // Puntos por día del mes actual
         const opsM2 = ops.filter(r => r.fecha_dia.startsWith(m2Key));
         const diasM2Map = {};
         opsM2.forEach(r => { diasM2Map[r.fecha_dia] = (diasM2Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
         const diasM2ConDatos = Object.keys(diasM2Map).length || 1;
-        const m2PromDia = m2Total / diasM2ConDatos;  // promedio real por día con actividad
+        const m2PromDia = getCleanPace(diasM2Map) || (m2Total / Math.max(currentDay, 1));
 
-        // Proyección fin de mes usando promedio diario real del mes actual
+        // Proyección fin de mes usando el ritmo LIMPIO del mes actual
         const projectedM2 = m2PromDia * totalDays;
 
         // % de crecimiento = comparación de RITMO DIARIO

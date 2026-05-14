@@ -10251,23 +10251,37 @@
         else { clearInterval(_cmvAutoRefresh); _cmvAutoRefresh = null; }
       }, 60000);
 
-      // Datos base del historial
+      // Datos base del historial + cálculo de ritmo diario AUTOSUFICIENTE
       if (typeof rkFetchSupabaseTotals === 'function') await rkFetchSupabaseTotals();
       const h = window._rkHistorial || { m0Total:0, m1Total:0, m2Total:0, m0Name:'Hace 2 Meses', m1Name:'Mes Pasado', m2Name:'Mes Actual', crec:0 };
-      const mesActual = localDateStr().slice(0, 7);
-      const hoyD = new Date();
-      const diaHoy = hoyD.getDate();
-      const diasMes = new Date(hoyD.getFullYear(), hoyD.getMonth()+1, 0).getDate();
-      const promDia = diaHoy > 0 ? h.m2Total / diaHoy : 0;
-      const proyecc = Math.round(promDia * diasMes);
-      const crec = h.crec;
-      const crecColor = crec >= 0 ? '#10b981' : '#f87171';
-      const crecSign  = crec > 0 ? '+' : '';
+      const mesActual  = localDateStr().slice(0, 7);
+      const hoyD       = new Date();
+      const diaHoy     = hoyD.getDate();
+      const diasMes    = new Date(hoyD.getFullYear(), hoyD.getMonth()+1, 0).getDate();
+      const diasM1     = new Date(hoyD.getFullYear(), hoyD.getMonth(), 0).getDate(); // días totales mes anterior
+
+      // Ritmo diario: usar campos de _rkHistorial si existen, si no calcular desde totales
+      const m1PromDia   = h.m1PromDia   > 0 ? h.m1PromDia   : (h.m1Total > 0 ? h.m1Total / diasM1    : 0);
+      const m2PromDia   = h.m2PromDia   > 0 ? h.m2PromDia   : (h.m2Total > 0 ? h.m2Total / Math.max(diaHoy,1) : 0);
+      const projectedM2 = h.projectedM2 > 0 ? h.projectedM2 : Math.round(m2PromDia * diasMes);
+      const crecProy    = h.crecProjected != null ? h.crecProjected
+                          : (h.m1Total > 0 ? ((projectedM2 - h.m1Total) / h.m1Total * 100) : 0);
+      // % de crecimiento por RITMO: compara prom/día actual vs prom/día anterior
+      const crec = h.crec != null ? h.crec
+                   : (m1PromDia > 0 ? ((m2PromDia - m1PromDia) / m1PromDia * 100) : 0);
+
+      const proyecc   = Math.round(projectedM2);
+      const promDia   = m2PromDia;
+      const copMes    = Math.round(h.m2Total * 1400);
+      const copProy   = Math.round(proyecc   * 1400);
       const fmtPct = p => { if(!p) return '<span style="color:#64748b">—</span>'; const c=p>0?'#34d399':'#f87171'; return `<span style="color:${c};font-weight:700">${p>0?'+':''}${p.toFixed(1)}%</span>`; };
       const crecM1 = h.m0Total>0 ? ((h.m1Total-h.m0Total)/h.m0Total*100) : 0;
       const crecM2 = h.m1Total>0 ? ((h.m2Total-h.m1Total)/h.m1Total*100) : 0;
-      const copMes  = Math.round(h.m2Total * 1400);
-      const copProy = Math.round(proyecc * 1400);
+      // Días con datos de cada mes (desde _rkHistorial si disponible)
+      const diasM1ConDatos = h.diasM1ConDatos || diasM1;
+      const diasM2ConDatos = h.diasM2ConDatos || Math.max(diaHoy,1);
+
+
 
       // Fetch Supabase hoy
       let rows = [], ptsHoy = 0, copHoy = 0, metaDia = 0;
@@ -10404,10 +10418,11 @@
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(16,185,129,.18)">
       <div class="cmv-kpi-label">🚀 PROYECCIÓN FIN MES</div>
-      <div class="cmv-kpi-value" style="color:#10b981">${proyecc.toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
-      <div class="cmv-kpi-sub">$${copProy.toLocaleString('es-CO')} COP</div>
-      <div class="cmv-proj-bar-wrap"><div class="cmv-proj-bar" style="width:${Math.min(100,proyecc/(h.m1Total||1)*100).toFixed(1)}%;background:${crec>=0?'#10b981':'#f87171'}"></div></div>
+      <div class="cmv-kpi-value" style="color:#10b981">${Math.round(projectedM2).toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
+      <div class="cmv-kpi-sub">$${copProy.toLocaleString('es-CO')} COP · ${m2PromDia.toFixed(0)} pts/día</div>
+      <div class="cmv-proj-bar-wrap"><div class="cmv-proj-bar" style="width:${Math.min(100,projectedM2/(h.m1Total||1)*100).toFixed(1)}%;background:${crec>=0?'#10b981':'#f87171'}"></div></div>
     </div>
+
   </div>
   ${alertas.length?`<div class="cmv-section-title">🔔 ALERTAS INTELIGENTES</div>${alertas.map(a=>`<div class="cmv-alert ${a.t}"><span class="cmv-alert-icon">${a.i}</span><div>${a.msg}</div></div>`).join('')}`:''}
   <div class="cmv-section-title">📅 HISTORIAL ${hoyD.getFullYear()}</div>

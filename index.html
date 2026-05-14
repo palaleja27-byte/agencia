@@ -17648,196 +17648,141 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     }
 
     // ══════════════════════════════════════════════════════════
-    // CALIBRAR BASELINE TARDE — llamar desde consola del admin:
-    //   calibrarTarde()
-    // Usa los valores exactos del corte manual de las 6 PM para
-    // corregir el baseline de cada perfil en Supabase y obtener
-    // puntos_neto precisos.
-    // ══════════════════════════════════════════════════════════
-    window.calibrarTarde = async function(fecha) {
-      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
-      const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      // Baselines exactos del corte manual (Comienza a las 4:00 PM del 08-Mayo-2026)
-      const baselines = {
-        '88243516': 1564.86, '95956014': 876.60,  '91360720': 531.36,
-        '143017065': 219.00, '91733663': 2114.70, '153039388': 76.44,
-        '79679899': 271.26,  '109551682': 158.10, '131130713': 519.84,
-        '101652076': 17.52,  '108018336': 1311.90, '103289167': 952.32,
-        '118179794': 632.82, '130338853': 618.30,  '160352260': 39.12,
-        '145834230': 81.72,  '120720195': 399.06,  '139247498': 647.82,
-        '120275229': 108.48, '157067734': 569.34,  '103291980': 151.68,
-        '130431310': 405.30, '98389135': 192.42,   '139245989': 436.08,
-        '98540781': 116.58,  '156881990': 342.00,  '151070498': 65.64,
-        '130422416': 1069.26, '138130329': 533.08, '133085188': 630.18,
-        '118692242': 55.44,  '143014129': 56.16,   '95955130': 136.32,
-        '145211163': 41.94,  '144863124': 771.12,  '145844971': 873.06,
-        '156716207': 134.82, '137163229': 69.48,   '157112125': 704.04,
-      };
-      let ok = 0, fail = 0;
-      for (const [id_perfil, pb] of Object.entries(baselines)) {
-        const { data } = await _sb.from('operaciones')
-          .select('puntos_total, puntos_neto')
-          .eq('id_perfil', id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Tarde')
-          .maybeSingle();
-        if (!data) { console.warn(`⚠️ Sin registro Tarde: ${id_perfil}`); fail++; continue; }
-        const pt = data.puntos_total || 0;
-        if (pt <= pb) { console.warn(`⚠️ ${id_perfil}: total(${pt}) <= baseline(${pb})`); fail++; continue; }
-        const nuevoNeto = +(pt - pb).toFixed(2);
-        const { error } = await _sb.from('operaciones')
-          .update({ puntos_baseline: pb, puntos_neto: nuevoNeto })
-          .eq('id_perfil', id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Tarde');
-        if (error) { console.error(`❌ ${id_perfil}:`, error.message); fail++; }
-        else { console.log(`✅ ${id_perfil}: baseline=${pb} → neto=${nuevoNeto}`); ok++; }
-      }
-      console.log(`\n🎯 Calibración completada: ${ok} OK, ${fail} fallidos. Haz ↻ Sync para ver datos actualizados.`);
-      if (ok > 0) {
-        setTimeout(() => {
-          sincronizarDatamePaneles();
-          if (typeof renderRanking === 'function') renderRanking();
-        }, 1500);
-      }
-    };
-
-    // ══════════════════════════════════════════════════════════
     // CALIBRAR BASELINE MAÑANA — llamar desde consola del admin:
     //   calibrarManana()
-    // Usa los valores del corte 10:00 AM 2026-05-12:
-    //   puntos_baseline = "Comienza" (valor al inicio del turno 6am)
-    //   NOTA: Este script fija el baseline desde el "Comienza" de la
-    //         imagen (valor acumulado a las 8am) para calcular neto
-    //         correcto desde ese punto de referencia.
+    // Corte 10:00 AM 2026-05-14: "Comienza" = baseline al inicio del turno 6am
     // ══════════════════════════════════════════════════════════
     window.calibrarManana = async function(fecha) {
       if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
       const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       console.log(`🔧 Calibrando baseline MAÑANA para ${fechaDia}...`);
 
-      // ── Baselines del corte 10:00 AM — "Comienza" de cada perfil ──
-      // ── Baselines del corte 12:00 PM — "Comienza" de cada perfil ──
-      // PANEL 1
-      const baselineP1 = {
-        '88243516': 3165.84,  '95956014': 1047.72,  '91360720': 711.00,
-        '143017065': 276.06,  '91733663': 3682.98,  '153039388': 136.92,
-        '79679899': 399.66,   '109551682': 239.10,  '131130713': 1076.58,
-        '101652076': 21.00,   '108018336': 1830.96, '103289167': 1632.42,
-        '118179794': 1019.58, '160352260': 247.44,
-        '145834230': 108.12,  '120720195': 669.72,  '139247498': 1081.44,
-        '120275229': 136.20,  '157067734': 1416.30, '103291980': 283.74,
-        '130431310': 628.98,  '98389135':  253.14,  '139245989': 620.28,
-        '98540781':  183.24,  '156881990': 481.50,  '151070498': 93.72,
-        '130422416': 1661.52, '138130329': 843.90,  '133085188': 866.94,
-        '118692242': 89.40,   '143014129': 82.68,   '95955130':  222.42,
-        '145211163': 86.16,   '144863124': 1245.78, '145844971': 1398.06,
-        '156716207': 181.74,  '137163229': 133.44,  '157112125': 1373.52,
-      };
-      // PANEL 2
-      const baselineP2 = {
-        '113579174': 109.26,  '93461947':  110.94,  '164812184': 11.40,
-        '158644203': 80.76,   '99611942':  7.02,    '113752797': 259.50,
-        '101245945': 853.38,  '114851358': 34.08,   '151410237': 178.38,
-        '145839775': 972.60,
+      // ── Baselines del corte 10:00 AM 14-Mayo-2026 ──
+      // "Comienza" = puntos_baseline (fijado al inicio del turno 6am)
+      const allData = {
+        '88243516':  {pb:3475.80, agencia:'RICARDO'},
+        '95956014':  {pb:1089.60, agencia:'PABLO'},
+        '91360720':  {pb:736.50,  agencia:'SANDRA MARIA'},
+        '143017065': {pb:289.84,  agencia:'MARIO'},
+        '91733663':  {pb:3882.98, agencia:'DANIEL 68'},
+        '153039388': {pb:161.80,  agencia:'AGUSTIN FERNANDO'},
+        '79679899':  {pb:427.74,  agencia:'NORBERTO'},
+        '109551682': {pb:254.58,  agencia:'RENATO'},
+        '131130713': {pb:1212.00, agencia:'LUIS JOAO'},
+        '101652076': {pb:21.12,   agencia:'CARINA'},
+        '108018336': {pb:1985.52, agencia:'LUCAS'},
+        '103289167': {pb:1807.98, agencia:'LUIS DAROSA'},
+        '118179794': {pb:1092.12, agencia:'HORACIO'},
+        '130338853': {pb:1062.42, agencia:'IVALDO'},
+        '160352260': {pb:256.08,  agencia:'JUVENAL'},
+        '145834230': {pb:114.12,  agencia:'MURILO'},
+        '120720195': {pb:733.44,  agencia:'MARCOS'},
+        '139247498': {pb:1221.24, agencia:'DAMIAN'},
+        '120275229': {pb:140.16,  agencia:'GERMAN'},
+        '157067734': {pb:1501.50, agencia:'VALDEMIR'},
+        '103291980': {pb:313.50,  agencia:'ARMANDO'},
+        '130431310': {pb:566.00,  agencia:'RAFAEL'},
+        '98389135':  {pb:292.26,  agencia:'RAUL'},
+        '139245989': {pb:555.56,  agencia:'ALFREDO'},
+        '98540781':  {pb:190.80,  agencia:'LEANDRO'},
+        '156881990': {pb:631.14,  agencia:'RALPH'},
+        '151070498': {pb:98.64,   agencia:'VALQUIMAR'},
+        '130422416': {pb:1856.52, agencia:'RAONI'},
+        '138130329': {pb:886.50,  agencia:'AGUSTIN'},
+        '133085188': {pb:879.66,  agencia:'MARCOS ANTONIO'},
+        '118692242': {pb:93.82,   agencia:'FRANCISCO'},
+        '143014129': {pb:87.60,   agencia:'RENEE'},
+        '95955130':  {pb:238.98,  agencia:'HECTOR'},
+        '145211163': {pb:107.16,  agencia:'FERAN'},
+        '144863124': {pb:1220.76, agencia:'FERNANDO'},
+        '145844971': {pb:1515.36, agencia:'RODRIGO'},
+        '156716207': {pb:188.94,  agencia:'AGNALDO'},
+        '137163229': {pb:144.54,  agencia:'SEBASTIAN'},
+        '157112125': {pb:1571.04, agencia:'LUIZ'},
       };
 
-      // Redefinición para usar pares PB/PT (Corte 12:00 PM)
-      const panel1Full = {
-        '88243516': {pb:3165.84, pt:3289.86}, '95956014': {pb:1047.72, pt:1058.88}, '91360720': {pb:711.00, pt:711.12},
-        '143017065':{pb:276.06, pt:276.90},   '91733663': {pb:3682.98, pt:3730.92}, '153039388':{pb:136.92, pt:142.68},
-        '79679899': {pb:399.66, pt:402.18},   '109551682':{pb:239.10, pt:241.02},  '131130713':{pb:1076.58, pt:1087.92},
-        '101652076':{pb:21.00, pt:21.00},     '108018336':{pb:1830.96, pt:1860.24}, '103289167':{pb:1632.42, pt:1688.28},
-        '118179794':{pb:1019.58, pt:1040.22}, '160352260':{pb:247.44, pt:249.60},  '145834230':{pb:108.12, pt:108.72},
-        '120720195':{pb:669.72, pt:672.96},  '139247498':{pb:1081.44, pt:1128.48}, '120275229':{pb:136.20, pt:136.32},
-        '157067734':{pb:1416.30, pt:1478.34}, '103291980':{pb:283.74, pt:295.38},  '130431310':{pb:628.98, pt:630.54},
-        '98389135': {pb:253.14, pt:265.86},   '139245989':{pb:620.28, pt:639.96},  '98540781': {pb:183.24, pt:185.76},
-        '156881990':{pb:481.50, pt:509.46},  '151070498':{pb:93.72, pt:93.96},    '130422416':{pb:1661.52, pt:1731.90},
-        '138130329':{pb:843.90, pt:851.58},  '133085188':{pb:866.94, pt:872.22},  '118692242':{pb:89.40, pt:90.66},
-        '143014129':{pb:82.68, pt:83.40},     '95955130': {pb:222.42, pt:224.58},   '145211163':{pb:86.16, pt:87.72},
-        '144863124':{pb:1245.78, pt:1261.62}, '145844971':{pb:1398.06, pt:1411.98}, '156716207':{pb:181.74, pt:184.98},
-        '137163229':{pb:133.44, pt:137.88},  '157112125':{pb:1373.52, pt:1415.70},
-      };
-      const panel2Full = {
-        '113579174': {pb:109.26, pt:116.22}, '93461947': {pb:110.94, pt:112.26}, '164812184': {pb:11.40, pt:14.64},
-        '158644203': {pb:80.76, pt:80.88},   '99611942': {pb:7.02, pt:9.54},    '113752797': {pb:259.50, pt:306.54},
-        '101245945': {pb:853.38, pt:854.88}, '114851358': {pb:34.08, pt:45.72},  '151410237': {pb:178.38, pt:191.10},
-        '145839775': {pb:972.60, pt:984.78},
-      };
-      const allData = { ...panel1Full, ...panel2Full };
       let ok = 0, fail = 0;
-
       for (const [id, vals] of Object.entries(allData)) {
-        const neto = +(vals.pt - vals.pb).toFixed(2);
-        // FORCE UPSERT (Insertar si no existe, actualizar si existe)
+        // Leer el puntos_total actual directamente de Supabase
+        const { data: row } = await _sb.from('operaciones')
+          .select('puntos_total')
+          .eq('id_perfil', id).eq('fecha_dia', fechaDia).eq('jornada', 'Mañana')
+          .maybeSingle();
+
+        const pt = row ? (row.puntos_total || 0) : 0;
+        const neto = pt > vals.pb ? +(pt - vals.pb).toFixed(2) : 0;
+
         const { error } = await _sb.from('operaciones').upsert({
           id_perfil: id,
           fecha_dia: fechaDia,
           jornada: 'Mañana',
           puntos_baseline: vals.pb,
-          puntos_total: vals.pt,
+          puntos_total: pt > 0 ? pt : vals.pb,
           puntos_neto: neto,
-          agencia: panel1Full[id] ? 'Panel 1' : 'Panel 2'
+          agencia: vals.agencia
         }, { onConflict: 'id_perfil,fecha_dia,jornada' });
 
         if (error) { console.error(`❌ ${id}:`, error.message); fail++; }
-        else { console.log(`✅ ${id}: baseline=${vals.pb} | total=${vals.pt} | neto=${neto}`); ok++; }
+        else { console.log(`✅ ${id} ${vals.agencia}: baseline=${vals.pb} | total=${pt > 0 ? pt : vals.pb} | neto=${neto}`); ok++; }
       }
 
       console.log(`\n🎯 Calibración MAÑANA: ${ok} OK, ${fail} fallidos.`);
       if (ok > 0) {
         setTimeout(() => {
           if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
-
           if (typeof renderRanking === 'function') renderRanking();
           if (typeof _opRtSync === 'function' && window._opRtOpName) _opRtSync(window._opRtOpName);
         }, 1500);
       }
     };
 
+    // ══════════════════════════════════════════════════════════
+    // CALIBRAR BASELINE TARDE — llamar desde consola del admin:
+    //   calibrarTarde()
+    // Usa el último corte manual de la Tarde como baseline
+    // ══════════════════════════════════════════════════════════
     window.calibrarTarde = async function(fecha) {
       if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
       const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       console.log(`🔧 Calibrando baseline TARDE para ${fechaDia}...`);
 
-      // PANEL 1 (Tarde - 4:00 PM)
-      const panel1 = {
-        '88243516': {pb:3322.14, pt:3337.02}, '95956014': {pb:1067.28, pt:1067.76}, '91360720': {pb:727.02, pt:732.66},
-        '143017065': {pb:279.84, pt:280.08},   '91733663': {pb:3750.00, pt:3757.86}, '153039388': {pb:143.40, pt:157.08},
-        '79679899': {pb:403.38, pt:407.58},    '109551682': {pb:241.02, pt:241.98},  '131130713': {pb:1098.48, pt:1124.88},
-        '101652076': {pb:21.00, pt:21.00},     '108018336': {pb:1869.48, pt:1888.80}, '103289167': {pb:1702.92, pt:1706.88},
-        '118179794': {pb:1044.42, pt:1050.18}, '130338853': {pb:1018.80, pt:1019.82}, '160352260': {pb:249.96, pt:251.52},
-        '145834230': {pb:108.84, pt:108.84},   '120720195': {pb:673.20, pt:676.56},  '139247498': {pb:1131.72, pt:1143.00},
-        '120275229': {pb:138.72, pt:138.72},   '157067734': {pb:1486.98, pt:1493.58}, '103291980': {pb:299.70, pt:300.78},
-        '130431310': {pb:631.14, pt:631.86},   '98389135': {pb:266.70, pt:279.06},   '139245989': {pb:642.00, pt:643.44},
-        '98540781': {pb:186.60, pt:186.60},    '156881990': {pb:541.02, pt:558.54},  '151070498': {pb:93.96, pt:95.28},
-        '130422416': {pb:1743.96, pt:1766.16}, '138130329': {pb:863.46, pt:867.18},  '133085188': {pb:875.46, pt:875.94},
-        '118692242': {pb:91.38, pt:91.98},     '143014129': {pb:83.52, pt:83.52},    '95955130': {pb:224.82, pt:226.38},
-        '145211163': {pb:100.38, pt:104.88},   '144863124': {pb:1280.10, pt:1290.06}, '145844971': {pb:1416.30, pt:1427.22},
-        '156716207': {pb:185.46, pt:185.58},   '137163229': {pb:138.24, pt:138.60},  '157112125': {pb:1433.22, pt:1455.06},
-      };
+      // Para Tarde: el baseline se toma del "En Curso" al cierre de la Mañana (2:00 PM)
+      // Leer los registros actuales de la Mañana como fuente de baseline
+      const { data: mananaRows } = await _sb.from('operaciones')
+        .select('id_perfil, puntos_total, agencia')
+        .eq('fecha_dia', fechaDia).eq('jornada', 'Mañana');
 
-      // PANEL 2 (Tarde - 4:00 PM)
-      const panel2 = {
-        '113579174': {pb:113.46, pt:114.90},   '93461947': {pb:113.22, pt:115.74},   '164812184': {pb:13.92, pt:15.12},
-        '158644203': {pb:82.80, pt:84.00},     '99611942': {pb:7.62, pt:7.62},       '113752797': {pb:267.30, pt:267.90},
-        '101245945': {pb:889.86, pt:897.06},   '114851358': {pb:36.12, pt:36.12},    '151410237': {pb:181.02, pt:181.26},
-        '145839775': {pb:981.60, pt:981.72},
-      };
+      if (!mananaRows || mananaRows.length === 0) {
+        console.error('❌ No hay registros de Mañana para derivar baselines de Tarde');
+        return;
+      }
 
-      const allData = { ...panel1, ...panel2 };
       let ok = 0, fail = 0;
+      for (const row of mananaRows) {
+        const pt = row.puntos_total || 0;
+        if (pt <= 0) continue;
 
-      for (const [id, vals] of Object.entries(allData)) {
-        const neto = +(vals.pt - vals.pb).toFixed(2);
+        // Leer el puntos_total actual de la Tarde
+        const { data: tardeRow } = await _sb.from('operaciones')
+          .select('puntos_total')
+          .eq('id_perfil', row.id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Tarde')
+          .maybeSingle();
+
+        const tardeTotal = tardeRow ? (tardeRow.puntos_total || 0) : 0;
+        const neto = tardeTotal > pt ? +(tardeTotal - pt).toFixed(2) : 0;
+
         const { error } = await _sb.from('operaciones').upsert({
-          id_perfil: id,
+          id_perfil: row.id_perfil,
           fecha_dia: fechaDia,
           jornada: 'Tarde',
-          puntos_baseline: vals.pb,
-          puntos_total: vals.pt,
+          puntos_baseline: pt,
+          puntos_total: tardeTotal > 0 ? tardeTotal : pt,
           puntos_neto: neto,
-          agencia: panel1[id] ? 'Panel 1' : 'Panel 2'
+          agencia: row.agencia
         }, { onConflict: 'id_perfil,fecha_dia,jornada' });
 
-        if (error) { console.error(`❌ ${id}:`, error.message); fail++; }
-        else { console.log(`✅ ${id}: baseline=${vals.pb} | total=${vals.pt} | neto=${neto}`); ok++; }
+        if (error) { console.error(`❌ ${row.id_perfil}:`, error.message); fail++; }
+        else { console.log(`✅ ${row.id_perfil}: baseline=${pt} | total=${tardeTotal > 0 ? tardeTotal : pt} | neto=${neto}`); ok++; }
       }
 
       console.log(`\n🎯 Calibración TARDE: ${ok} OK, ${fail} fallidos.`);
@@ -17964,12 +17909,30 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
               // Sync into localStorage for getCortesOp fallback
               if (netoReal > 0) {
-                // --- MAPPING FIX: Find operator name by profile ID or agency prefix ---
+                // --- MAPPING FIX v2: Match operator by profile ID AND jornada ---
+                // When multiple operators share the same profile across shifts
+                // (e.g., ANDREINA=Mañana, ANAZARED=Tarde, both use NORBERTO),
+                // we must find the operator whose turno matches this record's jornada.
                 let opName = op.agencia;
-                const srcOp = (typeof operatorsData !== 'undefined') ? operatorsData.find(o =>
-                  (o.profiles && o.profiles.some(p => String(p.id) === String(id))) ||
-                  (op.agencia && op.agencia.trim().length > 1 && o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase()))
-                ) : null;
+                let srcOp = null;
+                if (typeof operatorsData !== 'undefined') {
+                  // First pass: match by profile ID + matching turno (jornada)
+                  const candidatos = operatorsData.filter(o =>
+                    o.profiles && o.profiles.some(p => String(p.id) === String(id))
+                  );
+                  if (candidatos.length === 1) {
+                    srcOp = candidatos[0];
+                  } else if (candidatos.length > 1) {
+                    // Multiple operators share this profile — pick the one matching this jornada
+                    srcOp = candidatos.find(o => o.turno === op.jornada) || candidatos[0];
+                  }
+                  // Fallback: match by agency name prefix
+                  if (!srcOp && op.agencia && op.agencia.trim().length > 1) {
+                    srcOp = operatorsData.find(o =>
+                      o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase())
+                    );
+                  }
+                }
 
                 if (srcOp) opName = srcOp.name;
                 else if (!opName || opName.trim() === '') opName = String(id);
@@ -18302,14 +18265,24 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 
       try {
-        // 1. Obtener puntos_total actuales de Datame (por turno de hoy)
-        const { data: ops } = await _sb
-          .from('operaciones')
+        // ⏱️ 12H SHIFT™: Detectar si el operador es de 12h para evitar el reset de las 2 PM
+        const opData = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+          .find(o => _n(o.name) === _n(opName));
+        const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
+        const _horasOp = _horasHoyAll[opName] || (opData ? { horas: (opData.turno === 'Completo' ? 12 : 8) } : { horas: 8 });
+        const is12h = _horasOp.horas === 12;
+
+        let query = _sb.from('operaciones')
           .select('id_perfil, puntos_total, puntos_baseline, puntos_neto, jornada, agencia')
           .in('id_perfil', ids)
           .eq('fecha_dia', hoy)
-          .eq('jornada', _opRtJornada())   // solo el turno activo
           .neq('jornada', 'Auto');
+
+        if (!is12h) {
+          query = query.eq('jornada', _opRtJornada()); // Solo el turno activo para operadores de 8h
+        }
+
+        const { data: ops } = await query;
 
         if (!ops?.length) return;
 
@@ -18317,18 +18290,27 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const porPerfil = {};
         ops.forEach(r => {
           const pt = r.puntos_total || 0;
-          const bl = r.puntos_baseline || 0;   // baseline del turno (fijado a las 6am por el watcher)
-          if (!porPerfil[r.id_perfil] || pt > (porPerfil[r.id_perfil]?.total || 0)) {
+          const bl = r.puntos_baseline || 0;
+          
+          if (!porPerfil[r.id_perfil]) {
             porPerfil[r.id_perfil] = {
               total:    pt,
-              baseline: bl,            // ← baseline del watcher (inicio del turno)
+              baseline: bl,
               neto:     r.puntos_neto || 0,
               agencia:  r.agencia || r.id_perfil
             };
+          } else {
+            if (pt > porPerfil[r.id_perfil].total) {
+              porPerfil[r.id_perfil].total = pt;
+            }
+            if (bl > 0 && (porPerfil[r.id_perfil].baseline === 0 || bl < porPerfil[r.id_perfil].baseline)) {
+              porPerfil[r.id_perfil].baseline = bl;
+            }
           }
         });
         const sumaTotal    = Object.values(porPerfil).reduce((s, v) => s + v.total,    0);
         const sumaBaseline = Object.values(porPerfil).reduce((s, v) => s + v.baseline, 0);
+        const sumaNeto     = Object.values(porPerfil).reduce((s, v) => s + v.neto,     0);
 
         // 2b. Neto por perfil usando baseline del TURNO (6am), no del momento del login
         //     Así el operador ve sus puntos acumulados desde el inicio del turno
@@ -18354,7 +18336,9 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         if (typeof _dpTurnosData !== 'undefined') {
           _opRtPerfilesNeto.forEach(p => {
             if (!_dpTurnosData[p.id]) _dpTurnosData[p.id] = {};
-            _dpTurnosData[p.id][_opRtJornada()] = p.neto;
+            // Si es 12h, repartimos el neto según la jornada del registro, si no, usamos la jornada actual
+            const jCache = is12h ? (ops.find(r => String(r.id_perfil) === String(p.id))?.jornada || _opRtJornada()) : _opRtJornada();
+            _dpTurnosData[p.id][jCache] = p.neto;
           });
         }
 

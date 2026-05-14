@@ -6424,15 +6424,39 @@
         let m1Total = historialMap[m1Key] || 0;
         let m2Total = historialMap[m2Key] || 0;
 
-        // Crecimiento Proyectado (Actual Proyectado vs Anterior)
+        // Crecimiento basado en RITMO DIARIO (pace) — no en totales brutos
+        // Esto evita comparar un mes proyectado vs un mes completo
         const currentDay = now.getDate() || 1;
-        const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        const projectedM2 = (m2Total / currentDay) * totalDays;
-        
+        const totalDays  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+        // Días con actividad real en el mes anterior (para calcular su promedio real)
+        const m1Days = Object.keys(historialMap)
+          .filter(k => k.startsWith(m1Key));
+        // Puntos por día del mes anterior (días con datos)
+        const opsM1 = ops.filter(r => r.fecha_dia.startsWith(m1Key));
+        const diasM1Map = {};
+        opsM1.forEach(r => { diasM1Map[r.fecha_dia] = (diasM1Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
+        const diasM1ConDatos = Object.keys(diasM1Map).length || 1;
+        const m1PromDia = m1Total / diasM1ConDatos;  // promedio real por día con actividad
+
+        // Días con actividad en el mes actual
+        const opsM2 = ops.filter(r => r.fecha_dia.startsWith(m2Key));
+        const diasM2Map = {};
+        opsM2.forEach(r => { diasM2Map[r.fecha_dia] = (diasM2Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
+        const diasM2ConDatos = Object.keys(diasM2Map).length || 1;
+        const m2PromDia = m2Total / diasM2ConDatos;  // promedio real por día con actividad
+
+        // Proyección fin de mes usando promedio diario real del mes actual
+        const projectedM2 = m2PromDia * totalDays;
+
+        // % de crecimiento = comparación de RITMO DIARIO
+        const paceCrec = m1PromDia > 0 ? ((m2PromDia - m1PromDia) / m1PromDia * 100) : 0;
+        // % proyectado = proyección completa vs total mes anterior
         const crecOp = m1Total > 0 ? ((projectedM2 - m1Total) / m1Total * 100) : 0;
-        const sign = crecOp >= 0 ? '+' : '';
-        const color = crecOp >= 0 ? '#34d399' : '#f87171';
-        const icon = crecOp >= 0 ? '📈' : '📉';
+
+        const sign = paceCrec >= 0 ? '+' : '';
+        const color = paceCrec >= 0 ? '#34d399' : '#f87171';
+        const icon  = paceCrec >= 0 ? '📈' : '📉';
 
         const elTotal = document.getElementById('rk-val-total');
         const elCop   = document.getElementById('rk-val-cop');
@@ -6444,18 +6468,22 @@
         if (elCop) elCop.textContent = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
         const numOps = operatorsData.length || 1;
         if (elAvg) elAvg.textContent = (m2Total / numOps).toFixed(1);
-        if (elCrec) { 
-          elCrec.style.color = color; 
-          elCrec.textContent = icon + ' ' + sign + crecOp.toFixed(1) + '% (Proyectado)'; 
+        if (elCrec) {
+          elCrec.style.color = color;
+          elCrec.textContent = icon + ' ' + sign + paceCrec.toFixed(1) + '% ritmo/día';
         }
-        if (elRange) { 
-          elRange.textContent = `${m1Name}: ${m1Total.toFixed(0)} pts → Proyección ${m2Name}: ${projectedM2.toFixed(0)} pts`; 
+        if (elRange) {
+          elRange.textContent = `${m1Name}: ${m1PromDia.toFixed(0)} pts/día → ${m2Name}: ${m2PromDia.toFixed(0)} pts/día`;
         }
 
-        window._rkHistorial = { 
-          m0Total, m1Total, m2Total, 
-          m0Name, m1Name, m2Name, 
-          crec: crecOp 
+        window._rkHistorial = {
+          m0Total, m1Total, m2Total,
+          m0Name, m1Name, m2Name,
+          crec: paceCrec,
+          crecProjected: crecOp,
+          m1PromDia, m2PromDia,
+          diasM1ConDatos, diasM2ConDatos,
+          currentDay, totalDays, projectedM2
         };
       } catch(e) { console.warn('[RK-SUPABASE]', e); }
     }
@@ -10324,9 +10352,35 @@
     <div style="font-size:.55rem;color:#334155;margin-top:2px"><span class="cmv-rt-dot"></span>RT · ${ts} · auto-refresh 60s</div></div>
     <button onclick="window.toggleCrecTooltip(event)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#94a3b8;cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:1rem">&times;</button>
   </div>
-  <div style="text-align:center;padding:14px;background:rgba(255,255,255,.02);border-radius:14px;border:1px solid rgba(255,255,255,.05);margin-bottom:14px">
-    <div style="font-size:3rem;font-weight:900;color:${crecColor};line-height:1">${crecSign}${crec.toFixed(1)}%</div>
-    <div style="color:#475569;font-size:.75rem;margin-top:5px;font-weight:700">vs ${h.m1Name} · Proyectado al fin de mes</div>
+  <div style="text-align:center;padding:14px;background:rgba(255,255,255,.02);border-radius:14px;border:1px solid rgba(255,255,255,.05);margin-bottom:14px;position:relative">
+    <!-- Botón Info -->
+    <button id="cmv-info-btn" onclick="document.getElementById('cmv-info-tooltip').style.display=document.getElementById('cmv-info-tooltip').style.display==='block'?'none':'block'"
+      style="position:absolute;top:8px;right:8px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38bdf8;width:22px;height:22px;border-radius:50%;font-size:.65rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center">i</button>
+    <!-- Tooltip explicación -->
+    <div id="cmv-info-tooltip" style="display:none;position:absolute;top:36px;right:8px;width:240px;background:#0f172a;border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:10px 12px;font-size:.6rem;line-height:1.7;color:#94a3b8;text-align:left;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.6)">
+      <div style="color:#38bdf8;font-weight:800;margin-bottom:5px;font-size:.62rem">📊 Cómo se calcula el %</div>
+      <b style="color:#e2e8f0">Fórmula (Ritmo diario):</b><br>
+      <code style="color:#34d399;background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;display:block;margin:4px 0">
+        % = (prom/día ${h.m2Name} - prom/día ${h.m1Name})<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;/ prom/día ${h.m1Name} × 100
+      </code>
+      <b style="color:#e2e8f0">Datos reales:</b><br>
+      · <b>${h.m1Name}:</b> ${m1PromDia.toFixed(1)} pts/día (${h.diasM1ConDatos||'?'} días con datos)<br>
+      · <b>${h.m2Name}:</b> ${m2PromDia.toFixed(1)} pts/día (${h.diasM2ConDatos||'?'} días con datos)<br><br>
+      <b style="color:#e2e8f0">Proyección fin de mes:</b><br>
+      <code style="color:#fbbf24;background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;display:block;margin:4px 0">
+        ${m2PromDia.toFixed(1)} pts/día × ${h.totalDays||31} días = ${Math.round(projectedM2).toLocaleString()} pts
+      </code>
+      <div style="color:#475569;margin-top:4px;font-size:.55rem">⚠️ El % principal compara ritmo diario, no totales brutos. Esto es más justo cuando el mes actual aún no terminó.</div>
+    </div>
+    <!-- % principal -->
+    <div style="font-size:2.8rem;font-weight:900;color:${crec>=0?'#10b981':'#f87171'};line-height:1">${crec>0?'+':''}${crec.toFixed(1)}%</div>
+    <div style="color:#475569;font-size:.72rem;margin-top:4px;font-weight:700">ritmo diario vs ${h.m1Name}</div>
+    <!-- Sub-indicador proyección -->
+    <div style="margin-top:8px;display:inline-flex;gap:8px;align-items:center;background:rgba(255,255,255,.04);border-radius:99px;padding:3px 12px">
+      <span style="font-size:.6rem;color:#475569;font-weight:700">PROYECCIÓN vs ${h.m1Name}:</span>
+      <span style="font-size:.65rem;font-weight:900;color:${crecProy>=0?'#10b981':'#f87171'}">${crecProy>0?'+':''}${crecProy.toFixed(1)}%</span>
+    </div>
     <div style="display:flex;align-items:flex-end;gap:2px;height:22px;margin-top:10px;justify-content:center">${sparkHTML}</div>
   </div>
   <div class="cmv-kpi-grid">

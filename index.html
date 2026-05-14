@@ -10215,8 +10215,18 @@
     async function renderCrecimientoAnalisis() {
       const panel = document.getElementById('crec-tooltip-panel');
       if (!panel) return;
-      const mesActual = localDateStr().slice(0, 7);
+
+      // Auto-refresh cada 60s mientras el panel esté abierto
+      if (_cmvAutoRefresh) clearInterval(_cmvAutoRefresh);
+      _cmvAutoRefresh = setInterval(() => {
+        if (panel.classList.contains('tooltip-visible')) renderCrecimientoAnalisis();
+        else { clearInterval(_cmvAutoRefresh); _cmvAutoRefresh = null; }
+      }, 60000);
+
+      // Datos base del historial
+      if (typeof rkFetchSupabaseTotals === 'function') await rkFetchSupabaseTotals();
       const h = window._rkHistorial || { m0Total:0, m1Total:0, m2Total:0, m0Name:'Hace 2 Meses', m1Name:'Mes Pasado', m2Name:'Mes Actual', crec:0 };
+      const mesActual = localDateStr().slice(0, 7);
       const hoyD = new Date();
       const diaHoy = hoyD.getDate();
       const diasMes = new Date(hoyD.getFullYear(), hoyD.getMonth()+1, 0).getDate();
@@ -10224,85 +10234,151 @@
       const proyecc = Math.round(promDia * diasMes);
       const crec = h.crec;
       const crecColor = crec >= 0 ? '#10b981' : '#f87171';
-      const crecSign = crec > 0 ? '+' : '';
-      const fmtB = (pct) => { if (!pct) return '<span style="color:#64748b">—</span>'; const c = pct>0?'#34d399':'#f87171'; return '<span style="color:'+c+';font-weight:700;font-size:0.6rem;">'+(pct>0?'+':'')+pct.toFixed(1)+'%</span>'; };
-      const crecM1 = h.m0Total > 0 ? ((h.m1Total-h.m0Total)/h.m0Total*100) : 0;
-      const crecM2 = h.m1Total > 0 ? ((h.m2Total-h.m1Total)/h.m1Total*100) : 0;
-      const top3 = operatorsData.filter(o=>o.group!=='SP')
-        .map(o => { const p=getCortesOp(o.name).filter(x=>x.fecha&&x.fecha.slice(0,7)===mesActual).reduce((s,x)=>s+(Number(x.puntos)||0),0); return {name:o.name.split(' ').slice(0,2).join(' '),pts:p}; })
-        .filter(o=>o.pts>0).sort((a,b)=>b.pts-a.pts).slice(0,3);
+      const crecSign  = crec > 0 ? '+' : '';
+      const fmtPct = p => { if(!p) return '<span style="color:#64748b">—</span>'; const c=p>0?'#34d399':'#f87171'; return `<span style="color:${c};font-weight:700">${p>0?'+':''}${p.toFixed(1)}%</span>`; };
+      const crecM1 = h.m0Total>0 ? ((h.m1Total-h.m0Total)/h.m0Total*100) : 0;
+      const crecM2 = h.m1Total>0 ? ((h.m2Total-h.m1Total)/h.m1Total*100) : 0;
+      const copMes  = Math.round(h.m2Total * 1400);
+      const copProy = Math.round(proyecc * 1400);
 
-      panel.innerHTML =
-        '<div style="padding:18px;position:relative;background:#0f172a;color:#f1f5f9;border-radius:16px;max-height:80vh;overflow-y:auto;">'+
-        '<button onclick="window.toggleCrecTooltip(event)" style="position:absolute;top:12px;right:12px;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1.4rem;">&times;</button>'+
-        '<div style="color:#2dd4bf;font-weight:900;margin-bottom:15px;font-size:0.85rem;">📈 ¿CÓMO VAMOS ESTE MES?</div>'+
-        '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:3rem;font-weight:900;color:'+crecColor+';">'+crecSign+crec.toFixed(1)+'%</div>'+
-        '<div style="color:#64748b;font-size:0.8rem;margin-top:6px;font-weight:700;">vs '+h.m1Name+'</div></div>'+
-        '<div style="margin:12px 0;background:rgba(255,255,255,0.03);border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,0.06);">'+
-        '<div style="font-size:0.65rem;color:#475569;margin-bottom:6px;font-weight:800;">📅 HISTORIAL '+hoyD.getFullYear()+'</div>'+
-        '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;">'+
-        '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:4px 0;font-size:0.6rem;color:#475569;">MES</td><td style="text-align:right;font-size:0.6rem;color:#475569;">PUNTOS</td><td style="text-align:right;font-size:0.6rem;color:#475569;padding-left:8px;">VS ANT.</td></tr>'+
-        '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:5px 0;color:#94a3b8;">'+h.m0Name+'</td><td style="text-align:right;font-weight:700;color:#a78bfa;">'+h.m0Total.toLocaleString()+' pts</td><td style="text-align:right;padding-left:8px;">—</td></tr>'+
-        '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);"><td style="padding:5px 0;color:#94a3b8;">'+h.m1Name+'</td><td style="text-align:right;font-weight:700;color:#a78bfa;">'+h.m1Total.toLocaleString()+' pts</td><td style="text-align:right;padding-left:8px;">'+fmtB(crecM1)+'</td></tr>'+
-        '<tr style="background:rgba(52,211,153,0.05);"><td style="padding:5px 0;color:#34d399;font-weight:800;">'+h.m2Name+' (Actual)</td><td style="text-align:right;font-weight:800;color:#34d399;">'+h.m2Total.toLocaleString()+' pts</td><td style="text-align:right;padding-left:8px;">'+fmtB(crecM2)+'</td></tr>'+
-        '</table></div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'+
-        '<div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem;color:#94a3b8;font-weight:800;">RITMO ACTUAL ✨</div><div style="font-weight:900;font-size:1rem;">'+proyecc.toLocaleString()+' <small style="font-size:0.55rem;opacity:0.6;">pts</small></div></div>'+
-        '<div style="background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.6rem;color:#94a3b8;font-weight:800;">PROMEDIO DÍA 📅</div><div style="font-weight:900;font-size:1rem;">'+Math.round(promDia).toLocaleString()+' <small style="font-size:0.55rem;opacity:0.6;">pts</small></div></div>'+
-        '</div>'+
-        '<div style="margin-bottom:16px;"><div style="font-size:0.65rem;font-weight:900;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px;">🔥 Mapa de Calor — Día a Día</div>'+
-        '<div id="rk-heatmap-container"><span style="color:#475569;font-size:0.7rem;">Cargando datos de Supabase...</span></div>'+
-        '<div id="rk-heatmap-insight" style="margin-top:8px;font-size:0.66rem;line-height:1.6;color:#94a3b8;"></div></div>'+
-        '<div><div style="font-size:0.65rem;font-weight:900;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.05);padding-bottom:4px;">🏆 Líderes de Mes</div>'+
-        top3.map((o,i)=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;"><span style="font-size:0.85rem;"><span style="color:#64748b;">'+(i+1)+'.</span> '+o.name+'</span><span style="font-weight:900;color:#2dd4bf;">'+o.pts.toLocaleString()+'</span></div>').join('')+
-        '</div></div>';
-
-      (async () => {
-        try {
-          const hEl = document.getElementById('rk-heatmap-container');
-          const iEl = document.getElementById('rk-heatmap-insight');
-          if (!hEl || typeof _sb === 'undefined') return;
-          const m = String(hoyD.getMonth()+1).padStart(2,'0');
-          const desde = hoyD.getFullYear()+'-'+m+'-01';
-          const hasta  = hoyD.getFullYear()+'-'+m+'-'+String(diaHoy).padStart(2,'0');
-          const { data: rows } = await _sb.from('operaciones')
-            .select('fecha_dia,puntos_neto,id_perfil,agencia').gte('fecha_dia',desde).lte('fecha_dia',hasta).gt('puntos_neto',0);
-          if (!rows || !rows.length) { hEl.innerHTML = '<span style="color:#475569;font-size:0.7rem;">Sin datos Supabase este mes.</span>'; return; }
-          const pd = {};
+      // Fetch Supabase hoy
+      let rows = [], ptsHoy = 0, copHoy = 0, metaDia = 0;
+      const metaColor = '#fbbf24';
+      const hasta = hoyD.toLocaleDateString('en-CA',{timeZone:'America/Bogota'});
+      const desde = mesActual + '-01';
+      const pd = {};
+      try {
+        if (typeof _sb !== 'undefined') {
+          const { data: rawRows } = await _sb.from('operaciones')
+            .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
+            .gte('fecha_dia', desde).lte('fecha_dia', hasta)
+            .gt('puntos_neto', 0).neq('jornada','Auto');
+          rows = rawRows || [];
           rows.forEach(r => {
             if (!pd[r.fecha_dia]) pd[r.fecha_dia] = { t:0, n:0, ops: new Set() };
             pd[r.fecha_dia].t += Number(r.puntos_neto)||0;
             pd[r.fecha_dia].n++;
             pd[r.fecha_dia].ops.add(r.agencia||r.id_perfil);
           });
-          const dias = Object.keys(pd).sort();
-          const vals = dias.map(d=>pd[d].t);
-          const maxV = Math.max(...vals,1);
-          const promG = vals.reduce((a,b)=>a+b,0)/vals.length;
-          let html = '<div style="display:flex;flex-wrap:wrap;gap:3px;">';
-          dias.forEach(d => {
-            const v=pd[d].t, pct=v/maxV, dn=parseInt(d.slice(8));
-            const bg = pct>=0.8?'#10b981':pct>=0.5?'#34d399':pct>=0.25?'#fbbf24':'#f87171';
-            const lbl = pct>=0.8?'🔥':pct>=0.5?'✅':pct>=0.25?'⚡':'📉';
-            html += '<div title="Día '+dn+': '+v.toFixed(1)+' pts | '+pd[d].n+' reg | '+pd[d].ops.size+' perfiles" style="width:28px;height:28px;border-radius:5px;background:'+bg+';opacity:'+(0.4+pct*0.6).toFixed(2)+';display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;">' +
-              '<span style="font-size:0.5rem;font-weight:900;color:#000;">'+dn+'</span><span style="font-size:0.42rem;">'+lbl+'</span></div>';
-          });
-          html += '</div><div style="display:flex;gap:8px;margin-top:5px;font-size:0.52rem;color:#64748b;"><span>📉 Bajo</span><span>⚡ Medio</span><span>✅ Alto</span><span>🔥 Pico</span><span style="margin-left:auto;">Prom: '+promG.toFixed(0)+' pts/día</span></div>';
-          hEl.innerHTML = html;
-          const mejor = dias[vals.indexOf(Math.max(...vals))];
-          const peor  = dias[vals.indexOf(Math.min(...vals))];
-          const bajos = dias.filter(d=>pd[d].t < promG*0.5);
-          const altos = dias.filter(d=>pd[d].t >= promG*1.5);
-          const tend  = vals.length>=3 && vals[vals.length-1]>vals[Math.floor(vals.length/2)] ? 'ASCENDENTE 📈' : 'DESCENDENTE 📉';
-          if (iEl) iEl.innerHTML =
-            '<strong style="color:#e2e8f0;">📊 Análisis:</strong><br>'+
-            '<span style="color:#10b981">🔥 Mejor: día '+mejor.slice(8)+'</span> — '+pd[mejor].t.toFixed(1)+' pts ('+pd[mejor].n+' eventos, '+pd[mejor].ops.size+' perfiles). Alta densidad operativa.<br>'+
-            '<span style="color:#f87171">📉 Peor: día '+peor.slice(8)+'</span> — '+pd[peor].t.toFixed(1)+' pts. Baja cobertura ('+pd[peor].ops.size+' perfil'+(pd[peor].ops.size!==1?'es':'')+') o jornada incompleta.<br>'+
-            (bajos.length?'<span style="color:#fbbf24">⚠️ '+bajos.length+' día(s) bajo el 50% del promedio</span> — Revisar asistencia.<br>':'')+
-            (altos.length?'<span style="color:#34d399">✅ '+altos.length+' día(s) con rendimiento >150%</span> — Replicar condiciones de esos días.<br>':'')+
-            '<strong>Tendencia 2a mitad: '+tend+'</strong>';
-        } catch(e) { console.warn('[HEATMAP]',e); }
-      })();
+          ptsHoy = (pd[hasta]||{t:0}).t;
+          copHoy = Math.round(ptsHoy * 1400);
+        }
+      } catch(e) { console.warn('[CMV]', e); }
+
+      const dias = Object.keys(pd).sort();
+      const vals = dias.map(d=>pd[d].t);
+      const maxV = Math.max(...vals, 1);
+      const promG = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+      const metaDiaPct = promDia > 0 ? (ptsHoy / promDia * 100) : 0;
+      const metaC = metaDiaPct >= 100 ? '#10b981' : metaDiaPct >= 70 ? '#fbbf24' : '#f87171';
+
+      // Sparkline últimos 14 días
+      const spark14 = dias.slice(-14).map(d=>pd[d].t);
+      const spMax = Math.max(...spark14, 1);
+      const sparkHTML = spark14.map(v => { const h2=Math.max(3,Math.round(v/spMax*20)); const sc=v>=promG*1.2?'#10b981':v>=promG*0.7?'#2dd4bf':v>=promG*0.4?'#fbbf24':'#f87171'; return `<div style="flex:1;height:${h2}px;background:${sc};border-radius:2px 2px 0 0;min-width:4px"></div>`; }).join('');
+
+      // Heatmap
+      let hmHtml = '<div style="display:flex;flex-wrap:wrap;gap:3px">';
+      dias.forEach(d => {
+        const v=pd[d].t, pct=v/maxV, dn=parseInt(d.slice(8));
+        const bg=pct>=0.8?'#10b981':pct>=0.5?'#34d399':pct>=0.25?'#fbbf24':'#f87171';
+        const lbl=pct>=0.8?'🔥':pct>=0.5?'✅':pct>=0.25?'⚡':'📉';
+        hmHtml += `<div title="Día ${dn}: ${v.toFixed(1)} pts | ${pd[d].ops.size} perfiles" style="width:26px;height:26px;border-radius:5px;background:${bg};opacity:${(0.35+pct*0.65).toFixed(2)};display:flex;flex-direction:column;align-items:center;justify-content:center">`+
+          `<span style="font-size:.48rem;font-weight:900;color:#000">${dn}</span><span style="font-size:.4rem">${lbl}</span></div>`;
+      });
+      hmHtml += `</div><div style="display:flex;gap:8px;margin-top:5px;font-size:.52rem;color:#64748b"><span>📉 Bajo</span><span>⚡ Medio</span><span>✅ Alto</span><span>🔥 Pico</span><span style="margin-left:auto">Prom: ${promG.toFixed(0)} pts/día</span></div>`;
+
+      const tend = vals.length>=4 && vals[vals.length-1]>vals[Math.floor(vals.length/2)] ? 'ASCENDENTE 📈' : 'DESCENDENTE 📉';
+      const tendColor = tend.includes('ASC') ? '#10b981' : '#f87171';
+      const mejor = vals.length ? dias[vals.indexOf(Math.max(...vals))] : null;
+      const peor  = vals.length ? dias[vals.indexOf(Math.min(...vals))] : null;
+      const bajos = dias.filter(d=>pd[d].t<promG*0.5);
+      const altos = dias.filter(d=>pd[d].t>=promG*1.5);
+
+      // Alertas inteligentes
+      const alertas = [];
+      if (metaDiaPct < 60 && ptsHoy > 0) alertas.push({t:'danger',i:'🚨',msg:`<b>Producción baja hoy:</b> ${ptsHoy.toFixed(1)} pts = ${metaDiaPct.toFixed(0)}% del promedio diario.`});
+      if (crec < -20) alertas.push({t:'danger',i:'📉',msg:`<b>Caída mensual severa:</b> ${crecSign}${crec.toFixed(1)}% vs ${h.m1Name}. Revisar asistencia.`});
+      else if (crec < 0) alertas.push({t:'warn',i:'⚠️',msg:`<b>Mes en negativo:</b> ${crecSign}${crec.toFixed(1)}% vs ${h.m1Name}. Aumentar ritmo.`});
+      if (metaDiaPct >= 120) alertas.push({t:'success',i:'🔥',msg:`<b>¡Día excepcional!</b> ${metaDiaPct.toFixed(0)}% del promedio diario.`});
+      if (crec >= 10) alertas.push({t:'success',i:'📈',msg:`<b>Mes en crecimiento:</b> +${crec.toFixed(1)}% vs ${h.m1Name}.`});
+      const diasRest = diasMes - diaHoy;
+      const ptsNec = h.m1Total - h.m2Total;
+      if (ptsNec > 0 && diasRest > 0) alertas.push({t:'info',i:'🎯',msg:`<b>Para superar ${h.m1Name}:</b> faltan ${ptsNec.toFixed(0)} pts en ${diasRest} días (${(ptsNec/diasRest).toFixed(0)} pts/día).`});
+
+      // Top operadores del mes via Supabase
+      const opMap = {};
+      rows.forEach(r => {
+        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id)===String(r.id_perfil))) : null;
+        const key = op ? op.name.split(' ').slice(0,2).join(' ') : (r.agencia||String(r.id_perfil)).slice(0,18);
+        opMap[key] = (opMap[key]||0) + (r.puntos_neto||0);
+      });
+      const top5 = Object.entries(opMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+      const medals = ['🥇','🥈','🥉','4️⃣','5️⃣'];
+
+      const ts = new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+      panel.innerHTML = `
+<div style="padding:18px;color:#f1f5f9;font-family:inherit">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div><div style="color:#2dd4bf;font-weight:900;font-size:.88rem">📊 ¿CÓMO VAMOS ESTE MES?</div>
+    <div style="font-size:.55rem;color:#334155;margin-top:2px"><span class="cmv-rt-dot"></span>RT · ${ts} · auto-refresh 60s</div></div>
+    <button onclick="window.toggleCrecTooltip(event)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#94a3b8;cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:1rem">&times;</button>
+  </div>
+  <div style="text-align:center;padding:14px;background:rgba(255,255,255,.02);border-radius:14px;border:1px solid rgba(255,255,255,.05);margin-bottom:14px">
+    <div style="font-size:3rem;font-weight:900;color:${crecColor};line-height:1">${crecSign}${crec.toFixed(1)}%</div>
+    <div style="color:#475569;font-size:.75rem;margin-top:5px;font-weight:700">vs ${h.m1Name} · Proyectado al fin de mes</div>
+    <div style="display:flex;align-items:flex-end;gap:2px;height:22px;margin-top:10px;justify-content:center">${sparkHTML}</div>
+  </div>
+  <div class="cmv-kpi-grid">
+    <div class="cmv-kpi-card" style="border-color:rgba(45,212,191,.18)">
+      <div class="cmv-kpi-label">📅 HOY — Puntos</div>
+      <div class="cmv-kpi-value" style="color:#2dd4bf">${ptsHoy.toFixed(1)}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
+      <div class="cmv-kpi-sub">$${copHoy.toLocaleString('es-CO')} COP</div>
+      <span class="cmv-kpi-badge" style="background:${metaC}22;color:${metaC}">${metaDiaPct.toFixed(0)}% de meta</span>
+    </div>
+    <div class="cmv-kpi-card" style="border-color:rgba(167,139,250,.18)">
+      <div class="cmv-kpi-label">📆 MES — Total</div>
+      <div class="cmv-kpi-value" style="color:#a78bfa">${h.m2Total.toLocaleString('es-CO',{minimumFractionDigits:1})}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
+      <div class="cmv-kpi-sub">$${copMes.toLocaleString('es-CO')} COP</div>
+      <span class="cmv-kpi-badge" style="background:rgba(167,139,250,.1);color:#a78bfa">${h.m2Name}</span>
+    </div>
+    <div class="cmv-kpi-card" style="border-color:rgba(251,191,36,.18)">
+      <div class="cmv-kpi-label">✨ PROMEDIO / DÍA</div>
+      <div class="cmv-kpi-value" style="color:#fbbf24">${Math.round(promDia).toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
+      <div class="cmv-kpi-sub">$${Math.round(promDia*1400).toLocaleString('es-CO')} COP/día</div>
+      <span class="cmv-kpi-badge" style="background:rgba(251,191,36,.1);color:#fbbf24">Día ${diaHoy}/${diasMes}</span>
+    </div>
+    <div class="cmv-kpi-card" style="border-color:rgba(16,185,129,.18)">
+      <div class="cmv-kpi-label">🚀 PROYECCIÓN FIN MES</div>
+      <div class="cmv-kpi-value" style="color:#10b981">${proyecc.toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
+      <div class="cmv-kpi-sub">$${copProy.toLocaleString('es-CO')} COP</div>
+      <div class="cmv-proj-bar-wrap"><div class="cmv-proj-bar" style="width:${Math.min(100,proyecc/(h.m1Total||1)*100).toFixed(1)}%;background:${crec>=0?'#10b981':'#f87171'}"></div></div>
+    </div>
+  </div>
+  ${alertas.length?`<div class="cmv-section-title">🔔 ALERTAS INTELIGENTES</div>${alertas.map(a=>`<div class="cmv-alert ${a.t}"><span class="cmv-alert-icon">${a.i}</span><div>${a.msg}</div></div>`).join('')}`:''}
+  <div class="cmv-section-title">📅 HISTORIAL ${hoyD.getFullYear()}</div>
+  <div style="background:rgba(255,255,255,.02);border-radius:10px;border:1px solid rgba(255,255,255,.05);overflow:hidden;margin-bottom:4px">
+    <table style="width:100%;font-size:.75rem;border-collapse:collapse">
+      <tr style="border-bottom:1px solid rgba(255,255,255,.05)"><td style="padding:5px 10px;font-size:.56rem;color:#334155">MES</td><td style="text-align:right;padding:5px 6px;font-size:.56rem;color:#334155">PUNTOS</td><td style="text-align:right;padding:5px 6px;font-size:.56rem;color:#334155">VS ANT.</td><td style="text-align:right;padding:5px 10px;font-size:.56rem;color:#334155">COP</td></tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,.03)"><td style="padding:6px 10px;color:#94a3b8">${h.m0Name}</td><td style="text-align:right;padding:6px;font-weight:700;color:#a78bfa">${h.m0Total.toLocaleString()} pts</td><td style="text-align:right;padding:6px">—</td><td style="text-align:right;padding:6px 10px;color:#64748b;font-size:.63rem">$${Math.round(h.m0Total*1400).toLocaleString('es-CO')}</td></tr>
+      <tr style="border-bottom:1px solid rgba(255,255,255,.03)"><td style="padding:6px 10px;color:#94a3b8">${h.m1Name}</td><td style="text-align:right;padding:6px;font-weight:700;color:#a78bfa">${h.m1Total.toLocaleString()} pts</td><td style="text-align:right;padding:6px">${fmtPct(crecM1)}</td><td style="text-align:right;padding:6px 10px;color:#64748b;font-size:.63rem">$${Math.round(h.m1Total*1400).toLocaleString('es-CO')}</td></tr>
+      <tr style="background:rgba(52,211,153,.04)"><td style="padding:6px 10px;color:#34d399;font-weight:800">${h.m2Name} ✦</td><td style="text-align:right;padding:6px;font-weight:900;color:#34d399">${h.m2Total.toLocaleString()} pts</td><td style="text-align:right;padding:6px">${fmtPct(crecM2)}</td><td style="text-align:right;padding:6px 10px;color:#34d399;font-weight:700;font-size:.63rem">$${copMes.toLocaleString('es-CO')}</td></tr>
+    </table>
+  </div>
+  <div class="cmv-section-title">🔥 MAPA DE CALOR — DÍA A DÍA</div>
+  ${hmHtml}
+  <div style="margin-top:9px;font-size:.62rem;line-height:1.8;color:#64748b">
+    ${mejor?`<span style="color:#10b981">🔥 Mejor: día ${mejor.slice(8)}</span> — ${pd[mejor].t.toFixed(1)} pts | ${pd[mejor].ops.size} perfiles<br>`:''}
+    ${peor?`<span style="color:#f87171">📉 Peor: día ${peor.slice(8)}</span> — ${pd[peor].t.toFixed(1)} pts<br>`:''}
+    ${bajos.length?`<span style="color:#fbbf24">⚠️ ${bajos.length} día(s) bajo 50% del promedio</span><br>`:''}
+    ${altos.length?`<span style="color:#34d399">✅ ${altos.length} día(s) con rendimiento >150%</span><br>`:''}
+    <b style="color:${tendColor}">Tendencia 2ª mitad: ${tend}</b>
+  </div>
+  ${top5.length?`<div class="cmv-section-title">🏆 TOP OPERADORES DEL MES</div>${top5.map(([n,p],i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span style="font-size:.78rem">${medals[i]} ${n}</span><div style="text-align:right"><div style="font-weight:900;color:#2dd4bf;font-size:.8rem">${p.toFixed(1)} pts</div><div style="font-size:.57rem;color:#475569">$${Math.round(p*1400).toLocaleString('es-CO')} COP</div></div></div>`).join('')}`:''}
+  <div style="text-align:center;margin-top:14px">
+    <button onclick="renderCrecimientoAnalisis()" style="background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.2);color:#2dd4bf;padding:5px 16px;border-radius:99px;font-size:.6rem;cursor:pointer;font-weight:700">↻ Actualizar ahora</button>
+  </div>
+</div>`;
     }
 
     function _generarInsights(rows, vel, proy, totalPtsPrev) {

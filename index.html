@@ -13347,8 +13347,48 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         clearInterval(_opDashInterval);
         _opDashInterval = null;
       }
-    } // ← cierre loginSuccess
 
+      // Show/hide dashboard vs operator view
+      const tabBar = document.querySelector('.tab-bar');
+      const mainTitle = document.querySelector('h1');
+      const opDash = document.getElementById('op-dashboard');
+
+      if (role === 'operador') {
+        if (tabBar) tabBar.style.display = 'none';
+        document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+        if (opDash) opDash.classList.add('visible');
+        loadData();
+        // Show meta screen before dashboard
+        mostrarMetaDiaria(opName);
+        return; // dashboard rendered after meta confirmed
+      } else {
+        if (tabBar) tabBar.style.display = '';
+        if (opDash) opDash.classList.remove('visible');
+        // Clear lingering inline styles on tab contents
+        document.querySelectorAll('.tab-content').forEach(t => t.style.display = '');
+        loadData();
+        buildGroupSelect();   // Poblar select grupos con datos guardados
+        // Mostrar btn Grupos solo para admin
+        const btnGrupos = document.getElementById('btn-grupo-manager');
+        if (btnGrupos) btnGrupos.style.display = role === 'admin' ? 'inline-block' : 'none';
+        // Btn purgar mes: solo admin
+        const btnPurgar2 = document.getElementById('btn-purgar-mes');
+        if (btnPurgar2) btnPurgar2.style.display = role === 'admin' ? 'inline-block' : 'none';
+        // Monitor/admin arrancan en vista Día — ver quién produce HOY
+        if (role === 'monitor' || role === 'admin') {
+          rkViewMode = 'dia';
+          rkSortCol = 7;  // pts hoy
+          rkSortDir = -1;
+          const btnMes = document.getElementById('rk-btn-mes');
+          const btnDia = document.getElementById('rk-btn-dia');
+          if (btnMes) btnMes.className = 'rk-view-btn';
+          if (btnDia) btnDia.className = 'rk-view-btn active-dia';
+        }
+        switchTab(0);
+      }
+    }
+
+    // ── Barra competitiva de turno para operadores ──────────────────
     function getPuntosHoy(name, shiftFilter = null) {
       let ptsHoy = 0, ptsAyer = 0, ptsSemana = 0, ptsSemPasada = 0, ptsMes = 0;
       let ptsFeb = 0, ptsMar = 0;
@@ -13418,47 +13458,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       return datamePtsHoy > 0 ? datamePtsHoy : ptsHoy;
     }
 
-      // Show/hide dashboard vs operator view
-      const tabBar = document.querySelector('.tab-bar');
-      const mainTitle = document.querySelector('h1');
-      const opDash = document.getElementById('op-dashboard');
-
-      if (role === 'operador') {
-        if (tabBar) tabBar.style.display = 'none';
-        document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
-        if (opDash) opDash.classList.add('visible');
-        loadData();
-        // Show meta screen before dashboard
-        mostrarMetaDiaria(opName);
-        return; // dashboard rendered after meta confirmed
-      } else {
-        if (tabBar) tabBar.style.display = '';
-        if (opDash) opDash.classList.remove('visible');
-        // Clear lingering inline styles on tab contents
-        document.querySelectorAll('.tab-content').forEach(t => t.style.display = '');
-        loadData();
-        buildGroupSelect();   // Poblar select grupos con datos guardados
-        // Mostrar btn Grupos solo para admin
-        const btnGrupos = document.getElementById('btn-grupo-manager');
-        if (btnGrupos) btnGrupos.style.display = role === 'admin' ? 'inline-block' : 'none';
-        // Btn purgar mes: solo admin
-        const btnPurgar2 = document.getElementById('btn-purgar-mes');
-        if (btnPurgar2) btnPurgar2.style.display = role === 'admin' ? 'inline-block' : 'none';
-        // Monitor/admin arrancan en vista Día — ver quién produce HOY
-        if (role === 'monitor' || role === 'admin') {
-          rkViewMode = 'dia';
-          rkSortCol = 7;  // pts hoy
-          rkSortDir = -1;
-          const btnMes = document.getElementById('rk-btn-mes');
-          const btnDia = document.getElementById('rk-btn-dia');
-          if (btnMes) btnMes.className = 'rk-view-btn';
-          if (btnDia) btnDia.className = 'rk-view-btn active-dia';
-        }
-        switchTab(0);
-      }
-    }
-
-    // ── Barra competitiva de turno para operadores ──────────────────
     function renderCompetitiveBar() {
       const el = document.getElementById('op-competitive-bar');
       if (!el) return;

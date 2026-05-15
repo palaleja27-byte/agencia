@@ -8568,9 +8568,10 @@
       setTimeout(() => { boot.style.display = 'none'; }, 500);
     }
 
+    let _sbBootReady = false; // ← señal global: true cuando el boot inicial de Supabase terminó
     async function _sbSyncOnLoad() {
       _bootProgress(20, 'Conectando con Supabase...');
-      if (!_sb) { _bootDone(); return; }
+      if (!_sb) { _sbBootReady = true; _bootDone(); return; }
 
       try {
         _bootProgress(40, 'Descargando datos...');
@@ -8625,9 +8626,11 @@
           if (typeof renderAlertas === 'function') renderAlertas();
         }
         _toastSync('🟢 Datos sincronizados con Supabase');
+        _sbBootReady = true;
 
       } catch (e) {
         _sbOnline = false;
+        _sbBootReady = true; // permitir que funciones secundarias operen en modo local
         const errMsg = (e.message || e.toString()).slice(0, 40);
         _bootProgress(100, `⚠️ Error: ${errMsg} (Modo Local)`);
         console.warn('[Supabase] sync load:', e);
@@ -17072,8 +17075,14 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     // =====================================================================
     // SINCRONIZADOR LASER SYNC (v20 - AMANECER 6 AM)
     // =====================================================================
+    let _laserSyncRunning = false;
     async function sincronizarDatameRelacional() {
       if (typeof _sb === 'undefined' || !operatorsData) return;
+      // Esperar a que el boot de Supabase termine antes de disparar
+      if (!_sbBootReady) { console.log('[Bridge] Boot no listo, posponiendo Laser Sync...'); return; }
+      // Mutex: evitar ejecuciones concurrentes
+      if (_laserSyncRunning) { console.log('[Bridge] Laser Sync ya en curso, omitiendo...'); return; }
+      _laserSyncRunning = true;
       const loader = document.getElementById('rr-boot-msg');
       if (loader) loader.innerText = "Sincronizando (Amanecer 6 AM)...";
 
@@ -17160,7 +17169,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           if (typeof renderOperators === 'function') renderOperators();
           console.log("[Bridge] Laser Sync 6 AM Exitoso.");
         }
-      } catch (err) { console.error("[Bridge Error]", err); }
+      } catch (err) {
+        console.warn('[Bridge] Error en Laser Sync (se reintentará):', err.message || err);
+      } finally {
+        _laserSyncRunning = false;
+      }
     }
 
     async function testDatameExtraction() {
@@ -17346,7 +17359,8 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     function closeDailyHistory() { document.getElementById('modal-history').classList.remove('open'); }
 
     // --- RELLENO DEL BRIDGE ---
-    setTimeout(() => { sincronizarDatameRelacional(); }, 3000);
+    // Esperar 8s (suficiente para que _sbSyncOnLoad termine) antes del primer Laser Sync
+    setTimeout(() => { sincronizarDatameRelacional(); }, 8000);
     setInterval(sincronizarDatameRelacional, 300000);
 
     // ══════════════════════════════════════════════════════════════
@@ -17691,6 +17705,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     let _corteRefreshTimer = null;
 
     async function renderCorteTurnoLive() {
+      if (!_sbBootReady) return; // Esperar boot
       const corteWrap = document.getElementById('dp-corte-perfiles-list');
       const totalEl   = document.getElementById('dp-corte-total-global');
       const labelEl   = document.getElementById('dp-corte-active-label');
@@ -18222,6 +18237,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
     async function sincronizarDatamePaneles() {
       if (typeof _sb === 'undefined') return;
+      if (!_sbBootReady) return; // Esperar boot de Supabase
 
       // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
       // Esto asegura que las asignaciones hechas por monitores se distribuyan a todos los usuarios
@@ -18532,9 +18548,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     const _dpOrigLoadData = typeof loadData === 'function' ? loadData : null;
     setTimeout(dpMostrarWrap, 4000);
     // Sincronizar automáticamente para el Resumen de Corte de Turno (visible para todos)
-    setTimeout(sincronizarDatamePaneles, 5500);
+    // Escalonar cargas: Paneles a 10s, Corte a 12s (después del boot de Supabase)
+    setTimeout(sincronizarDatamePaneles, 10000);
     // Resumen Corte de Turno — consulta autónoma (independiente de dpMostrarWrap)
-    setTimeout(renderCorteTurnoLive, 4500);
+    setTimeout(renderCorteTurnoLive, 12000);
     setInterval(renderCorteTurnoLive, 300000);  // Refrescar cada 5 min
     setInterval(sincronizarDatamePaneles, 300000); // Refresh cada 5 min
 

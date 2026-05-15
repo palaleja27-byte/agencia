@@ -8575,9 +8575,9 @@
       try {
         _bootProgress(40, 'Descargando datos...');
         
-        // Timeout de seguridad: Si Supabase se cuelga (network drop silencioso), forzamos error tras 15s
+        // Timeout de seguridad: Si Supabase se cuelga (network drop silencioso), forzamos error tras 35s
         const fetchPromise = _sb.from('kv_store').select('key, value');
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 15000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 35000));
         
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
         
@@ -17082,10 +17082,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const perfiles_activos = operatorsData.flatMap(op => (op.profiles || []).map(p => String(p.id)));
 
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync")), 25000));
-        
         const fetchCat = _sb.from('operadores_v3').select('*').range(0, 1000);
-        const { data: catOperadores } = await Promise.race([fetchCat, timeoutPromise]);
+        const { data: catOperadores } = await Promise.race([
+          fetchCat, 
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync (Cat)")), 25000))
+        ]);
         
         const fetchOps = _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
@@ -17094,7 +17095,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           .order('fecha_corte', { ascending: true }) // ASC para capturar base primero
           .range(0, 5000);
           
-        const { data: operaciones, error } = await Promise.race([fetchOps, timeoutPromise]);
+        const { data: operaciones, error } = await Promise.race([
+          fetchOps, 
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync (Ops)")), 45000))
+        ]);
 
         if (error || !operaciones) return;
 

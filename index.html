@@ -6102,7 +6102,13 @@
     function localDateStr(d) {
       // ⚠️ SIEMPRE usar America/Bogota para fecha_dia (UTC-5)
       // El navegador puede estar en UK u otro timezone — NO usar getDate() local.
-      const dt = d || new Date();
+      let dt;
+      if (typeof d === 'number') {
+        dt = new Date();
+        dt.setDate(dt.getDate() - d);
+      } else {
+        dt = d || new Date();
+      }
       return dt.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     }
 
@@ -8569,9 +8575,9 @@
       try {
         _bootProgress(40, 'Descargando datos...');
         
-        // Timeout de seguridad: Si Supabase se cuelga (network drop silencioso), forzamos error tras 6s
+        // Timeout de seguridad: Si Supabase se cuelga (network drop silencioso), forzamos error tras 15s
         const fetchPromise = _sb.from('kv_store').select('key, value');
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 6000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 15000));
         
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
         

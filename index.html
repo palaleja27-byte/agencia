@@ -4100,12 +4100,31 @@
       padding:8px 14px; border-top:1px solid rgba(255,255,255,.05);
       font-size:.72rem; color:#94a3b8;
     }
+    }
     @keyframes dp-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     .dp-live-dot {
       width:7px; height:7px; border-radius:50%; background:#2dd4bf;
       display:inline-block; margin-right:5px;
       animation:dp-pulse 2s infinite;
     }
+/* AI Modal & Buttons */
+.ai-info-btn { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 8px; padding: 5px 10px; font-size: 0.7rem; font-weight: bold; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px; z-index: 10; }
+.ai-info-btn:hover { background: rgba(255,255,255,0.1); color: #fff; transform: scale(1.05); }
+.modal-info-ov { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 30000; display: none; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
+.modal-info-ov.open { display: flex; opacity: 1; }
+.modal-info-box { background: #0f172a; border: 1px solid #334155; border-radius: 16px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); transform: translateY(20px); transition: transform 0.3s; display: flex; flex-direction: column; }
+.modal-info-ov.open .modal-info-box { transform: translateY(0); }
+.mi-header { padding: 20px; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; }
+.mi-body { padding: 20px; }
+.mi-section { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 15px; }
+.mi-label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; font-weight: 800; }
+.mi-text { font-size: 0.9rem; color: #e2e8f0; line-height: 1.5; }
+.mi-math { font-family: monospace; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; color: #38bdf8; font-size: 0.85rem; margin-top: 8px; border: 1px dashed rgba(56,189,248,0.2); }
+.mi-ai-box { background: linear-gradient(145deg, rgba(167,139,250,0.1), rgba(167,139,250,0.02)); border: 1px solid rgba(167,139,250,0.3); border-radius: 10px; padding: 15px; position: relative; }
+.btn-audio { width: 100%; padding: 12px; background: #a78bfa; color: #000; border: none; border-radius: 10px; font-weight: 800; font-size: 0.9rem; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 15px; transition: background 0.2s; }
+.btn-audio:hover { background: #c4b5fd; }
+.btn-audio.playing { background: #f43f5e; color: #fff; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.98); } 100% { transform: scale(1); } }
   </style>
 </head>
 
@@ -11926,6 +11945,11 @@ function exportarDatos() {
       }
       const ptsProyectado24h = paceHourly * 24;
 
+      const dHora = btoa(JSON.stringify({ ptsHoy, currentHour, paceHourly, ptsProyectado24h }));
+      const dDia = btoa(JSON.stringify({ ptsSemana, ptsPorDiaSemana }));
+      const dSemana = btoa(JSON.stringify({ ptsMes, ptsPorSemanaMes }));
+      const dMes = btoa(JSON.stringify({ ptsPorMes }));
+
       container.innerHTML = `
         <div style="margin-bottom: 25px; padding: 10px;">
           <h2 style="font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 20px; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
@@ -11936,12 +11960,13 @@ function exportarDatos() {
             
             <!-- CARD 1: HORA (Pulso Diario) -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(52,211,153,0.05);">
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('hora', '${dHora}')">🤖 Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
                   <div style="font-size:0.75rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;">⚡ Ritmo por Hora (Hoy)</div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsHoy.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts actuales</span></div>
                 </div>
-                <div style="text-align:right;">
+                <div style="text-align:right; margin-right: 65px;">
                   <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Proyección 24h</div>
                   <div style="font-size:1.1rem;color:#5eead4;font-weight:bold;">${ptsProyectado24h.toFixed(0)} pts</div>
                 </div>
@@ -11951,12 +11976,13 @@ function exportarDatos() {
 
             <!-- CARD 2: DÍA (Semana en Curso) -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(56,189,248,0.05);">
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('dia', '${dDia}')">🤖 Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
                   <div style="font-size:0.75rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;">📅 Rendimiento Diario (Semana)</div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsSemana.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts totales</span></div>
                 </div>
-                <div style="text-align:right;">
+                <div style="text-align:right; margin-right: 65px;">
                   <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Ganancia Semanal</div>
                   <div style="font-size:1.1rem;color:#bae6fd;font-weight:bold;">$${Math.round(ptsSemana * 1400).toLocaleString('es-CO')}</div>
                 </div>
@@ -11966,12 +11992,13 @@ function exportarDatos() {
 
             <!-- CARD 3: SEMANA (Mes en Curso) -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(167,139,250,0.4);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(167,139,250,0.05);">
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('semana', '${dSemana}')">🤖 Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
                   <div style="font-size:0.75rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">🏆 Rendimiento Semanal (${currLabel})</div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsMes.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts totales</span></div>
                 </div>
-                <div style="text-align:right;">
+                <div style="text-align:right; margin-right: 65px;">
                   <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Ganancia Mensual</div>
                   <div style="font-size:1.1rem;color:#ddd6fe;font-weight:bold;">$${Math.round(ptsMes * 1400).toLocaleString('es-CO')}</div>
                 </div>
@@ -11981,12 +12008,13 @@ function exportarDatos() {
 
             <!-- CARD 4: MES (Histórico Anual) -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(251,191,36,0.05);">
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('mes', '${dMes}')">🤖 Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
                   <div style="font-size:0.75rem;color:#fbbf24;font-weight:800;letter-spacing:1px;text-transform:uppercase;">📊 Histórico Mensual (2026)</div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${['01','02','03','04','05'].reduce((a,m)=>a+ptsPorMes[m],0).toFixed(0)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts anuales</span></div>
                 </div>
-                <div style="text-align:right;">
+                <div style="text-align:right; margin-right: 65px;">
                   <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Mes Más Fuerte</div>
                   <div style="font-size:1.1rem;color:#fde68a;font-weight:bold;">${Math.max(...['01','02','03','04','05'].map(m=>ptsPorMes[m])).toFixed(0)} pts</div>
                 </div>
@@ -19261,5 +19289,126 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         </div>
      </div>
   </div>
+  <!-- MODAL INFO & AI LOCAL -->
+  <div class="modal-info-ov" id="modal-info-ai">
+    <div class="modal-info-box">
+      <div class="mi-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:1.5rem;" id="mi-icon">🤖</span>
+          <div>
+            <h3 style="margin:0; font-size:1.1rem; color:#fff;" id="mi-title">Análisis</h3>
+            <span style="font-size:0.65rem; color:#64748b;">Motor Ejecutivo Local v1.0</span>
+          </div>
+        </div>
+        <button onclick="cerrarInfoIA()" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="mi-body">
+        <div class="mi-section">
+          <div class="mi-label">Origen de Datos</div>
+          <div class="mi-text" id="mi-origen">...</div>
+        </div>
+        <div class="mi-section">
+          <div class="mi-label">Ecuación Técnica</div>
+          <div class="mi-math" id="mi-ecuacion">...</div>
+        </div>
+        <div class="mi-ai-box">
+          <div style="position:absolute; top:-10px; right:15px; background:#0f172a; padding:0 5px; font-size:0.7rem; color:#a78bfa; font-weight:bold; border-radius:4px;">Análisis Estratégico</div>
+          <div class="mi-text" id="mi-analisis" style="color:#e2e8f0; font-style:italic;">...</div>
+          <button class="btn-audio" id="btn-mi-audio" onclick="toggleAudioIA()">
+            <span>🔊 Reproducir Análisis</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _speechUtterance = null;
+    function cerrarInfoIA() {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      document.getElementById('modal-info-ai').classList.remove('open');
+      const btn = document.getElementById('btn-mi-audio');
+      btn.classList.remove('playing');
+      btn.innerHTML = '<span>🔊 Reproducir Análisis</span>';
+    }
+
+    function toggleAudioIA() {
+      const btn = document.getElementById('btn-mi-audio');
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        btn.classList.remove('playing');
+        btn.innerHTML = '<span>🔊 Reproducir Análisis</span>';
+        return;
+      }
+      const texto = document.getElementById('mi-analisis').innerText;
+      _speechUtterance = new SpeechSynthesisUtterance(texto);
+      _speechUtterance.lang = 'es-ES';
+      _speechUtterance.rate = 1.05;
+      _speechUtterance.pitch = 0.9;
+      _speechUtterance.onend = () => {
+        btn.classList.remove('playing');
+        btn.innerHTML = '<span>🔊 Reproducir Análisis</span>';
+      };
+      window.speechSynthesis.speak(_speechUtterance);
+      btn.classList.add('playing');
+      btn.innerHTML = '<span>⏹ Detener Audio</span>';
+    }
+
+    window.abrirInfoTarjeta = function(tipo, dataBase64) {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      const data = JSON.parse(atob(dataBase64));
+      const modal = document.getElementById('modal-info-ai');
+      const icon = document.getElementById('mi-icon');
+      const title = document.getElementById('mi-title');
+      const origen = document.getElementById('mi-origen');
+      const ecuacion = document.getElementById('mi-ecuacion');
+      const analisis = document.getElementById('mi-analisis');
+      const btnAudio = document.getElementById('btn-mi-audio');
+      
+      btnAudio.classList.remove('playing');
+      btnAudio.innerHTML = '<span>🔊 Reproducir Análisis</span>';
+      let textAI = '';
+
+      if (tipo === 'hora') {
+        icon.innerText = '⚡';
+        title.innerText = 'Métrica: Ritmo por Hora (Pace)';
+        origen.innerText = 'Extracción en tiempo real de Datame, sumando todos los operadores. Excluye cortes atípicos (>1500).';
+        ecuacion.innerText = 'Pace = ( Σ Puntos Hoy / Hora Actual ) * 24';
+        const ritmo = data.ptsHoy / data.currentHour;
+        const proyectado = ritmo * 24;
+        textAI = `Director, al corte de la hora ${data.currentHour}, hemos asegurado ${data.ptsHoy.toFixed(0)} puntos. El ritmo operativo actual es de ${ritmo.toFixed(0)} puntos por hora. Manteniendo esta constante, la proyección matemática de cierre a la medianoche es de ${proyectado.toFixed(0)} puntos. ` + (ritmo > 1000 ? 'El rendimiento horario es excepcional, sugiero mantener las estrategias de retención actuales.' : 'El ritmo es moderado. Sugiero incentivar a los equipos de la jornada tarde y noche para acelerar el volumen de producción.');
+      } else if (tipo === 'dia') {
+        icon.innerText = '📅';
+        title.innerText = 'Métrica: Rendimiento Diario';
+        origen.innerText = 'Acumulado de cortes Datame de la semana en curso, aplicando offset de +2 días para corregir la zona horaria UK -> Colombia.';
+        ecuacion.innerText = 'Semana = Σ (Puntos_Neto) donde Week(Fecha) == Week(Hoy)';
+        const diasArr = data.ptsPorDiaSemana;
+        const maxPts = Math.max(...diasArr);
+        const bestDayIdx = diasArr.indexOf(maxPts);
+        const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+        textAI = `Análisis semanal en curso. Hemos consolidado ${data.ptsSemana.toFixed(0)} puntos esta semana. El día de mayor tracción operativa ha sido el ${days[bestDayIdx]} con ${maxPts.toFixed(0)} puntos. Estratégicamente, debemos replicar el modelo de tráfico del ${days[bestDayIdx]} hacia los días de menor rendimiento para equilibrar la curva semanal.`;
+      } else if (tipo === 'semana') {
+        icon.innerText = '🏆';
+        title.innerText = 'Métrica: Rendimiento Semanal';
+        origen.innerText = 'Consolidado del mes actual agrupado en semanas estándar (7 días exactos desde el inicio del año).';
+        ecuacion.innerText = 'Semana_N = Σ (Puntos) donde Month == Mes_Actual agrupado por index % 7';
+        const sumSem = data.ptsPorSemanaMes.reduce((a,b)=>a+b,0);
+        textAI = `Reporte mensual ejecutivo. Hasta la fecha, el volumen acumulado del mes es de ${data.ptsMes.toFixed(0)} puntos. Si analizamos la distribución intersemanal, observamos que las primeras semanas definen la tendencia del mes. La prioridad gerencial debe ser sostener este volumen operativo para maximizar la conversión final en COP, la cual se estima en una base de mil cuatrocientos pesos por punto.`;
+      } else if (tipo === 'mes') {
+        icon.innerText = '📊';
+        title.innerText = 'Métrica: Histórico Anual';
+        origen.innerText = 'Histórico consolidado del año 2026 directamente extraído de la base de datos maestra (Datame).';
+        ecuacion.innerText = 'Total_Anual = Σ (Puntos) agrupados por Mes (01, 02, 03...)';
+        const arrMeses = ['01','02','03','04','05'].map(m => data.ptsPorMes[m]);
+        const maxMes = Math.max(...arrMeses);
+        const mIdx = arrMeses.indexOf(maxMes);
+        const nombresMes = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo'];
+        textAI = `Panorama macroeconómico anual. El histórico nos muestra que nuestro mejor ciclo fiscal ha sido ${nombresMes[mIdx]}, alcanzando el pico histórico de ${maxMes.toFixed(0)} puntos. Este récord debe ser nuestro benchmark, nuestro estándar mínimo de calidad para los próximos meses. Las proyecciones sugieren un crecimiento escalonado si mantenemos la densidad de tráfico en las cuentas principales.`;
+      }
+      
+      analisis.innerText = textAI;
+      modal.classList.add('open');
+    };
+  </script>
 </body>
 </html>

@@ -63,6 +63,70 @@ const shiftBaselines = {};
 function bKey(id, fecha, jornada) { return `${id}__${fecha}__${jornada}`; }
 
 // ─────────────────────────────────────────────────────────────────
+// FUNCIONES DB CON REINTENTOS (TOLERANCIA A FALLOS DE RED / 502)
+// ─────────────────────────────────────────────────────────────────
+async function dbSelectBaseline(idPerfil, fechaDia, jornada) {
+  let attempt = 0;
+  while (attempt < 5) {
+    const res = await supabase.from('operaciones')
+      .select('puntos_total, puntos_baseline, puntos_neto')
+      .eq('id_perfil', idPerfil)
+      .eq('fecha_dia', fechaDia)
+      .eq('jornada', jornada)
+      .maybeSingle();
+    
+    if (!res.error) return res;
+    
+    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
+      attempt++;
+      await new Promise(r => setTimeout(r, 3000 * attempt));
+    } else {
+      return res;
+    }
+  }
+  return { error: { message: 'Max retries reached (fetch failed)' }, data: null };
+}
+
+async function dbUpsertTurno(payload) {
+  let attempt = 0;
+  while (attempt < 5) {
+    const res = await supabase.from('operaciones')
+      .upsert(payload, { onConflict: 'id_perfil,fecha_dia,jornada' });
+      
+    if (!res.error) return res;
+    
+    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
+      attempt++;
+      await new Promise(r => setTimeout(r, 3000 * attempt));
+    } else {
+      return res;
+    }
+  }
+  return { error: { message: 'Max retries reached (fetch failed)' } };
+}
+
+async function dbUpdateBaseline(idPerfil, fechaDia, jornada, baselineCorr, netoCorr) {
+  let attempt = 0;
+  while (attempt < 5) {
+    const res = await supabase.from('operaciones')
+      .update({ puntos_baseline: baselineCorr, puntos_neto: netoCorr })
+      .eq('id_perfil', idPerfil)
+      .eq('fecha_dia', fechaDia)
+      .eq('jornada', jornada);
+      
+    if (!res.error) return res;
+    
+    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
+      attempt++;
+      await new Promise(r => setTimeout(r, 3000 * attempt));
+    } else {
+      return res;
+    }
+  }
+  return { error: { message: 'Max retries reached (fetch failed)' } };
+}
+
+// ─────────────────────────────────────────────────────────────────
 // PERSISTIR TURNO EN SUPABASE
 // puntos_total   = acumulado del mes (lo que trae Datame con rango mensual)
 // puntos_baseline= acumulado al INICIO de este turno  (referencia del 0)
@@ -76,28 +140,18 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
 
   // Si no tenemos baseline en memoria, buscar en Supabase (watcher se reinició)
   if (shiftBaselines[key] === undefined) {
-    const { data: rec } = await supabase
-      .from('operaciones')
-      .select('puntos_total, puntos_baseline, puntos_neto')
-      .eq('id_perfil', idPerfil)
-      .eq('fecha_dia', fechaDia)
-      .eq('jornada', jornada)
-      .maybeSingle();
+    const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
 
     if (rec) {
-      // Usar puntos_baseline DIRECTO de la DB (campo correcto)
-      // NO recalcular como total-neto porque si neto está corrupto se propaga el error
       const dbBaseline = rec.puntos_baseline || 0;
       if (dbBaseline > 0) {
         shiftBaselines[key] = dbBaseline;
         log(`  📥 Baseline recuperado de DB: ${modelo} [${jornada}] = ${dbBaseline.toFixed(2)} pts`);
       } else {
-        // Sin baseline en DB → el total actual es el baseline (neto = 0)
         shiftBaselines[key] = monthlyTotal;
         log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
       }
     } else {
-      // Primera captura del turno: fijar baseline ahora
       shiftBaselines[key] = monthlyTotal;
       log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
     }
@@ -107,18 +161,12 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
   // ── SANIDAD: neto no puede superar el 60% del total mensual en un turno ──
-  // Si supera ese umbral → baseline corrupto en DB. CORREGIR ACTIVAMENTE en Supabase.
   if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100) {
-    // Baseline correcto: asumir que el neto real es ≈ 3% del total (producción conservadora)
     const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
     const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
     log(`  🔴 SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total → CORRIENDO baseline en DB...`);
-    // Corregir en Supabase directamente
-    const { error: errCorr } = await supabase.from('operaciones')
-      .update({ puntos_baseline: baselineCorr, puntos_neto: netoCorr })
-      .eq('id_perfil', idPerfil)
-      .eq('fecha_dia', fechaDia)
-      .eq('jornada', jornada);
+    
+    const { error: errCorr } = await dbUpdateBaseline(idPerfil, fechaDia, jornada, baselineCorr, netoCorr);
     if (!errCorr) {
       log(`  ✅ SANIDAD ${modelo}: baseline corregido → ${baselineCorr} | neto → ${netoCorr} pts`);
       shiftBaselines[key] = baselineCorr;
@@ -136,17 +184,17 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     return;
   }
 
-  const { error } = await supabase.from('operaciones').upsert({
+  const { error } = await dbUpsertTurno({
     id_perfil:       idPerfil,
     agencia:         panelNombre,
-    puntos:          monthlyTotal,     // col. legado — mantener para compatibilidad
-    puntos_total:    monthlyTotal,     // total acumulado del mes
-    puntos_baseline: baseline,         // total al inicio de ESTE turno
-    puntos_neto:     netoTurno,        // puntos hechos EN ESTE TURNO (empieza en 0)
+    puntos:          monthlyTotal,
+    puntos_total:    monthlyTotal,
+    puntos_baseline: baseline,
+    puntos_neto:     netoTurno,
     fecha_corte:     ts,
     fecha_dia:       fechaDia,
     jornada:         jornada,
-  }, { onConflict: 'id_perfil,fecha_dia,jornada' });
+  });
 
   if (error) {
     log(`  ❌ DB Error ${modelo}: ${error.message}`);

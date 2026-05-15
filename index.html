@@ -5616,9 +5616,10 @@
     </div>
   </div>
 
-  <!-- TAB 1: REPORTE OPERADORES -->
+  <!-- TAB 1: REPORTE OPERACIÓN -->
   <div id="tab-report" class="tab-content">
-    <div class="controls">
+    <div id="globalOperationReport"></div>
+    <div class="controls" style="margin-top: 15px;">
       <select class="filter-select" id="groupFilter" onchange="renderOperators()">
         <option value="">Todos los grupos</option>
       </select>
@@ -11843,7 +11844,106 @@ function exportarDatos() {
       });
     }, { rootMargin: '100px', threshold: 0.01 });
 
+    function renderGlobalOperationReport() {
+      const container = document.getElementById('globalOperationReport');
+      if (!container) return;
+
+      const hoy = localDateStr();
+      const mesActual = hoy.slice(0, 7);
+
+      const add2Days = (ds) => {
+        if (!ds) return null;
+        const d = new Date(ds + 'T12:00:00');
+        d.setDate(d.getDate() + 2);
+        return d.toISOString().slice(0, 10);
+      };
+
+      const getWk = (ds) => {
+        if (!ds) return '';
+        const d = new Date(ds + 'T12:00:00');
+        const dNum = d.getDay() || 7;
+        d.setDate(d.getDate() + (4 - dNum));
+        const yearStart = new Date(d.getFullYear(), 0, 1);
+        const wk = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return d.getFullYear() + '-W' + wk;
+      };
+
+      const currentWk = getWk(hoy);
+
+      let ptsHoy = 0, ptsSemana = 0, ptsMes = 0;
+      const ptsPorMes = { '01':0, '02':0, '03':0, '04':0, '05':0, '06':0, '07':0, '08':0, '09':0, '10':0, '11':0, '12':0 };
+
+      // Iterar sobre todos los operadores para sumar la operación completa
+      operatorsData.forEach(op => {
+        const cortesOp = getCortesOp(op.name);
+        cortesOp.forEach(c => {
+          if (!c.fecha) return;
+          const fechaReal = add2Days(c.fecha);
+          if (!fechaReal || fechaReal < '2026-01-01') return;
+          
+          const val = Number(c.puntos) || 0;
+          const net = val > 1500 ? 0 : val;
+          
+          if (fechaReal === hoy) ptsHoy += net;
+          if (getWk(fechaReal) === currentWk) ptsSemana += net;
+          if (fechaReal.slice(0, 7) === mesActual) ptsMes += net;
+          
+          const mesStr = fechaReal.slice(5, 7);
+          if (ptsPorMes[mesStr] !== undefined && fechaReal.startsWith('2026')) {
+            ptsPorMes[mesStr] += net;
+          }
+        });
+      });
+
+      const { curr } = getActivePair();
+      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
+
+      container.innerHTML = `
+        <div style="margin-bottom: 25px; padding: 10px;">
+          <h2 style="font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 15px; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.6rem;">🌍</span> Operación Global (Datame Real)
+          </h2>
+          
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:15px;margin-bottom:15px;">
+            <!-- Card Hoy -->
+            <div style="background:linear-gradient(145deg, rgba(52,211,153,0.1), rgba(52,211,153,0.02));border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="font-size:0.8rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">⚡ Puntos Hoy</div>
+              <div style="font-size:2.4rem;font-weight:900;color:#fff;text-shadow: 0 0 15px rgba(52,211,153,0.4);">${ptsHoy.toFixed(1)}</div>
+              <div style="font-size:0.75rem;color:#94a3b8;margin-top:4px;">$${Math.round(ptsHoy * 1400).toLocaleString('es-CO')} COP</div>
+              <div style="font-size:0.6rem;color:#5eead4;margin-top:6px;background:rgba(52,211,153,0.1);padding:3px 8px;border-radius:10px;">⏱ Real-time Datame</div>
+            </div>
+            <!-- Card Semana -->
+            <div style="background:linear-gradient(145deg, rgba(56,189,248,0.1), rgba(56,189,248,0.02));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="font-size:0.8rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">📅 Esta Semana</div>
+              <div style="font-size:2.4rem;font-weight:900;color:#fff;text-shadow: 0 0 15px rgba(56,189,248,0.4);">${ptsSemana.toFixed(1)}</div>
+              <div style="font-size:0.75rem;color:#94a3b8;margin-top:4px;">$${Math.round(ptsSemana * 1400).toLocaleString('es-CO')} COP</div>
+            </div>
+            <!-- Card Mes -->
+            <div style="background:linear-gradient(145deg, rgba(167,139,250,0.15), rgba(167,139,250,0.02));border:1px solid rgba(167,139,250,0.4);border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
+              <div style="font-size:0.8rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">🏆 Mes Actual (${currLabel})</div>
+              <div style="font-size:2.8rem;font-weight:900;color:#fff;text-shadow: 0 0 20px rgba(167,139,250,0.5);">${ptsMes.toFixed(1)}</div>
+              <div style="font-size:0.85rem;color:#e2e8f0;font-weight:bold;margin-top:4px;">$${Math.round(ptsMes * 1400).toLocaleString('es-CO')} COP</div>
+            </div>
+          </div>
+
+          <!-- Card Histórico Meses Global -->
+          <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:15px;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+            <div style="font-size:0.75rem;color:#94a3b8;font-weight:bold;margin-bottom:12px;text-transform:uppercase;letter-spacing:1.5px;text-align:center;">📊 Histórico 2026 Agencia RR (Datame Real)</div>
+            <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+              ${['01','02','03','04','05'].map((m, i) => `
+                <div style="flex:1;min-width:60px;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 5px;text-align:center;border:1px solid rgba(255,255,255,0.06);transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                  <div style="font-size:0.65rem;color:#64748b;margin-bottom:4px;font-weight:bold;">${['ENERO','FEBRERO','MARZO','ABRIL','MAYO'][i]}</div>
+                  <div style="font-size:1.1rem;color:${m===mesActual.slice(5,7)?'#a78bfa':'#f8fafc'};font-weight:900;">${Math.round(ptsPorMes[m]).toLocaleString()}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderOperators() {
+      renderGlobalOperationReport();
       const filterGroup = document.getElementById('groupFilter')?.value || '';
       const filterJornada = document.getElementById('jornadaFilter')?.value || '';
       const container = document.getElementById('operatorsList');

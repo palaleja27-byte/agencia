@@ -13347,6 +13347,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         clearInterval(_opDashInterval);
         _opDashInterval = null;
       }
+    } // ← cierre loginSuccess
 
     function getPuntosHoy(name, shiftFilter = null) {
       let ptsHoy = 0, ptsAyer = 0, ptsSemana = 0, ptsSemPasada = 0, ptsMes = 0;
@@ -17076,7 +17077,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const perfiles_activos = operatorsData.flatMap(op => (op.profiles || []).map(p => String(p.id)));
 
       try {
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync")), 10000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync")), 25000));
         
         const fetchCat = _sb.from('operadores_v3').select('*').range(0, 1000);
         const { data: catOperadores } = await Promise.race([fetchCat, timeoutPromise]);
@@ -17715,6 +17716,19 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
         if (error) {
           console.warn('[Corte] Error Supabase:', error.message);
+          // Retry tras 2 segundos antes del fallback
+          await new Promise(r => setTimeout(r, 2000));
+          const { data: rowsRetry, error: errRetry } = await _sb
+            .from('operaciones')
+            .select('id_perfil, puntos_neto, jornada, agencia, puntos')
+            .eq('fecha_dia', hoy)
+            .in('jornada', jornadaVariants)
+            .gt('puntos_neto', 0)
+            .order('puntos_neto', { ascending: false });
+          if (!errRetry && rowsRetry && rowsRetry.length > 0) {
+            _renderCorteRows(rowsRetry, corteWrap, totalEl, tAct);
+            return;
+          }
           // Fallback: intentar sin filtro de jornada (tomar todos los de hoy)
           const { data: rowsAll } = await _sb
             .from('operaciones')

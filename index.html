@@ -5616,22 +5616,9 @@
     </div>
   </div>
 
-  <!-- TAB 1: REPORTE OPERACIÓN -->
+  <!-- TAB 1: REPORTE OPERACIÓN (Dashboard Ejecutivo) -->
   <div id="tab-report" class="tab-content">
     <div id="globalOperationReport"></div>
-    <div class="controls" style="margin-top: 15px;">
-      <select class="filter-select" id="groupFilter" onchange="renderOperators()">
-        <option value="">Todos los grupos</option>
-      </select>
-      <select class="filter-select" id="jornadaFilter" onchange="renderOperators()">
-        <option value="">Todas las jornadas</option>
-        <option value="Mañana">☀️ Mañana</option>
-        <option value="Tarde">🌆 Tarde</option>
-        <option value="Noche">🌙 Noche</option>
-        <option value="Completo">🔄 Completo</option>
-      </select>
-    </div>
-    <div class="operators-list" id="operatorsList"></div>
   </div>
 
   <!-- MODAL GRUPOS -->
@@ -11677,174 +11664,7 @@ function exportarDatos() {
     window.addEventListener('resize', () => {
       const iframe = document.querySelector('#tab-plantrabajo iframe');
       const tab = document.getElementById('tab-plantrabajo');
-      if (iframe && tab && tab.classList.contains('active')) {
-        iframe.style.height = (window.innerHeight - 130) + 'px';
-        iframe.style.width = '100%';
-      }
-    });
-
-
-    function abrirAgregarOp() {
-      ['addop-name', 'addop-doctype', 'addop-doc', 'addop-group', 'addop-phone', 'addop-email'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.value = '';
-      });
-      const turno = document.getElementById('addop-turno'); if (turno) turno.value = '';
-      const emp = document.getElementById('addop-empresa'); if (emp) emp.value = '';
-      document.getElementById('modal-add-op').classList.add('open');
-    }
-
-    function confirmarAgregarOp() {
-      const name = document.getElementById('addop-name')?.value.trim().toUpperCase();
-      const doc = document.getElementById('addop-doc')?.value.trim();
-      if (!name) return alert('El nombre es obligatorio.');
-      if (operatorsData.find(o => o.name.toUpperCase() === name)) return alert('Ya existe un operador con ese nombre.');
-
-      const newOp = {
-        name,
-        group: document.getElementById('addop-group')?.value.trim() || '',
-        ene: 0, feb: 0,
-        profiles: [],
-        doc_type: document.getElementById('addop-doctype')?.value.trim() || '',
-        doc: doc || '',
-        dob: '', phone: document.getElementById('addop-phone')?.value.trim() || '',
-        email: document.getElementById('addop-email')?.value.trim() || '',
-        address: '', sex: '',
-        empresa: document.getElementById('addop-empresa')?.value.trim() || '',
-        contrato: '',
-        turno: document.getElementById('addop-turno')?.value || '',
-        cargo: 'Operador', area: 'Operativa',
-        fecha_ingreso: localDateStr(),
-        mensual: '', cuenta: ''
-      };
-
-      operatorsData.push(newOp);
-      saveData();
-      document.getElementById('modal-add-op').classList.remove('open');
-      renderRanking();
-      if (typeof renderOperators === 'function') renderOperators();
-      alert(`✅ Operador "${name}" agregado correctamente.`);
-    }
-
-    // Keep Plan de Trabajo iframe always full size
-    window.addEventListener('resize', () => {
-      const iframe = document.querySelector('#tab-plantrabajo iframe');
-      if (iframe && document.getElementById('tab-plantrabajo').classList.contains('active')) {
-        iframe.style.height = (window.innerHeight - 130) + 'px';
-        iframe.style.width = '100%';
-      }
-    });
-
-    document.addEventListener('click', e => {
-      if (e.target === document.getElementById('modal-add-op')) document.getElementById('modal-add-op').classList.remove('open');
-    });
-
-    function renderDetConsejos() {
-      const op = operatorsData[detOpIndex];
-      const arr = loadDetConsejos(op.name);
-      const list = document.getElementById('det-consejos-list');
-
-      if (arr.length === 0 && !detEditando) {
-        list.innerHTML = `<div style="color:#475569;font-size:.82rem;padding:12px 0;">Sin consejos aún. Pulsa ✏️ Editar para agregar.</div>`;
-      } else {
-        list.innerHTML = arr.map((c, i) => `
-      <div class="det-consejo-item">
-        <textarea class="det-consejo-txt${detEditando ? ' editing' : ''}" rows="2"
-          ${detEditando ? '' : 'readonly'}
-          onchange="detEditarConsejo(${i}, this.value)">${c}</textarea>
-        ${detEditando ? `<button class="det-consejo-del" onclick="detBorrarConsejo(${i})">✕</button>` : ''}
-      </div>`).join('');
-      }
-      document.getElementById('btn-det-add').style.display = detEditando ? 'flex' : 'none';
-    }
-
-    function detToggleEdit() {
-      detEditando = !detEditando;
-      renderDetConsejos();
-    }
-    function detEditarConsejo(i, val) {
-      const op = operatorsData[detOpIndex];
-      const arr = loadDetConsejos(op.name); arr[i] = val; saveDetConsejos(op.name, arr);
-    }
-    function detBorrarConsejo(i) {
-      const op = operatorsData[detOpIndex];
-      const arr = loadDetConsejos(op.name); arr.splice(i, 1); saveDetConsejos(op.name, arr); renderDetConsejos();
-    }
-    function detAgregarConsejo() {
-      const op = operatorsData[detOpIndex];
-      const arr = loadDetConsejos(op.name); arr.push('✏️ Escribe el consejo aquí...'); saveDetConsejos(op.name, arr); renderDetConsejos();
-    }
-
-    window.switchToOperator = function (index) {
-      switchTab(1);
-      document.getElementById('groupFilter').value = '';
-      renderOperators();
-      setTimeout(() => {
-        const cards = document.querySelectorAll('.operator-card');
-        if (cards[index]) cards[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
-    };
-
-    // ==================== REPORTE OPERADORES ====================
-    // ── Lazy operator cards with IntersectionObserver ──
-    const _opChartObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        const card = entry.target;
-        const idx = parseInt(card.dataset.opIndex);
-        if (card.dataset.rendered === '1') return;
-        card.dataset.rendered = '1';
-        _opChartObserver.unobserve(card);
-        const op = operatorsData[idx];
-        if (!op) return;
-        // Render chart
-        const canvas = card.querySelector('canvas');
-        if (canvas) {
-          const _months = ['FEB', 'MAR', 'ABR', 'MAY'];
-          const _vals = [
-            parseFloat(card.dataset.ptsFeb) || 0,
-            parseFloat(card.dataset.ptsMar) || 0,
-            parseFloat(card.dataset.ptsAbr) || 0,
-            parseFloat(card.dataset.ptsMay) || 0
-          ];
-
-          // Mostrar desde Feb hasta el mes actual (mes 1=Feb como índice base)
-          const monthIdx = new Date().getMonth(); // 0=Ene, 1=Feb, 2=Mar, 3=Abr, 4=May...
-          // El array empieza en FEB (mes 1), así que mostramos monthIdx meses desde Feb
-          const showCount = Math.max(Math.min(monthIdx, _months.length), 2); // mínimo 2 columnas
-          const activeLabels = _months.slice(0, showCount);
-          const activeData = _vals.slice(0, showCount);
-
-          new Chart(canvas, {
-            type: 'bar',
-            data: {
-              labels: activeLabels,
-              datasets: [{
-                label: 'Logro Mensual',
-                data: activeData,
-                backgroundColor: activeData.map((v, i) => i === activeData.length - 1 ? 'rgba(52,211,153,0.6)' : 'rgba(94,234,212,0.25)'),
-                borderColor: activeData.map((v, i) => i === activeData.length - 1 ? '#34d399' : '#5eead4'),
-                borderWidth: 1,
-                borderRadius: 4
-              }]
-            },
-            options: {
-              plugins: { legend: { display: false } },
-              scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { size: 9 } } },
-                x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 9, weight: 'bold' } } }
-              }
-            }
-          });
-        }
-        // Render profiles
-        const pListContainer = card.querySelector('.profiles-container');
-        if (pListContainer) {
-          pListContainer.innerHTML = renderPerfilMetrics(op.name);
-        }
-      });
-    }, { rootMargin: '100px', threshold: 0.01 });
-
-    function renderGlobalOperationReport() {
+      if (iframe && tab && tab.classList.contains('ac    function renderOperators() {
       const container = document.getElementById('globalOperationReport');
       if (!container) return;
 
@@ -11872,8 +11692,10 @@ function exportarDatos() {
 
       let ptsHoy = 0, ptsSemana = 0, ptsMes = 0;
       const ptsPorMes = { '01':0, '02':0, '03':0, '04':0, '05':0, '06':0, '07':0, '08':0, '09':0, '10':0, '11':0, '12':0 };
+      const ptsPorDiaSemana = [0, 0, 0, 0, 0, 0, 0]; // Lun a Dom
+      const ptsPorSemanaMes = [0, 0, 0, 0]; // Sem 1 a Sem 4+
 
-      // Iterar sobre todos los operadores para sumar la operación completa
+      // Procesamiento de datos masivos
       operatorsData.forEach(op => {
         const cortesOp = getCortesOp(op.name);
         cortesOp.forEach(c => {
@@ -11885,8 +11707,19 @@ function exportarDatos() {
           const net = val > 1500 ? 0 : val;
           
           if (fechaReal === hoy) ptsHoy += net;
-          if (getWk(fechaReal) === currentWk) ptsSemana += net;
-          if (fechaReal.slice(0, 7) === mesActual) ptsMes += net;
+          
+          if (getWk(fechaReal) === currentWk) {
+            ptsSemana += net;
+            const dIdx = new Date(fechaReal + 'T12:00:00').getDay();
+            ptsPorDiaSemana[dIdx === 0 ? 6 : dIdx - 1] += net;
+          }
+          
+          if (fechaReal.slice(0, 7) === mesActual) {
+            ptsMes += net;
+            const dayOfMonth = new Date(fechaReal + 'T12:00:00').getDate();
+            const wIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), 3);
+            ptsPorSemanaMes[wIdx] += net;
+          }
           
           const mesStr = fechaReal.slice(5, 7);
           if (ptsPorMes[mesStr] !== undefined && fechaReal.startsWith('2026')) {
@@ -11898,115 +11731,146 @@ function exportarDatos() {
       const { curr } = getActivePair();
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
 
+      // Cálculos Horarios Proyectados (Pace)
+      const currentHour = Math.max(1, new Date().getHours());
+      const paceHourly = ptsHoy / currentHour;
+      const projData = Array(24).fill(null);
+      const realData = Array(24).fill(null);
+      for(let i=0; i<24; i++) {
+        if(i <= currentHour) realData[i] = paceHourly * i;
+        if(i >= currentHour) projData[i] = paceHourly * i;
+      }
+      const ptsProyectado24h = paceHourly * 24;
+
       container.innerHTML = `
         <div style="margin-bottom: 25px; padding: 10px;">
-          <h2 style="font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 15px; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 1.6rem;">🌍</span> Operación Global (Datame Real)
+          <h2 style="font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 20px; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.6rem;">🌍</span> Operación Global Inteligente (Datame Realtime)
           </h2>
           
-          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:15px;margin-bottom:15px;">
-            <!-- Card Hoy -->
-            <div style="background:linear-gradient(145deg, rgba(52,211,153,0.1), rgba(52,211,153,0.02));border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
-              <div style="font-size:0.8rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">⚡ Puntos Hoy</div>
-              <div style="font-size:2.4rem;font-weight:900;color:#fff;text-shadow: 0 0 15px rgba(52,211,153,0.4);">${ptsHoy.toFixed(1)}</div>
-              <div style="font-size:0.75rem;color:#94a3b8;margin-top:4px;">$${Math.round(ptsHoy * 1400).toLocaleString('es-CO')} COP</div>
-              <div style="font-size:0.6rem;color:#5eead4;margin-top:6px;background:rgba(52,211,153,0.1);padding:3px 8px;border-radius:10px;">⏱ Real-time Datame</div>
-            </div>
-            <!-- Card Semana -->
-            <div style="background:linear-gradient(145deg, rgba(56,189,248,0.1), rgba(56,189,248,0.02));border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
-              <div style="font-size:0.8rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">📅 Esta Semana</div>
-              <div style="font-size:2.4rem;font-weight:900;color:#fff;text-shadow: 0 0 15px rgba(56,189,248,0.4);">${ptsSemana.toFixed(1)}</div>
-              <div style="font-size:0.75rem;color:#94a3b8;margin-top:4px;">$${Math.round(ptsSemana * 1400).toLocaleString('es-CO')} COP</div>
-            </div>
-            <!-- Card Mes -->
-            <div style="background:linear-gradient(145deg, rgba(167,139,250,0.15), rgba(167,139,250,0.02));border:1px solid rgba(167,139,250,0.4);border-radius:12px;padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;cursor:pointer;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='translateY(0)'">
-              <div style="font-size:0.8rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">🏆 Mes Actual (${currLabel})</div>
-              <div style="font-size:2.8rem;font-weight:900;color:#fff;text-shadow: 0 0 20px rgba(167,139,250,0.5);">${ptsMes.toFixed(1)}</div>
-              <div style="font-size:0.85rem;color:#e2e8f0;font-weight:bold;margin-top:4px;">$${Math.round(ptsMes * 1400).toLocaleString('es-CO')} COP</div>
-            </div>
-          </div>
-
-          <!-- Card Histórico Meses Global -->
-          <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:15px;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-            <div style="font-size:0.75rem;color:#94a3b8;font-weight:bold;margin-bottom:12px;text-transform:uppercase;letter-spacing:1.5px;text-align:center;">📊 Histórico 2026 Agencia RR (Datame Real)</div>
-            <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-              ${['01','02','03','04','05'].map((m, i) => `
-                <div style="flex:1;min-width:60px;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 5px;text-align:center;border:1px solid rgba(255,255,255,0.06);transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
-                  <div style="font-size:0.65rem;color:#64748b;margin-bottom:4px;font-weight:bold;">${['ENERO','FEBRERO','MARZO','ABRIL','MAYO'][i]}</div>
-                  <div style="font-size:1.1rem;color:${m===mesActual.slice(5,7)?'#a78bfa':'#f8fafc'};font-weight:900;">${Math.round(ptsPorMes[m]).toLocaleString()}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(45%, 1fr));gap:20px;margin-bottom:20px;">
+            
+            <!-- CARD 1: HORA (Pulso Diario) -->
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(52,211,153,0.05);">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:0.75rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;">⚡ Ritmo por Hora (Hoy)</div>
+                  <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsHoy.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts actuales</span></div>
                 </div>
-              `).join('')}
+                <div style="text-align:right;">
+                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Proyección 24h</div>
+                  <div style="font-size:1.1rem;color:#5eead4;font-weight:bold;">${ptsProyectado24h.toFixed(0)} pts</div>
+                </div>
+              </div>
+              <div style="height:140px;width:100%;"><canvas id="chart-hora"></canvas></div>
             </div>
+
+            <!-- CARD 2: DÍA (Semana en Curso) -->
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(56,189,248,0.05);">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:0.75rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;">📅 Rendimiento Diario (Semana)</div>
+                  <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsSemana.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts totales</span></div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Ganancia Semanal</div>
+                  <div style="font-size:1.1rem;color:#bae6fd;font-weight:bold;">$${Math.round(ptsSemana * 1400).toLocaleString('es-CO')}</div>
+                </div>
+              </div>
+              <div style="height:140px;width:100%;"><canvas id="chart-dia"></canvas></div>
+            </div>
+
+            <!-- CARD 3: SEMANA (Mes en Curso) -->
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(167,139,250,0.4);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(167,139,250,0.05);">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:0.75rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">🏆 Rendimiento Semanal (${currLabel})</div>
+                  <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsMes.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts totales</span></div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Ganancia Mensual</div>
+                  <div style="font-size:1.1rem;color:#ddd6fe;font-weight:bold;">$${Math.round(ptsMes * 1400).toLocaleString('es-CO')}</div>
+                </div>
+              </div>
+              <div style="height:140px;width:100%;"><canvas id="chart-semana"></canvas></div>
+            </div>
+
+            <!-- CARD 4: MES (Histórico Anual) -->
+            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(251,191,36,0.05);">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                <div>
+                  <div style="font-size:0.75rem;color:#fbbf24;font-weight:800;letter-spacing:1px;text-transform:uppercase;">📊 Histórico Mensual (2026)</div>
+                  <div style="font-size:2rem;font-weight:900;color:#fff;">${['01','02','03','04','05'].reduce((a,m)=>a+ptsPorMes[m],0).toFixed(0)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts anuales</span></div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Mes Más Fuerte</div>
+                  <div style="font-size:1.1rem;color:#fde68a;font-weight:bold;">${Math.max(...['01','02','03','04','05'].map(m=>ptsPorMes[m])).toFixed(0)} pts</div>
+                </div>
+              </div>
+              <div style="height:140px;width:100%;"><canvas id="chart-mes"></canvas></div>
+            </div>
+
           </div>
         </div>
       `;
+
+      // ---------- INICIALIZACIÓN DE GRÁFICOS (Chart.js) ----------
+      const commonOpts = {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#475569', font: { size: 10 } } }
+        }
+      };
+
+      // Gráfico Hora
+      new Chart(document.getElementById('chart-hora'), {
+        type: 'line',
+        data: {
+          labels: Array.from({length:24}, (_,i) => i+'h'),
+          datasets: [
+            { label: 'Puntos Reales', data: realData, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)', fill: true, tension: 0.3, pointRadius: 0 },
+            { label: 'Proyección', data: projData, borderColor: 'rgba(52,211,153,0.4)', borderDash: [5,5], fill: false, tension: 0.3, pointRadius: 0 }
+          ]
+        },
+        options: commonOpts
+      });
+
+      // Gráfico Día
+      new Chart(document.getElementById('chart-dia'), {
+        type: 'bar',
+        data: {
+          labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+          datasets: [{ label: 'Puntos', data: ptsPorDiaSemana, backgroundColor: 'rgba(56,189,248,0.7)', borderRadius: 4 }]
+        },
+        options: commonOpts
+      });
+
+      // Gráfico Semana
+      new Chart(document.getElementById('chart-semana'), {
+        type: 'bar',
+        data: {
+          labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4+'],
+          datasets: [{ label: 'Puntos', data: ptsPorSemanaMes, backgroundColor: 'rgba(167,139,250,0.7)', borderRadius: 4 }]
+        },
+        options: commonOpts
+      });
+
+      // Gráfico Mes
+      new Chart(document.getElementById('chart-mes'), {
+        type: 'bar',
+        data: {
+          labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May'],
+          datasets: [{ label: 'Puntos', data: ['01','02','03','04','05'].map(m => ptsPorMes[m]), backgroundColor: 'rgba(251,191,36,0.7)', borderRadius: 4 }]
+        },
+        options: commonOpts
+      });
     }
 
-    function renderOperators() {
-      renderGlobalOperationReport();
-      const filterGroup = document.getElementById('groupFilter')?.value || '';
-      const filterJornada = document.getElementById('jornadaFilter')?.value || '';
-      const container = document.getElementById('operatorsList');
-      container.innerHTML = '';
-      _opChartObserver.disconnect();
-
-      const { prev, curr } = getActivePair();
-      const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)] || prev;
-      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
-      const hoy = localDateStr();
-      const mesActual = hoy.slice(0, 7);
-      
-      const feb2026 = '2026-02';
-      const mar2026 = '2026-03';
-      const abr2026 = '2026-04';
-      const may2026 = '2026-05';
-
-      let filtered = operatorsData.filter(op => {
-        const matchGroup = !filterGroup || op.group === filterGroup;
-        const matchJornada = !filterJornada || (op.turno || '').toLowerCase() === filterJornada.toLowerCase();
-        return matchGroup && matchJornada;
-      });
-      filtered.sort((a, b) => (b[curr] || 0) - (a[curr] || 0));
-
-      if (filtered.length === 0) {
-        container.innerHTML = '<div class="empty-msg">No hay operadores en este grupo / jornada</div>';
-        return;
-      }
-
-      const fragment = document.createDocumentFragment();
-
-      filtered.forEach(op => {
-        const globalIndex = operatorsData.indexOf(op);
-        const cortesOp = getCortesOp(op.name);
-
-        const _sumNet = (arr) => arr.reduce((s, c) => {
-          const v = (Number(c.puntos) || 0);
-          return s + (v > 1500 ? 0 : v);
-        }, 0);
-
-        const ptsFeb = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === feb2026)), (op.feb || 0));
-        const ptsMar = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mar2026)), (op.mar || 0));
-        const ptsAbr = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === abr2026)), (op.abr || 0));
-        const ptsMay = _sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === may2026)) || (op.may || 0);
-
-        const ptsCurr = Math.max(_sumNet(cortesOp.filter(c => c.fecha && c.fecha.slice(0, 7) === mesActual)), (op[curr] || 0));
-        const ptsPrev = op[prev] || 0;
-        const growth = ptsPrev > 0 ? ((ptsCurr - ptsPrev) / ptsPrev * 100) : 0;
-        const growthSign = growth > 0 ? '+' : '';
-        const growthCls = growth > 0 ? 'growth-up' : growth < 0 ? 'growth-down' : 'growth-neutral';
-        const copCurr = Math.round(ptsCurr * 1400).toLocaleString('es-CO');
-
-        // Función para ajustar fecha Datame (+2 días)
-        const add2Days = (ds) => {
-          if (!ds) return null;
-          const d = new Date(ds + 'T12:00:00'); // Evitar timezone bugs
-          d.setDate(d.getDate() + 2);
-          return d.toISOString().slice(0, 10);
-        };
-
-        const getWk = (ds) => {
-          if (!ds) return '';
-          const d = new Date(ds + 'T12:00:00');
+    // ══════════════════════════════════════════
+    // GESTIÓN DE GRUPOS (agregar / borrar)
+    // ══════════════════════════════════════════onst d = new Date(ds + 'T12:00:00');
           const dNum = d.getDay() || 7;
           d.setDate(d.getDate() + (4 - dNum));
           const yearStart = new Date(d.getFullYear(), 0, 1);

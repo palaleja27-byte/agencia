@@ -5223,7 +5223,6 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
               <span style="font-size:.6rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:1px;">🛰️ Consola de Sincronización</span>
               <div style="display:flex; align-items:center; gap:8px;">
-                <button onclick="if(confirm('¿Calibrar puntos con baselines de las 4PM?')) calibrarTarde()" style="background:rgba(45,212,191,0.1); border:1px solid rgba(45,212,191,0.3); color:#2dd4bf; font-size:.55rem; padding:2px 8px; border-radius:4px; cursor:pointer;">🎯 Calibrar 4PM</button>
                 <button onclick="document.getElementById('dp-logs-console').innerHTML=''" style="background:none; border:none; color:#475569; font-size:.6rem; cursor:pointer;">Limpiar</button>
               </div>
             </div>
@@ -18142,64 +18141,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       }
     };
 
-    // ══════════════════════════════════════════════════════════
-    // CALIBRAR BASELINE TARDE — llamar desde consola del admin:
-    //   calibrarTarde()
-    // Usa el último corte manual de la Tarde como baseline
-    // ══════════════════════════════════════════════════════════
-    window.calibrarTarde = async function(fecha) {
-      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
-      const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      console.log(`🔧 Calibrando baseline TARDE para ${fechaDia}...`);
 
-      // Para Tarde: el baseline se toma del "En Curso" al cierre de la Mañana (2:00 PM)
-      // Leer los registros actuales de la Mañana como fuente de baseline
-      const { data: mananaRows } = await _sb.from('operaciones')
-        .select('id_perfil, puntos_total, agencia')
-        .eq('fecha_dia', fechaDia).eq('jornada', 'Mañana');
-
-      if (!mananaRows || mananaRows.length === 0) {
-        console.error('❌ No hay registros de Mañana para derivar baselines de Tarde');
-        return;
-      }
-
-      let ok = 0, fail = 0;
-      for (const row of mananaRows) {
-        const pt = row.puntos_total || 0;
-        if (pt <= 0) continue;
-
-        // Leer el puntos_total actual de la Tarde
-        const { data: tardeRow } = await _sb.from('operaciones')
-          .select('puntos_total')
-          .eq('id_perfil', row.id_perfil).eq('fecha_dia', fechaDia).eq('jornada', 'Tarde')
-          .maybeSingle();
-
-        const tardeTotal = tardeRow ? (tardeRow.puntos_total || 0) : 0;
-        const neto = tardeTotal > pt ? +(tardeTotal - pt).toFixed(2) : 0;
-
-        const { error } = await _sb.from('operaciones').upsert({
-          id_perfil: row.id_perfil,
-          fecha_dia: fechaDia,
-          jornada: 'Tarde',
-          puntos_baseline: pt,
-          puntos_total: tardeTotal > 0 ? tardeTotal : pt,
-          puntos_neto: neto,
-          agencia: row.agencia
-        }, { onConflict: 'id_perfil,fecha_dia,jornada' });
-
-        if (error) { console.error(`❌ ${row.id_perfil}:`, error.message); fail++; }
-        else { console.log(`✅ ${row.id_perfil}: baseline=${pt} | total=${tardeTotal > 0 ? tardeTotal : pt} | neto=${neto}`); ok++; }
-      }
-
-      console.log(`\n🎯 Calibración TARDE: ${ok} OK, ${fail} fallidos.`);
-      if (ok > 0) {
-        setTimeout(() => {
-          if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
-          if (typeof renderRanking === 'function') renderRanking();
-          if (typeof _opRtSync === 'function' && window._opRtOpName) _opRtSync(window._opRtOpName);
-        }, 1500);
-      }
-    };
 
     // ══════════════════════════════════════════════════════════
     // DIAGNÓSTICO DELTA-SHIFT™ — ejecutar desde consola:
@@ -18834,6 +18776,8 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
             if (bl > 0 && (porPerfil[r.id_perfil].baseline === 0 || bl < porPerfil[r.id_perfil].baseline)) {
               porPerfil[r.id_perfil].baseline = bl;
             }
+            // ⏱️ 12H SHIFT™: Sumar los netos de todas las jornadas del día (Mañana + Tarde)
+            porPerfil[r.id_perfil].neto += (r.puntos_neto || 0);
           }
         });
         const sumaTotal    = Object.values(porPerfil).reduce((s, v) => s + v.total,    0);
@@ -18850,7 +18794,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           } else if (_opRtBaselineMap[id] === undefined) {
             _opRtBaselineMap[id] = v.total;
           }
-          const neto = Math.max(0, v.total - _opRtBaselineMap[id]);
+          
+          // DELTA-SHIFT™: Usar puntos_neto calibrado de la BD en lugar de recalcularlo
+          // Esto garantiza que se respeten los scripts de mantenimiento y cortes manuales
+          const neto = Math.max(0, v.neto);
+          
           const nombrePerfil = opData?.profiles?.find(p => String(p.id) === String(id))?.name || v.agencia || id;
           return { id, nombre: nombrePerfil, total: v.total, baseline: _opRtBaselineMap[id], neto };
         }).sort((a, b) => b.neto - a.neto);
@@ -18864,6 +18812,14 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
             if (!_dpTurnosData[p.id]) _dpTurnosData[p.id] = {};
             // Si es 12h, repartimos el neto según la jornada del registro, si no, usamos la jornada actual
             const jCache = is12h ? (ops.find(r => String(r.id_perfil) === String(p.id))?.jornada || _opRtJornada()) : _opRtJornada();
+            
+            // Para 12h, limpiamos los otros turnos para evitar conteo doble en Datame, ya que p.neto es el total del día
+            if (is12h) {
+              _dpTurnosData[p.id]['Mañana'] = 0;
+              _dpTurnosData[p.id]['Tarde'] = 0;
+              _dpTurnosData[p.id]['Noche'] = 0;
+            }
+            
             _dpTurnosData[p.id][jCache] = p.neto;
           });
         }

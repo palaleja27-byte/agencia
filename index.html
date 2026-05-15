@@ -6217,7 +6217,12 @@
         _crecTooltipOpen = false;
       } else {
         console.log(' [Análisis] Renderizando datos profesionales...');
-        // Renderizar datos antes de mostrar
+        // Mostrar estado de carga si está vacío o si los datos aún no están listos
+        if (!panel.innerHTML || panel.innerHTML.trim() === '') {
+          panel.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#94a3b8;font-family:inherit"><div style="font-size:1.5rem;margin-bottom:10px">⏳</div>Calculando crecimiento...</div>';
+        }
+        
+        // Renderizar datos asíncronamente
         if (typeof renderCrecimientoAnalisis === 'function') {
            renderCrecimientoAnalisis();
         } else {
@@ -6399,6 +6404,7 @@
     // ════════════════════════════════════════════════════════════════════════
     async function rkFetchSupabaseTotals() {
       if (typeof _sb === 'undefined') return;
+      if (typeof _sbBootReady !== 'undefined' && !_sbBootReady) return;
       
       const formatMes = (d) => {
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -6419,11 +6425,15 @@
         const m0Key = formatMes(d0);
         const m0Name = nombresMeses[d0.getMonth()];
 
-        const { data: ops } = await _sb
-          .from('operaciones')
+        // Timeout para que no bloquee infinitamente
+        const fetchPromise = _sb.from('operaciones')
           .select('fecha_dia, puntos_neto, jornada')
           .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
           .neq('jornada', 'Auto');
+        const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 8000));
+        const { data: ops, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (error || !ops || !ops.length) return;
 
         if (!ops || !ops.length) return;
 
@@ -6523,6 +6533,23 @@
           diasM1ConDatos, diasM2ConDatos,
           currentDay, totalDays, projectedM2
         };
+
+        // ── Post-fetch: Actualizar cards de crecimiento con datos reales de Supabase ──
+        const _elGrowth = document.getElementById('rk-val-growth');
+        const _elRange = document.getElementById('rk-val-range');
+        const _elTotal = document.getElementById('rk-val-total');
+        const _elCop = document.getElementById('rk-val-cop');
+        if (_elGrowth) {
+          const _gc = paceCrec >= 0 ? '#34d399' : '#f87171';
+          const _gi = paceCrec >= 0 ? '📈' : '📉';
+          const _gs = paceCrec > 0 ? '+' : '';
+          _elGrowth.style.color = _gc;
+          _elGrowth.textContent = _gi + ' ' + _gs + paceCrec.toFixed(1) + '% ritmo/día';
+        }
+        if (_elRange) _elRange.textContent = m1Name + ' → ' + m2Name;
+        if (_elTotal) _elTotal.textContent = m2Total.toLocaleString('es-CO', {minimumFractionDigits: 1});
+        if (_elCop) _elCop.textContent = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
+
       } catch(e) { console.warn('[RK-SUPABASE]', e); }
     }
 
@@ -6930,6 +6957,25 @@
       const crecOpColor = crecOp >= 0 ? '#34d399' : '#f87171';
       const crecOpIcon = crecOp >= 0 ? '📈' : '📉';
 
+      // Pacing con Supabase (Prioridad)
+      let dCrecStr = `${crecOpSign}${crecOp.toFixed(1)}%`;
+      let dCrecColor = crecOpColor;
+      let dCrecIcon = crecOpIcon;
+      let dTotalDisp = totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 1});
+      let dCopDisp = '💰 $' + Math.round(totalPtsCurr * 1400).toLocaleString('es-CO') + ' COP';
+      let dRangeDisp = totalPtsAnt.toFixed(0) + '→' + totalPtsCurr.toFixed(0);
+      
+      if (typeof window._rkHistorial !== 'undefined') {
+        const h = window._rkHistorial;
+        const hc = h.crec;
+        dCrecStr = `${hc >= 0 ? '+' : ''}${hc.toFixed(1)}% ritmo/día`;
+        dCrecColor = hc >= 0 ? '#34d399' : '#f87171';
+        dCrecIcon = hc >= 0 ? '📈' : '📉';
+        dTotalDisp = h.m2Total.toLocaleString('es-CO', {minimumFractionDigits: 1});
+        dCopDisp = '💰 $' + Math.round(h.m2Total * 1400).toLocaleString('es-CO') + ' COP';
+        dRangeDisp = `${h.m1Name} → ${h.m2Name}`;
+      }
+
       // Promedio real exacto de la operación
       const avgPts = rkDataFiltered.length ? totalPtsCurr / rkDataFiltered.length : 0;
 
@@ -6948,9 +6994,9 @@
       '<button onclick="showDailyHistory()" style="margin-top:4px;padding:2px 6px;font-size:0.5rem;background:rgba(147,197,253,0.08);border:1px solid rgba(147,197,253,0.2);color:#93c5fd;border-radius:4px;cursor:pointer;">🕰️ Hist</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="border: 1px solid rgba(94, 234, 212, 0.25); background: rgba(94, 234, 212, 0.02);">' +
-      '<div class="stat-val" id="rk-val-total" style="font-size:18px; color: #5eead4;">' + totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 1}) + '</div>' +
+      '<div class="stat-val" id="rk-val-total" style="font-size:18px; color: #5eead4;">' + dTotalDisp + '</div>' +
       '<div class="stat-lbl" style="color:#5eead4; font-weight: 700; opacity: 0.8; font-size: 8px;">GLOBAL ' + currLabel.toUpperCase() + '</div>' +
-      '<div id="rk-val-cop" style="font-size:.65rem;color:#34d399;margin-top:1px; font-weight: 600;">$' + copTotal + '</div>' +
+      '<div id="rk-val-cop" style="font-size:.65rem;color:#34d399;margin-top:1px; font-weight: 600;">' + dCopDisp + '</div>' +
     '</div>' +
     '<div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px; position:relative;">' +
       '<div id="rk-header-live-feed" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">' +
@@ -6964,9 +7010,9 @@
       '<button onclick="rrInfoLive()" style="position:absolute;top:4px;right:4px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:16px;height:16px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;" title="Info del modulo">ℹ</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="position:relative;">' +
-      '<div class="stat-val" id="rk-val-growth" style="color:' + crecOpColor + '; font-size: 16px;">' + crecOpIcon + crecOpSign + crecOp.toFixed(1) + '%</div>' +
+      '<div class="stat-val" id="rk-val-growth" style="color:' + dCrecColor + '; font-size: 16px;">' + dCrecIcon + ' ' + dCrecStr + '</div>' +
       '<div class="stat-lbl" style="font-size: 8px;">Crecimiento</div>' +
-      '<div id="rk-val-range" style="font-size:.5rem;color:#475569;margin-top:1px;">' + totalPtsAnt.toFixed(0) + '→' + totalPtsCurr.toFixed(0) + '</div>' +
+      '<div id="rk-val-range" style="font-size:.5rem;color:#475569;margin-top:1px;">' + dRangeDisp + '</div>' +
       '<button id="btn-crec-info" onclick="toggleCrecTooltip(event)" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#64748b;font-size:8px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>' +
     '</div>';
 
@@ -8576,9 +8622,9 @@
       try {
         _bootProgress(40, 'Descargando datos...');
         
-        // Timeout de seguridad: Si Supabase se cuelga (network drop silencioso), forzamos error tras 35s
+        // Timeout de seguridad: Si Supabase se cuelga, forzamos error tras 10s
         const fetchPromise = _sb.from('kv_store').select('key, value');
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 35000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 10000));
         
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
         
@@ -10340,10 +10386,12 @@
       const pd = {};
       try {
         if (typeof _sb !== 'undefined') {
-          const { data: rawRows } = await _sb.from('operaciones')
+          const fetchP = _sb.from('operaciones')
             .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
             .gte('fecha_dia', desde).lte('fecha_dia', hasta)
             .gt('puntos_neto', 0).neq('jornada','Auto');
+          const timeoutP = new Promise((_,r) => setTimeout(()=>r({data:[], error:new Error('Timeout')}), 8000));
+          const { data: rawRows } = await Promise.race([fetchP, timeoutP]);
           rows = rawRows || [];
           rows.forEach(r => {
             if (!pd[r.fecha_dia]) pd[r.fecha_dia] = { t:0, n:0, ops: new Set() };

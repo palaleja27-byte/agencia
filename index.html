@@ -18077,6 +18077,126 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       }
     };
 
+    // ══════════════════════════════════════════════════════════
+    // DIAGNÓSTICO DELTA-SHIFT™ — ejecutar desde consola:
+    //   diagnosticarOperador('JHORIANNYS ESTHER MOSQUERA ROJANO')
+    // Muestra el estado real de los registros en BD para hoy
+    // ══════════════════════════════════════════════════════════
+    window.diagnosticarOperador = async function(nombreOp) {
+      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => 
+        o.name.toUpperCase().includes(nombreOp.toUpperCase())
+      );
+      if (!op) { console.error(`❌ Operador "${nombreOp}" no encontrado en operatorsData`); return; }
+      const ids = (op.profiles || []).map(p => String(p.id));
+      console.log(`\n🔍 DIAGNÓSTICO DELTA-SHIFT™ para: ${op.name}`);
+      console.log(`   IDs de perfil: ${ids.join(', ')}`);
+      console.log(`   Turno asignado: ${op.turno}`);
+      console.log(`   Fecha: ${hoy}\n`);
+      
+      for (const id of ids) {
+        const { data: rows } = await _sb.from('operaciones').select('*').eq('id_perfil', id).gte('fecha_dia', hoy);
+        if (!rows || rows.length === 0) { console.warn(`   ⚠️ [${id}] Sin registros hoy`); continue; }
+        rows.forEach(r => {
+          const netoReal = r.puntos_total - r.puntos_baseline;
+          console.log(`   📊 [${id}] Jornada: ${r.jornada}`);
+          console.log(`      puntos_total: ${r.puntos_total} | baseline: ${r.puntos_baseline} | neto_DB: ${r.puntos_neto} | neto_CALC: ${netoReal.toFixed(2)}`);
+          if (Math.abs(netoReal - r.puntos_neto) > 5) {
+            console.warn(`      🔴 DESFASE: DB dice ${r.puntos_neto} pts pero el cálculo da ${netoReal.toFixed(2)} pts`);
+          } else {
+            console.log(`      ✅ Sin desfase`);
+          }
+        });
+      }
+    };
+
+    // ══════════════════════════════════════════════════════════
+    // CALIBRACIÓN QUIRÚRGICA DELTA-SHIFT™ — ejecutar desde consola:
+    //   calibrarBaseline('JHORIANNYS ESTHER MOSQUERA ROJANO', 1825)
+    // Donde 1825 = los puntos que tenía Datame al INICIO del turno Mañana
+    // ══════════════════════════════════════════════════════════
+    window.calibrarBaseline = async function(nombreOp, baselineManual, jornadaTarget) {
+      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const jornada = jornadaTarget || (typeof detectarJornada === 'function' ? detectarJornada() : 'Mañana');
+      const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => 
+        o.name.toUpperCase().includes(nombreOp.toUpperCase())
+      );
+      if (!op) { console.error(`❌ "${nombreOp}" no encontrado`); return; }
+      const ids = (op.profiles || []).map(p => String(p.id));
+      console.log(`\n🔧 CALIBRACIÓN QUIRÚRGICA: ${op.name} | Jornada: ${jornada} | Baseline manual: ${baselineManual}`);
+      let ok = 0;
+      for (const id of ids) {
+        const { data: rec } = await _sb.from('operaciones').select('*').eq('id_perfil', id).eq('fecha_dia', hoy).eq('jornada', jornada).maybeSingle();
+        if (!rec) { console.warn(`   ⚠️ [${id}] Sin registro para ${jornada} hoy`); continue; }
+        const nuevoNeto = Math.max(0, rec.puntos_total - baselineManual);
+        const { error } = await _sb.from('operaciones').update({ puntos_baseline: baselineManual, puntos_neto: nuevoNeto }).eq('id', rec.id);
+        if (!error) {
+          console.log(`   ✅ [${id}] Corregido: baseline=${baselineManual} | neto=${nuevoNeto.toFixed(2)} pts (antes: ${rec.puntos_neto} pts)`);
+          ok++;
+        } else { console.error(`   ❌ [${id}] Error:`, error.message); }
+      }
+      if (ok > 0) {
+        console.log(`\n✅ ${ok} perfiles calibrados. Recargando dashboard...`);
+        setTimeout(() => { if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles(); if (typeof renderRanking === 'function') renderRanking(); }, 500);
+      }
+    };
+
+    // ══════════════════════════════════════════════════════════
+    // FIX DELTA-SHIFT GLOBAL — botón en UI llama esta función
+    // Reconstruye TODOS los baselines de hoy usando herencia continua
+    // ══════════════════════════════════════════════════════════
+    window.sincronizarDeltaShift = async function() {
+      if (typeof _sb === 'undefined') { alert('Supabase no disponible'); return; }
+      if (!confirm('¿Reconstruir matemáticamente los puntos de HOY aplicando DELTA-SHIFT™?\n\nEsto corregirá baselines corruptos usando herencia continua entre jornadas.')) return;
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      console.log(`🔧 Iniciando Reconstrucción DELTA-SHIFT™ para ${hoy}...`);
+      
+      const { data: ops } = await _sb.from('operaciones').select('*').gte('fecha_dia', hoy).order('fecha_corte', { ascending: true });
+      if (!ops || ops.length === 0) return alert('No hay datos para reparar hoy.');
+
+      // Agrupar por id_perfil
+      const perfiles = {};
+      ops.forEach(op => { if (!perfiles[op.id_perfil]) perfiles[op.id_perfil] = []; perfiles[op.id_perfil].push(op); });
+      let corregidos = 0;
+      const jornadaOrd = { 'Mañana': 1, 'Tarde': 2, 'Noche': 3, 'Completo': 4, 'Auto': 5 };
+
+      for (const [id, regs] of Object.entries(perfiles)) {
+        // Ordenar cronológicamente por jornada
+        regs.sort((a, b) => (jornadaOrd[a.jornada] || 9) - (jornadaOrd[b.jornada] || 9));
+        let lastTotal = null;
+        for (let i = 0; i < regs.length; i++) {
+          const rec = regs[i];
+          let nuevoBase = rec.puntos_baseline;
+          if (i === 0) {
+            // Primer turno del día: buscar cierre del día anterior como baseline
+            const { data: ayer } = await _sb.from('operaciones').select('puntos_total').eq('id_perfil', id).lt('fecha_dia', hoy).order('fecha_corte', { ascending: false }).limit(1).maybeSingle();
+            nuevoBase = ayer ? ayer.puntos_total : rec.puntos_baseline;
+          } else {
+            // Herencia continua: el baseline de este turno = cierre del turno anterior
+            nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
+          }
+          
+          if (rec.puntos_total >= nuevoBase) {
+            const nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            if (Math.abs(rec.puntos_neto - nuevoNeto) > 2) {
+              await _sb.from('operaciones').update({ puntos_baseline: nuevoBase, puntos_neto: nuevoNeto }).eq('id', rec.id);
+              console.log(`✅ [${id}] ${rec.jornada}: baseline ${rec.puntos_baseline}→${nuevoBase} | neto ${rec.puntos_neto}→${nuevoNeto.toFixed(1)}`);
+              corregidos++;
+            }
+            lastTotal = rec.puntos_total;
+          } else {
+            lastTotal = nuevoBase;
+          }
+        }
+      }
+      alert(`✅ Reconstrucción DELTA-SHIFT™ completada.\n${corregidos} turnos corregidos matemáticamente.\n\nEl dashboard se actualizará ahora.`);
+      if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
+      if (typeof renderRanking === 'function') renderRanking();
+    };
+
+
     async function sincronizarDatamePaneles() {
       if (typeof _sb === 'undefined') return;
 

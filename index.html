@@ -4560,7 +4560,7 @@
 
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab(0)">🏆 OP Real-Time</button>
-    <button class="tab-btn" onclick="switchTab(1)">📋 Reporte Operadores</button>
+    <button class="tab-btn" onclick="switchTab(1)">📋 Reporte Operación</button>
     <button class="tab-btn" onclick="switchTab(2)">📊 Monitoreo de Tareas</button>
     <button class="tab-btn" onclick="switchTab(3)">✅ Asistencia</button>
   </div>
@@ -11896,58 +11896,72 @@ function exportarDatos() {
         const growthCls = growth > 0 ? 'growth-up' : growth < 0 ? 'growth-down' : 'growth-neutral';
         const copCurr = Math.round(ptsCurr * 1400).toLocaleString('es-CO');
 
-        // Pts del día en tiempo real (incluyendo proyección +3 días)
-        const futuro3 = localDateStr(new Date(Date.now() + 3 * 86400000));
-        const cortesHoy = cortesOp.filter(c => c.fecha >= hoy && c.fecha <= futuro3);
-        const ptsHoy = _sumNet(cortesHoy);
-        const horaUltimo = cortesHoy.length ? cortesHoy[cortesHoy.length - 1].hora : null;
-        const copHoy = Math.round(ptsHoy * 1400).toLocaleString('es-CO');
-        const turnoIcon = op.turno === 'Mañana' ? '🌅' : op.turno === 'Tarde' ? '🌇' : op.turno === 'Noche' ? '🌙' : '📌';
+        // Función para ajustar fecha Datame (+2 días)
+        const add2Days = (ds) => {
+          if (!ds) return null;
+          const d = new Date(ds + 'T12:00:00'); // Evitar timezone bugs
+          d.setDate(d.getDate() + 2);
+          return d.toISOString().slice(0, 10);
+        };
+
+        const getWk = (ds) => {
+          if (!ds) return '';
+          const d = new Date(ds + 'T12:00:00');
+          const dNum = d.getDay() || 7;
+          d.setDate(d.getDate() + (4 - dNum));
+          const yearStart = new Date(d.getFullYear(), 0, 1);
+          const wk = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+          return d.getFullYear() + '-W' + wk;
+        };
+
+        const currentWk = getWk(hoy);
+
+        let ptsHoyReal = 0;
+        let ptsSemanaReal = 0;
+        let ptsMesReal = 0;
+        const ptsPorMes = { '01':0, '02':0, '03':0, '04':0, '05':0, '06':0, '07':0, '08':0, '09':0, '10':0, '11':0, '12':0 };
+
+        cortesOp.forEach(c => {
+          if (!c.fecha) return;
+          const fechaReal = add2Days(c.fecha); // Ajuste +2 días (UK -> Colombia shift)
+          if (!fechaReal || fechaReal < '2026-01-01') return;
+          
+          const val = Number(c.puntos) || 0;
+          const net = val > 1500 ? 0 : val; // Filtro de anomalías acumuladas
+          
+          if (fechaReal === hoy) ptsHoyReal += net;
+          if (getWk(fechaReal) === currentWk) ptsSemanaReal += net;
+          if (fechaReal.slice(0, 7) === mesActual) ptsMesReal += net;
+          
+          const mesStr = fechaReal.slice(5, 7);
+          if (ptsPorMes[mesStr] !== undefined && fechaReal.startsWith('2026')) {
+            ptsPorMes[mesStr] += net;
+          }
+        });
 
         // ✅ PERFILES FIJOS + NOVEDADES (v8.6)
         const _novedadesHoy = getNovedadesHoy();
         const _perfilesNov  = _novedadesHoy[op.name] || [];
         const _perfilesFix  = op.profiles || [];
-        
-        // Unificar perfiles evitando duplicados por ID
         const allPerfs = [..._perfilesFix];
         _perfilesNov.forEach(np => {
-          if (!allPerfs.some(fp => String(fp.id) === String(np.id))) {
-            allPerfs.push(np);
-          }
+          if (!allPerfs.some(fp => String(fp.id) === String(np.id))) allPerfs.push(np);
         });
 
         const _novBadge = allPerfs.length > 0
-          ? `<span class="nov-badge">📋 ${allPerfs.length} perfil${allPerfs.length !== 1 ? 'es' : ''} asignados</span>`
-          : '';
-
-        const _novDetalle = allPerfs.length > 0
-          ? `<div style="margin:6px 0 2px;padding:7px 10px;border-radius:8px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.2);">
-               <div style="font-size:.65rem;color:#fbbf24;font-weight:700;margin-bottom:4px;">📋 PERFILES ACTIVOS</div>
-               ${allPerfs.map(p => `<div style="font-size:.68rem;color:#94a3b8;padding:1px 0;">• ID <strong style="color:#e2e8f0">${p.id}</strong> — ${p.modelo || p.model || 'Sin nombre'}</div>`).join('')}
-             </div>`
+          ? `<span class="nov-badge">📋 ${allPerfs.length} perfil${allPerfs.length !== 1 ? 'es' : ''}</span>`
           : '';
 
         const div = document.createElement('div');
         div.className = 'operator-card';
         div.dataset.opIndex = globalIndex;
         div.dataset.rendered = '0';
-        
-        // --- DATASET EXPANDIDO PARA CHART ---
-        div.dataset.ptsFeb = ptsFeb;
-        div.dataset.ptsMar = ptsMar;
-        div.dataset.ptsAbr = ptsAbr;
-        div.dataset.ptsMay = ptsMay;
-        div.dataset.ptsCurr = ptsCurr;
-        div.dataset.growth = growth;
-        div.dataset.prevLabel = prevLabel;
-        div.dataset.currLabel = currLabel;
 
         div.innerHTML = `
-      <div class="op-header">
+      <div class="op-header" style="margin-bottom:12px;">
         <div>
-          <div class="op-name">${op.name}</div>
-          <div class="group-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <div class="op-name" style="font-size:1.15rem;">${op.name}</div>
+          <div class="group-label" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
             <span>Grupo ${op.group} · ${turnoIcon} ${op.turno || '—'}${_novBadge}</span>
             <span style="display:inline-flex;align-items:center;gap:4px;">
               <select
@@ -11959,72 +11973,53 @@ function exportarDatos() {
             </span>
           </div>
         </div>
-        <div class="growth-badge ${growthCls}">
-          ${growthSign}${growth.toFixed(1)}%
-        </div>
       </div>
-      <div class="metric-big">${ptsCurr.toFixed(2)} pts</div>
-      <div class="sub-metric">${prevLabel}: ${ptsPrev.toFixed(2)} pts • Δ ${growthSign}${growth.toFixed(1)}%</div>
       
-      <!-- BARRA DE PROGRESO DE META (Grupal) -->
-      ${(() => {
-        // Meta por grupo (configurable en el panel de Metas del admin)
-        const metaGrupal = (typeof getMetaValue === 'function')
-          ? (getMetaValue('grupo', String(op.group), 'mes') || getMetaValue('general', 'GENERAL', 'mes') || 0)
-          : 0;
-        const pct = metaGrupal > 0 ? Math.min((ptsCurr / metaGrupal) * 100, 100) : 0;
-        const barColor = pct >= 100 ? '#10b981' : pct >= 70 ? '#fbbf24' : '#6366f1';
-        return `
-          <div style="margin:8px 0;">
-            <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:#94a3b8; margin-bottom:3px;">
-              <span>Cumplimiento Meta</span>
-              <span style="font-weight:bold; color:${barColor};">${pct.toFixed(1)}%</span>
-            </div>
-            <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.02);">
-              <div style="width:${pct}%; height:100%; background:${barColor}; box-shadow: 0 0 10px ${barColor}44; transition: width 0.8s ease;"></div>
-            </div>
-            <div style="font-size:0.55rem; color:#475569; margin-top:2px;">Meta Grupal: ${metaGrupal > 0 ? metaGrupal + ' pts' : 'No configurada — ir a ⚙️ Metas'}</div>
-          </div>
-        `;
-      })()}
-
-      <div style="font-size:15px;color:#5eead4;margin:4px 0 2px;">$${copCurr} COP · ${currLabel}</div>
-      ${ptsHoy > 0
-            ? `<div style="font-size:12px;color:#34d399;margin-bottom:4px;">⚡ Hoy: ${ptsHoy.toFixed(1)} pts · $${copHoy} COP${horaUltimo ? ' · ⏱ ' + horaUltimo : ''}</div>`
-            : `<div style="font-size:12px;color:#475569;margin-bottom:4px;">💤 Sin corte hoy</div>`}
-      ${_novDetalle}
-
-      <!-- BITÁCORA DIARIA v19.2 -->
-      <div class="daily-log-minimal" style="margin-top:10px; background:rgba(0,0,0,0.2); border-radius:8px; padding:8px;">
-        <div style="font-size:0.6rem; color:#94a3b8; font-weight:bold; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">📅 ÚLTIMOS 7 DÍAS CON ACTIVIDAD</div>
-        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap:5px;">
-          ${(() => {
-            const dailyMap = {};
-            cortesOp.forEach(c => { 
-              if(c.fecha) {
-                const val = (Number(c.puntos) || 0);
-                dailyMap[c.fecha] = (dailyMap[c.fecha] || 0) + (val > 1500 ? 0 : val); 
-              }
-            });
-            const sorted = Object.entries(dailyMap).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 7);
-            return sorted.length ? sorted.map(([f, p]) => `
-              <div style="background:rgba(255,255,255,0.03); padding:4px; border-radius:4px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
-                <div style="font-size:0.55rem; color:#64748b;">${f.split('-').slice(1).join('/')}</div>
-                <div style="font-size:0.7rem; color:#5eead4; font-weight:bold;">${p.toFixed(1)}</div>
-              </div>`).join('') : '<div style="grid-column:1/-1; font-size:0.65rem; color:#475569; text-align:center;">Sin actividad reciente</div>';
-          })()}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <!-- Card Hoy -->
+        <div style="background:rgba(52,211,153,0.05);border:1px solid rgba(52,211,153,0.2);border-radius:10px;padding:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size:0.65rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">⚡ Hoy</div>
+          <div style="font-size:1.6rem;font-weight:900;color:#fff;">${ptsHoyReal.toFixed(1)}</div>
+          <div style="font-size:0.6rem;color:#94a3b8;">puntos</div>
+        </div>
+        <!-- Card Semana -->
+        <div style="background:rgba(56,189,248,0.05);border:1px solid rgba(56,189,248,0.2);border-radius:10px;padding:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size:0.65rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">📅 Semana</div>
+          <div style="font-size:1.6rem;font-weight:900;color:#fff;">${ptsSemanaReal.toFixed(1)}</div>
+          <div style="font-size:0.6rem;color:#94a3b8;">puntos</div>
+        </div>
+        <!-- Card Mes -->
+        <div style="background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.2);border-radius:10px;padding:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;grid-column:1/-1;transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+          <div style="font-size:0.65rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">🏆 Mes Actual (${currLabel})</div>
+          <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsMesReal.toFixed(1)}</div>
+          <div style="font-size:0.65rem;color:#94a3b8;">$${Math.round(ptsMesReal * 1400).toLocaleString('es-CO')} COP</div>
         </div>
       </div>
 
-      <div class="chart-container" style="margin-top:15px;"><canvas></canvas></div>
-      <div class="profiles-container" id="profiles-list-${globalIndex}">
-         <div style="color:#334155;font-size:.75rem;padding:6px 0;text-align:center;">Cargando perfiles...</div>
+      <!-- Card Histórico Meses -->
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:10px;">
+        <div style="font-size:0.6rem;color:#94a3b8;font-weight:bold;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;text-align:center;">📊 Histórico 2026 (Datame Real)</div>
+        <div style="display:flex;justify-content:space-between;gap:4px;">
+          ${['01','02','03','04','05'].map((m, i) => `
+            <div style="flex:1;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 2px;text-align:center;border:1px solid rgba(255,255,255,0.04);">
+              <div style="font-size:0.55rem;color:#64748b;margin-bottom:2px;">${['ENE','FEB','MAR','ABR','MAY'][i]}</div>
+              <div style="font-size:0.7rem;color:${m===mesActual.slice(5,7)?'#a78bfa':'#e2e8f0'};font-weight:bold;">${Math.round(ptsPorMes[m])}</div>
+            </div>
+          `).join('')}
+        </div>
       </div>
+
+      <div class="profiles-container" id="profiles-list-${globalIndex}" style="margin-top:12px;"></div>
       <div style="margin-top:12px;font-size:.62rem;color:#334155;font-style:italic;text-align:center;">
-        ✏️ Edita los perfiles desde la pestaña <strong style="color:#a78bfa;">✅ Asistencia</strong>
+        ✏️ Reporte de Datame (+2 días Offset UK)
       </div>`;
         fragment.appendChild(div);
-        _opChartObserver.observe(div);
+        
+        // Renderizar perfiles directamente en lugar del observer (ya no hay Chart.js en la card)
+        setTimeout(() => {
+          const pListContainer = div.querySelector('.profiles-container');
+          if (pListContainer) pListContainer.innerHTML = renderPerfilMetrics(op.name);
+        }, 50);
       });
 
       container.appendChild(fragment);

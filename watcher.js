@@ -152,19 +152,40 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
         log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
       }
     } else {
-      shiftBaselines[key] = monthlyTotal;
-      log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+      // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
+      // Esto cierra la "brecha temporal" si el watcher se retrasa en el cambio de turno.
+      let inheritedBaseline = monthlyTotal;
+      if (jornada === 'Tarde' || jornada === 'Noche') {
+        const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
+        const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
+        // Si el turno anterior tiene puntos, usamos SU CIERRE como nuestro INICIO.
+        if (prevRec && prevRec.puntos_total > 0) {
+          inheritedBaseline = prevRec.puntos_total;
+          log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
+        } else {
+          log(`  📍 Baseline fijado (sin herencia): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+        }
+      } else {
+        log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+      }
+      shiftBaselines[key] = inheritedBaseline;
     }
   }
 
   const baseline  = shiftBaselines[key];
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
-  // ── SANIDAD: neto no puede superar el 60% del total mensual en un turno ──
-  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100) {
-    const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
-    const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
-    log(`  🔴 SANIDAD ${modelo}: neto ${netoTurno.toFixed(1)} > 60% del total → CORRIENDO baseline en DB...`);
+  // ── SANIDAD: Control de picos irracionales ──
+  // Si netoTurno > 1500, significa que el baseline en BD se perdió o es corrupto
+  // (un operador no puede generar >1500 pts en una sola jornada).
+  if (netoTurno > 1500) {
+    // Estimación conservadora basada en horas trabajadas (aprox 15 pts/hr)
+    const h = Math.max(1, new Date().getHours() % 8);
+    const netoEstimado = h * 15;
+    
+    const baselineCorr = parseFloat((monthlyTotal - netoEstimado).toFixed(2));
+    const netoCorr     = parseFloat(netoEstimado.toFixed(2));
+    log(`  🔴 SANIDAD ${modelo}: neto irreal (${netoTurno.toFixed(1)} > 1500) → CORRIENDO baseline a ${baselineCorr}`);
     
     const { error: errCorr } = await dbUpdateBaseline(idPerfil, fechaDia, jornada, baselineCorr, netoCorr);
     if (!errCorr) {

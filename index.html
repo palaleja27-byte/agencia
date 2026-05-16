@@ -4598,7 +4598,7 @@
           </div>
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
-           <button class="btn-cyber-bot" onclick="sincronizarDeltaShift()" title="Sincronizar DELTA-SHIFT (Corregir Desfases)" style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--primary); padding: 5px 10px; border-radius: 8px; color: var(--primary); font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.8rem;">
+           <button id="btn-fix-delta" class="btn-cyber-bot" onclick="sincronizarDeltaShift()" title="Sincronizar DELTA-SHIFT (Corregir Desfases)" style="background: rgba(45, 212, 191, 0.1); border: 1px solid var(--primary); padding: 5px 10px; border-radius: 8px; color: var(--primary); font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 0.8rem;">
               <span>🔄</span> Fix DELTA-SHIFT
            </button>
            <button class="btn-cyber-bot" onclick="abrirAnalisisIA()" title="Análisis Cyber-IA">
@@ -6817,8 +6817,9 @@
           return s + (corteMismaJornada ? val : 0);
         }, 0);
 
-        // Usamos Datame Realtime si tiene puntos, sino el legacy
-        _ptsHoyMap[op.name] = Math.max(datamePts, legacyPts);
+        // 🔬 DELTA-SHIFT™ PRIORITY: Usar Datame si tiene datos, sino el legacy (manual).
+        // Evitamos Math.max para que correcciones a la baja (Fix) se reflejen de inmediato.
+        _ptsHoyMap[op.name] = (datamePts > 0) ? datamePts : legacyPts;
         _connectedMap[op.name.toUpperCase()] = estaLogueado;
 
         const last = hoyCortes[hoyCortes.length - 1];
@@ -18035,7 +18036,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         else { console.warn('⚠️ [SYNC] psaCargarDesdeSupabase no disponible'); }
       } catch(e) { console.error('❌ [SYNC] Error en PSA:', e); }
 
-      // ── PASO 6: (Ranking Perfiles Migrado a Reporte Operadores) ───
+      // ── PASO 6: Corrección Automática DELTA-SHIFT™ ────────────────
+      console.log('🔧 [SYNC] Paso 6 — Aplicando corrección DELTA-SHIFT™...');
+      try {
+        await sincronizarDeltaShift(true); 
+      } catch(e) { console.error('❌ [SYNC] Error en Delta-Shift:', e); }
 
       // ── UI: estado ok ─────────────────────────────────────────────
       const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
@@ -18047,21 +18052,116 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         setTimeout(() => { btn.textContent = '↻ Sync'; }, 2500);
       }
     }
+    window.sincronizarDeltaShift = async function(silent = false) {
+      if (typeof _sb === 'undefined') { if (!silent) alert('Supabase no disponible'); return; }
+      if (!silent && !confirm('¿Reconstruir matemáticamente los puntos de HOY aplicando DELTA-SHIFT™?\n\nEsto corregirá baselines corruptos usando herencia continua entre jornadas.')) return;
+      
+      const btn = document.getElementById('btn-fix-delta');
+      const originalHTML = btn ? btn.innerHTML : '';
+      if (btn) { 
+        btn.innerHTML = '<span>⏳</span> Reparando...'; 
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+      }
 
-    // ── SISTEMA DE LOGS DATAME ──
-    function dpLog(msg, type = 'info') {
-      const consoleEl = document.getElementById('dp-logs-console');
-      if (!consoleEl) return;
-      const time = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const colors = { error:'#f87171', warn:'#fbbf24', success:'#34d399', info:'#94a3b8' };
-      const div = document.createElement('div');
-      div.style.marginBottom = '2px';
-      div.innerHTML = `<span style="color:#475569;">[${time}]</span> <span style="color:${colors[type] || colors.info};">${msg}</span>`;
-      consoleEl.prepend(div);
-      if (consoleEl.children.length > 50) consoleEl.lastElementChild.remove();
-    }
+      const hoy = localDateStr();
+      console.log(`🔧 [DELTA-SHIFT] Iniciando Reconstrucción para ${hoy}...`);
+      
+      // 🧹 LIMPIEZA AGRESIVA: Eliminar TODO el rastro de hoy en cache local
+      try {
+        const raw = localStorage.getItem('rr_cortes');
+        if (raw) {
+          const all = JSON.parse(raw);
+          let cleaned = false;
+          Object.keys(all).forEach(opName => {
+            const count = all[opName].length;
+            all[opName] = all[opName].filter(c => c.fecha !== hoy);
+            if (all[opName].length !== count) cleaned = true;
+          });
+          if (cleaned) {
+            localStorage.setItem('rr_cortes', JSON.stringify(all));
+            console.log('🧹 [DELTA-SHIFT] Cache local de hoy PURGADA.');
+          }
+        }
+      } catch(e) { console.warn('Error purgando cache:', e); }
 
-    // ══════════════════════════════════════════════════════════
+      try {
+        // Obtener TODOS los registros de hoy, ordenados por fecha de corte
+        const { data: ops } = await _sb.from('operaciones').select('*').gte('fecha_dia', hoy).order('fecha_corte', { ascending: true });
+        if (!ops || ops.length === 0) {
+          if (!silent) alert('No hay datos para reparar hoy.');
+          if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; btn.style.opacity = '1'; }
+          return;
+        }
+
+        const perfiles = {};
+        ops.forEach(op => { if (!perfiles[op.id_perfil]) perfiles[op.id_perfil] = []; perfiles[op.id_perfil].push(op); });
+        let corregidos = 0;
+        const jornadaOrd = { 'Mañana': 1, 'Tarde': 2, 'Noche': 3, 'Completo': 4, 'Auto': 5 };
+
+        for (const [id, regs] of Object.entries(perfiles)) {
+          regs.sort((a, b) => (jornadaOrd[a.jornada] || 9) - (jornadaOrd[b.jornada] || 9));
+          let lastTotal = null;
+          
+          for (let i = 0; i < regs.length; i++) {
+            const rec = regs[i];
+            let nuevoBase = rec.puntos_baseline;
+            
+            if (i === 0) {
+              // Buscar el último cierre conocido de este perfil (ayer o el último día activo)
+              const { data: ultimo } = await _sb.from('operaciones')
+                .select('puntos_total')
+                .eq('id_perfil', id)
+                .lt('fecha_dia', hoy)
+                .order('fecha_dia', { ascending: false })
+                .order('fecha_corte', { ascending: false })
+                .limit(1).maybeSingle();
+              
+              nuevoBase = ultimo ? (ultimo.puntos_total || 0) : rec.puntos_baseline;
+            } else {
+              nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
+            }
+            
+            // Sanidad: El baseline no puede ser mayor que el total (excepto en reset mensual, no aplica hoy)
+            if (nuevoBase > rec.puntos_total) nuevoBase = rec.puntos_total;
+
+            const nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            
+            // Si el neto resultante es absurdo (> 1000 en un turno), probablemente el baseline anterior era corrupto
+            // pero no tenemos mejor referencia, así que lo mantenemos para revisión manual si es necesario.
+            
+            if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
+              await _sb.from('operaciones').update({ 
+                puntos_baseline: nuevoBase, 
+                puntos_neto: nuevoNeto 
+              }).eq('id', rec.id);
+              corregidos++;
+            }
+            lastTotal = rec.puntos_total;
+          }
+        }
+
+        if (!silent) alert(`✅ Reconstrucción DELTA-SHIFT™ completada.\n${corregidos} turnos corregidos matemáticamente.\n\nEl dashboard se actualizará ahora.`);
+        
+        // Refresh individual op if logged in
+        if (typeof _opRtSync === 'function' && window._opRtOpName) {
+           _opRtSync(window._opRtOpName);
+        }
+        
+        // Refresh UI components
+        if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
+        if (typeof renderRanking === 'function') renderRanking();
+
+      } catch (err) {
+        console.error('Error en sincronizarDeltaShift:', err);
+      } finally {
+        if (btn) { 
+          btn.innerHTML = originalHTML; 
+          btn.disabled = false; 
+          btn.style.opacity = '1';
+        }
+      }
+    };
     // CALIBRAR BASELINE MAÑANA — llamar desde consola del admin:
     //   calibrarManana()
     // Corte 10:00 AM 2026-05-14: "Comienza" = baseline al inicio del turno 6am
@@ -18221,55 +18321,6 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
     // ══════════════════════════════════════════════════════════
     // FIX DELTA-SHIFT GLOBAL — botón en UI llama esta función
     // Reconstruye TODOS los baselines de hoy usando herencia continua
-    // ══════════════════════════════════════════════════════════
-    window.sincronizarDeltaShift = async function() {
-      if (typeof _sb === 'undefined') { alert('Supabase no disponible'); return; }
-      if (!confirm('¿Reconstruir matemáticamente los puntos de HOY aplicando DELTA-SHIFT™?\n\nEsto corregirá baselines corruptos usando herencia continua entre jornadas.')) return;
-      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      console.log(`🔧 Iniciando Reconstrucción DELTA-SHIFT™ para ${hoy}...`);
-      
-      const { data: ops } = await _sb.from('operaciones').select('*').gte('fecha_dia', hoy).order('fecha_corte', { ascending: true });
-      if (!ops || ops.length === 0) return alert('No hay datos para reparar hoy.');
-
-      // Agrupar por id_perfil
-      const perfiles = {};
-      ops.forEach(op => { if (!perfiles[op.id_perfil]) perfiles[op.id_perfil] = []; perfiles[op.id_perfil].push(op); });
-      let corregidos = 0;
-      const jornadaOrd = { 'Mañana': 1, 'Tarde': 2, 'Noche': 3, 'Completo': 4, 'Auto': 5 };
-
-      for (const [id, regs] of Object.entries(perfiles)) {
-        // Ordenar cronológicamente por jornada
-        regs.sort((a, b) => (jornadaOrd[a.jornada] || 9) - (jornadaOrd[b.jornada] || 9));
-        let lastTotal = null;
-        for (let i = 0; i < regs.length; i++) {
-          const rec = regs[i];
-          let nuevoBase = rec.puntos_baseline;
-          if (i === 0) {
-            // Primer turno del día: buscar cierre del día anterior como baseline
-            const { data: ayer } = await _sb.from('operaciones').select('puntos_total').eq('id_perfil', id).lt('fecha_dia', hoy).order('fecha_corte', { ascending: false }).limit(1).maybeSingle();
-            nuevoBase = ayer ? ayer.puntos_total : rec.puntos_baseline;
-          } else {
-            // Herencia continua: el baseline de este turno = cierre del turno anterior
-            nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
-          }
-          
-          if (rec.puntos_total >= nuevoBase) {
-            const nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-            if (Math.abs(rec.puntos_neto - nuevoNeto) > 2) {
-              await _sb.from('operaciones').update({ puntos_baseline: nuevoBase, puntos_neto: nuevoNeto }).eq('id', rec.id);
-              console.log(`✅ [${id}] ${rec.jornada}: baseline ${rec.puntos_baseline}→${nuevoBase} | neto ${rec.puntos_neto}→${nuevoNeto.toFixed(1)}`);
-              corregidos++;
-            }
-            lastTotal = rec.puntos_total;
-          } else {
-            lastTotal = nuevoBase;
-          }
-        }
-      }
-      alert(`✅ Reconstrucción DELTA-SHIFT™ completada.\n${corregidos} turnos corregidos matemáticamente.\n\nEl dashboard se actualizará ahora.`);
-      if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
-      if (typeof renderRanking === 'function') renderRanking();
-    };
 
 
     async function sincronizarDatamePaneles() {
@@ -18417,28 +18468,30 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
                 if (!allCortes[opName]) allCortes[opName] = [];
 
-                // 🔒 FIX ANTI-DUPLICADO: 1 corte por jornada por día — UPSERT, no push.
-                // El bug anterior creaba un corte nuevo cada vez que netoReal cambiaba
-                // aunque fuera 0.01 pts (63+ cortes en un día = puntos duplicados).
+                // FIX ANTI-DUPLICADO: 1 corte por PERFIL por JORNADA por DIA.
                 const existingIdx = allCortes[opName].findIndex(
-                  c => c.fecha === hoy && c.jornada === op.jornada
+                  c => c.fecha === hoy && c.jornada === op.jornada && String(c.perfil || c.pid || '') === String(id)
                 );
+
                 if (existingIdx >= 0) {
-                  // ACTUALIZAR el corte existente si los puntos crecieron
-                  if (netoReal > (allCortes[opName][existingIdx].puntos || 0)) {
+                  const oldPts = allCortes[opName][existingIdx].puntos || 0;
+                  if (Math.abs(netoReal - oldPts) > 0.05) {
                     allCortes[opName][existingIdx].puntos = netoReal;
                     allCortes[opName][existingIdx].ts     = Date.now();
                     allCortes[opName][existingIdx].hora   = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
                     cortesChanged = true;
                   }
                 } else {
-                  // CREAR el primer corte para esta jornada
+                  // Eliminar registros huerfanos sin perfil para evitar duplicados
+                  const legacyIdx = allCortes[opName].findIndex(c => c.fecha === hoy && c.jornada === op.jornada && !c.perfil && !c.pid);
+                  if (legacyIdx >= 0) allCortes[opName].splice(legacyIdx, 1);
+
                   allCortes[opName].push({
                     fecha: hoy,
-                    hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
                     puntos: netoReal,
                     jornada: op.jornada,
                     perfil: String(id),
+                    hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
                     ts: Date.now()
                   });
                   cortesChanged = true;

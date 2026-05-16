@@ -13,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenci
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
-const CICLO_PAUSA_MS  = 30 * 60 * 1000;    // 30 min entre ciclos
+const CICLO_PAUSA_MS  = 5 * 60 * 1000;    // 5 min entre ciclos
 const PAUSA_PERFIL_MS = 3000;              // 3 seg por perfil (más rápido)
 const startTime       = Date.now();
 
@@ -346,23 +346,36 @@ async function watchPanel(panel, perfiles) {
   log(`⏱️  Runtime máx: ${MAX_RUNTIME_MS / 3600000}h | Ciclo: ${CICLO_PAUSA_MS / 60000} min`);
   log(`📅 Rango Datame: ${rangoMesActual().start} → ${rangoMesActual().end} (total mes)`);
 
-  const { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
-  const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
+  while (Date.now() - startTime < MAX_RUNTIME_MS) {
+    const cycleStart = Date.now();
+    
+    const { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
+    const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
 
-  if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
-  if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
+    if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
+    if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
 
-  if (!panels?.length) { 
-    log('❌ Sin paneles en Supabase (o tabla vacía/inactiva)'); 
-    process.exit(1); 
+    if (panels?.length) {
+      log(`📡 ${panels.length} paneles | ${allPerfiles?.length || 0} perfiles`);
+      await Promise.all(panels.map(panel => {
+        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id);
+        if (!perfiles.length) { log(`[SKIP] ${panel.nombre}`); return Promise.resolve(); }
+        return watchPanel(panel, perfiles);
+      }));
+    } else {
+      log('❌ Sin paneles en Supabase (o tabla vacía/inactiva)');
+    }
+
+    const elapsed = Date.now() - cycleStart;
+    const waitTime = Math.max(1000, CICLO_PAUSA_MS - (elapsed % CICLO_PAUSA_MS));
+    
+    if (Date.now() - startTime + waitTime < MAX_RUNTIME_MS) {
+      log(`⏳ Ciclo terminado en ${Math.round(elapsed/1000)}s. Esperando ${Math.round(waitTime/1000)}s para el próximo...`);
+      await new Promise(r => setTimeout(r, waitTime));
+    } else {
+      break;
+    }
   }
-  log(`📡 ${panels.length} paneles | ${allPerfiles?.length || 0} perfiles`);
 
-  await Promise.all(panels.map(panel => {
-    const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id);
-    if (!perfiles.length) { log(`[SKIP] ${panel.nombre}`); return Promise.resolve(); }
-    return watchPanel(panel, perfiles);
-  }));
-
-  log('🏁 WATCHER MODE completado. GitHub Actions lo reiniciará automáticamente.');
+  log('🏁 WATCHER MODE completado por límite de tiempo. GitHub Actions lo reiniciará automáticamente.');
 })();

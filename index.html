@@ -6099,7 +6099,7 @@
 
     // ── Fecha local del PC (no UTC) — evita bug de timezone UTC-5 ──
     function localDateStr(d) {
-      // ⚠️ SIEMPRE usar America/Bogota para fecha_dia (UTC-5)
+      // 🧠 LOGICAL DATE (v2026): El día cambia a las 6:00 AM.
       // El navegador puede estar en UK u otro timezone — NO usar getDate() local.
       let dt;
       if (typeof d === 'number') {
@@ -6107,6 +6107,10 @@
         dt.setDate(dt.getDate() - d);
       } else {
         dt = d || new Date();
+      }
+      // Si no se pasó una fecha específica, aplicamos el offset lógico de 6h
+      if (!d) {
+        dt = new Date(new Date(dt.toLocaleString('en-US', { timeZone: 'America/Bogota' })).getTime() - (6 * 3600000));
       }
       return dt.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     }
@@ -13636,10 +13640,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       }
 
       const ids    = typeof _opRtGetIds === 'function' ? _opRtGetIds(name) : [];
-      const hoy    = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      const ayer   = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      const hace7  = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      const hace14 = new Date(Date.now() - 14 * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const hoy    = localDateStr();
+      const ayer   = localDateStr(1);
+      const hace7  = localDateStr(7);
+      const hace14 = localDateStr(14);
       const mesActual = hoy.slice(0, 7);
 
       // Desde Febrero para medir historial de crecimiento completo
@@ -13731,6 +13735,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const crecMensual = crec(ptsMes, mesRef);
 
       // — Actualizar Hero en tiempo real —
+      if (typeof _opRtOpName !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(name)) {
+        window._opRtSemanaPrevia = ptsSemana - ptsHoy;
+      }
       const heroPts = document.getElementById('op-dash-hero-pts');
       const heroCop = document.getElementById('op-dash-hero-cop');
       if (heroPts) heroPts.textContent = ptsHoy.toFixed(1);
@@ -13797,19 +13804,19 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           '</div>' +
           '<div class="op-stat-card" style="padding:10px;">' +
             '<div class="op-stat-label">Ayer</div>' +
-            '<div class="op-stat-pts" style="font-size:1.1rem;">' + fmtPts(ptsAyer) + ' <small style="font-size:.6rem;color:#475569;">pts</small></div>' +
-            '<div class="op-stat-cop" style="font-size:.6rem;">$' + fmt(Math.round(ptsAyer*VALOR_COP)) + '</div>' +
+            '<div class="op-stat-pts" style="font-size:1.1rem;" id="op-dash-ayer-val">' + fmtPts(ptsAyer) + ' <small style="font-size:.6rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop" style="font-size:.6rem;" id="op-dash-ayer-cop">$' + fmt(Math.round(ptsAyer*VALOR_COP)) + '</div>' +
           '</div>' +
           '<div class="op-stat-card" style="padding:10px;">' +
             '<div class="op-stat-label">Semana</div>' +
-            '<div class="op-stat-pts" style="font-size:1.1rem;">' + fmtPts(ptsSemana) + ' <small style="font-size:.6rem;color:#475569;">pts</small></div>' +
-            '<div class="op-stat-cop" style="font-size:.6rem;">$' + fmt(Math.round(ptsSemana*VALOR_COP)) + '</div>' +
+            '<div class="op-stat-pts" style="font-size:1.1rem;" id="op-dash-sem-val">' + fmtPts(ptsSemana) + ' <small style="font-size:.6rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop" style="font-size:.6rem;" id="op-dash-sem-cop">$' + fmt(Math.round(ptsSemana*VALOR_COP)) + '</div>' +
             badge(crecSemanal) +
           '</div>' +
           '<div class="op-stat-card" style="padding:10px;">' +
             '<div class="op-stat-label">Mes</div>' +
-            '<div class="op-stat-pts">' + fmtPts(ptsMes) + ' <small style="font-size:.7rem;color:#475569;">pts</small></div>' +
-            '<div class="op-stat-cop">$' + fmt(Math.round(ptsMes*VALOR_COP)) + ' COP</div>' +
+            '<div class="op-stat-pts" id="op-dash-mes-val">' + fmtPts(ptsMes) + ' <small style="font-size:.7rem;color:#475569;">pts</small></div>' +
+            '<div class="op-stat-cop" id="op-dash-mes-cop">$' + fmt(Math.round(ptsMes*VALOR_COP)) + ' COP</div>' +
             badge(crecMensual) +
           '</div>' +
         '</div>' +
@@ -13819,8 +13826,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           '<div class="op-barchart">' + bars + '</div>' +
         '</div>' +
         '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:#475569;padding:0 2px;margin-bottom:4px;">' +
-          '<span>Prom/dia este mes: <strong style="color:#a78bfa;">' + fmtPts(promDia) + ' pts</strong></span>' +
-          '<span>$' + fmt(Math.round(promDia * VALOR_COP)) + ' COP/dia</span>' +
+          '<span>Prom/dia este mes: <strong style="color:#a78bfa;" id="op-dash-prom-val">' + fmtPts(promDia) + ' pts</strong></span>' +
+          '<span id="op-dash-prom-cop">$' + fmt(Math.round(promDia * VALOR_COP)) + ' COP/dia</span>' +
         '</div>';
       
       // Mostrar botón logout global
@@ -18289,7 +18296,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
       try {
         const FECHA_INICIO = '2026-02-01T00:00:00';
-        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const hoy = localDateStr();
         dpLog('Iniciando sincronización dinámica...', 'info');
 
         // ── Intento 1: columnas nuevas (Buscamos TODOS los perfiles activos del mes) ─────
@@ -18734,7 +18741,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       const ids = _opRtGetIds(opName);
       if (!ids.length) return;
 
-      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const hoy = localDateStr();
 
       try {
         // ⏱️ 12H SHIFT™: Detectar si el operador es de 12h para evitar el reset de las 2 PM
@@ -18830,11 +18837,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         }
 
         // 2d. Actualizar la métrica del mes actual en el dashboard
-        const mesEl = document.querySelector('#op-dash-metrics .op-dash-metric:nth-child(2) .val');
+        const mesEl = document.getElementById('op-dash-mes-val');
         if (mesEl && sumaTotal > 0) {
-          mesEl.textContent = sumaTotal.toFixed(1);
-          const copEl = mesEl.closest('.op-dash-metric')?.querySelector('.op-stat-cop');
-          if (copEl) copEl.textContent = '💰 $' + Math.round(sumaTotal * 1400).toLocaleString('es-CO') + ' COP';
+          mesEl.innerHTML = sumaTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
+          const copEl = document.getElementById('op-dash-mes-cop');
+          if (copEl) copEl.textContent = '$' + Math.round(sumaTotal * 1400).toLocaleString('es-CO') + ' COP';
         }
 
         if (_opRtBaseline === null) {
@@ -18887,11 +18894,20 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         // No sumar todos los turnos del día para evitar atribuir producción de otros turnos compartidos.
         let _hoyTotal = _opRtPtosSesion > 0 ? _opRtPtosSesion : Object.values(_opRtTurnos).reduce((s, v) => s + v, 0);
 
-        // 1. Actualizar Stats Card
+        // 1. Actualizar Stats Card (Hoy + Semana)
         const _hoyEl = document.getElementById('op-dash-hoy-val');
         const _hoyCopEl = document.getElementById('op-dash-hoy-cop');
         if (_hoyEl && _hoyTotal > 0) {
           _hoyEl.innerHTML = _hoyTotal.toFixed(1) + ' <small style="font-size:.6rem;color:#475569;">pts</small>';
+          
+          // Actualizar Semana en tiempo real
+          const _semEl = document.getElementById('op-dash-sem-val');
+          const _semCopEl = document.getElementById('op-dash-sem-cop');
+          if (_semEl && typeof window._opRtSemanaPrevia !== 'undefined') {
+            const _semTotal = window._opRtSemanaPrevia + _hoyTotal;
+            _semEl.innerHTML = _semTotal.toFixed(1) + ' <small style="font-size:.6rem;color:#475569;">pts</small>';
+            if (_semCopEl) _semCopEl.textContent = '$' + Math.round(_semTotal * 1400).toLocaleString('es-CO');
+          }
         }
 
         // 2. Actualizar Hero Section
@@ -18928,15 +18944,16 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
 
         // ABRIL / PROM-DÍA: usar _opRtTotalMes (Supabase real) / días transcurridos del mes
         if (_opRtTotalMes > 0) {
-          const _mesEl2 = document.getElementById('op-dash-mes-val');
           const _promEl = document.getElementById('op-dash-prom-val');
-          if (_mesEl2) _mesEl2.textContent = _opRtTotalMes.toFixed(1);
+          const _promCop = document.getElementById('op-dash-prom-cop');
           if (_promEl) {
-            const _hoyS = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            const _hoyS = localDateStr();
             const _d1   = new Date(_hoyS.slice(0, 7) + '-01').getTime();
             const _d2   = new Date(_hoyS).getTime();
             const _dias = Math.max(1, Math.round((_d2 - _d1) / 86400000) + 1);
-            _promEl.textContent = (_opRtTotalMes / _dias).toFixed(1);
+            const _val  = _opRtTotalMes / _dias;
+            _promEl.textContent = _val.toFixed(1) + ' pts';
+            if (_promCop) _promCop.textContent = '$' + Math.round(_val * 1400).toLocaleString('es-CO') + ' COP/dia';
           }
         }
 

@@ -30,7 +30,11 @@ function detectarJornada() {
 }
 
 function fechaHoyColombia() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+  // 🧠 LOGICAL DATE (v2026): El día cambia a las 6:00 AM, no a medianoche.
+  // Esto evita que el turno de NOCHE (10pm-6am) se parta en dos registros.
+  const dt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+  const logical = new Date(dt.getTime() - (6 * 3600000));
+  return logical.toLocaleDateString('en-CA');
 }
 
 function rangoMesActual() {

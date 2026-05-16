@@ -342,10 +342,16 @@ async function watchPanel(panel, perfiles) {
   log(`⏱️  Runtime máx: ${MAX_RUNTIME_MS / 3600000}h | Ciclo: ${CICLO_PAUSA_MS / 60000} min`);
   log(`📅 Rango Datame: ${rangoMesActual().start} → ${rangoMesActual().end} (total mes)`);
 
-  const { data: panels } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
-  const { data: allPerfiles } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
+  const { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
+  const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
 
-  if (!panels?.length) { log('❌ Sin paneles en Supabase'); process.exit(1); }
+  if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
+  if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
+
+  if (!panels?.length) { 
+    log('❌ Sin paneles en Supabase (o tabla vacía/inactiva)'); 
+    process.exit(1); 
+  }
   log(`📡 ${panels.length} paneles | ${allPerfiles?.length || 0} perfiles`);
 
   await Promise.all(panels.map(panel => {

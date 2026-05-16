@@ -6748,7 +6748,7 @@
         let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
 
         // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar AMBAS jornadas
-        const _horasOp = _horasHoyAll[op.name];
+        const _horasOp = _horasHoyAll[op.name] || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === _hoy;
         if (_es12h) {
           jornadaALeer = 'Completo'; // Suma Mañana + Tarde para operadores de 12h
@@ -6783,7 +6783,7 @@
                   // Si turno = 'Completo' → sumar todos los turnos del día.
                   let pts = 0;
                   if (jornadaALeer === 'Completo') {
-                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
                   } else {
                     // Normalizar 'Mañana' con/sin tilde
                     const key = jornadaLeer === 'Mañana' ? 'Mañana' : jornadaLeer;
@@ -7308,7 +7308,7 @@
         // Jornadas visibles según turno actual del día
         const _jActual = typeof jornadaActual !== 'undefined' ? jornadaActual : '';
         // ⏱️ 12H SHIFT™: Operadores de 12h ven SIEMPRE ambas jornadas activas
-        const _horasOpCard = _horasHoyAll[op.name];
+        const _horasOpCard = _horasHoyAll[op.name] || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12hCard = _horasOpCard && _horasOpCard.horas === 12 && _horasOpCard.fecha === _hoy;
         const _jornadasVisibles = _es12hCard
           ? ['Mañana', 'Tarde', 'Noche']      // 12h: mostrar todas las jornadas que tengan puntos

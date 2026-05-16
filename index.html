@@ -6429,7 +6429,7 @@
           .select('fecha_dia, puntos_neto, jornada')
           .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
           .neq('jornada', 'Auto');
-        const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 8000));
+        const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 12000));
         const { data: ops, error } = await Promise.race([fetchPromise, timeoutPromise]);
         
         if (error || !ops || !ops.length) {
@@ -6807,7 +6807,9 @@
           const val = (Number(c.puntos) || 0);
           if (val > 1500) return s; // sanidad
           // Filtrar por jornada: incluir si coincide, si no tiene jornada, o si es turno 'Completo'
-          const corteMismaJornada = !c.jornada || jornadaParaLegacy === 'Completo' || c.jornada === jornadaParaLegacy;
+          const _normCJ = (c.jornada || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const _normLJ = (jornadaParaLegacy || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const corteMismaJornada = !c.jornada || jornadaParaLegacy === 'Completo' || _normCJ === _normLJ;
           return s + (corteMismaJornada ? val : 0);
         }, 0);
 
@@ -10404,7 +10406,7 @@
             .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
             .gte('fecha_dia', desde).lte('fecha_dia', hasta)
             .gt('puntos_neto', 0).neq('jornada','Auto');
-          const timeoutP = new Promise((_,r) => setTimeout(()=>r({data:[], error:new Error('Timeout')}), 8000));
+          const timeoutP = new Promise((_,r) => setTimeout(()=>r({data:[], error:new Error('Timeout')}), 12000));
           const { data: rawRows, error } = await Promise.race([fetchP, timeoutP]);
           if (error || !rawRows || !rawRows.length) throw new Error('Timeout or empty');
           rows = rawRows;
@@ -18752,7 +18754,10 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           query = query.eq('jornada', _opRtJornada()); // Solo el turno activo para operadores de 8h
         }
 
-        const { data: ops } = await query;
+        const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 12000));
+        const { data: ops, error } = await Promise.race([query, timeoutPromise]);
+        
+        if (error) { console.warn('[_opRtSync] Timeout/Error:', error.message); return; }
 
         if (!ops?.length) return;
 

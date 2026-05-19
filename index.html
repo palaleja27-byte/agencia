@@ -6367,25 +6367,42 @@
           .select('fecha_dia, puntos_neto, jornada')
           .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
           .neq('jornada', 'Auto');
-        const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 12000));
-        let { data: ops, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        let ops = null;
+        let error = null;
+        try {
+          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 12000));
+          const result = await Promise.race([fetchPromise, timeoutPromise]);
+          ops = result.data;
+          error = result.error;
+        } catch(raceErr) {
+          error = raceErr;
+        }
         
         if (error || !ops || !ops.length) {
-          console.warn('[RK-SUPABASE] Fallback a datos simulados de alto rendimiento:', error ? error.message : 'No data');
-          // Generar datos muy positivos simulados para presentar
+          console.warn('[RK-SUPABASE] Fallback a datos reales de localStorage:', error ? error.message : 'No data');
           ops = [];
-          const nowD = new Date();
-          const dM1 = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
-          const dM2 = new Date(nowD.getFullYear(), nowD.getMonth(), 1);
-          
-          // Llenar Abril con ~750 pts diarios (total ~22,500)
-          for(let i=1; i<=30; i++) {
-            ops.push({ fecha_dia: `${formatMes(dM1)}-${String(i).padStart(2,'0')}`, puntos_neto: 720 + Math.random()*100, jornada: 'M' });
-          }
-          // Llenar Mayo hasta hoy con ~890 pts diarios (+19% crecimiento real!)
-          const daysMayo = nowD.getDate();
-          for(let i=1; i<=daysMayo; i++) {
-            ops.push({ fecha_dia: `${formatMes(dM2)}-${String(i).padStart(2,'0')}`, puntos_neto: 860 + Math.random()*120, jornada: 'M' });
+          try {
+            const CORTE_KEY = 'rr_prime_cortes';
+            const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+            Object.values(allCortes).forEach(cortes => {
+              if (!Array.isArray(cortes)) return;
+              cortes.forEach(c => {
+                if (c.fecha && c.puntos) {
+                  const val = Number(c.puntos) || 0;
+                  if (val <= 1500) {
+                    ops.push({
+                      fecha_dia: c.fecha,
+                      puntos_neto: val,
+                      jornada: 'LocalFallback'
+                    });
+                  }
+                }
+              });
+            });
+            console.log('[RK-SUPABASE] Fallback completado con', ops.length, 'registros reales de localStorage');
+          } catch(errCortes) {
+            console.error('[RK-SUPABASE] Error cargando cortes locales:', errCortes);
           }
         }
 
@@ -6905,21 +6922,25 @@
       // PSA ya incluido en getTotalMesPts — no necesita suma extra
       const _psaTotalMes = getPSATotalMes(_mesActStats); // para mostrar en tooltip
 
-      // Crecimiento de toda la operación vs mes anterior (base = todos los ops)
-      const crecOp = totalPtsAnt > 0
-        ? ((totalPtsCurr - totalPtsAnt) / totalPtsAnt * 100)
-        : (totalPtsCurr > 0 ? 100 : 0);
+      // Crecimiento de toda la operación vs mes anterior (base = todos los ops) — COMPARACIÓN DE RITMO DIARIO (PACE) PARA EVITAR % ENGAÑOSOS
+      const currentDay = new Date().getDate() || 1;
+      const totalDays  = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const diasM1     = new Date(new Date().getFullYear(), new Date().getMonth(), 0).getDate();
+      
+      const paceM1 = totalPtsAnt > 0 ? totalPtsAnt / diasM1 : 0;
+      const paceM2 = totalPtsCurr > 0 ? totalPtsCurr / currentDay : 0;
+      const crecOp = paceM1 > 0 ? ((paceM2 - paceM1) / paceM1 * 100) : (paceM2 > 0 ? 100 : 0);
       const crecOpSign = crecOp >= 0 ? '+' : '';
       const crecOpColor = crecOp >= 0 ? '#34d399' : '#f87171';
       const crecOpIcon = crecOp >= 0 ? '📈' : '📉';
 
       // Pacing con Supabase (Prioridad)
-      let dCrecStr = `${crecOpSign}${crecOp.toFixed(1)}%`;
+      let dCrecStr = `${crecOpSign}${crecOp.toFixed(1)}% ritmo/día`;
       let dCrecColor = crecOpColor;
       let dCrecIcon = crecOpIcon;
       let dTotalDisp = totalPtsCurr.toLocaleString('es-CO', {minimumFractionDigits: 1});
       let dCopDisp = '💰 $' + Math.round(totalPtsCurr * 1400).toLocaleString('es-CO') + ' COP';
-      let dRangeDisp = totalPtsAnt.toFixed(0) + '→' + totalPtsCurr.toFixed(0);
+      let dRangeDisp = `${paceM1.toFixed(0)} pts/día → ${paceM2.toFixed(0)} pts/día`;
       
       if (typeof window._rkHistorial !== 'undefined') {
         const h = window._rkHistorial;
@@ -10343,31 +10364,38 @@
             .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
             .gte('fecha_dia', desde).lte('fecha_dia', hasta)
             .gt('puntos_neto', 0).neq('jornada','Auto');
-          const timeoutP = new Promise((_,r) => setTimeout(()=>r({data:[], error:new Error('Timeout')}), 12000));
-          const { data: rawRows, error } = await Promise.race([fetchP, timeoutP]);
+          const timeoutP = new Promise((resolve) => setTimeout(()=>resolve({data:[], error:new Error('Timeout')}), 12000));
+          const result = await Promise.race([fetchP, timeoutP]);
+          const rawRows = result.data;
+          const error = result.error;
           if (error || !rawRows || !rawRows.length) throw new Error('Timeout or empty');
           rows = rawRows;
         }
       } catch(e) { 
-        console.warn('[CMV] Generando fallback positivo:', e);
+        console.warn('[CMV] Fallback a datos reales de localStorage:', e);
         rows = [];
-        const nowD2 = new Date();
-        const diasDelMesHastaHoy = nowD2.getDate();
-        const agenciasMock = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Omega'];
-        for(let i=1; i<=diasDelMesHastaHoy; i++) {
-          const isWeekend = new Date(nowD2.getFullYear(), nowD2.getMonth(), i).getDay() % 6 === 0;
-          const base = isWeekend ? 650 : 920; // Más puntos los días de semana
-          const ptsDia = base + Math.random()*150;
-          
-          // Dividir ptsDia entre agencias
-          for (let ag of agenciasMock) {
-             rows.push({
-               fecha_dia: `${desde.slice(0,8)}${String(i).padStart(2,'0')}`,
-               puntos_neto: (ptsDia / 5) + Math.random()*20,
-               agencia: ag,
-               id_perfil: 'mock'
-             });
-          }
+        try {
+          const CORTE_KEY = 'rr_prime_cortes';
+          const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
+          Object.entries(allCortes).forEach(([opName, cortes]) => {
+            if (!Array.isArray(cortes)) return;
+            cortes.forEach(c => {
+              if (c.fecha && c.fecha >= desde && c.fecha <= hasta && c.puntos) {
+                const val = Number(c.puntos) || 0;
+                if (val <= 1500) {
+                  rows.push({
+                    fecha_dia: c.fecha,
+                    puntos_neto: val,
+                    agencia: opName,
+                    id_perfil: 'local'
+                  });
+                }
+              }
+            });
+          });
+          console.log('[CMV] Fallback completado con', rows.length, 'registros reales desde localStorage');
+        } catch(errCortes) {
+          console.error('[CMV] Error cargando cortes locales para CMV:', errCortes);
         }
       }
 

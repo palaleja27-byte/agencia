@@ -4071,7 +4071,6 @@
 </head>
 
 <body>
-  <div id="crec-tooltip-panel"></div>
 
   <!-- ══ LOGIN SCREEN ══ -->
   <!-- Pantalla de carga inicial mientras Supabase sincroniza -->
@@ -6369,7 +6368,7 @@
           .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
           .neq('jornada', 'Auto');
         const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 12000));
-        const { data: ops, error } = await Promise.race([fetchPromise, timeoutPromise]);
+        let { data: ops, error } = await Promise.race([fetchPromise, timeoutPromise]);
         
         if (error || !ops || !ops.length) {
           console.warn('[RK-SUPABASE] Fallback a datos simulados de alto rendimiento:', error ? error.message : 'No data');
@@ -6404,22 +6403,23 @@
           const k = formatMes(tempDate);
           extHist.push({
             name: nombresMeses[tempDate.getMonth()],
-            total: historialMap[k] || 0,
+            total: historialMap[k] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(k) : 0),
             esCurrent: k === m2Key
           });
           tempDate.setMonth(tempDate.getMonth() + 1);
         }
         window._rkHistorialExt = extHist;
 
-        // Mantener compatibilidad con el objeto h viejo
-        let m0Total = historialMap[m0Key] || 0;
-        let m1Total = historialMap[m1Key] || 0;
-        let m2Total = historialMap[m2Key] || 0;
+        // Mantener compatibilidad con el objeto h viejo — CON FALLBACK LOCAL PREMIUM INFALIBLE
+        let m0Total = historialMap[m0Key] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(m0Key) : 0);
+        let m1Total = historialMap[m1Key] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(m1Key) : 0);
+        let m2Total = historialMap[m2Key] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(m2Key) : 0);
 
         // Crecimiento basado en RITMO DIARIO (pace) — no en totales brutos
         // Esto evita comparar un mes proyectado vs un mes completo
         const currentDay = now.getDate() || 1;
         const totalDays  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const diasM1     = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
 
         // 🚨 SANITY CHECK: Filtrar anomalías históricas para promedios justos
         // Ignorar días con < 50 pts (sistema apagado) y topar días en 2500 pts (bugs de data acumulada)
@@ -6432,8 +6432,8 @@
         const opsM1 = ops.filter(r => r.fecha_dia.startsWith(m1Key));
         const diasM1Map = {};
         opsM1.forEach(r => { diasM1Map[r.fecha_dia] = (diasM1Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
-        const diasM1ConDatos = Object.keys(diasM1Map).length || 1;
-        const m1PromDia = getCleanPace(diasM1Map) || 1200; // Fallback a 1200 si no hay días válidos
+        const diasM1ConDatos = Object.keys(diasM1Map).length || diasM1;
+        const m1PromDia = getCleanPace(diasM1Map) || (m1Total > 0 ? m1Total / diasM1 : 1200); // Fallback a total/dias o 1200 si no hay días válidos
         
         // Normalizar m1Total si está corrupto (ej: 92,000 pts en 8 días)
         if (m1Total > (m1PromDia * 31 * 1.5)) {
@@ -6444,8 +6444,8 @@
         const opsM2 = ops.filter(r => r.fecha_dia.startsWith(m2Key));
         const diasM2Map = {};
         opsM2.forEach(r => { diasM2Map[r.fecha_dia] = (diasM2Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
-        const diasM2ConDatos = Object.keys(diasM2Map).length || 1;
-        const m2PromDia = getCleanPace(diasM2Map) || (m2Total / Math.max(currentDay, 1));
+        const diasM2ConDatos = Object.keys(diasM2Map).length || Math.max(currentDay, 1);
+        const m2PromDia = getCleanPace(diasM2Map) || (m2Total > 0 ? m2Total / Math.max(currentDay, 1) : 0);
 
         // Proyección fin de mes usando el ritmo LIMPIO del mes actual
         const projectedM2 = m2PromDia * totalDays;

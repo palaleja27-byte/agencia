@@ -457,10 +457,6 @@
 
     /* ── Performance: disable expensive transforms on touch ── */
     @media(hover:none) {
-      .operator-card:hover {
-        transform: none;
-        box-shadow: var(--shadow-out);
-      }
 
       .btn-excel-upload:hover {
         transform: none;
@@ -1423,28 +1419,6 @@
         padding: 10px;
       }
 
-      .operators-list {
-        grid-template-columns: 1fr !important;
-        padding: 0;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-
-      .operator-card {
-        padding: 14px;
-        box-sizing: border-box;
-        width: 100%;
-      }
-
-      .operator-card:hover {
-        transform: none;
-      }
-
-      .op-name {
-        font-size: 14px;
-        word-break: break-word;
-      }
-
       .metric-big {
         font-size: 22px;
       }
@@ -1679,38 +1653,6 @@
       color: white;
       cursor: pointer;
     }
-
-    .operators-list {
-      max-width: 1200px;
-      margin: 0 auto 60px;
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 20px;
-      padding: 0 20px;
-    }
-
-    .operator-card {
-      background: var(--panel);
-      padding: 20px;
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-out);
-      transition: 0.3s ease;
-      position: relative;
-    }
-
-    .operator-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
-    }
-
-    .op-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
     .op-name {
       font-size: 17px;
       font-weight: 600;
@@ -5652,7 +5594,7 @@
         <option value="Completo">🔄 Completo</option>
       </select>
     </div>
-    <div class="operators-list" id="operatorsList"></div>
+    <!-- operatorsList was removed -->
   </div>
 
   <!-- MODAL GRUPOS -->
@@ -5856,13 +5798,8 @@
        const h = window._rkHistorial || { feb: 0, mar: 0, abr: 0, crec: 0 };
        const mesActualKey = new Date().toISOString().slice(0, 7);
        
-       // Fuente Única de Verdad: Usar el historial sincronizado de Supabase
-       let ptsMes = 0;
-       if (mesActualKey === '2026-04') {
-         ptsMes = h.abr || (typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0);
-       } else {
-         ptsMes = typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0;
-       }
+       // Fuente Única de Verdad: Usar historial sincronizado o fallback a getTotalMesPts
+       let ptsMes = h[MONTH_KEYS[new Date().getMonth()]] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(mesActualKey) : 0);
        
        const diaActual = new Date().getDate();
        const diasMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
@@ -6101,18 +6038,16 @@
     function localDateStr(d) {
       // 🧠 LOGICAL DATE (v2026): El día cambia a las 6:00 AM.
       // El navegador puede estar en UK u otro timezone — NO usar getDate() local.
-      let dt;
-      if (typeof d === 'number') {
-        dt = new Date();
-        dt.setDate(dt.getDate() - d);
-      } else {
-        dt = d || new Date();
+      // Siempre aplicamos el offset de 6h para consistencia entre turnos.
+      const bogota = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+      const logical = new Date(bogota.getTime() - (6 * 3600000));
+      if (typeof d === 'number' && d > 0) {
+        logical.setDate(logical.getDate() - d);
+      } else if (d && typeof d !== 'number') {
+        // Si se pasa un Date object directamente, usarlo
+        return new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       }
-      // Si no se pasó una fecha específica, aplicamos el offset lógico de 6h
-      if (!d) {
-        dt = new Date(new Date(dt.toLocaleString('en-US', { timeZone: 'America/Bogota' })).getTime() - (6 * 3600000));
-      }
-      return dt.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      return logical.toLocaleDateString('en-CA');
     }
 
     // --- DA LGICO (6 AM) ---
@@ -8827,15 +8762,18 @@
         });
 
       // 2. Canal OPERACIONES (Detección instantánea de puntos Datame)
-      _sb.channel('operaciones_changes')
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'operaciones' },
-          () => { 
-            console.log("[Bridge] ⚡ Cambio detectado en Datame Supabase -> Disparando Laser Sync...");
-            _debouncedLaserSync(); 
-          }
-        )
-        .subscribe();
+      // FIX CUOTA: Solo admin/monitor escuchan esto masivamente. Operadores usan su propio canal.
+      if (currentRole === 'admin' || currentRole === 'monitor') {
+        _sb.channel('operaciones_changes')
+          .on('postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'operaciones' },
+            () => { 
+              console.log("[Bridge] ⚡ Cambio detectado en Datame Supabase -> Disparando Laser Sync...");
+              _debouncedLaserSync(); 
+            }
+          )
+          .subscribe();
+      }
     }
 
     // ── Override localStorage.setItem → también escribe en Supabase ─
@@ -9471,12 +9409,6 @@
     // ── Suma total de cortes reales de toda la operación en un mes ──
     function getTotalMesPts(mesStr) {
       if (!mesStr) mesStr = localDateStr().slice(0, 7);
-      // 🏥 Saneamiento de emergencia para Abril 2026 (solo una vez)
-      const yaSaneado = localStorage.getItem('rr_sanar_abril_2026');
-      if (!yaSaneado && mesStr === '2026-04') {
-        asiSanarDatosAbril();
-      }
-
       // 1. Sumar cortes reales en rr_prime_cortes
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       const today = localDateStr();
@@ -11897,75 +11829,7 @@ function exportarDatos() {
       const arr = loadDetConsejos(op.name); arr.push('✏️ Escribe el consejo aquí...'); saveDetConsejos(op.name, arr); renderDetConsejos();
     }
 
-    window.switchToOperator = function (index) {
-      switchTab(1);
-      document.getElementById('groupFilter').value = '';
-      renderOperators();
-      setTimeout(() => {
-        const cards = document.querySelectorAll('.operator-card');
-        if (cards[index]) cards[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
-    };
-
     // ==================== REPORTE OPERADORES ====================
-    // ── Lazy operator cards with IntersectionObserver ──
-    const _opChartObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        const card = entry.target;
-        const idx = parseInt(card.dataset.opIndex);
-        if (card.dataset.rendered === '1') return;
-        card.dataset.rendered = '1';
-        _opChartObserver.unobserve(card);
-        const op = operatorsData[idx];
-        if (!op) return;
-        // Render chart
-        const canvas = card.querySelector('canvas');
-        if (canvas) {
-          const _months = ['FEB', 'MAR', 'ABR', 'MAY'];
-          const _vals = [
-            parseFloat(card.dataset.ptsFeb) || 0,
-            parseFloat(card.dataset.ptsMar) || 0,
-            parseFloat(card.dataset.ptsAbr) || 0,
-            parseFloat(card.dataset.ptsMay) || 0
-          ];
-
-          // Mostrar desde Feb hasta el mes actual (mes 1=Feb como índice base)
-          const monthIdx = new Date().getMonth(); // 0=Ene, 1=Feb, 2=Mar, 3=Abr, 4=May...
-          // El array empieza en FEB (mes 1), así que mostramos monthIdx meses desde Feb
-          const showCount = Math.max(Math.min(monthIdx, _months.length), 2); // mínimo 2 columnas
-          const activeLabels = _months.slice(0, showCount);
-          const activeData = _vals.slice(0, showCount);
-
-          new Chart(canvas, {
-            type: 'bar',
-            data: {
-              labels: activeLabels,
-              datasets: [{
-                label: 'Logro Mensual',
-                data: activeData,
-                backgroundColor: activeData.map((v, i) => i === activeData.length - 1 ? 'rgba(52,211,153,0.6)' : 'rgba(94,234,212,0.25)'),
-                borderColor: activeData.map((v, i) => i === activeData.length - 1 ? '#34d399' : '#5eead4'),
-                borderWidth: 1,
-                borderRadius: 4
-              }]
-            },
-            options: {
-              plugins: { legend: { display: false } },
-              scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { size: 9 } } },
-                x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 9, weight: 'bold' } } }
-              }
-            }
-          });
-        }
-        // Render profiles
-        const pListContainer = card.querySelector('.profiles-container');
-        if (pListContainer) {
-          pListContainer.innerHTML = renderPerfilMetrics(op.name);
-        }
-      });
-    }, { rootMargin: '100px', threshold: 0.01 });
 
     function renderGlobalOperationReport() {
       // Esta función fue absorbida por renderOperators.
@@ -13260,29 +13124,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       localStorage.setItem('rr_logs_entrada', JSON.stringify(logs));
     }
 
-    // 🧹 SANEAMIENTO QUIRÚRGICO DE ABRIL 2026
-    function asiSanarDatosAbril() {
-      console.warn("[Sanity Check] Purgando registros inflados de Abril...");
-      const allCortes = JSON.parse(localStorage.getItem('rr_prime_cortes') || '{}');
-      let count = 0;
-      Object.keys(allCortes).forEach(opName => {
-        if (Array.isArray(allCortes[opName])) {
-           const initialCount = allCortes[opName].length;
-           allCortes[opName] = allCortes[opName].filter(c => {
-             const isApril = c.fecha && c.fecha.startsWith('2026-04');
-             const isOldSync = c.novedades && (c.novedades.includes('Laser Sync Histórico') || c.novedades.includes('Laser Sync ('));
-             const isSuspect = isApril && (Number(c.puntos) || 0) > 1500 && c.novedades?.includes('Laser');
-             return !(isApril && (isOldSync || isSuspect));
-           });
-           count += (initialCount - allCortes[opName].length);
-        }
-      });
-      localStorage.setItem('rr_prime_cortes', JSON.stringify(allCortes));
-      localStorage.setItem('rr_sanar_abril_2026', 'true');
-      console.log(`[Sanity Check] Se purgaron ${count} registros. Forzando re-sync...`);
-      if (typeof sincronizarDatameRelacional === 'function') sincronizarDatameRelacional();
-    }
-
     function renderCompetitiveBar() {
       const el = document.getElementById('op-competitive-bar');
       if (!el) return;
@@ -13492,7 +13333,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     // ── Barra competitiva de turno para operadores ──────────────────
     function getPuntosHoy(name, shiftFilter = null) {
       let ptsHoy = 0, ptsAyer = 0, ptsSemana = 0, ptsSemPasada = 0, ptsMes = 0;
-      let ptsFeb = 0, ptsMar = 0;
       const hoy = localDateStr();
       const ayer = localDateStr(1);
       const hace7 = localDateStr(7);
@@ -13516,8 +13356,6 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       ptsSemana    = Object.entries(porDia).filter(([d]) => d >= hace7  && d <= hoy ).reduce((s,[,v])=>s+v,0);
       ptsSemPasada = Object.entries(porDia).filter(([d]) => d >= hace14 && d <  hace7).reduce((s,[,v])=>s+v,0);
       ptsMes       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === mesActual).reduce((s,[,v])=>s+v,0);
-      ptsFeb       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-02').reduce((s,[,v])=>s+v,0);
-      ptsMar       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-03').reduce((s,[,v])=>s+v,0);
 
       // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
       let datamePtsHoy = 0;
@@ -13647,12 +13485,21 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const hace14 = localDateStr(14);
       const mesActual = hoy.slice(0, 7);
 
-      // Desde Febrero para medir historial de crecimiento completo
-      const INICIO = '2026-02-01';
+      // Historial dinámico: 3 meses hacia atrás desde el actual
+      const _mesIdx = new Date().getMonth(); // 0-based (May=4)
+      const _yr     = new Date().getFullYear();
+      const _m2Key  = _yr + '-' + String(_mesIdx + 1).padStart(2, '0');       // mes actual
+      const _m1Idx  = (_mesIdx + 11) % 12;
+      const _m1Yr   = _mesIdx === 0 ? _yr - 1 : _yr;
+      const _m1Key  = _m1Yr + '-' + String(_m1Idx + 1).padStart(2, '0');     // mes anterior
+      const _m0Idx  = (_mesIdx + 10) % 12;
+      const _m0Yr   = _mesIdx <= 1 ? _yr - 1 : _yr;
+      const _m0Key  = _m0Yr + '-' + String(_m0Idx + 1).padStart(2, '0');     // hace 2 meses
+      const INICIO  = _m0Key + '-01';
 
       let porDia = {};
       let ptsHoy = 0, ptsAyer = 0, ptsSemana = 0, ptsSemPasada = 0;
-      let ptsMes = 0, ptsFeb = 0, ptsMar = 0;
+      let ptsMes = 0, ptsMesPrev1 = 0, ptsMesPrev2 = 0;
 
       try {
         if (ids.length) {
@@ -13676,8 +13523,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       ptsSemana    = Object.entries(porDia).filter(([d]) => d >= hace7  && d <= hoy ).reduce((s,[,v])=>s+v,0);
       ptsSemPasada = Object.entries(porDia).filter(([d]) => d >= hace14 && d <  hace7).reduce((s,[,v])=>s+v,0);
       ptsMes       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === mesActual).reduce((s,[,v])=>s+v,0);
-      ptsFeb       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-02').reduce((s,[,v])=>s+v,0);
-      ptsMar       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === '2026-03').reduce((s,[,v])=>s+v,0);
+      ptsMesPrev1  = Object.entries(porDia).filter(([d]) => d.slice(0,7) === _m1Key).reduce((s,[,v])=>s+v,0);
+      ptsMesPrev2  = Object.entries(porDia).filter(([d]) => d.slice(0,7) === _m0Key).reduce((s,[,v])=>s+v,0);
 
       // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
       let datamePtsHoy = 0;
@@ -13732,7 +13579,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const crec = (n, v) => v > 0 ? ((n - v) / v * 100) : (n > 0 ? 100 : 0);
       const crecDiario  = crec(ptsHoy, ptsAyer);
       const crecSemanal = crec(ptsSemana, ptsSemPasada);
-      const mesRef      = ptsMar > 0 ? ptsMar : (ptsFeb > 0 ? ptsFeb : 1);
+      const mesRef      = ptsMesPrev1 > 0 ? ptsMesPrev1 : (ptsMesPrev2 > 0 ? ptsMesPrev2 : 1);
       const crecMensual = crec(ptsMes, mesRef);
 
       // — Actualizar Hero en tiempo real —
@@ -13774,21 +13621,24 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           '</div>';
       }).join('');
 
-      // Panel historico Feb/Mar/Abr
-      const histPanel = (ptsFeb > 0 || ptsMar > 0) ? (
+      // Panel historico dinámico (últimos 3 meses)
+      const _lblPrev2 = MONTH_LABELS[_m0Idx] + ' ' + _m0Yr;
+      const _lblPrev1 = MONTH_LABELS[_m1Idx] + ' ' + _m1Yr;
+      const _lblCurr  = MONTH_LABELS[_mesIdx] + ' ' + _yr;
+      const histPanel = (ptsMesPrev2 > 0 || ptsMesPrev1 > 0) ? (
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0;font-size:.67rem;">' +
         '<div style="background:rgba(99,102,241,.07);border-radius:8px;padding:8px;text-align:center;">' +
-          '<div style="color:#64748b;">Feb 2026</div>' +
-          '<div style="color:#a78bfa;font-weight:700;">' + fmtPts(ptsFeb) + ' pts</div>' +
-          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsFeb*VALOR_COP)) + ' COP</div>' +
+          '<div style="color:#64748b;">' + _lblPrev2 + '</div>' +
+          '<div style="color:#a78bfa;font-weight:700;">' + fmtPts(ptsMesPrev2) + ' pts</div>' +
+          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsMesPrev2*VALOR_COP)) + ' COP</div>' +
         '</div>' +
         '<div style="background:rgba(99,102,241,.07);border-radius:8px;padding:8px;text-align:center;">' +
-          '<div style="color:#64748b;">Mar 2026</div>' +
-          '<div style="color:#a78bfa;font-weight:700;">' + fmtPts(ptsMar) + ' pts</div>' +
-          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsMar*VALOR_COP)) + ' COP</div>' +
+          '<div style="color:#64748b;">' + _lblPrev1 + '</div>' +
+          '<div style="color:#a78bfa;font-weight:700;">' + fmtPts(ptsMesPrev1) + ' pts</div>' +
+          '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsMesPrev1*VALOR_COP)) + ' COP</div>' +
         '</div>' +
         '<div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.15);border-radius:8px;padding:8px;text-align:center;">' +
-          '<div style="color:#64748b;">Abr 2026</div>' +
+          '<div style="color:#64748b;">' + _lblCurr + '</div>' +
           '<div style="color:#34d399;font-weight:700;">' + fmtPts(ptsMes) + ' pts</div>' +
           '<div style="color:#475569;font-size:.6rem;">$' + fmt(Math.round(ptsMes*VALOR_COP)) + ' COP</div>' +
         '</div>' +
@@ -17192,9 +17042,11 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync (Cat)")), 25000))
         ]);
         
+        // FIX CUOTA: Limitar a los últimos 45 días (1 mes y medio) para no descargar todo el histórico
+        const START_DATE = localDateStr(45) + 'T00:00:00';
         const fetchOps = _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
-          .filter('fecha_corte', 'gte', '2026-02-01T00:00:00')
+          .filter('fecha_corte', 'gte', START_DATE)
           .in('id_perfil', perfiles_activos)
           .order('fecha_corte', { ascending: true }) // ASC para capturar base primero
           .range(0, 5000);
@@ -18346,7 +18198,8 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        const FECHA_INICIO = '2026-02-01T00:00:00';
+        // FIX CUOTA: Limitar a 45 días
+        const FECHA_INICIO = localDateStr(45);
         const hoy = localDateStr();
         dpLog('Iniciando sincronización dinámica...', 'info');
 
@@ -18356,7 +18209,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
         const { data: opsNuevo, error: errNuevo } = await _sb
           .from('operaciones')
           .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
-          .gte('fecha_dia', '2026-02-01')
+          .gte('fecha_dia', FECHA_INICIO)
             .order('id', { ascending: false });
 
         if (!errNuevo && opsNuevo) {
@@ -18369,7 +18222,7 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
           const { data: opsFallback, error: errFallback } = await _sb
             .from('operaciones')
             .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
-            .gte('fecha_dia', '2026-02-01')
+            .gte('fecha_dia', FECHA_INICIO)
             .order('id', { ascending: false });
           if (errFallback) { 
             dpLog('Error crítico Supabase: ' + errFallback.message, 'error');

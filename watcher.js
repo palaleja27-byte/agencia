@@ -63,6 +63,7 @@ function log(msg) {
 // Valor: total_mensual al inicio del turno
 // ─────────────────────────────────────────────────────────────────
 const shiftBaselines = {};
+const lastUpsertTotals = {}; // FIX CUOTA: Evita upserts redundantes si no hay cambios
 
 function bKey(id, fecha, jornada) { return `${id}__${fecha}__${jornada}`; }
 
@@ -208,6 +209,12 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     log(`  ⚠️ ${modelo}: total_mes (${monthlyTotal.toFixed(1)}) < baseline (${baseline.toFixed(1)}), ignorando`);
     return;
   }
+
+  // FIX CUOTA: Ignorar si los puntos no han cambiado desde el último upsert
+  if (lastUpsertTotals[key] === monthlyTotal) {
+    return;
+  }
+  lastUpsertTotals[key] = monthlyTotal;
 
   const { error } = await dbUpsertTurno({
     id_perfil:       idPerfil,

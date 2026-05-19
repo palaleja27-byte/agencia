@@ -3921,6 +3921,7 @@
       border-radius: 13px;
       padding: 12px 14px;
       transition: border-color .2s, box-shadow .2s;
+      position: relative;
     }
     .cmv-kpi-card:hover { border-color: rgba(94,234,212,0.25); box-shadow: 0 0 14px rgba(94,234,212,0.06); }
     .cmv-kpi-label { font-size: .58rem; color: #475569; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
@@ -10472,21 +10473,45 @@
     <button id="cmv-info-btn" onclick="document.getElementById('cmv-info-tooltip').style.display=document.getElementById('cmv-info-tooltip').style.display==='block'?'none':'block'"
       style="position:absolute;top:8px;right:8px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38bdf8;width:22px;height:22px;border-radius:50%;font-size:.65rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center">i</button>
     <!-- Tooltip explicación -->
-    <div id="cmv-info-tooltip" style="display:none;position:absolute;top:36px;right:8px;width:240px;background:#0f172a;border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:10px 12px;font-size:.6rem;line-height:1.7;color:#94a3b8;text-align:left;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.6)">
-      <div style="color:#38bdf8;font-weight:800;margin-bottom:5px;font-size:.62rem">📊 Cómo se calcula el %</div>
-      <b style="color:#e2e8f0">Fórmula (Ritmo diario):</b><br>
-      <code style="color:#34d399;background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;display:block;margin:4px 0">
-        % = (prom/día ${h.m2Name} - prom/día ${h.m1Name})<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;/ prom/día ${h.m1Name} × 100
-      </code>
-      <b style="color:#e2e8f0">Datos reales:</b><br>
-      · <b>${h.m1Name}:</b> ${m1PromDia.toFixed(1)} pts/día (${h.diasM1ConDatos||'?'} días con datos)<br>
-      · <b>${h.m2Name}:</b> ${m2PromDia.toFixed(1)} pts/día (${h.diasM2ConDatos||'?'} días con datos)<br><br>
-      <b style="color:#e2e8f0">Proyección fin de mes:</b><br>
-      <code style="color:#fbbf24;background:rgba(0,0,0,.3);padding:2px 5px;border-radius:4px;display:block;margin:4px 0">
-        ${m2PromDia.toFixed(1)} pts/día × ${h.totalDays||31} días = ${Math.round(projectedM2).toLocaleString()} pts
-      </code>
-      <div style="color:#475569;margin-top:4px;font-size:.55rem">⚠️ El % principal compara ritmo diario, no totales brutos. Esto es más justo cuando el mes actual aún no terminó.</div>
+    <div id="cmv-info-tooltip" style="display:none;position:absolute;top:36px;right:8px;width:270px;background:#0b0f19;border:1px solid rgba(56,189,248,.35);border-radius:12px;padding:12px;font-size:.62rem;line-height:1.6;color:#94a3b8;text-align:left;z-index:10;box-shadow:0 8px 30px rgba(0,0,0,.85)">
+      <div style="color:#38bdf8;font-weight:900;margin-bottom:8px;font-size:.7rem;display:flex;align-items:center;gap:4px">🚗 EL RITMO DE TU NEGOCIO</div>
+      
+      <div style="background:rgba(255,255,255,.02);border-radius:8px;padding:8px;margin-bottom:8px;border:1px solid rgba(255,255,255,.04)">
+        <b style="color:#f1f5f9;display:block;margin-bottom:4px">🚗 Analogía del Carro:</b>
+        Imaginen que la agencia es un carro en la autopista:<br>
+        • <b>Velocidad en ${h.m1Name}:</b> Iban a <b style="color:#a78bfa">${m1PromDia.toFixed(0)} km/h</b> (puntos/día).<br>
+        • <b>Velocidad en ${h.m2Name}:</b> Ahora van a <b style="color:#34d399">${m2PromDia.toFixed(0)} km/h</b> (puntos/día).<br>
+        <span style="display:block;margin-top:4px">Tu ritmo de viaje hoy es un <b>${crec>=0?'más rápido':'más lento'} (${crecSign}${crec.toFixed(1)}%)</b> que el mes anterior.</span>
+      </div>
+
+      <div style="background:rgba(56,189,248,.05);border-radius:8px;padding:8px;margin-bottom:8px;border:1px solid rgba(56,189,248,.15);color:#38bdf8">
+        <b style="color:#fff;display:block;margin-bottom:2px">💰 ¿Cómo nos hace más rentables?</b>
+        Más velocidad diaria = más dinero producido cada día (<b style="color:#fff">$${Math.round(promDia*1400).toLocaleString('es-CO')} COP/día</b>). Esto cubre tus costos fijos en menos días y el resto del mes se convierte en <b>ganancia neta pura</b>.
+      </div>
+
+      <div style="font-size:.56rem;color:#475569;margin-bottom:4px">📊 <b>Cálculos Reales Usados:</b></div>
+      <table style="width:100%;font-size:.56rem;border-collapse:collapse;color:#64748b">
+        <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
+          <td style="padding:2px 0">Indicador</td>
+          <td style="text-align:right;color:#a78bfa;padding:2px 0">${h.m1Name}</td>
+          <td style="text-align:right;color:#34d399;padding:2px 0">${h.m2Name}</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
+          <td style="padding:3px 0;color:#94a3b8">Promedio diario:</td>
+          <td style="text-align:right;padding:3px 0">${m1PromDia.toFixed(1)} pts</td>
+          <td style="text-align:right;padding:3px 0">${m2PromDia.toFixed(1)} pts</td>
+        </tr>
+        <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
+          <td style="padding:3px 0;color:#94a3b8">Días activos:</td>
+          <td style="text-align:right;padding:3px 0">${diasM1ConDatos} días</td>
+          <td style="text-align:right;padding:3px 0">${diasM2ConDatos} días</td>
+        </tr>
+        <tr>
+          <td style="padding:3px 0;color:#94a3b8">Total Puntos:</td>
+          <td style="text-align:right;padding:3px 0">${h.m1Total.toLocaleString()} pts</td>
+          <td style="text-align:right;padding:3px 0">${h.m2Total.toLocaleString()} pts</td>
+        </tr>
+      </table>
     </div>
     <!-- % principal -->
     <div style="font-size:2.8rem;font-weight:900;color:${crec>=0?'#10b981':'#f87171'};line-height:1">${crec>0?'+':''}${crec.toFixed(1)}%</div>
@@ -10500,30 +10525,33 @@
   </div>
   <div class="cmv-kpi-grid">
     <div class="cmv-kpi-card" style="border-color:rgba(45,212,191,.18)">
+      <button onclick="alert('📅 HOY — PUNTOS EN VIVO\\n\\n¿QUÉ SIGNIFICA?\\nMide los puntos netos acumulados por tus operadores en los turnos del día de hoy en tiempo real.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nEs tu indicador de tracción instantánea. Si detectas a mitad de jornada que la producción está baja, puedes intervenir de inmediato para motivar al equipo o ajustar perfiles. ¡Salvar un solo día malo a tiempo protege tu rentabilidad mensual!')" style="position:absolute;top:6px;right:6px;background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.25);color:#2dd4bf;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">📅 HOY — Puntos</div>
       <div class="cmv-kpi-value" style="color:#2dd4bf">${ptsHoy.toFixed(1)}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${copHoy.toLocaleString('es-CO')} COP</div>
       <span class="cmv-kpi-badge" style="background:${metaC}22;color:${metaC}">${metaDiaPct.toFixed(0)}% de meta</span>
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(167,139,250,.18)">
+      <button onclick="alert('📆 MES — TOTAL ACUMULADO\\n\\n¿QUÉ SIGNIFICA?\\nEs la suma total de puntos netos generados por todos tus perfiles y operadores en lo que va del mes.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nEsta es la caja registradora de la agencia. Al cruzarla en tiempo real con tus costos fijos (servicios, nóminas, plataformas), sabrás exactamente qué día alcanzas el punto de equilibrio. A partir de ahí, cada punto extra es casi un 100% de utilidad neta para tu bolsillo.')" style="position:absolute;top:6px;right:6px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.25);color:#a78bfa;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">📆 MES — Total</div>
       <div class="cmv-kpi-value" style="color:#a78bfa">${h.m2Total.toLocaleString('es-CO',{minimumFractionDigits:1})}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${copMes.toLocaleString('es-CO')} COP</div>
       <span class="cmv-kpi-badge" style="background:rgba(167,139,250,.1);color:#a78bfa">${h.m2Name}</span>
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(251,191,36,.18)">
+      <button onclick="alert('✨ PROMEDIO / DÍA\\n\\n¿QUÉ SIGNIFICA?\\nEs la cantidad media de puntos que tu agencia produce en cada día de operación activa durante el mes.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nEs el motor de tu eficiencia. Incrementar tu promedio en solo 100 puntos diarios (por ejemplo, mejorando la puntualidad de asistencia) añade 3,000 puntos extra al final del mes. ¡Eso representa más de $4,200,000 COP en ingresos netos adicionales con exactamente los mismos costos fijos!')" style="position:absolute;top:6px;right:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);color:#fbbf24;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">✨ PROMEDIO / DÍA</div>
       <div class="cmv-kpi-value" style="color:#fbbf24">${Math.round(promDia).toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${Math.round(promDia*1400).toLocaleString('es-CO')} COP/día</div>
       <span class="cmv-kpi-badge" style="background:rgba(251,191,36,.1);color:#fbbf24">Día ${diaHoy}/${diasMes}</span>
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(16,185,129,.18)">
+      <button onclick="alert('🚀 PROYECCIÓN FIN DE MES\\n\\n¿QUÉ SIGNIFICA?\\nPredice cuántos puntos y facturación alcanzará la agencia al final del mes si continúas operando al mismo ritmo promedio actual.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nFunciona como tu radar preventivo. Si la proyección muestra un cierre por debajo de tus metas, te da días de anticipación para implementar incentivos, intensificar horas de producción o ajustar estrategias, corrigiendo el rumbo antes de que termine el mes.')" style="position:absolute;top:6px;right:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#10b981;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">🚀 PROYECCIÓN FIN MES</div>
       <div class="cmv-kpi-value" style="color:#10b981">${Math.round(projectedM2).toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${copProy.toLocaleString('es-CO')} COP · ${m2PromDia.toFixed(0)} pts/día</div>
       <div class="cmv-proj-bar-wrap"><div class="cmv-proj-bar" style="width:${Math.min(100,projectedM2/(h.m1Total||1)*100).toFixed(1)}%;background:${crec>=0?'#10b981':'#f87171'}"></div></div>
     </div>
-
   </div>
   ${alertas.length?`<div class="cmv-section-title">🔔 ALERTAS INTELIGENTES</div>${alertas.map(a=>`<div class="cmv-alert ${a.t}"><span class="cmv-alert-icon">${a.i}</span><div>${a.msg}</div></div>`).join('')}`:''}
   <div class="cmv-section-title">📅 HISTORIAL ${hoyD.getFullYear()}</div>

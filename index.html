@@ -4505,16 +4505,88 @@
       <div id="news-trending-tags" style="display:flex; gap:6px; padding:0 20px 16px; flex-wrap:wrap; border-top:1px solid rgba(255,255,255,0.04); padding-top:12px;"></div>
     </div>
     <div class="op-section" id="op-ice-section" style="grid-column: span 1;">
-      <div class="op-section-title">🔥 Icebreakers TalkyTimes</div>
-      <div class="ice-generator-box" style="padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.2);">
-        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-          <button class="ice-btn real" onclick="PT.generateIce('real')" style="padding: 8px 12px; font-size: 0.7rem; flex: 1;">❤️ Real</button>
-          <button class="ice-btn hot" onclick="PT.generateIce('hot')" style="padding: 8px 12px; font-size: 0.7rem; flex: 1;">🌶️ Hot</button>
-          <button class="ice-btn deep" onclick="PT.generateIce('deep')" style="padding: 8px 12px; font-size: 0.7rem; flex: 1;">🧠 Deep</button>
+      <div class="op-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>🔥 Icebreakers TalkyTimes</span>
+        <button onclick="document.getElementById('ice-strategy-info').style.display = document.getElementById('ice-strategy-info').style.display === 'none' ? 'block' : 'none'" style="background:transparent; border:1px solid rgba(255,255,255,0.2); color:#94a3b8; font-size:0.6rem; padding:2px 6px; border-radius:4px; cursor:pointer;">💡 Estrategia</button>
+      </div>
+      
+      <div id="ice-strategy-info" style="display:none; background:rgba(234, 179, 8, 0.1); border-left:3px solid #eab308; padding:8px 12px; margin-bottom:10px; border-radius:4px; font-size:0.65rem; color:#fef08a;">
+        <strong>Regla de Oro Anti-Spam:</strong> Rota y cambia tus icebreakers cada <strong>48-72 horas</strong>. TalkyTimes penaliza la repetición exacta enviándote al fondo del feed.<br>
+        <strong>Replays Asegurados:</strong> Usa "Cliente Nuevo" para pescar con curiosidad y "Cliente Antiguo" para revivir chats apelando a la nostalgia.
+      </div>
+
+      <div class="ice-generator-box" style="padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.3); display:flex; flex-direction:column; gap:12px;">
+        
+        <!-- Controles Superiores -->
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:space-between;">
+          <!-- Tipo de Cliente -->
+          <div style="display:flex; background:rgba(255,255,255,0.05); border-radius:6px; padding:2px;">
+            <button id="ice-t-nuevo" onclick="PT.setIceClient('nuevo')" style="padding:4px 10px; border:none; background:rgba(99,102,241,0.2); color:#818cf8; border-radius:4px; font-size:0.65rem; cursor:pointer; font-weight:700; transition:all 0.3s;">👤 Nuevo</button>
+            <button id="ice-t-antiguo" onclick="PT.setIceClient('antiguo')" style="padding:4px 10px; border:none; background:transparent; color:#94a3b8; border-radius:4px; font-size:0.65rem; cursor:pointer; font-weight:700; transition:all 0.3s;">🔄 Antiguo</button>
+          </div>
+          
+          <!-- Canal y Lenguaje -->
+          <div style="display:flex; gap:5px;">
+            <select id="ice-canal-sel" onchange="PT.setIceType(this.value); PT.auditIcebreaker();" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.65rem; padding:4px 8px; border-radius:6px; outline:none; cursor:pointer;">
+              <option value="chat">💬 Chat</option>
+              <option value="mail">✉️ Mail</option>
+            </select>
+            <select id="ice-lang-sel" onchange="PT.setIceLang(this.value); PT.auditIcebreaker();" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.65rem; padding:4px 8px; border-radius:6px; outline:none; cursor:pointer;">
+              <option value="es">🇪🇸 ES</option>
+              <option value="en">🇺🇸 EN</option>
+            </select>
+          </div>
         </div>
-        <div id="pt-ice-output" class="ice-display" style="font-size: 0.85rem; min-height: 60px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); color: var(--accent); font-style: italic; display: flex; align-items: center; justify-content: center; text-align: center;">
-          Selecciona una temática para generar un abridor...
+
+        <!-- Controles Avanzados (Multiplicadores) -->
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="ice-arquetipo-sel" onchange="PT.setIceArchetype(this.value)" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; font-size:0.65rem; padding:6px 8px; border-radius:6px; outline:none; cursor:pointer;">
+            <option value="dulce">🌸 Arquetipo: Dulce / Tímida</option>
+            <option value="atrevida" selected>🔥 Arquetipo: Atrevida / Dominante</option>
+            <option value="misteriosa">🔮 Arquetipo: Misteriosa / Intelectual</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:5px; font-size:0.65rem; color:#cbd5e1; cursor:pointer; background:rgba(255,255,255,0.05); padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">
+            <input type="checkbox" id="ice-vip-hook" onchange="PT.toggleIceVipHook(this.checked)" style="accent-color:#eab308; cursor:pointer;">
+            📸 Gancho VIP
+          </label>
         </div>
+
+        <!-- Contexto del Usuario -->
+        <input type="text" id="ice-context-input" placeholder="Opcional: Contexto del cliente (Ej: Le gusta leer, ojos azules, viajero)..." style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; border-radius:6px; outline:none;" autocomplete="off">
+
+        <!-- Botones Generadores Principales -->
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="ice-btn real" onclick="PT.generateIce('real')" style="padding: 8px; font-size: 0.7rem; flex: 1;">❤️ Real Love</button>
+          <button class="ice-btn hot" onclick="PT.generateIce('hot')" style="padding: 8px; font-size: 0.7rem; flex: 1;">🌶️ Hot Talks</button>
+          <button class="ice-btn deep" onclick="PT.generateIce('deep')" style="padding: 8px; font-size: 0.7rem; flex: 1;">🤝 Friendship</button>
+        </div>
+        
+        <!-- Área de Salida Editable -->
+        <div style="position:relative; margin-top:4px;">
+          <textarea id="pt-ice-textarea" oninput="PT.onIceTextChange()" placeholder="Genera un abridor o pégalo aquí para auditarlo..." style="width:100%; min-height:80px; padding:12px; padding-bottom:30px; background:rgba(15,23,42,0.6); border-radius:8px; border:1px dashed rgba(255,255,255,0.2); color:#f8fafc; font-size:0.75rem; font-family:inherit; resize:vertical; outline:none; line-height:1.4;"></textarea>
+          
+          <div style="position:absolute; bottom:8px; left:12px; display:flex; gap:10px; align-items:center;">
+            <span id="ice-char-count" style="font-size:0.6rem; color:#64748b; font-weight:700;">0 chars</span>
+            <span id="ice-source-badge" style="font-size:0.55rem; color:#94a3b8; background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px; display:none;"></span>
+          </div>
+          
+          <button id="ice-copy-btn" onclick="PT.copyIce()" style="position:absolute; bottom:8px; right:8px; background:#10b981; color:white; border:none; padding:4px 10px; border-radius:6px; font-size:0.6rem; font-weight:700; cursor:pointer; transition:all 0.2s; display:none;">Copiar 📋</button>
+        </div>
+
+        <!-- Panel de Auditoría -->
+        <div id="ice-audit-panel" style="display:none; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:8px 12px; margin-top:2px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.65rem; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:1px;">🛡️ Auditoría TalkyTimes</span>
+            <span id="ice-audit-score" style="font-size:0.7rem; font-weight:800; color:#10b981;">100% SEGURO</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px; font-size:0.6rem; color:#94a3b8;">
+            <div id="audit-len"><span class="audit-icon">⏳</span> Longitud <span class="audit-msg">Esperando...</span></div>
+            <div id="audit-sec"><span class="audit-icon">⏳</span> Seguridad (Contacto) <span class="audit-msg">Esperando...</span></div>
+            <div id="audit-com"><span class="audit-icon">⏳</span> Comercial (Tokens/Regalos) <span class="audit-msg">Esperando...</span></div>
+            <div id="audit-ton"><span class="audit-icon">⏳</span> Tono Adulto Seguro <span class="audit-msg">Esperando...</span></div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -14806,27 +14878,142 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         ];
 
         PT.ICEBREAKERS_BANK = {
-          real: [
-            "Vi tu perfil en TalkyTimes y me llamó la atención tu vibra. ¿Qué es lo más auténtico que te ha pasado hoy?",
-            "No soy de muchos rodeos, me gusta la gente real. ¿Qué te hace sonreír cuando nadie te ve?",
-            "Busco una conexión que vaya más allá de un simple hola. ¿Qué valoras más en una conversación?",
-            "Tienes algo en tu mirada que dice mucho... ¿Me equivoco o eres de los que piensan profundo?",
-            "Si pudiéramos escapar de la rutina ahora mismo, ¿a qué rincón del mundo me llevarías?"
-          ],
-          hot: [
-            "A veces la mente seduce mucho más que la piel... ¿Qué tan peligroso eres con tus palabras?",
-            "Me gusta la gente que sabe lo que quiere y no tiene miedo a pedirlo. ¿Eres de esos?",
-            "Dicen que los mejores secretos se cuentan en voz baja. ¿Tienes alguno que te atrevas a compartir conmigo?",
-            "Mi imaginación vuela muy rápido hoy... ¿Me ayudas a aterrizar o prefieres volar conmigo?",
-            "Me encantan los desafíos, y siento que tú podrías ser uno muy interesante. ¿Me pones a prueba?"
-          ],
-          deep: [
-            "¿Cuál es ese sueño que te da miedo contar porque suena demasiado grande?",
-            "Creo que todos tenemos una historia que nadie conoce. ¿Cuál es el capítulo más valiente de la tuya?",
-            "¿Qué es lo que más te apasiona en esta vida? Me gusta la gente con fuego en el alma.",
-            "Si pudieras cambiar una sola regla del mundo, ¿cuál sería?",
-            "Valoro la honestidad brutal. ¿Qué es lo más real que puedes decirme de ti ahora mismo?"
-          ]
+          es: {
+            chat: {
+              nuevo: {
+                real: [
+                  "Hola... Veo que buscas conexiones reales y no solo pasar el rato. ¿Qué es lo primero en lo que te fijas en el perfil de una mujer para saber si vale la pena?",
+                  "Hola... Tienes una vibra muy agradable en tu foto. Me da curiosidad saber, ¿eres de los que prefieren una charla tranquila con un buen café o te gusta más el misterio?",
+                  "Hola. Estaba mirando perfiles y el tuyo me transmitió algo muy genuino. Si tuvieras que describirte con una sola palabra que no esté en tu perfil, ¿cuál elegirías?"
+                ],
+                hot: [
+                  "Hola... Tengo la leve sospecha de que tienes un lado bastante atrevido que no le muestras a cualquiera. ¿Me equivoco o te gusta jugar con fuego de vez en cuando?",
+                  "A veces las palabras correctas pueden ser sumamente tentadoras. ¿Qué tipo de provocación te resulta más difícil de resistir cuando alguien te interesa?",
+                  "Me dio mucha curiosidad tu perfil... Si pudieras cumplir una fantasía traviesa conmigo ahora mismo sin que nadie se entere, ¿por dónde empezaríamos?"
+                ],
+                deep: [
+                  "Hola... Valoro mucho las conversaciones con sustancia. Dime, si pudieras cambiar una sola regla de la sociedad actual, ¿cuál sería y por qué?",
+                  "Me llamó la atención tu perfil, pareces alguien maduro y con opiniones propias. ¿Qué proyecto o pasión en tu vida es la que te quita el sueño ahora mismo?",
+                  "Hola. Me gusta la gente auténtica y apasionada. ¿Qué es lo más loco o aventurero que has hecho últimamente y que repetirías sin dudarlo?"
+                ]
+              },
+              antiguo: {
+                real: [
+                  "Hola de nuevo... Me quedé pensando en nuestra última conversación y me dieron ganas de saber cómo va tu semana. ¿Qué cosas buenas te han pasado desde la última vez?",
+                  "Hola. Te he extrañado un poquito por aquí... ¿Qué has estado haciendo estos días que te ha mantenido tan alejado de mí?",
+                  "¡Hola! Estaba recordando nuestras charlas y me di cuenta de que no sé cuál es tu rincón favorito del mundo. Si tuvieras que escapar hoy mismo, ¿a dónde irías?"
+                ],
+                hot: [
+                  "Hola... Últimamente mi imaginación ha estado volando un poco y tú has sido el protagonista de un par de ideas traviesas. ¿Quieres que te cuente mi secreto o prefieres confesarme el tuyo?",
+                  "Hola... Te noto un poco perdido y eso me resulta peligrosamente intrigante. ¿Cómo haces para mantenerte tan frío cuando yo muero por un poco de calor?",
+                  "Hola, tentación... Estaba pensando en lo bien que se siente cuando nos dejamos llevar por las palabras. ¿Qué es lo que más extrañas de nuestras conversaciones traviesas?"
+                ],
+                deep: [
+                  "Hola... He estado reflexionando sobre las personas que realmente vale la pena conocer aquí, y me acordé de ti. ¿Qué libros, música o pasatiempos te tienen atrapado últimamente?",
+                  "Hola. Me gustaría retomar nuestras charlas interesantes... ¿Cuál ha sido el mayor desafío mental o profesional que has enfrentado esta semana?",
+                  "Hola... Hace tiempo no compartimos ideas profundas. Si pudieras pedir un deseo que se cumpla mañana mismo para mejorar tu vida, ¿qué pedirías?"
+                ]
+              }
+            },
+            mail: {
+              nuevo: {
+                real: [
+                  "Hola... Estaba recorriendo perfiles en la plataforma y me detuve en el tuyo. Tienes un aire muy auténtico que resalta entre la multitud, y me dieron muchas ganas de escribirte algo más personal que un simple saludo.\n\nMe encantaría saber qué tipo de conexión estás buscando realmente aquí. ¿Eres de los que valoran una conversación sincera y profunda, de esas que fluyen solas sin presiones? Cuéntame un poco de ti, de tus días, o de lo que te hace sonreír cuando nadie te ve. Espero leerte pronto...",
+                  "Hola... Espero que estés teniendo un excelente día. Decidí enviarte esta carta porque tu perfil me transmitió una energía muy linda y genuina. En un mundo donde todo va tan rápido, a veces es refrescante detenerse a conocer a alguien de verdad.\n\nMe dio curiosidad saber qué cosas te apasionan en el día a día y qué te motivó a entrar aquí. A mí me encanta descubrir el lado real de las personas. Si te apetece una bonita charla, escríbeme y dime: ¿cuál es tu mayor sueño en la vida?"
+                ],
+                hot: [
+                  "Hola... Estaba mirando tu perfil y no pude evitar sentir una tremenda curiosidad por ti. Tienes una mirada muy intensa y segura, el tipo de mirada que me hace pensar que tienes un lado bastante travieso y atrevido guardado bajo llave.\n\nMe encanta la gente que sabe jugar con la mente antes de pasar a la acción. ¿Qué tan audaz te consideras con tus palabras? Tengo ganas de iniciar una conversación que nos haga acelerar el pulso a los dos. ¿Te atreves a confesarme tu fantasía favorita o prefieres que te tiente yo primero?",
+                  "Hola... Creo que hay conexiones que se sienten desde el primer segundo. Vi tu foto y mi imaginación empezó a volar un poco más rápido de lo normal. Tienes una vibra magnética que me intriga muchísimo.\n\nMe encantaría descubrir qué secretos ocultas y qué tan dispuesto estás a explorar tus deseos conmigo sin tabúes ni rodeos. Escríbeme y dime: ¿qué es lo primero que harías si estuviéramos solos en una habitación oscura?"
+                ],
+                deep: [
+                  "Hola... Me llamó mucho la atención la profundidad que transmite tu perfil. Es difícil encontrar hombres que inspiren ganas de tener una conversación verdaderamente inteligente, interesante y con sustancia.\n\nMe encantaría saber qué es lo que más te apasiona en esta vida, qué metas te quitan el sueño y qué valoras en una persona cuando decides abrir tu mundo. A veces las palabras correctas pueden abrir puertas increíbles. Si compartes mi gusto por el misterio y las charlas profundas, me encantaría leer tu respuesta...",
+                  "Hola... Me dio curiosidad tu perfil porque reflejas una madurez y un misterio poco común. A veces las conversaciones más sencillas terminan siendo las más memorables si se habla con honestidad.\n\n¿Qué es lo más valiente o desafiante que has hecho últimamente? Me encantaría conocer esa parte de ti que no le muestras a todo el mundo. Si te gusta conversar sin máscaras y descubrir una amistad especial, aquí estoy..."
+                ]
+              },
+              antiguo: {
+                real: [
+                  "Hola... Llevo un par de días pensando en ti y en lo rápido que pasó el tiempo la última vez que conversamos. Me da la sensación de que dejamos muchas cosas a mitad de camino y me gustaría ponerme al día contigo.\n\n¿Cómo han estado tus cosas? Cuéntame si has logrado avanzar en tus metas o si has descubierto algo nuevo que te llame la atención. Me haría muy feliz leer una respuesta tuya para retomar nuestro bonito vínculo. Te mando un abrazo fuerte...",
+                  "Hola... Te escribo esta carta porque hoy me desperté recordando algunas cosas que compartimos en nuestras charlas. Tienes esa extraña habilidad de dejar una huella bonita, y me pareció un buen momento para saludarte y ver cómo estás.\n\nEspero que la rutina no te esté tratando muy duro. Si tienes un ratito libre, escríbeme y cuéntame cómo te ha ido. ¿Qué ha sido lo más lindo que te ha pasado esta semana?"
+                ],
+                hot: [
+                  "Hola... Vengo a sacudirte un poco la rutina. He estado recordando algunas de las palabras que nos hemos dicho y no puedo evitar sentir un cosquilleo de complicidad. Eres de los pocos hombres que sabe cómo mantener mi mente activa y mi cuerpo impaciente.\n\n¿Qué te parece si dejamos de lado la distancia por un momento y nos sumergimos de nuevo en nuestras fantasías? Cuéntame qué has estado imaginando últimamente cuando piensas en mí. Estoy deseando leer tu lado más sincero y atrevido...",
+                  "Hola... Te noto muy alejado y eso solo hace que me den más ganas de tentarte. Tengo un par de secretos nuevos que he guardado en mi diario y creo que tú eres la persona indicada para escucharlos.\n\n¿Qué tan dispuesto estás a dejarte llevar de nuevo por el juego de la seducción? Escríbeme hoy y confiésame: ¿cuál de todas nuestras charlas calientes ha sido la que más te ha hecho pensar en mí a solas?"
+                ],
+                deep: [
+                  "Hola... A veces hace falta desconectarse del ruido diario y conversar con alguien que realmente entienda el valor de una charla reflexiva. Estaba pensando en ti y en la madurez con la que ves la vida.\n\nMe encantaría saber qué proyectos o ideas nuevas te han estado rondando la cabeza últimamente. ¿Sigue en pie aquel sueño de viajar, o has descubierto una nueva pasión? Escríbeme cuando puedas, me hace mucha falta conversar de verdad contigo...",
+                  "Hola... Extraño nuestras charlas nocturnas sobre la vida, el destino y todas esas cosas de las que no se habla con cualquiera. Me di cuenta de que hace días no compartimos un momento de verdadera complicidad.\n\n¿Qué cambios importantes han ocurrido en tu vida en estas semanas? Me encantaría que me cuentes con absoluta honestidad. Aquí tienes siempre a alguien lista para escucharte y debatir tus ideas. Espero tu mensaje..."
+                ]
+              }
+            }
+          },
+          en: {
+            chat: {
+              nuevo: {
+                real: [
+                  "Hi there... I noticed you look for real connections and not just passing time. What's the first thing you notice in a woman's profile to know if she's worth it?",
+                  "Hi... You have a very warm vibe in your photo. I'm curious, are you the type who prefers a cozy chat over a good cup of coffee, or do you love mystery?",
+                  "Hey. I was browsing profiles and yours felt very genuine. If you had to describe yourself in just one word that isn't on your profile, what would it be?"
+                ],
+                hot: [
+                  "Hi... I have a slight suspicion that you have a wild side you don’t show to everyone. Am I wrong, or do you like playing with fire?",
+                  "Sometimes the right words can be extremely tempting. What kind of teasing is hardest for you to resist when you like someone?",
+                  "Your profile got me thinking... If you could share a secret naughty fantasy with me right now without anyone knowing, where would we start?"
+                ],
+                deep: [
+                  "Hi... I highly value conversations with real depth. If you could change just one rule in modern society, what would it be and why?",
+                  "Your profile caught my eye, you seem mature and independent. What project or passion in your life is keeping you awake at night right now?",
+                  "Hi. I love authentic and passionate people. What's the craziest or most adventurous thing you've done lately that you'd repeat in a heartbeat?"
+                ]
+              },
+              antiguo: {
+                real: [
+                  "Hi again... I was thinking about our last chat and wanted to see how your week is going. What's one good thing that happened to you since we last spoke?",
+                  "Hey. I've missed you a little bit around here... What have you been up to that's keeping you so far away from me?",
+                  "Hey! I was remembering our conversations and realized I don't know your absolute favorite place in the world. If you could escape today, where would you go?"
+                ],
+                hot: [
+                  "Hi... My imagination has been running wild lately, and you've been the star of a few naughty ideas. Do you want me to tell you my secret, or will you confess yours?",
+                  "Hey... You seem so distant lately, and that only makes you dangerously intriguing. How do you stay so cool when I'm craving a little heat?",
+                  "Hey, temptation... I was thinking about how amazing it feels when we let go with words. What do you miss most about our naughty chats?"
+                ],
+                deep: [
+                  "Hi... I was reflecting on who is truly worth knowing here, and you came to mind. What books, music, or hobbies have caught your attention lately?",
+                  "Hey. I'd love to resume our deep chats... What has been your biggest mental or professional challenge this week?",
+                  "Hi... We hasn't shared any deep thoughts in a while. If you could make one wish come true tomorrow to improve your life, what would you ask for?"
+                ]
+              }
+            },
+            mail: {
+              nuevo: {
+                real: [
+                  "Hello... I was browsing through profiles and stopped on yours. You have a very authentic aura that stands out from the crowd, and I really wanted to write you something more personal than just a simple hello.\n\nI’d love to know what kind of connection you are truly looking for here. Are you someone who values a sincere and deep conversation, the kind that flows naturally without any pressure? Tell me a bit about yourself, your days, or what makes you smile when no one is watching. Looking forward to reading your reply...",
+                  "Hello... I hope you're having an amazing day. I decided to send you this message because your profile gave off a very warm and genuine energy. In a world where everything moves so fast, it is refreshing to stop and actually get to know someone.\n\nI was curious to know what things you are passionate about day-to-day and what motivated you to join here. I love discovering the real side of people. If you're up for a lovely chat, write back and tell me: what is your ultimate dream in life?"
+                ],
+                hot: [
+                  "Hello... I was looking at your profile and couldn't help but feel incredibly curious about you. You have a very intense and confident gaze, the kind that makes me think you have a wild and naughty side hidden away.\n\nI love people who know how to play with the mind before jumping into action. How bold are you with your words? I want to start a conversation that gets both of our hearts racing. Do you dare to confess your favorite fantasy, or do you want me to tease you first?",
+                  "Hello... I believe some connections are felt from the very first second. I saw your picture and my imagination started running a bit faster than usual. You have a magnetic vibe that intrigues me so much.\n\nI would love to discover what secrets you hide and how willing you are to explore your desires with me without taboos or hesitations. Write back and let me know: what is the very first thing you'd do if we were completely alone in a dark room?"
+                ],
+                deep: [
+                  "Hello... I was highly intrigued by the depth your profile conveys. It's rare to find men who inspire a desire for a truly intelligent, engaging, and meaningful conversation.\n\nI would love to know what you are most passionate about in life, what dreams keep you awake at night, and what you value in a person when you decide to let them into your world. Sometimes the right words can open incredible doors. If you share my taste for mystery and deep chats, I’d love to read your thoughts...",
+                  "Hello... I was curious about your profile because you reflect a maturity and mystery that is hard to find. Sometimes the simplest conversations end up being the most memorable if you speak with raw honesty.\n\nWhat is the bravest or most challenging thing you've done lately? I’d love to get to know that part of you that you don't show to the rest of the world. If you enjoy talking without masks and discovering a special friendship, I'm right here..."
+                ]
+              },
+              antiguo: {
+                real: [
+                  "Hello... I've been thinking about you for a couple of days and how fast time flew the last time we talked. I feel like we left so many things unfinished, and I'd love to catch up with you.\n\nHow have things been going? Tell me if you've made progress on your goals or if you've discovered something new that caught your eye. It would make me so happy to read your reply and rebuild our beautiful bond. Sending you a big hug...",
+                  "Hello... I'm writing this letter because I woke up today remembering some things we shared in our chats. You have that rare ability to leave a beautiful trace, and it felt like a good time to say hello and see how you are.\n\nI hope the daily routine isn't treating you too hard. If you have a free moment, write back and tell me how you've been. What has been the most beautiful thing that happened to you this week?"
+                ],
+                hot: [
+                  "Hello... I'm here to shake up your routine a bit. I've been remembering some of the things we've said to each other, and I can't help but feel a spark of excitement. You're one of the few men who knows exactly how to keep my mind active and my body impatient.\n\nWhat if we set aside the distance for a moment and dive back into our fantasies? Tell me what you've been imagining lately when you think of me. I'm eager to read your most sincere and bold thoughts...",
+                  "Hello... You seem so far away lately, and that only makes me want to tease you more. I have a couple of new secrets saved in my diario and I think you're the perfect person to hear them.\n\nHow willing are you to let yourself get carried away again by the game of seduction? Write to me today and confess: which of all our hot chats was the one that made you think of me the most when you were alone?"
+                ],
+                deep: [
+                  "Hello... Sometimes we just need to disconnect from the daily noise and chat with someone who truly understands the value of a meaningful conversation. I was thinking about you and the mature way you see life.\n\nI would love to know what new projects or ideas have been crossing your mind lately. Is that dream of traveling still on, or have you discovered a new passion? Write to me when you can, I really miss having a genuine chat with you...",
+                  "Hello... I miss our late-night chats about life, destiny, and all those things you don't talk about with just anyone. I realized we haven't shared a moment of true connection in days.\n\nWhat important changes have occurred in your life in these weeks? I'd love for you to tell me with raw honesty. Here you will always have someone ready to listen and talk about your ideas. Looking forward to your letter..."
+                ]
+              }
+            }
+          }
         };
 
         function getPTShiftKey(s) {
@@ -15211,50 +15398,175 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           if (btn) btn.classList.add('active');
         };
 
-        PT.generateIce = async function (cat) {
-          const el = document.getElementById('pt-ice-output');
-          if (!el) return;
-          el.innerHTML = '<span style="opacity:0.5; font-style:italic;">🤖 Generando abridor con IA...</span>';
-          el.style.color = '#64748b';
+        // --- ESTADOS DEL MÓDULO ICEBREAKER ---
+        PT.iceClient = 'nuevo';
+        PT.iceType = 'chat';
+        PT.iceLang = 'es';
+        PT.iceArchetype = 'atrevida';
+        PT.iceVipHook = false;
 
-          // Obtener API key del config del robot/OpenClaw
+        PT.setIceClient = function(val) {
+          PT.iceClient = val;
+          const btnN = document.getElementById('ice-t-nuevo');
+          const btnA = document.getElementById('ice-t-antiguo');
+          if (val === 'nuevo') {
+            btnN.style.background = 'rgba(99,102,241,0.2)'; btnN.style.color = '#818cf8';
+            btnA.style.background = 'transparent'; btnA.style.color = '#94a3b8';
+          } else {
+            btnA.style.background = 'rgba(16,185,129,0.2)'; btnA.style.color = '#34d399';
+            btnN.style.background = 'transparent'; btnN.style.color = '#94a3b8';
+          }
+        };
+
+        PT.setIceType = function(val) { PT.iceType = val; };
+        PT.setIceLang = function(val) { PT.iceLang = val; };
+        PT.setIceArchetype = function(val) { PT.iceArchetype = val; };
+        PT.toggleIceVipHook = function(val) { PT.iceVipHook = val; };
+
+        PT.onIceTextChange = function() {
+          PT.auditIcebreaker();
+        };
+
+        PT.copyIce = function() {
+          const area = document.getElementById('pt-ice-textarea');
+          if(!area || !area.value.trim()) return;
+          navigator.clipboard.writeText(area.value.trim());
+          const btn = document.getElementById('ice-copy-btn');
+          const original = btn.innerHTML;
+          btn.innerHTML = '¡Copiado! ✓';
+          btn.style.background = '#059669';
+          setTimeout(() => {
+            btn.innerHTML = original;
+            btn.style.background = '#10b981';
+          }, 2000);
+        };
+
+        PT.auditIcebreaker = function() {
+          const area = document.getElementById('pt-ice-textarea');
+          const panel = document.getElementById('ice-audit-panel');
+          const cc = document.getElementById('ice-char-count');
+          const copyBtn = document.getElementById('ice-copy-btn');
+          const scoreEl = document.getElementById('ice-audit-score');
+          
+          if (!area || !area.value.trim()) {
+            panel.style.display = 'none';
+            copyBtn.style.display = 'none';
+            if (cc) cc.innerText = '0 chars';
+            return;
+          }
+          
+          const text = area.value.trim();
+          const len = text.length;
+          cc.innerText = `${len} chars`;
+          panel.style.display = 'block';
+          copyBtn.style.display = 'block';
+
+          let score = 100;
+
+          // 1. Longitud
+          const aLen = document.getElementById('audit-len');
+          if (PT.iceType === 'chat') {
+            if (len < 40) { aLen.innerHTML = '❌ Muy corto para TalkyTimes'; score -= 30; aLen.style.color='#ef4444'; }
+            else if (len > 250) { aLen.innerHTML = '⚠️ Demasiado largo (Chat)'; score -= 10; aLen.style.color='#eab308'; }
+            else { aLen.innerHTML = '✅ Longitud ideal (Chat)'; aLen.style.color='#10b981'; }
+          } else {
+            if (len < 100) { aLen.innerHTML = '❌ Muy corto para Mail (>100)'; score -= 40; aLen.style.color='#ef4444'; }
+            else { aLen.innerHTML = '✅ Longitud ideal (Mail)'; aLen.style.color='#10b981'; }
+          }
+
+          // 2. Seguridad Contacto
+          const aSec = document.getElementById('audit-sec');
+          const contactRegex = /(@|instagram|whatsapp|snapchat|facebook|telegram|skype|\b\d{5,}\b)/i;
+          if (contactRegex.test(text)) {
+             aSec.innerHTML = '🚫 PELIGRO: Dato de contacto o @ detectado!'; aSec.style.color='#ef4444'; score -= 50;
+          } else {
+             aSec.innerHTML = '✅ Seguro (Sin redes/números)'; aSec.style.color='#10b981';
+          }
+
+          // 3. Comercial
+          const aCom = document.getElementById('audit-com');
+          const comRegex = /(coins|tokens|créditos|regalo|gift|money|dinero|pay|pagar)/i;
+          if (comRegex.test(text)) {
+             aCom.innerHTML = '🚫 PELIGRO: Solicitud de transacciones'; aCom.style.color='#ef4444'; score -= 50;
+          } else {
+             aCom.innerHTML = '✅ Limpio de palabras comerciales'; aCom.style.color='#10b981';
+          }
+
+          // 4. Tono Adulto
+          const aTon = document.getElementById('audit-ton');
+          const adultRegex = /(coger|mamar|pito|concha|puta|fuck|suck|cock|pussy)/i;
+          if (adultRegex.test(text)) {
+             aTon.innerHTML = '⚠️ Demasiado explícito (Mejor ser sugerente)'; aTon.style.color='#eab308'; score -= 30;
+          } else {
+             aTon.innerHTML = '✅ Coquetería sugerente aprobada'; aTon.style.color='#10b981';
+          }
+
+          // Score Final
+          if (score >= 90) { scoreEl.innerText = '100% SEGURO'; scoreEl.style.color = '#10b981'; panel.style.border = '1px solid rgba(16,185,129,0.3)'; }
+          else if (score >= 60) { scoreEl.innerText = 'Riesgo Moderado'; scoreEl.style.color = '#eab308'; panel.style.border = '1px solid rgba(234,179,8,0.3)'; }
+          else { scoreEl.innerText = 'RECHAZO INMINENTE'; scoreEl.style.color = '#ef4444'; panel.style.border = '1px solid rgba(239,68,68,0.3)'; }
+        };
+
+        PT.generateIce = async function (cat) {
+          const area = document.getElementById('pt-ice-textarea');
+          const badge = document.getElementById('ice-source-badge');
+          if (!area) return;
+          
+          area.value = '🤖 Generando abridor inteligente...';
+          badge.style.display = 'none';
+          document.getElementById('ice-audit-panel').style.display = 'none';
+
           const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
           const apiKey = cfg.key || localStorage.getItem('rr_ai_api_key') || '';
 
-          // Contexto del operador para personalizar
           const opName = window.currentOpName || 'el operador';
           const opPts = typeof getPuntosHoy === 'function' ? getPuntosHoy(opName) : 0;
-          const hour = new Date().getHours();
-          const turno = hour < 14 ? 'mañana' : hour < 22 ? 'tarde' : 'noche';
-
-          const catLabels = { real: 'conexión genuina y emocional', hot: 'tensión sexual y seducción', deep: 'profundidad psicológica y vulnerabilidad' };
+          
+          // Leer Inputs Opcionales
+          const ctxInput = document.getElementById('ice-context-input').value.trim();
+          
+          const catLabels = { real: 'conexión genuina, amor real y preguntas profundas', hot: 'tensión sexual sugerente, picardía y fantasías', deep: 'amistad, hobbies, complicidad' };
           const catLabel = catLabels[cat] || 'conexión';
+          
+          const maxTokens = PT.iceType === 'chat' ? 100 : 250;
+          const lenInst = PT.iceType === 'chat' ? '1 a 2 oraciones (corto y rápido).' : '3 a 4 oraciones (extenso, tipo carta).';
+          
+          let clientInst = PT.iceClient === 'nuevo' 
+            ? 'El cliente es NUEVO. El objetivo es intriga máxima, captar su atención rápidamente y pescar una respuesta.' 
+            : 'El cliente es ANTIGUO. Apela a la nostalgia, pregúntale cómo ha estado, dile que extrañabas conversar con él.';
+            
+          let hookInst = PT.iceVipHook 
+            ? 'MUY IMPORTANTE: Incluye de forma muy coqueta y sutil que acabas de subir fotos o videos nuevos hoy y quieres saber su opinión. Esto es un GANCHO VIP.'
+            : '';
+
+          let systemPrompt = `Eres una experta modelo de TalkyTimes. Arquetipo: ${PT.iceArchetype.toUpperCase()}. Genera UN SOLO mensaje de apertura (${PT.iceType}) en idioma ${PT.iceLang.toUpperCase()}.
+Temática: ${catLabel}. ${clientInst} ${hookInst}
+Contexto extra del cliente: ${ctxInput ? ctxInput : 'Ninguno, inventa algo general basado en el mood.'}
+REGLAS ESTRICTAS:
+1. Longitud: ${lenInst}
+2. OBLIGATORIO: Termina el mensaje con una pregunta abierta irresistible para forzar su respuesta.
+3. PROHIBIDO usar palabras: instagram, whatsapp, email, coins, tokens, regalos, o lenguaje porno vulgar explícito.
+Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
           if (apiKey && (cfg.url || apiKey.startsWith('AIza'))) {
             try {
               let result = '';
               if (apiKey.startsWith('AIza')) {
-                // Gemini API
-                const prompt = `Eres un experto en psicología de la seducción y plataformas de chat adulto. Genera UN SOLO mensaje de apertura (icebreaker) para TalkyTimes enfocado en "${catLabel}". 
-El operador ${opName} lleva ${opPts.toFixed(1)} puntos hoy, turno de ${turno}.
-El mensaje debe ser: natural, en español latino, 1-2 oraciones máx, provocador pero no vulgar, desde el personaje de la modelo.
-Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                  body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
                 });
                 const data = await res.json();
                 result = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
               } else if (cfg.url) {
-                // OpenClaw / OpenAI compatible
                 const res = await fetch(cfg.url + '/chat/completions', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
                   body: JSON.stringify({
                     model: 'gpt-3.5-turbo',
-                    messages: [{ role: 'user', content: `Genera 1 icebreaker para chat adulto TalkyTimes, tema: ${catLabel}. Español. Solo el mensaje.` }],
-                    max_tokens: 100
+                    messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: 'Genera el mensaje ahora.' }],
+                    max_tokens: maxTokens
                   })
                 });
                 const data = await res.json();
@@ -15262,18 +15574,35 @@ Responde SOLO con el mensaje, sin comillas extra ni explicaciones.`;
               }
 
               if (result.trim()) {
-                el.innerHTML = `<div style="border-left:3px solid #6366f1; padding-left:10px; font-style:normal;">"${result.trim()}"</div><div style="font-size:0.55rem; color:#6366f1; margin-top:8px; font-weight:700;">🤖 Generado con IA · Categoría: ${cat.toUpperCase()}</div>`;
-                el.style.color = '#e2e8f0';
+                area.value = result.trim().replace(/^"|"$/g, '');
+                badge.innerText = `🤖 IA Activa • ${cat.toUpperCase()}`;
+                badge.style.display = 'block';
+                PT.auditIcebreaker();
                 return;
               }
             } catch(e) { console.warn('[ICE] API error, usando banco local:', e); }
           }
 
           // Fallback: banco local
-          const list = PT.ICEBREAKERS_BANK[cat] || PT.ICEBREAKERS_BANK.real;
-          const msg = list[Math.floor(Math.random() * list.length)];
-          el.innerHTML = `<div style="border-left:3px solid #475569; padding-left:10px;">"${msg}"</div><div style="font-size:0.55rem; color:#475569; margin-top:8px;">📚 Banco local · <a onclick="ocToggleConfig()" style="color:#6366f1; cursor:pointer;">Configura tu API</a> para IA real</div>`;
-          el.style.color = '#e2e8f0';
+          let langBank = PT.ICEBREAKERS_BANK[PT.iceLang] || PT.ICEBREAKERS_BANK.es;
+          let typeBank = langBank[PT.iceType] || langBank.chat;
+          let clientBank = typeBank[PT.iceClient] || typeBank.nuevo;
+          let list = clientBank[cat] || clientBank.real;
+          
+          let msg = list[Math.floor(Math.random() * list.length)];
+          if (PT.iceVipHook) {
+             const hookAppend = PT.iceLang === 'en' ? " By the way, I just uploaded some new private stuff today... tell me if you like it." : " Por cierto, acabo de subir cositas nuevas hoy... dime si te gustan.";
+             msg += hookAppend;
+          }
+          if (ctxInput) {
+             const ctxAppend = PT.iceLang === 'en' ? ` P.S. I noticed you like ${ctxInput}...` : ` P.D. Noté lo de ${ctxInput}...`;
+             msg += ctxAppend;
+          }
+
+          area.value = msg;
+          badge.innerText = `📚 Banco Local • ${cat.toUpperCase()}`;
+          badge.style.display = 'block';
+          PT.auditIcebreaker();
         };
 
         // ── Bitácora ──

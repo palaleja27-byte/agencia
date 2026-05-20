@@ -12175,217 +12175,481 @@ function exportarDatos() {
         return d.getFullYear() + '-W' + wk;
       };
 
+      // Fechas de referencia
+      const ayer = (() => { const d = new Date(hoy + 'T12:00:00'); d.setDate(d.getDate() - 1); return d.toISOString().slice(0,10); })();
+      const haceUnasSemana = (() => { const d = new Date(hoy + 'T12:00:00'); d.setDate(d.getDate() - 7); return d.toISOString().slice(0,10); })();
+      const mesAnterior = (() => { const d = new Date(hoy + 'T12:00:00'); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0,7); })();
+
       const currentWk = getWk(hoy);
+      const prevWk    = getWk(haceUnasSemana);
 
-      let ptsHoy = 0, ptsSemana = 0, ptsMes = 0;
-      const ptsPorMes = { '01':0, '02':0, '03':0, '04':0, '05':0, '06':0, '07':0, '08':0, '09':0, '10':0, '11':0, '12':0 };
-      const ptsPorDiaSemana = [0, 0, 0, 0, 0, 0, 0]; // Lun a Dom
-      const ptsPorSemanaMes = [0, 0, 0, 0]; // Sem 1 a Sem 4+
+      // Acumuladores
+      let ptsHoy = 0, ptsAyer = 0;
+      let ptsSemana = 0, ptsSemanaAnterior = 0;
+      let ptsMes = 0, ptsMesAnterior = 0;
+      const ptsPorMes = { '01':0,'02':0,'03':0,'04':0,'05':0,'06':0,'07':0,'08':0,'09':0,'10':0,'11':0,'12':0 };
+      const ptsPorDiaSemana = [0,0,0,0,0,0,0];
+      const ptsPorDiaSemPrev = [0,0,0,0,0,0,0];
+      const ptsPorSemanaMes = [0,0,0,0];
+      const rankOp = {};
+      // Normalizar jornada: quitar tildes
+      const normJ = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      const ptsPorJornada = { 'Manana':0, 'Tarde':0, 'Noche':0, 'Completo':0, '':0 };
 
-      // Procesamiento de datos masivos
       operatorsData.forEach(op => {
         const cortesOp = getCortesOp(op.name);
+        if (!rankOp[op.name]) rankOp[op.name] = 0;
         cortesOp.forEach(c => {
           if (!c.fecha) return;
           const fechaReal = add2Days(c.fecha);
           if (!fechaReal || fechaReal < '2026-01-01') return;
-          
           const val = Number(c.puntos) || 0;
           const net = val > 1500 ? 0 : val;
-          
-          if (fechaReal === hoy) ptsHoy += net;
-          
+          if (net <= 0) return;
+
+          if (fechaReal === hoy)  ptsHoy  += net;
+          if (fechaReal === ayer) ptsAyer += net;
+
           if (getWk(fechaReal) === currentWk) {
             ptsSemana += net;
+            rankOp[op.name] += net;
             const dIdx = new Date(fechaReal + 'T12:00:00').getDay();
             ptsPorDiaSemana[dIdx === 0 ? 6 : dIdx - 1] += net;
+            const jn = normJ(c.jornada);
+            if (ptsPorJornada[jn] !== undefined) ptsPorJornada[jn] += net;
+            else ptsPorJornada[''] += net;
           }
-          
-          if (fechaReal.slice(0, 7) === mesActual) {
+          if (getWk(fechaReal) === prevWk) {
+            ptsSemanaAnterior += net;
+            const dIdx = new Date(fechaReal + 'T12:00:00').getDay();
+            ptsPorDiaSemPrev[dIdx === 0 ? 6 : dIdx - 1] += net;
+          }
+          if (fechaReal.slice(0,7) === mesActual) {
             ptsMes += net;
             const dayOfMonth = new Date(fechaReal + 'T12:00:00').getDate();
-            const wIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), 3);
-            ptsPorSemanaMes[wIdx] += net;
+            ptsPorSemanaMes[Math.min(Math.floor((dayOfMonth - 1) / 7), 3)] += net;
           }
-          
-          const mesStr = fechaReal.slice(5, 7);
-          if (ptsPorMes[mesStr] !== undefined && fechaReal.startsWith('2026')) {
-            ptsPorMes[mesStr] += net;
-          }
+          if (fechaReal.slice(0,7) === mesAnterior) ptsMesAnterior += net;
+          const mesStr = fechaReal.slice(5,7);
+          if (ptsPorMes[mesStr] !== undefined && fechaReal.startsWith('2026')) ptsPorMes[mesStr] += net;
         });
       });
 
       const { curr } = getActivePair();
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
 
-      // Cálculos Horarios Proyectados (Pace)
-      const currentHour = Math.max(1, new Date().getHours());
-      const paceHourly = ptsHoy / currentHour;
-      const projData = Array(24).fill(null);
-      const realData = Array(24).fill(null);
-      for(let i=0; i<24; i++) {
-        if(i <= currentHour) realData[i] = paceHourly * i;
-        if(i >= currentHour) projData[i] = paceHourly * i;
-      }
-      const ptsProyectado24h = paceHourly * 24;
+      // --- COMPARATIVAS REALES ---
+      const pctVsAyer = ptsAyer > 0 ? ((ptsHoy - ptsAyer) / ptsAyer * 100) : 0;
+      const pctWoW    = ptsSemanaAnterior > 0 ? ((ptsSemana - ptsSemanaAnterior) / ptsSemanaAnterior * 100) : 0;
+      const pctMoM    = ptsMesAnterior > 0 ? ((ptsMes - ptsMesAnterior) / ptsMesAnterior * 100) : 0;
 
-      const dHora = btoa(JSON.stringify({ ptsHoy, currentHour, paceHourly, ptsProyectado24h }));
-      const dDia = btoa(JSON.stringify({ ptsSemana, ptsPorDiaSemana }));
-      const dSemana = btoa(JSON.stringify({ ptsMes, ptsPorSemanaMes }));
-      const dMes = btoa(JSON.stringify({ ptsPorMes }));
+      const fmtPct  = v => (v >= 0 ? '+' : '') + Number(v).toFixed(1) + '%';
+      const colorPct = v => v >= 0 ? '#34d399' : '#f87171';
+      const bgPct    = v => v >= 0 ? 'rgba(52,211,153,0.2)' : 'rgba(248,113,113,0.2)';
+
+      const diasNombres     = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+      const diasNombresLargo = ['Lunes','Martes','Miercoles','Jueves','Viernes','Sabado','Domingo'];
+      const bestDayIdx = ptsPorDiaSemana.indexOf(Math.max(...ptsPorDiaSemana));
+
+      const jornadaOrden = ['Manana','Tarde','Noche'];
+      const bestJornada  = jornadaOrden.reduce((a,b) => ptsPorJornada[a] >= ptsPorJornada[b] ? a : b);
+      const topOps = Object.entries(rankOp).sort((a,b) => b[1]-a[1]).slice(0,5);
+
+      // --- HORARIO Y PROYECCION ---
+      const currentHour   = Math.max(1, new Date().getHours());
+      const paceHourly    = ptsHoy / currentHour;
+      const realData      = Array(24).fill(null).map((_,i) => i <= currentHour ? paceHourly * (i+1) / currentHour : null);
+      const projData      = Array(24).fill(null).map((_,i) => i >= currentHour ? paceHourly * (i - currentHour + 1) : null);
+      const ptsProyectado24h = ptsHoy + paceHourly * (24 - currentHour);
+
+      // --- GANANCIAS ---
+      const COP_POR_PUNTO = 1400;
+      const ganSemanal    = Math.round(ptsSemana * COP_POR_PUNTO);
+      const ganMensual    = Math.round(ptsMes * COP_POR_PUNTO);
+      const ganMesAnt     = Math.round(ptsMesAnterior * COP_POR_PUNTO);
+      const ganSemAnt     = Math.round(ptsSemanaAnterior * COP_POR_PUNTO);
+
+      // --- PROYECCION MES ---
+      const diaDelMes    = new Date(hoy + 'T12:00:00').getDate();
+      const diasEnMes    = new Date(new Date(hoy+'T12:00:00').getFullYear(), new Date(hoy+'T12:00:00').getMonth()+1, 0).getDate();
+      const proyeccionMes = diaDelMes > 0 ? (ptsMes / diaDelMes) * diasEnMes : 0;
+
+      // --- ANALISIS IA DE CRECIMIENTO ---
+      const analisisLineas = [];
+      if (ptsAyer > 0) {
+        analisisLineas.push(`&#x1F4CC; HOY vs AYER: ${pctVsAyer >= 0 ? 'crecimiento' : 'caida'} de ${fmtPct(pctVsAyer)} — ${ptsHoy.toFixed(0)} pts hoy vs ${ptsAyer.toFixed(0)} pts ayer. ${pctVsAyer >= 5 ? 'Ritmo acelerado. Mantener presion en todos los turnos.' : pctVsAyer < -10 ? 'Baja significativa. Revisar asistencia y conexion de perfiles.' : 'Ritmo estable dentro del rango normal.'}`);
+      }
+      if (ptsSemanaAnterior > 0) {
+        analisisLineas.push(`&#x1F4CA; SEMANA: ${fmtPct(pctWoW)} vs semana anterior — ${ptsSemana.toFixed(0)} pts esta sem vs ${ptsSemanaAnterior.toFixed(0)} pts sem anterior. ${pctWoW >= 10 ? 'Semana excepcional. La operacion esta en su mejor ciclo.' : pctWoW >= 0 ? 'Tendencia positiva sostenida.' : 'Semana por debajo. Reforzar dias de menor rendimiento.'} Mejor dia: ${diasNombresLargo[bestDayIdx]} (${ptsPorDiaSemana[bestDayIdx].toFixed(0)} pts).`);
+      }
+      if (ptsMesAnterior > 0) {
+        const mesPrevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(mesAnterior)] || mesAnterior;
+        analisisLineas.push(`&#x1F4C5; MES: ${fmtPct(pctMoM)} vs ${mesPrevLabel} — ${ptsMes.toFixed(0)} pts vs ${ptsMesAnterior.toFixed(0)} pts. ${pctMoM >= 15 ? 'Crecimiento historico. Mantener las estrategias de este mes.' : pctMoM >= 0 ? 'Mes en expansion positiva.' : 'Mes por debajo del anterior. Identificar y corregir cuellos de botella.'}`);
+      }
+      if (ptsPorJornada[bestJornada] > 0) {
+        analisisLineas.push(`&#x23F0; TURNO ESTRELLA: "${bestJornada}" lidera con ${ptsPorJornada[bestJornada].toFixed(0)} pts esta semana. ${bestJornada === 'Tarde' ? 'El turno tarde tiene el mayor volumen — asegurar operadores completos en ese horario.' : bestJornada === 'Manana' ? 'La jornada matutina domina — replicar su modelo en los otros turnos.' : 'El turno nocturno es el mas productivo — protegerlo con incentivos.'}`);
+      }
+      analisisLineas.push(`&#x1F52E; PROYECCION: Al ritmo actual el mes cerrara con ~${proyeccionMes.toFixed(0)} pts (~$${Math.round(proyeccionMes * COP_POR_PUNTO).toLocaleString('es-CO')} COP). ${proyeccionMes > ptsMesAnterior ? '&#x1F4C8; Por encima del mes anterior — seguir acelerando.' : '&#x26A0;&#xFE0F; Por debajo del mes anterior — hay que acelerar produccion los proximos dias.'}`);
+
+      const dHora   = btoa(JSON.stringify({ ptsHoy, currentHour, paceHourly, ptsProyectado24h, ptsAyer, pctVsAyer }));
+      const dDia    = btoa(JSON.stringify({ ptsSemana, ptsPorDiaSemana, ptsPorDiaSemPrev, ptsSemanaAnterior, pctWoW }));
+      const dSemana = btoa(JSON.stringify({ ptsMes, ptsPorSemanaMes, ptsMesAnterior, pctMoM, proyeccionMes }));
+      const dMes    = btoa(JSON.stringify({ ptsPorMes }));
 
       container.innerHTML = `
-        <div style="margin-bottom: 25px; padding: 10px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-            <h2 style="font-size: 1.4rem; font-weight: 800; color: #fff; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 1.6rem;">🌍</span> Operación Global Inteligente
+        <div style="padding:10px;">
+
+          <!-- ENCABEZADO -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+            <h2 style="font-size:1.4rem;font-weight:800;color:#fff;letter-spacing:1px;display:flex;align-items:center;gap:8px;margin:0;">
+              <span style="font-size:1.6rem;">&#127758;</span> Operacion Global Inteligente
+              <span style="font-size:0.65rem;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);padding:3px 8px;border-radius:8px;font-weight:700;">LIVE DATA</span>
             </h2>
-            <button onclick="alert('📥 Generando Informe Directivo PPDF...')" style="background:rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.5); color:#c7d2fe; padding:6px 12px; border-radius:8px; font-size:0.75rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:6px;">
-              <span>📈</span> Exportar Informe Directivo
+            <button onclick="exportarInformeDirectivo()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#c7d2fe;padding:8px 14px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:6px;">
+              <span>&#128200;</span> Exportar Informe Directivo
             </button>
           </div>
-          
-          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(45%, 1fr));gap:20px;margin-bottom:20px;">
-            
-            <!-- CARD 1: HORA (Pulso Diario) -->
+
+          <!-- KPIs RAPIDOS -->
+          <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:130px;background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.2);border-radius:10px;padding:12px 16px;">
+              <div style="font-size:0.6rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pts Hoy</div>
+              <div style="font-size:1.5rem;font-weight:900;color:#fff;">${ptsHoy.toFixed(0)}</div>
+              <div style="font-size:0.65rem;font-weight:700;color:${colorPct(pctVsAyer)};">${fmtPct(pctVsAyer)} vs ayer</div>
+            </div>
+            <div style="flex:1;min-width:130px;background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.2);border-radius:10px;padding:12px 16px;">
+              <div style="font-size:0.6rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pts Semana</div>
+              <div style="font-size:1.5rem;font-weight:900;color:#fff;">${ptsSemana.toFixed(0)}</div>
+              <div style="font-size:0.65rem;font-weight:700;color:${colorPct(pctWoW)};">${fmtPct(pctWoW)} vs sem. ant.</div>
+            </div>
+            <div style="flex:1;min-width:130px;background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.2);border-radius:10px;padding:12px 16px;">
+              <div style="font-size:0.6rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Pts Mes (${currLabel})</div>
+              <div style="font-size:1.5rem;font-weight:900;color:#fff;">${ptsMes.toFixed(0)}</div>
+              <div style="font-size:0.65rem;font-weight:700;color:${colorPct(pctMoM)};">${fmtPct(pctMoM)} vs mes ant.</div>
+            </div>
+            <div style="flex:1;min-width:130px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:10px;padding:12px 16px;">
+              <div style="font-size:0.6rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Ganancias Mes</div>
+              <div style="font-size:1.3rem;font-weight:900;color:#fde68a;">$${ganMensual.toLocaleString('es-CO')}</div>
+              <div style="font-size:0.65rem;font-weight:700;color:#94a3b8;">Proy: $${Math.round(proyeccionMes*COP_POR_PUNTO).toLocaleString('es-CO')}</div>
+            </div>
+          </div>
+
+          <!-- GRID 4 CARDS -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(45%, 1fr));gap:20px;margin-bottom:24px;">
+
+            <!-- CARD HORA -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(52,211,153,0.05);">
-              <button class="ai-info-btn" onclick="abrirInfoTarjeta('hora', '${dHora}')">🤖 Info</button>
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('hora', '${dHora}')">&#129302; Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                    <div style="font-size:0.75rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;">⚡ Ritmo por Hora</div>
-                    <span style="font-size:0.5rem; background:rgba(52,211,153,0.2); color:#34d399; padding:2px 4px; border-radius:4px; font-weight:bold;">+15% vs Ayer</span>
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <div style="font-size:0.75rem;color:#34d399;font-weight:800;letter-spacing:1px;text-transform:uppercase;">&#9889; Ritmo por Hora</div>
+                    <span style="font-size:0.5rem;background:${bgPct(pctVsAyer)};color:${colorPct(pctVsAyer)};padding:2px 5px;border-radius:4px;font-weight:bold;">${fmtPct(pctVsAyer)} vs Ayer</span>
                   </div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsHoy.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts actuales</span></div>
+                  <div style="font-size:0.65rem;color:#64748b;margin-top:4px;">Pace: <strong style="color:#5eead4;">${paceHourly.toFixed(1)} pts/h</strong> &nbsp;|&nbsp; Ayer: ${ptsAyer.toFixed(0)} pts</div>
                 </div>
-                <div style="text-align:right; margin-right: 65px;">
-                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Proyección 24h</div>
+                <div style="text-align:right;margin-right:65px;">
+                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Proyeccion Cierre</div>
                   <div style="font-size:1.1rem;color:#5eead4;font-weight:bold;">${ptsProyectado24h.toFixed(0)} pts</div>
-                  <div style="font-size:0.55rem; color:#f59e0b; font-weight:700; margin-top:4px;">🎯 Sugerencia: Acelerar Tráfico VIP</div>
+                  <div style="font-size:0.55rem;color:${paceHourly > 100 ? '#10b981' : '#f59e0b'};font-weight:700;margin-top:4px;">${paceHourly > 100 ? '&#x1F680; Ritmo Alto' : '&#x1F3AF; Acelerar Produccion'}</div>
                 </div>
               </div>
               <div style="height:140px;width:100%;"><canvas id="chart-hora"></canvas></div>
             </div>
 
-            <!-- CARD 2: DÍA (Semana en Curso) -->
+            <!-- CARD SEMANA -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(56,189,248,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(56,189,248,0.05);">
-              <button class="ai-info-btn" onclick="abrirInfoTarjeta('dia', '${dDia}')">🤖 Info</button>
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('dia', '${dDia}')">&#129302; Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                    <div style="font-size:0.75rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;">📅 Rendimiento Semanal</div>
-                    <span style="font-size:0.5rem; background:rgba(56,189,248,0.2); color:#38bdf8; padding:2px 4px; border-radius:4px; font-weight:bold;">+8% WoW</span>
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <div style="font-size:0.75rem;color:#38bdf8;font-weight:800;letter-spacing:1px;text-transform:uppercase;">&#128197; Rendimiento Semanal</div>
+                    <span style="font-size:0.5rem;background:${bgPct(pctWoW)};color:${colorPct(pctWoW)};padding:2px 5px;border-radius:4px;font-weight:bold;">${fmtPct(pctWoW)} WoW</span>
                   </div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsSemana.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts totales</span></div>
+                  <div style="font-size:0.65rem;color:#64748b;margin-top:4px;">Ant: <strong style="color:#94a3b8;">${ptsSemanaAnterior.toFixed(0)} pts</strong> &nbsp;|&nbsp; Mejor: ${diasNombres[bestDayIdx]}</div>
                 </div>
-                <div style="text-align:right; margin-right: 65px;">
+                <div style="text-align:right;margin-right:65px;">
                   <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Ganancia Semanal</div>
-                  <div style="font-size:1.1rem;color:#bae6fd;font-weight:bold;">$${Math.round(ptsSemana * 1400).toLocaleString('es-CO')}</div>
-                  <div style="font-size:0.55rem; color:#10b981; font-weight:700; margin-top:4px;">✅ Operación Saludable</div>
+                  <div style="font-size:1.1rem;color:#bae6fd;font-weight:bold;">$${ganSemanal.toLocaleString('es-CO')}</div>
+                  <div style="font-size:0.55rem;color:#64748b;margin-top:2px;">Ant: $${ganSemAnt.toLocaleString('es-CO')}</div>
                 </div>
               </div>
               <div style="height:140px;width:100%;"><canvas id="chart-dia"></canvas></div>
             </div>
 
-            <!-- CARD 3: SEMANA (Mes en Curso) -->
+            <!-- CARD MES -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(167,139,250,0.4);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(167,139,250,0.05);">
-              <button class="ai-info-btn" onclick="abrirInfoTarjeta('semana', '${dSemana}')">🤖 Info</button>
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('semana', '${dSemana}')">&#129302; Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                    <div style="font-size:0.75rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">🏆 Meta Mensual (${currLabel})</div>
-                    <span style="font-size:0.5rem; background:rgba(167,139,250,0.2); color:#c084fc; padding:2px 4px; border-radius:4px; font-weight:bold;">+12% MoM</span>
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <div style="font-size:0.75rem;color:#a78bfa;font-weight:800;letter-spacing:1px;text-transform:uppercase;">&#127942; Meta Mensual (${currLabel})</div>
+                    <span style="font-size:0.5rem;background:${bgPct(pctMoM)};color:${colorPct(pctMoM)};padding:2px 5px;border-radius:4px;font-weight:bold;">${fmtPct(pctMoM)} MoM</span>
                   </div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${ptsMes.toFixed(1)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts totales</span></div>
+                  <div style="font-size:0.65rem;color:#64748b;margin-top:4px;">Ant: <strong style="color:#94a3b8;">${ptsMesAnterior.toFixed(0)} pts</strong> &nbsp;|&nbsp; Proy: ${proyeccionMes.toFixed(0)} pts</div>
                 </div>
-                <div style="text-align:right; margin-right: 65px;">
+                <div style="text-align:right;margin-right:65px;">
                   <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Ganancia Mensual</div>
-                  <div style="font-size:1.1rem;color:#ddd6fe;font-weight:bold;">$${Math.round(ptsMes * 1400).toLocaleString('es-CO')}</div>
-                  <div style="font-size:0.55rem; color:#6366f1; font-weight:700; margin-top:4px;">🚀 Superando Proyección</div>
+                  <div style="font-size:1.1rem;color:#ddd6fe;font-weight:bold;">$${ganMensual.toLocaleString('es-CO')}</div>
+                  <div style="font-size:0.55rem;color:#64748b;margin-top:2px;">Ant: $${ganMesAnt.toLocaleString('es-CO')}</div>
+                  <div style="font-size:0.55rem;color:${proyeccionMes > ptsMesAnterior ? '#6366f1' : '#f59e0b'};font-weight:700;margin-top:4px;">Proy cierre: ${proyeccionMes.toFixed(0)} pts</div>
                 </div>
               </div>
               <div style="height:140px;width:100%;"><canvas id="chart-semana"></canvas></div>
             </div>
 
-            <!-- CARD 4: MES (Histórico Anual) -->
+            <!-- CARD ANUAL -->
             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:20px;display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:inset 0 0 20px rgba(251,191,36,0.05);">
-              <button class="ai-info-btn" onclick="abrirInfoTarjeta('mes', '${dMes}')">🤖 Info</button>
+              <button class="ai-info-btn" onclick="abrirInfoTarjeta('mes', '${dMes}')">&#129302; Info</button>
               <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div>
-                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                    <div style="font-size:0.75rem;color:#fbbf24;font-weight:800;letter-spacing:1px;text-transform:uppercase;">📊 Histórico Anual (2026)</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <div style="font-size:0.75rem;color:#fbbf24;font-weight:800;letter-spacing:1px;text-transform:uppercase;">&#128202; Historico Anual (2026)</div>
                   </div>
                   <div style="font-size:2rem;font-weight:900;color:#fff;">${['01','02','03','04','05'].reduce((a,m)=>a+ptsPorMes[m],0).toFixed(0)} <span style="font-size:0.8rem;color:#94a3b8;font-weight:400;">pts anuales</span></div>
                 </div>
-                <div style="text-align:right; margin-right: 65px;">
-                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Mes Más Fuerte</div>
+                <div style="text-align:right;margin-right:65px;">
+                  <div style="font-size:0.65rem;color:#94a3b8;margin-bottom:4px;">Mes Mas Fuerte</div>
                   <div style="font-size:1.1rem;color:#fde68a;font-weight:bold;">${Math.max(...['01','02','03','04','05'].map(m=>ptsPorMes[m])).toFixed(0)} pts</div>
-                  <div style="font-size:0.55rem; color:#fbbf24; font-weight:700; margin-top:4px;">📈 Tendencia Alcista</div>
+                  <div style="font-size:0.55rem;color:#fbbf24;font-weight:700;margin-top:4px;">&#128200; Tendencia Alcista</div>
                 </div>
               </div>
               <div style="height:140px;width:100%;"><canvas id="chart-mes"></canvas></div>
             </div>
 
           </div>
+
+          <!-- PANEL INFERIOR: ANALISIS + CHAT -->
+          <div style="display:grid;grid-template-columns:1fr 310px;gap:20px;align-items:start;">
+
+            <div style="display:flex;flex-direction:column;gap:16px;">
+
+              <!-- ANALISIS IA -->
+              <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:18px;">
+                <div style="font-size:0.8rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+                  &#129302; Analisis Inteligente de Crecimiento
+                  <span style="font-size:0.6rem;background:rgba(99,102,241,0.2);padding:2px 6px;border-radius:4px;">IA OPERATIVA</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  ${analisisLineas.map(l => `<div style="background:rgba(255,255,255,0.03);border-left:3px solid rgba(99,102,241,0.5);padding:10px 14px;border-radius:0 8px 8px 0;font-size:0.78rem;color:#cbd5e1;line-height:1.5;">${l}</div>`).join('')}
+                </div>
+              </div>
+
+              <!-- TOP OPERADORES -->
+              <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;">
+                <div style="font-size:0.8rem;font-weight:800;color:#e2e8f0;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">&#127885; Top Operadores — Semana Actual</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  ${topOps.map(([name, pts], i) => {
+                    const icons=['&#129351;','&#129352;','&#129353;','4.','5.'];
+                    const w = topOps[0][1] > 0 ? (pts / topOps[0][1] * 100) : 0;
+                    const clrs = ['#fbbf24','#94a3b8','#cd7c2f','#38bdf8','#a78bfa'];
+                    return `<div style="display:flex;align-items:center;gap:10px;">
+                      <span style="font-size:1rem;width:24px;text-align:center;">${icons[i]||''}</span>
+                      <div style="flex:1;">
+                        <div style="font-size:0.8rem;font-weight:700;color:#e2e8f0;">${name}</div>
+                        <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:3px;">
+                          <div style="height:100%;width:${w.toFixed(0)}%;background:${clrs[i]||'#5eead4'};border-radius:2px;"></div>
+                        </div>
+                      </div>
+                      <div style="text-align:right;min-width:60px;">
+                        <div style="font-size:0.85rem;font-weight:800;color:#fff;">${pts.toFixed(0)}</div>
+                        <div style="font-size:0.55rem;color:#475569;">pts</div>
+                      </div>
+                    </div>`;
+                  }).join('')}
+                </div>
+              </div>
+
+              <!-- JORNADAS -->
+              <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;">
+                <div style="font-size:0.8rem;font-weight:800;color:#e2e8f0;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">&#128336; Productividad por Jornada — Semana</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                  ${jornadaOrden.map(j => {
+                    const pts = ptsPorJornada[j] || 0;
+                    const tot = jornadaOrden.reduce((a,b) => a + (ptsPorJornada[b]||0), 0);
+                    const pct = tot > 0 ? (pts/tot*100).toFixed(0) : 0;
+                    const isBest = j === bestJornada && pts > 0;
+                    const cols  = { 'Manana':'#fbbf24', 'Tarde':'#38bdf8', 'Noche':'#a78bfa' };
+                    const emos  = { 'Manana':'&#9728;&#xFE0F;', 'Tarde':'&#127749;', 'Noche':'&#127769;' };
+                    return `<div style="flex:1;min-width:80px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,${isBest?'0.15':'0.05'});border-radius:8px;padding:10px;text-align:center;${isBest?'border-color:'+cols[j]+';':''}">
+                      <div style="font-size:1rem;">${emos[j]||''}</div>
+                      <div style="font-size:0.7rem;color:#64748b;margin:2px 0;">${j}</div>
+                      <div style="font-size:1.1rem;font-weight:800;color:${cols[j]||'#fff'};">${pts.toFixed(0)}</div>
+                      <div style="font-size:0.55rem;color:#475569;">${pct}% del total</div>
+                      ${isBest ? '<div style="font-size:0.5rem;color:#34d399;margin-top:2px;">&#11088; MEJOR</div>' : ''}
+                    </div>`;
+                  }).join('')}
+                </div>
+              </div>
+
+            </div>
+
+            <!-- CHAT IA INTEGRADO -->
+            <div id="reporte-chat-panel" style="background:rgba(15,23,42,0.95);border:1px solid rgba(99,102,241,0.3);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;height:520px;">
+              <div style="background:rgba(99,102,241,0.15);border-bottom:1px solid rgba(99,102,241,0.2);padding:12px 16px;display:flex;align-items:center;gap:10px;">
+                <span style="width:8px;height:8px;background:#10b981;border-radius:50%;box-shadow:0 0 6px #10b981;"></span>
+                <span style="color:#c7d2fe;font-weight:800;font-size:0.82rem;letter-spacing:1px;">&#129302; Coach IA — Reporte</span>
+              </div>
+              <div id="reporte-chat-msgs" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;">
+                <div style="text-align:center;font-size:0.6rem;color:#475569;">Conectado. Pregunta sobre tus metricas.</div>
+                <div style="align-self:flex-start;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.2);padding:10px 12px;border-radius:2px 12px 12px 2px;max-width:90%;">
+                  <div style="font-size:0.6rem;color:#818cf8;font-weight:bold;margin-bottom:4px;">Coach IA</div>
+                  <div style="font-size:0.78rem;color:#e2e8f0;line-height:1.4;">Hola! Esta semana: <strong>${ptsSemana.toFixed(0)} pts</strong> (${fmtPct(pctWoW)} WoW). Este mes: <strong>${ptsMes.toFixed(0)} pts</strong> (${fmtPct(pctMoM)} MoM). Preguntame lo que necesites.</div>
+                </div>
+              </div>
+              <div style="padding:10px;background:rgba(0,0,0,0.4);border-top:1px solid rgba(255,255,255,0.05);display:flex;gap:8px;">
+                <input id="reporte-chat-input" type="text" placeholder="Pregunta sobre el reporte..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:8px 12px;border-radius:8px;font-size:0.78rem;outline:none;" onkeypress="if(event.key==='Enter') enviarReporteChat()">
+                <button onclick="enviarReporteChat()" style="background:rgba(99,102,241,0.8);border:none;color:white;font-weight:bold;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;">Enviar</button>
+              </div>
+            </div>
+
+          </div>
         </div>
       `;
 
-      // ---------- INICIALIZACIÓN DE GRÁFICOS (Chart.js) ----------
+      // ======= GRAFICOS =======
       const commonOpts = {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        plugins: { legend:{ display:false }, tooltip:{ mode:'index', intersect:false } },
         scales: {
-          x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
-          y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#475569', font: { size: 10 } } }
+          x: { grid:{ display:false }, ticks:{ color:'#64748b', font:{ size:10 } } },
+          y: { beginAtZero:true, grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#475569', font:{ size:10 } } }
         }
       };
 
-      // Gráfico Hora
       new Chart(document.getElementById('chart-hora'), {
         type: 'line',
         data: {
-          labels: Array.from({length:24}, (_,i) => i+'h'),
+          labels: Array.from({length:24},(_,i)=>i+'h'),
           datasets: [
-            { label: 'Puntos Reales', data: realData, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.1)', fill: true, tension: 0.3, pointRadius: 0 },
-            { label: 'Proyección', data: projData, borderColor: 'rgba(52,211,153,0.4)', borderDash: [5,5], fill: false, tension: 0.3, pointRadius: 0 }
+            { label:'Pts Reales', data:realData, borderColor:'#34d399', backgroundColor:'rgba(52,211,153,0.1)', fill:true, tension:0.3, pointRadius:2 },
+            { label:'Proyeccion', data:projData, borderColor:'rgba(52,211,153,0.4)', borderDash:[5,5], fill:false, tension:0.3, pointRadius:0 }
           ]
-        },
-        options: commonOpts
+        }, options: commonOpts
       });
 
-      // Gráfico Día
       new Chart(document.getElementById('chart-dia'), {
         type: 'bar',
         data: {
-          labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-          datasets: [{ label: 'Puntos', data: ptsPorDiaSemana, backgroundColor: 'rgba(56,189,248,0.7)', borderRadius: 4 }]
+          labels: ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'],
+          datasets: [
+            { label:'Esta semana', data:ptsPorDiaSemana, backgroundColor:'rgba(56,189,248,0.7)', borderRadius:4 },
+            { label:'Sem. anterior', data:ptsPorDiaSemPrev, backgroundColor:'rgba(56,189,248,0.2)', borderRadius:4 }
+          ]
         },
-        options: commonOpts
+        options: { ...commonOpts, plugins:{ ...commonOpts.plugins, legend:{ display:true, labels:{ color:'#64748b', font:{ size:9 } } } } }
       });
 
-      // Gráfico Semana
       new Chart(document.getElementById('chart-semana'), {
         type: 'bar',
         data: {
-          labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4+'],
-          datasets: [{ label: 'Puntos', data: ptsPorSemanaMes, backgroundColor: 'rgba(167,139,250,0.7)', borderRadius: 4 }]
-        },
-        options: commonOpts
+          labels: ['Sem 1','Sem 2','Sem 3','Sem 4+'],
+          datasets: [{ label:'Puntos', data:ptsPorSemanaMes, backgroundColor:'rgba(167,139,250,0.7)', borderRadius:4 }]
+        }, options: commonOpts
       });
 
-      // Gráfico Mes
       new Chart(document.getElementById('chart-mes'), {
         type: 'bar',
         data: {
-          labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May'],
-          datasets: [{ label: 'Puntos', data: ['01','02','03','04','05'].map(m => ptsPorMes[m]), backgroundColor: 'rgba(251,191,36,0.7)', borderRadius: 4 }]
-        },
-        options: commonOpts
+          labels: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],
+          datasets: [{ label:'Puntos', data:['01','02','03','04','05','06','07','08','09','10','11','12'].map(m=>ptsPorMes[m]), backgroundColor: (ctx) => ctx.dataIndex === (new Date().getMonth()) ? 'rgba(251,191,36,0.9)' : 'rgba(251,191,36,0.35)', borderRadius:4 }]
+        }, options: commonOpts
       });
+
+      window._reporteData = { ptsHoy, ptsAyer, ptsSemana, ptsSemanaAnterior, ptsMes, ptsMesAnterior, pctVsAyer, pctWoW, pctMoM, bestJornada, topOps, proyeccionMes, diasNombresLargo, bestDayIdx, ptsPorDiaSemana, ptsPorJornada, COP_POR_PUNTO, currLabel };
     }
 
+    // ======= CHAT COACH IA DEL REPORTE =======
+    window.enviarReporteChat = function() {
+      const input = document.getElementById('reporte-chat-input');
+      const box   = document.getElementById('reporte-chat-msgs');
+      if (!input || !box) return;
+      const txt = input.value.trim();
+      if (!txt) return;
+      box.innerHTML += `<div style="align-self:flex-end;background:rgba(99,102,241,0.25);border:1px solid rgba(99,102,241,0.4);padding:9px 12px;border-radius:12px 2px 12px 12px;max-width:85%;font-size:0.78rem;color:#e2e8f0;">${txt}</div>`;
+      input.value = '';
+      box.scrollTop = box.scrollHeight;
+      const d = window._reporteData || {};
+      const fP = v => (v>=0?'+':'')+Number(v).toFixed(1)+'%';
+      const q = txt.toLowerCase();
+      let resp = '';
+      if (q.includes('semana') && (q.includes('crecio')||q.includes('crecimiento')||q.includes('subi')||q.includes('mejor'))) {
+        resp = `Esta semana: ${(d.ptsSemana||0).toFixed(0)} pts. Anterior: ${(d.ptsSemanaAnterior||0).toFixed(0)} pts. Variacion: ${fP(d.pctWoW)}. ${(d.pctWoW||0)>=0 ? 'Crecimiento positivo impulsado por el dia '+((d.diasNombresLargo||[])[d.bestDayIdx||0]||'N/A')+' y el turno '+(d.bestJornada||'N/A')+'.' : 'Semana en descenso. Refuerza asistencia y estrategias.'}`;
+      } else if (q.includes('mes') && (q.includes('crecio')||q.includes('crecimiento')||q.includes('subi')||q.includes('mejor'))) {
+        resp = `Mes ${d.currLabel||''}: ${(d.ptsMes||0).toFixed(0)} pts. Anterior: ${(d.ptsMesAnterior||0).toFixed(0)} pts. Variacion: ${fP(d.pctMoM)}. Proyeccion: ${(d.proyeccionMes||0).toFixed(0)} pts.`;
+      } else if (q.includes('hoy')||q.includes('dia')||q.includes('ritmo')) {
+        resp = `Hoy: ${(d.ptsHoy||0).toFixed(0)} pts (${fP(d.pctVsAyer)} vs ayer: ${(d.ptsAyer||0).toFixed(0)} pts). Turno activo: ${d.bestJornada||'N/A'}.`;
+      } else if (q.includes('turno')||q.includes('jornada')) {
+        const j = d.ptsPorJornada || {};
+        resp = `Manana: ${(j['Manana']||0).toFixed(0)} pts, Tarde: ${(j['Tarde']||0).toFixed(0)} pts, Noche: ${(j['Noche']||0).toFixed(0)} pts. Turno estrella: ${d.bestJornada||'N/A'}.`;
+      } else if (q.includes('operador')||q.includes('top')||q.includes('quien')) {
+        const t = d.topOps || [];
+        resp = t.length > 0 ? `Top 3: 1. ${t[0]?.[0]} (${t[0]?.[1]?.toFixed(0)} pts), 2. ${t[1]?.[0]||'-'} (${t[1]?.[1]?.toFixed(0)||0} pts), 3. ${t[2]?.[0]||'-'} (${t[2]?.[1]?.toFixed(0)||0} pts).` : 'Sin datos aun.';
+      } else if (q.includes('ganancia')||q.includes('cop')||q.includes('plata')||q.includes('dinero')) {
+        resp = `Hoy: $${Math.round((d.ptsHoy||0)*1400).toLocaleString('es-CO')} COP. Semana: $${Math.round((d.ptsSemana||0)*1400).toLocaleString('es-CO')} COP. Mes: $${Math.round((d.ptsMes||0)*1400).toLocaleString('es-CO')} COP. Proyeccion mes: $${Math.round((d.proyeccionMes||0)*1400).toLocaleString('es-CO')} COP.`;
+      } else if (q.includes('proyeccion')||q.includes('va a cerrar')) {
+        resp = `Proyeccion mes: ~${(d.proyeccionMes||0).toFixed(0)} pts. ${(d.proyeccionMes||0)>(d.ptsMesAnterior||0) ? 'Por encima del mes anterior.' : 'Por debajo del mes anterior. Hay que acelerar.'}`;
+      } else {
+        resp = `Resumen: ${(d.ptsHoy||0).toFixed(0)} pts hoy (${fP(d.pctVsAyer)} vs ayer), ${(d.ptsSemana||0).toFixed(0)} pts semana (${fP(d.pctWoW)} WoW), ${(d.ptsMes||0).toFixed(0)} pts mes (${fP(d.pctMoM)} MoM). Turno estrella: ${d.bestJornada||'N/A'}. Que necesitas?`;
+      }
+      setTimeout(() => {
+        box.innerHTML += `<div style="align-self:flex-start;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);padding:10px 12px;border-radius:2px 12px 12px 12px;max-width:92%;"><div style="font-size:0.55rem;color:#818cf8;font-weight:bold;margin-bottom:4px;">Coach IA</div><div style="font-size:0.78rem;color:#e2e8f0;line-height:1.5;">${resp}</div></div>`;
+        box.scrollTop = box.scrollHeight;
+      }, 500);
+    };
 
-    // ══════════════════════════════════════════
+    // ======= EXPORTAR INFORME =======
+    window.exportarInformeDirectivo = function() {
+      const d = window._reporteData || {};
+      const fP = v => (v>=0?'+':'')+Number(v).toFixed(1)+'%';
+      const hoy = localDateStr();
+      const lines = [
+        '=================================================',
+        '        INFORME DIRECTIVO -- AGENCIA RR',
+        '=================================================',
+        'Fecha: ' + hoy,
+        '',
+        '--- METRICAS DEL DIA ---',
+        'Puntos hoy: ' + (d.ptsHoy||0).toFixed(0) + ' pts (' + fP(d.pctVsAyer) + ' vs ayer: ' + (d.ptsAyer||0).toFixed(0) + ' pts)',
+        '',
+        '--- METRICAS SEMANALES ---',
+        'Semana actual: ' + (d.ptsSemana||0).toFixed(0) + ' pts',
+        'Semana anterior: ' + (d.ptsSemanaAnterior||0).toFixed(0) + ' pts',
+        'Variacion WoW: ' + fP(d.pctWoW),
+        'Mejor dia: ' + ((d.diasNombresLargo||[])[d.bestDayIdx||0]||'N/A') + ' (' + ((d.ptsPorDiaSemana||[])[d.bestDayIdx||0]||0).toFixed(0) + ' pts)',
+        'Ganancia semanal: $' + Math.round((d.ptsSemana||0)*1400).toLocaleString('es-CO') + ' COP',
+        '',
+        '--- METRICAS MENSUALES ---',
+        'Mes actual (' + (d.currLabel||'') + '): ' + (d.ptsMes||0).toFixed(0) + ' pts',
+        'Mes anterior: ' + (d.ptsMesAnterior||0).toFixed(0) + ' pts',
+        'Variacion MoM: ' + fP(d.pctMoM),
+        'Proyeccion fin de mes: ' + (d.proyeccionMes||0).toFixed(0) + ' pts',
+        'Ganancia mensual: $' + Math.round((d.ptsMes||0)*1400).toLocaleString('es-CO') + ' COP',
+        'Proyeccion mes COP: $' + Math.round((d.proyeccionMes||0)*1400).toLocaleString('es-CO') + ' COP',
+        '',
+        '--- TOP OPERADORES (SEMANA) ---',
+        ...(d.topOps||[]).map(([n,p],i) => (i+1) + '. ' + n + ': ' + p.toFixed(0) + ' pts'),
+        '',
+        '--- TURNO ESTRELLA ---',
+        'Jornada mas productiva: ' + (d.bestJornada||'N/A'),
+        '  Manana: ' + ((d.ptsPorJornada||{})['Manana']||0).toFixed(0) + ' pts',
+        '  Tarde:  ' + ((d.ptsPorJornada||{})['Tarde']||0).toFixed(0) + ' pts',
+        '  Noche:  ' + ((d.ptsPorJornada||{})['Noche']||0).toFixed(0) + ' pts',
+        '',
+        '=================================================',
+        '            GENERADO POR AGENCIA RR AI',
+        '=================================================',
+      ];
+      const blob = new Blob([lines.join('\n')], { type:'text/plain;charset=utf-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'Informe_AgenciaRR_' + hoy + '.txt'; a.click();
+      URL.revokeObjectURL(url);
+    };
+
     // GESTIÓN DE GRUPOS (agregar / borrar)
     // ══════════════════════════════════════════
     const GRUPOS_KEY = 'rr_prime_grupos_v1';

@@ -8855,16 +8855,19 @@
     let _sbBootReady = false; // ← señal global: true cuando el boot inicial de Supabase terminó
     let _sbBootRetries = 0;
     const _SB_BOOT_MAX_RETRIES = 3;
-    const _SB_BOOT_TIMEOUT_MS = 25000; // 25s — tolerante a redes lentas
+    const _SB_BOOT_TIMEOUT_MS = 4000; // 4s — extremadamente rápido para dar entrada con datos locales si Supabase tarda
 
     async function _sbSyncOnLoad() {
-      _bootProgress(20, 'Conectando con Supabase...');
+      if (!_sbBootReady) {
+        _bootProgress(20, 'Conectando con Supabase...');
+      }
       if (!_sb) { _sbBootReady = true; _bootDone(); return; }
 
       try {
-        _bootProgress(40, `Descargando datos${_sbBootRetries > 0 ? ' (intento ' + (_sbBootRetries + 1) + ')' : ''}...`);
+        if (!_sbBootReady) {
+          _bootProgress(40, `Descargando datos${_sbBootRetries > 0 ? ' (intento ' + (_sbBootRetries + 1) + ')' : ''}...`);
+        }
 
-        // Timeout ampliado a 25s para tolerar redes lentas
         const fetchPromise = _sb.from('kv_store').select('key, value');
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Supabase Timeout')), _SB_BOOT_TIMEOUT_MS)
@@ -8873,7 +8876,9 @@
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
         if (error) throw error;
 
-        _bootProgress(70, 'Cargando operadores y cortes...');
+        if (!_sbBootReady) {
+          _bootProgress(70, 'Cargando operadores y cortes...');
+        }
         data.forEach(({ key, value }) => {
           if (_sbShouldExclude(key)) return;
           _origSetItem(key, value);
@@ -8882,7 +8887,9 @@
 
         _sbOnline = true;
         _sbBootRetries = 0;
-        _bootProgress(90, 'Listo ✓');
+        if (!_sbBootReady) {
+          _bootProgress(90, 'Listo ✓');
+        }
 
         // ── Sincronizar avatares y banners desde Supabase ──
         if (typeof mediaCargarTodo === 'function') mediaCargarTodo().then(() => {
@@ -8919,28 +8926,31 @@
         const errMsg = (e.message || e.toString());
         console.warn('[Supabase] sync load error:', errMsg);
 
-        // Retry automático para timeouts (máx 3 intentos con backoff)
-        if (errMsg.includes('Timeout') && _sbBootRetries < _SB_BOOT_MAX_RETRIES) {
-          _sbBootRetries++;
-          const backoff = _sbBootRetries * 3000; // 3s, 6s, 9s
-          _bootProgress(30, `⏳ Reintentando en ${backoff/1000}s... (${_sbBootRetries}/${_SB_BOOT_MAX_RETRIES})`);
-          console.warn(`[Supabase] Timeout — reintentando en ${backoff}ms (intento ${_sbBootRetries})`);
-          setTimeout(() => _sbSyncOnLoad(), backoff);
-          return; // no marcar como fallido aún
+        // Fallback inmediato a datos locales para agilizar el arranque
+        if (!_sbBootReady) {
+          console.warn('[Supabase] Fallback inmediato a datos locales para evitar bloqueos.');
+          _sbBootReady = true;
+          _bootProgress(100, `⚠️ Conectando en segundo plano...`);
+          if (typeof loadData === 'function') loadData();
+          if (currentRole === 'operador' && currentOpName) {
+            if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
+            if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
+          } else {
+            if (typeof renderRanking === 'function') renderRanking();
+          }
+          _toastSync('⚠️ Modo local activo (conectando a Supabase...)', true);
         }
 
-        // Agotados los reintentos → modo local
-        _sbOnline = false;
-        _sbBootReady = true;
-        _bootProgress(100, `⚠️ Sin conexión — usando datos locales`);
-        if (typeof loadData === 'function') loadData();
-        if (currentRole === 'operador' && currentOpName) {
-          if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
-          if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
+        // Retry automático en segundo plano para timeouts (máx 3 intentos con backoff de 5s)
+        if (errMsg.includes('Timeout') && _sbBootRetries < _SB_BOOT_MAX_RETRIES) {
+          _sbBootRetries++;
+          const backoff = _sbBootRetries * 5000; // 5s, 10s, 15s
+          console.warn(`[Supabase] Reintentando sincronización en segundo plano en ${backoff/1000}s (intento ${_sbBootRetries}/${_SB_BOOT_MAX_RETRIES})`);
+          setTimeout(() => _sbSyncOnLoad(), backoff);
         } else {
-          if (typeof renderRanking === 'function') renderRanking();
+          _sbOnline = false;
+          _toastSync('🔴 Sin conexión Supabase — datos locales', true);
         }
-        _toastSync('🔴 Sin conexión Supabase — datos locales', true);
       } finally {
         if (_sbBootReady) setTimeout(_bootDone, 400);
       }

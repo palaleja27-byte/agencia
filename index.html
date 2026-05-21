@@ -8853,52 +8853,55 @@
     }
 
     let _sbBootReady = false; // ← señal global: true cuando el boot inicial de Supabase terminó
+    let _sbBootRetries = 0;
+    const _SB_BOOT_MAX_RETRIES = 3;
+    const _SB_BOOT_TIMEOUT_MS = 25000; // 25s — tolerante a redes lentas
+
     async function _sbSyncOnLoad() {
       _bootProgress(20, 'Conectando con Supabase...');
       if (!_sb) { _sbBootReady = true; _bootDone(); return; }
 
       try {
-        _bootProgress(40, 'Descargando datos...');
-        
-        // Timeout de seguridad: Si Supabase se cuelga, forzamos error tras 10s
+        _bootProgress(40, `Descargando datos${_sbBootRetries > 0 ? ' (intento ' + (_sbBootRetries + 1) + ')' : ''}...`);
+
+        // Timeout ampliado a 25s para tolerar redes lentas
         const fetchPromise = _sb.from('kv_store').select('key, value');
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout")), 10000));
-        
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase Timeout')), _SB_BOOT_TIMEOUT_MS)
+        );
+
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
-        
         if (error) throw error;
 
         _bootProgress(70, 'Cargando operadores y cortes...');
-        // Supabase gana siempre — sobreescribe localStorage Y memory cache
         data.forEach(({ key, value }) => {
           if (_sbShouldExclude(key)) return;
-          _origSetItem(key, value);   // localStorage
-          _sbMemCache[key] = value;   // memory cache — lectura instantánea
+          _origSetItem(key, value);
+          _sbMemCache[key] = value;
         });
 
         _sbOnline = true;
+        _sbBootRetries = 0;
         _bootProgress(90, 'Listo ✓');
 
         // ── Sincronizar avatares y banners desde Supabase ──
         if (typeof mediaCargarTodo === 'function') mediaCargarTodo().then(() => {
-          // Actualizar renders con fotos recién descargadas
           if (typeof renderRanking === 'function') renderRanking();
         });
         if (typeof mediaIniciarRealtime === 'function') mediaIniciarRealtime();
 
-        // ── Sincronizar datos de Tableau ──
-        if (typeof loadTableauData === 'function') loadTableauData().then(() => {
-           if (typeof renderPSAPanel === 'function') renderPSAPanel();
-        });
+        // ── Sincronizar datos de Tableau (con retry independiente) ──
+        if (typeof loadTableauData === 'function') {
+          loadTableauData().then(() => {
+            if (typeof renderPSAPanel === 'function') renderPSAPanel();
+          }).catch(e => console.warn('[Tableau] carga inicial falló:', e.message));
+        }
         if (typeof tableauIniciarRealtime === 'function') tableauIniciarRealtime();
 
         // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();
         _autoFixActivePair();
 
-        // ── CRÍTICO: refrescar vista del operador con datos reales de Supabase ──
-        // checkSession() corrió ANTES de esta carga — los datos que vio eran del
-        // localStorage vacío. Ahora que Supabase cargó, forzar re-render completo.
         if (currentRole === 'operador' && currentOpName) {
           if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
           if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
@@ -8913,11 +8916,23 @@
         _sbBootReady = true;
 
       } catch (e) {
+        const errMsg = (e.message || e.toString());
+        console.warn('[Supabase] sync load error:', errMsg);
+
+        // Retry automático para timeouts (máx 3 intentos con backoff)
+        if (errMsg.includes('Timeout') && _sbBootRetries < _SB_BOOT_MAX_RETRIES) {
+          _sbBootRetries++;
+          const backoff = _sbBootRetries * 3000; // 3s, 6s, 9s
+          _bootProgress(30, `⏳ Reintentando en ${backoff/1000}s... (${_sbBootRetries}/${_SB_BOOT_MAX_RETRIES})`);
+          console.warn(`[Supabase] Timeout — reintentando en ${backoff}ms (intento ${_sbBootRetries})`);
+          setTimeout(() => _sbSyncOnLoad(), backoff);
+          return; // no marcar como fallido aún
+        }
+
+        // Agotados los reintentos → modo local
         _sbOnline = false;
-        _sbBootReady = true; // permitir que funciones secundarias operen en modo local
-        const errMsg = (e.message || e.toString()).slice(0, 40);
-        _bootProgress(100, `⚠️ Error: ${errMsg} (Modo Local)`);
-        console.warn('[Supabase] sync load:', e);
+        _sbBootReady = true;
+        _bootProgress(100, `⚠️ Sin conexión — usando datos locales`);
         if (typeof loadData === 'function') loadData();
         if (currentRole === 'operador' && currentOpName) {
           if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
@@ -8925,9 +8940,9 @@
         } else {
           if (typeof renderRanking === 'function') renderRanking();
         }
-        _toastSync('🔴 Sin conexión — datos locales', true);
+        _toastSync('🔴 Sin conexión Supabase — datos locales', true);
       } finally {
-        setTimeout(_bootDone, 400);
+        if (_sbBootReady) setTimeout(_bootDone, 400);
       }
     }
 
@@ -18323,51 +18338,82 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
     async function loadTableauData() {
       if (typeof _sb === 'undefined' || !_sb) {
-        if (typeof tableauLog === 'function') tableauLog('⚠️ Supabase no disponible', 'warn');
+        if (typeof tableauLog === 'function') tableauLog('⚠️ Supabase no disponible — esperando conexion', 'warn');
         return;
       }
 
-      // Intentar primero la tabla donde escribe el RPC, luego la alternativa
       const TABLES_TO_TRY = ['tableau_data', 'tableau_perfiles'];
       let data = null;
+      const TABLEAU_TIMEOUT_MS = 15000; // 15s por tabla
 
       for (const tbl of TABLES_TO_TRY) {
         try {
-          const res = await _sb.from(tbl).select('perfil_id, valor, updated_at, data_json');
+          if (typeof tableauLog === 'function') tableauLog(`🔍 Consultando tabla '${tbl}'...`, 'info');
+
+          // Timeout independiente por tabla
+          const fetchPromise = _sb.from(tbl).select('perfil_id, valor, updated_at, data_json');
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout tabla ${tbl}`)), TABLEAU_TIMEOUT_MS)
+          );
+
+          const res = await Promise.race([fetchPromise, timeoutPromise]);
+
           if (res.error) {
-            if (typeof tableauLog === 'function') tableauLog(`⚠️ Tabla '${tbl}': ${res.error.message}`, 'warn');
-            continue; // probar la siguiente
+            const errCode = res.error.code || '';
+            const errMsg  = res.error.message || res.error.toString();
+            if (errCode === '42P01' || errMsg.includes('does not exist')) {
+              if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' no existe en Supabase`, 'warn');
+            } else if (errCode === '42501' || errMsg.includes('permission')) {
+              if (typeof tableauLog === 'function') tableauLog(`🔐 Tabla '${tbl}': sin permisos RLS`, 'warn');
+            } else {
+              if (typeof tableauLog === 'function') tableauLog(`⚠️ '${tbl}': ${errMsg.slice(0,80)}`, 'warn');
+            }
+            continue;
           }
+
           if (res.data && res.data.length > 0) {
             data = res.data;
             if (typeof tableauLog === 'function') tableauLog(`✅ Tabla '${tbl}' OK — ${data.length} filas`, 'success');
             break;
           } else {
-            if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' vacía`, 'info');
+            if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' existe pero esta vacia`, 'info');
           }
         } catch(e) {
-          if (typeof tableauLog === 'function') tableauLog(`❌ Error en '${tbl}': ${e.message}`, 'error');
+          const msg = e.message || e.toString();
+          if (msg.includes('Failed to fetch')) {
+            if (typeof tableauLog === 'function') tableauLog(`🌐 '${tbl}': sin red / CORS — verifica conectividad`, 'error');
+          } else if (msg.includes('Timeout')) {
+            if (typeof tableauLog === 'function') tableauLog(`⏱️ '${tbl}': timeout (${TABLEAU_TIMEOUT_MS/1000}s)`, 'warn');
+          } else {
+            if (typeof tableauLog === 'function') tableauLog(`❌ '${tbl}': ${msg.slice(0,80)}`, 'error');
+          }
         }
       }
 
       if (!data || data.length === 0) {
-        if (typeof tableauLog === 'function') tableauLog('❌ Sin datos en ninguna tabla Tableau', 'error');
+        if (typeof tableauLog === 'function') {
+          tableauLog('❌ Sin datos en ninguna tabla Tableau', 'error');
+          tableauLog('💡 Verifica: 1) Tablas existen en Supabase  2) RLS permite anon  3) El sync de GitHub Actions corrió', 'info');
+        }
         return;
       }
 
       _dpTableauData = {};
 
-      // Buscar Log de Depuración
       const debugLog = data.find(d => d.perfil_id === 'DEBUG_LOG');
       if (debugLog && typeof tableauLog === 'function') {
-        const info = typeof debugLog.data_json === 'string' ? JSON.parse(debugLog.data_json || '{}') : (debugLog.data_json || {});
+        const info = typeof debugLog.data_json === 'string'
+          ? (() => { try { return JSON.parse(debugLog.data_json || '{}'); } catch(e) { return {}; } })()
+          : (debugLog.data_json || {});
         tableauLog(`⚠️ ALERTA ROBOT: ${info.error || 'Fallo desconocido'}`, 'error');
       }
 
       const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
       validData.forEach(row => {
         const djRaw = row.data_json;
-        const dj = typeof djRaw === 'string' ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })() : (djRaw || {});
+        const dj = typeof djRaw === 'string'
+          ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })()
+          : (djRaw || {});
         _dpTableauData[String(row.perfil_id).trim()] = {
           valor:     Number(row.valor) || 0,
           data_json: dj
@@ -18376,7 +18422,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
       const timeEl = document.getElementById('tableau-sync-time');
       if (timeEl) {
-        const last = new Date(validData[0]?.updated_at || new Date()).toLocaleTimeString('es-CO',{hour12:false});
+        const last = new Date(validData[0]?.updated_at || new Date()).toLocaleTimeString('es-CO', {hour12: false});
         timeEl.textContent = `Último: ${last} (${validData.length} perfiles)`;
       }
 

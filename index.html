@@ -9023,6 +9023,37 @@
                 }
               }
 
+              // --- CHAT REAL-TIME SYNC ---
+              if (row.key.startsWith('rr_chat_')) {
+                const chatOpName = row.key.replace('rr_chat_', '');
+                if (currentRole === 'monitor' || currentRole === 'admin') {
+                  if (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === chatOpName.toLowerCase()) {
+                    cargarHistorialChatSeleccionado();
+                  }
+                } else if (currentRole === 'operador') {
+                  if (currentOpName && currentOpName.toLowerCase() === chatOpName.toLowerCase()) {
+                    cargarHistorialChatSeleccionado();
+                  }
+                }
+              }
+              // --- CUSTOM ALERTS SYNC ---
+              if (row.key.startsWith('rr_custom_alert_')) {
+                const targetOpName = row.key.replace('rr_custom_alert_', '');
+                if (currentRole === 'operador' && currentOpName && currentOpName.toLowerCase() === targetOpName.toLowerCase()) {
+                  try {
+                    const alertData = JSON.parse(row.value);
+                    lanzarAlertaMonitor(alertData.nivel, alertData.msg);
+                    
+                    // Borrar alerta en Supabase para no re-procesarla
+                    if (_sb) {
+                      _sb.from('kv_store').delete().eq('key', row.key).then(() => {});
+                    }
+                  } catch (e) {
+                    console.error("Error parseando alerta personalizada en tiempo real:", e);
+                  }
+                }
+              }
+
               if (critical.includes(row.key) && typeof loadData === 'function') {
                 loadData();
                 if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
@@ -10956,6 +10987,260 @@
           return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${cs}</tr>`;
         }).join('');
         content = `<div style="overflow-x:auto;background:rgba(0,0,0,0.5);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;min-width:700px;"><thead><tr><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;left:0;background:#1e293b;z-index:10;border-bottom:1px solid rgba(255,255,255,0.05);">OPERADOR</th><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;background:#1e293b;border-bottom:1px solid rgba(255,255,255,0.05);">PERFIL</th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">5m<br><small>LIVE</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">10m<br><small>PULSO</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">DÍA<br><small>PROM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">SEM<br><small>ACUM</small></th><th style="padding:10px;background:#1e293b;color:#f1f5f9;font-size:0.55rem;border-bottom:1px solid rgba(255,255,255,0.05);">MES<br><small>TOTAL</small></th></tr></thead><tbody>${trs}</tbody></table></div>`;
+      }       const svcIcons = {
+        'MAILS':'📧','STICKERS':'🎨','CHAT AUDIO':'🎙️','CHAT POSTS':'💬','MAIL READS':'📖','CHAT':'💬','CARTAS':'✉️','LETTERS':'✉️','VIDEO':'📹','GIFTS':'🎁','PHOTOS':'📸','VIRTUAL GIFTS':'🎁','VOICE':'🎙️','POSTS':'📱','POST':'📱','AUDIOS':'🎵','MESSAGES':'📩','PRIME':'💎'
+      };
+
+      else if (tab === 'productividad') {
+        const opsMap = {};
+        const opsEnTurnoDraft = (typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : null) || new Set();
+        
+        rows.forEach(r => {
+          if (!opsMap[r.op]) {
+            opsMap[r.op] = {
+              name: r.op,
+              dia: 0,
+              sem: 0,
+              mes: 0,
+              r05: 0,
+              r10: 0,
+              profiles: []
+            };
+          }
+          opsMap[r.op].dia += r.dia;
+          opsMap[r.op].sem += r.sem;
+          opsMap[r.op].mes += r.mes;
+          opsMap[r.op].r05 += r.r05;
+          opsMap[r.op].r10 += r.r10;
+          opsMap[r.op].profiles.push(r);
+        });
+
+        const activeOps = Object.values(opsMap).sort((a, b) => b.dia - a.dia);
+
+        // Stats calculations
+        const totalOps = activeOps.length;
+        let onlineOps = 0;
+        let totalShiftPoints = 0;
+        let totalProgressPct = 0;
+        let operatorsWithMeta = 0;
+
+        activeOps.forEach(op => {
+          const estaLogueado = Array.from(opsEnTurnoDraft).some(n => _normName(n) === _normName(op.name));
+          if (estaLogueado) onlineOps++;
+          totalShiftPoints += op.dia;
+          
+          const meta = typeof getMetaHoy === 'function' ? getMetaHoy(op.name) : 100;
+          if (meta > 0) {
+            totalProgressPct += Math.min(100, (op.dia / meta) * 100);
+            operatorsWithMeta++;
+          }
+        });
+
+        const projectedCOP = totalShiftPoints * 1400;
+        const avgEfficiency = operatorsWithMeta > 0 ? (totalProgressPct / operatorsWithMeta) : 0;
+
+        // Premium 3-column stats panel
+        const statsPanelHtml = `
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:16px;">
+            <!-- Stat 1: Conectados -->
+            <div style="background:linear-gradient(135deg, rgba(45,212,191,0.1), rgba(45,212,191,0.02)); border:1px solid rgba(45,212,191,0.25); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:12px; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.25);">
+              <div style="width:40px; height:40px; border-radius:50%; background:rgba(45,212,191,0.1); border:1px solid rgba(45,212,191,0.3); display:flex; align-items:center; justify-content:center; color:#2dd4bf; font-size:1.3rem;">👥</div>
+              <div>
+                <div style="font-size:0.58rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:0.8px;">Operadores Online</div>
+                <div style="font-size:1.25rem; font-weight:950; color:#fff; line-height:1.2;">${onlineOps} <span style="font-size:0.75rem; color:#64748b; font-weight:normal;">de ${totalOps}</span></div>
+              </div>
+            </div>
+            <!-- Stat 2: Puntos de Turno -->
+            <div style="background:linear-gradient(135deg, rgba(167,139,250,0.1), rgba(167,139,250,0.02)); border:1px solid rgba(167,139,250,0.25); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:12px; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.25);">
+              <div style="width:40px; height:40px; border-radius:50%; background:rgba(167,139,250,0.1); border:1px solid rgba(167,139,250,0.3); display:flex; align-items:center; justify-content:center; color:#📈; font-size:1.3rem;">📈</div>
+              <div>
+                <div style="font-size:0.58rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:0.8px;">Puntos Totales Turno</div>
+                <div style="font-size:1.25rem; font-weight:950; color:#fff; line-height:1.2;">${totalShiftPoints.toFixed(1)} <span style="font-size:0.65rem; color:#a78bfa; font-weight:bold;">(\$${Math.round(projectedCOP).toLocaleString('es-CO')} COP)</span></div>
+              </div>
+            </div>
+            <!-- Stat 3: Eficiencia Promedio -->
+            <div style="background:linear-gradient(135deg, rgba(251,191,36,0.1), rgba(251,191,36,0.02)); border:1px solid rgba(251,191,36,0.25); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:12px; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.25);">
+              <div style="width:40px; height:40px; border-radius:50%; background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); display:flex; align-items:center; justify-content:center; color:#fbbf24; font-size:1.3rem;">🎯</div>
+              <div>
+                <div style="font-size:0.58rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:0.8px;">Eficiencia Promedio</div>
+                <div style="font-size:1.25rem; font-weight:950; color:#fff; line-height:1.2;">${avgEfficiency.toFixed(0)}%</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Premium dynamic filter bar
+        const filterBarHtml = `
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.05); padding:10px 14px; border-radius:10px; flex-wrap:wrap; backdrop-filter:blur(5px);">
+            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:200px;">
+              <span style="font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap;">🔍 Filtrar Operador:</span>
+              <input type="text" id="op-search-filter" oninput="window.filtrarOperadoresProductividad()" placeholder="Buscar operador por nombre..." style="flex:1; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-size:0.7rem; padding:6px 10px; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#2dd4bf'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; min-width:180px;">
+              <span style="font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap;">🟢 Estado:</span>
+              <select id="op-status-filter" onchange="window.filtrarOperadoresProductividad()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-size:0.7rem; padding:5px 8px; outline:none; cursor:pointer; font-weight:700;">
+                <option value="ALL">TODOS</option>
+                <option value="ONLINE">CONECTADOS (ON)</option>
+                <option value="OFFLINE">DESCONECTADOS (OFF)</option>
+                <option value="ACTIVE">ALTA ACTIVIDAD</option>
+                <option value="INACTIVE">INACTIVO / CRÍTICO</option>
+              </select>
+            </div>
+          </div>
+        `;
+
+        const opCards = activeOps.map(op => {
+          const estaLogueado = Array.from(opsEnTurnoDraft).some(n => _normName(n) === _normName(op.name));
+          
+          let maxTs = 0;
+          op.profiles.forEach(p => {
+            (p.cortes || []).forEach(c => {
+              if (c.ts && c.ts > maxTs) maxTs = c.ts;
+            });
+          });
+
+          const elapsedMin = maxTs > 0 ? Math.floor((Date.now() - maxTs) / 60000) : 9999;
+          
+          let statusText = 'DESCONECTADO';
+          let statusColor = '#64748b';
+          let statusBg = 'rgba(100,116,139,0.1)';
+          let glowClass = '';
+          let pulseDotClass = '';
+
+          if (estaLogueado) {
+            if (op.dia === 0) {
+              statusText = 'SIN ACTIVIDAD';
+              statusColor = '#eab308';
+              statusBg = 'rgba(234,179,8,0.1)';
+              pulseDotClass = 'status-alerta';
+            } else if (elapsedMin <= 3) {
+              statusText = 'ALTA ACTIVIDAD';
+              statusColor = '#10b981';
+              statusBg = 'rgba(16,185,129,0.15)';
+              glowClass = 'box-shadow: 0 0 10px rgba(16,185,129,0.25); border-color: rgba(16,185,129,0.3);';
+              pulseDotClass = 'status-motivar';
+            } else if (elapsedMin <= 10) {
+              statusText = `INACTIVO (${elapsedMin}m)`;
+              statusColor = '#f97316';
+              statusBg = 'rgba(249,115,22,0.15)';
+              pulseDotClass = 'status-alerta';
+            } else {
+              statusText = `CRÍTICO (${elapsedMin}m)`;
+              statusColor = '#ef4444';
+              statusBg = 'rgba(239,68,68,0.2)';
+              glowClass = 'box-shadow: 0 0 12px rgba(239,68,68,0.3); border-color: rgba(239,68,68,0.4);';
+              pulseDotClass = 'status-critico';
+            }
+          }
+
+          const totalServices = {};
+          op.profiles.forEach(p => {
+            const dj = (typeof _dpTableauData !== 'undefined' && p.id && _dpTableauData[String(p.id).trim()]) ? _dpTableauData[String(p.id).trim()].data_json || {} : {};
+            Object.entries(dj).forEach(([k, v]) => {
+              const kUp = k.toUpperCase();
+              const val = Number(String(v).replace(/[$ ,]/g, ''));
+              if (val > 0 && !kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER') && !kUp.includes('TYPE') && kUp !== 'ADMIN' && kUp !== 'REVENUE') {
+                totalServices[kUp] = (totalServices[kUp] || 0) + val;
+              }
+            });
+          });
+
+          const serviceBadges = Object.entries(totalServices).map(([k, val]) => {
+            const icon = svcIcons[k] || '📊';
+            return `<span style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); padding:3px 6px; border-radius:6px; font-size:0.52rem; color:#f1f5f9; display:inline-flex; align-items:center; gap:3px;" title="${k}: ${val}">${icon} <b>${val}</b> <small style="color:#64748b; font-weight:normal;">${k.toLowerCase()}</small></span>`;
+          }).join('') || '<span style="font-size:0.55rem; color:#475569; font-style:italic;">Sin servicios registrados hoy</span>';
+
+          const meta = typeof getMetaHoy === 'function' ? getMetaHoy(op.name) : 100;
+          const pct = meta > 0 ? Math.min(100, Math.round((op.dia / meta) * 100)) : 0;
+          const barColor = pct >= 90 ? '#10b981' : pct >= 60 ? '#38bdf8' : pct >= 30 ? '#f59e0b' : '#ef4444';
+
+          const avatarChar = op.name.charAt(0).toUpperCase();
+
+          // Calculate productivity letter grade
+          let grade = 'OFF';
+          let gradeColor = '#64748b';
+          let gradeBg = 'rgba(100,116,139,0.1)';
+
+          if (estaLogueado) {
+            if (pct >= 120) {
+              grade = 'A+'; gradeColor = '#10b981'; gradeBg = 'rgba(16,185,129,0.15)';
+            } else if (pct >= 90) {
+              grade = 'A'; gradeColor = '#10b981'; gradeBg = 'rgba(16,185,129,0.1)';
+            } else if (pct >= 70) {
+              grade = 'B'; gradeColor = '#38bdf8'; gradeBg = 'rgba(56,189,248,0.1)';
+            } else if (pct >= 50) {
+              grade = 'C'; gradeColor = '#eab308'; gradeBg = 'rgba(234,179,8,0.1)';
+            } else if (pct >= 30) {
+              grade = 'D'; gradeColor = '#f97316'; gradeBg = 'rgba(249,115,22,0.1)';
+            } else {
+              grade = 'F'; gradeColor = '#ef4444'; gradeBg = 'rgba(239,68,68,0.1)';
+            }
+          }
+
+          return `
+            <div class="op-prod-card" data-name="${op.name.toLowerCase()}" data-logueado="${estaLogueado}" data-status="${statusText}" style="background:rgba(15,23,42,0.85); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; transition:all 0.3s; position:relative; backdrop-filter:blur(5px); ${glowClass}">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <div style="width:28px; height:28px; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#818cf8; font-weight:bold; font-size:0.75rem;">${avatarChar}</div>
+                  <div>
+                    <div style="font-size:0.7rem; font-weight:900; color:#f8fafc; line-height:1.2;">${op.name}</div>
+                    <div style="font-size:0.5rem; color:#475569; margin-top:2px;">Perfiles: ${op.profiles.length}</div>
+                  </div>
+                </div>
+                
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <!-- Grade Badge -->
+                  <div style="width:32px; height:32px; border-radius:6px; background:${gradeBg}; border:1px solid ${gradeColor}33; display:flex; flex-direction:column; align-items:center; justify-content:center; color:${gradeColor};" title="Calificación de productividad (puntos vs meta de hoy)">
+                    <span style="font-size:0.35rem; font-weight:bold; color:#64748b; line-height:1; text-transform:uppercase;">RANGO</span>
+                    <span style="font-size:0.95rem; font-weight:950; line-height:1; margin-top:1px;">${grade}</span>
+                  </div>
+                  <!-- Status Indicator -->
+                  <span style="font-size:0.52rem; font-weight:900; color:${statusColor}; background:${statusBg}; padding:3px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px; display:inline-flex; align-items:center; gap:5px;">
+                    <span class="${pulseDotClass}" style="width:6px; height:6px; background:${estaLogueado ? statusColor : '#64748b'}; border-radius:50%; display:inline-block; box-shadow: 0 0 6px ${estaLogueado ? statusColor : 'transparent'};"></span>
+                    ${statusText}
+                  </span>
+                </div>
+              </div>
+              
+              <div style="background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.02);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-size:0.52rem; color:#94a3b8; font-weight:700; letter-spacing:0.3px;">PROGRESO JORNADA</span>
+                  <span style="font-size:0.55rem; color:${barColor}; font-weight:900;">${op.dia.toFixed(1)} / ${meta} pts (${pct}%)</span>
+                </div>
+                <div style="background:rgba(255,255,255,0.05); border-radius:99px; height:5px; overflow:hidden;">
+                  <div style="height:100%; width:${pct}%; background:${barColor}; transition:width 0.5s;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; font-size:0.52rem; color:#64748b;">
+                  <span>Proyectado: \$${Math.round(op.dia * 1400).toLocaleString('es-CO')} COP</span>
+                  <span>Último cobro: ${maxTs > 0 ? new Date(maxTs).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) : 'Ninguno'}</span>
+                </div>
+              </div>
+              
+              <div>
+                <div style="font-size:0.5rem; color:#64748b; font-weight:700; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Servicios Consumidos (Desglose)</div>
+                <div style="display:flex; flex-wrap:wrap; gap:4px; max-height:55px; overflow-y:auto;" class="custom-scrollbar">
+                  ${serviceBadges}
+                </div>
+              </div>
+              
+              <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:10px; display:flex; gap:4px; margin-top:2px;">
+                <button onclick="window.chatSelectedOp='${op.name}'; document.getElementById('rr-chat-op-select').value='${op.name}'; cargarHistorialChatSeleccionado(); document.getElementById('rr-urgent-chat').classList.add('open');" style="background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.3); color:#818cf8; font-size:0.55rem; font-weight:800; cursor:pointer; padding:5px 10px; border-radius:6px; display:flex; align-items:center; gap:4px; flex:1; justify-content:center; transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.2)'" onmouseout="this.style.background='rgba(99,102,241,0.12)'">💬 Chatear</button>
+                <button onclick="enviarPredefinida('${op.name}', 'motivar')" style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); color:#10b981; font-size:0.55rem; font-weight:800; cursor:pointer; padding:5px 8px; border-radius:6px; transition:0.2s;" title="Felicitar / Motivar" onmouseover="this.style.background='rgba(16,185,129,0.18)'" onmouseout="this.style.background='rgba(16,185,129,0.1)'">🎉 Motivar</button>
+                <button onclick="enviarPredefinida('${op.name}', 'tactica')" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.25); color:#f59e0b; font-size:0.55rem; font-weight:800; cursor:pointer; padding:5px 8px; border-radius:6px; transition:0.2s;" title="Sugerir Táctica" onmouseover="this.style.background='rgba(245,158,11,0.18)'" onmouseout="this.style.background='rgba(245,158,11,0.1)'">⚠️ Táctica</button>
+                <button onclick="enviarPredefinida('${op.name}', 'inactivo')" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); color:#ef4444; font-size:0.55rem; font-weight:800; cursor:pointer; padding:5px 8px; border-radius:6px; transition:0.2s;" title="Alerta de Inactividad" onmouseover="this.style.background='rgba(239,68,68,0.18)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">🚨 Inactivo</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        content = `
+          ${statsPanelHtml}
+          ${filterBarHtml}
+          <div id="op-cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; margin-bottom:12px;">
+            ${opCards}
+          </div>
+        `;
+      } 
       } else if (tab === '5m' || tab === '10m') {
         const interval = tab === '5m' ? 5 : 10;
         const nSlots = 30;
@@ -11081,7 +11366,7 @@
              </div>
           </div>
           <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
-            ${['resumen', '5m', '10m', 'mapa'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t.toUpperCase()}</button>`).join('')}
+            ${['resumen', 'productividad', '5m', '10m', 'mapa'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t === 'productividad' ? '📈 PRODUCTIVIDAD' : t.toUpperCase()}</button>`).join('')}
           </div>
           ${content}
           
@@ -11095,6 +11380,8 @@
       <style>
         .action-map-accordion summary{list-style:none;outline:none;} .action-map-accordion summary::-webkit-details-marker{display:none;}
         .custom-scrollbar::-webkit-scrollbar { height: 6px; width:6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(45,212,191,0.2); border-radius: 10px; }
+        .op-prod-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .op-prod-card:hover { transform: translateY(-4px) scale(1.01); border-color: rgba(99, 102, 241, 0.4) !important; background: rgba(30, 41, 59, 0.9) !important; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
       </style>`;
       if (tab === 'mapa') {
         requestAnimationFrame(() => {
@@ -11353,7 +11640,7 @@ function exportarDatos() {
         const now = new Date();
         const curMon = now.getMonth() + 1;
         const yr = (mon > curMon + 1) ? now.getFullYear() - 1 : now.getFullYear();
-        return `\${yr}-\${String(mon).padStart(2,'0')}-\${String(day).padStart(2,'0')}`;
+        return `${yr}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       }
 
       wb.SheetNames.forEach(sheetName => {
@@ -20528,19 +20815,39 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       modal.classList.add('open');
     };
   </script>
-  <!-- ==================== MONITOR CENTRAL GHOST (FASE 6) ==================== -->
-  <div id="rr-urgent-chat" style="position:fixed; bottom:20px; right:20px; width:360px; background:rgba(15,23,42,0.98); border:1px solid rgba(255,255,255,0.1); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.8); z-index:99999; display:flex; flex-direction:column; overflow:hidden; backdrop-filter:blur(15px); transform:translateY(150%); transition:transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-family: 'Inter', sans-serif;">
+  
+  <!-- ==================== MONITOR CENTRAL GHOST (FASE 7) ==================== -->
+  <div id="rr-urgent-chat" style="position:fixed; bottom:20px; right:20px; width:360px; background:rgba(15,23,42,0.98); border:1px solid rgba(255,255,255,0.1); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.8); z-index:99999; display:flex; flex-direction:column; overflow:hidden; backdrop-filter:blur(15px); transform:translateY(150%); transition:all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-family: 'Inter', sans-serif;">
     
     <!-- Cabecera -->
     <div id="chat-header" style="background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); padding:12px 16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleChatCollapse()">
       <div style="display:flex; align-items:center; gap:10px;">
         <span id="chat-status-dot" style="width:8px; height:8px; background:#10b981; border-radius:50%; box-shadow:0 0 8px #10b981; transition:0.3s;"></span>
-        <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:1px;">MONITOR CENTRAL</span>
+        <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:1px;" id="rr-chat-header-title">MONITOR CENTRAL</span>
       </div>
-      <button onclick="document.getElementById('rr-urgent-chat').style.transform='translateY(150%)'; event.stopPropagation();" style="background:transparent; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; transition:0.2s;">✕</button>
+      <button onclick="document.getElementById('rr-urgent-chat').classList.remove('open'); event.stopPropagation();" style="background:transparent; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#94a3b8'">✖</button>
     </div>
 
-    <!-- Ajustes -->
+    <!-- Controles de Monitor (Solo visible para monitor/admin) -->
+    <div id="rr-chat-monitor-selectors" style="display:none; padding:8px 12px; background:rgba(99,102,241,0.08); border-bottom:1px solid rgba(255,255,255,0.05); flex-direction:column; gap:6px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span style="font-size:0.6rem; color:#818cf8; font-weight:bold; white-space:nowrap; letter-spacing:0.5px;">💬 CHATEAR CON:</span>
+        <select id="rr-chat-op-select" onchange="seleccionarOperadorChat(this.value)" style="flex:1; background:rgba(15,23,42,0.9); border:1px solid rgba(99,102,241,0.3); color:#fff; font-size:0.65rem; padding:3px 6px; border-radius:6px; outline:none; cursor:pointer; font-weight:700;">
+          <option value="">-- SELECCIONAR --</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span style="font-size:0.6rem; color:#f43f5e; font-weight:bold; white-space:nowrap; letter-spacing:0.5px;">🚨 TIPO ALERTA:</span>
+        <select id="rr-chat-alert-level" style="flex:1; background:rgba(15,23,42,0.9); border:1px solid rgba(244,63,94,0.3); color:#fff; font-size:0.65rem; padding:3px 6px; border-radius:6px; outline:none; cursor:pointer;">
+          <option value="INFO">ℹ️ NORMAL / INFO</option>
+          <option value="WARNING">⚠️ ADVERTENCIA</option>
+          <option value="CRITICAL">🚨 CRÍTICA (ALARMA)</option>
+          <option value="MOTIVAR">🎉 FELICITACIÓN</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Ajustes generales -->
     <div style="padding:6px 16px; background:rgba(0,0,0,0.4); border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
       <span style="font-size:0.65rem; color:#64748b;">🔊 Alerta Sonora:</span>
       <select id="chat-sound-sel" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:2px 4px; border-radius:4px; outline:none; cursor:pointer;" onchange="playTestSound()">
@@ -20551,9 +20858,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     </div>
 
     <!-- Mensajes -->
-    <div id="rr-chat-msgs" style="flex:1; height:280px; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;">
+    <div id="rr-chat-msgs" style="flex:1; height:280px; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px;" class="custom-scrollbar">
        <div style="text-align:center; font-size:0.6rem; color:#475569; margin-bottom:10px;">Conexión Segura P2P. Monitoreo Activo.</div>
-       <!-- Mensaje Inicial -->
        <div style="align-self:flex-start; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); padding:10px 14px; border-radius:12px 12px 12px 2px; max-width:85%;">
          <div style="font-size:0.6rem; color:#94a3b8; font-weight:bold; margin-bottom:4px;">Sistema Administrativo</div>
          <div style="font-size:0.8rem; color:#e2e8f0;">Sistema de vigilancia "Ghost" activado. Evaluando rendimiento del operador en tiempo real...</div>
@@ -20565,7 +20871,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       <button onclick="document.getElementById('chat-file-upload').click()" title="Adjuntar foto/archivo" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem; transition:0.2s;">📎</button>
       <input type="file" id="chat-file-upload" style="display:none" onchange="alert('Simulación: Archivo listo para subir')">
       
-      <input type="text" id="rr-chat-input" placeholder="Responder al monitor..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
+      <input type="text" id="rr-chat-input" placeholder="Responder..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
       <button onclick="enviarMensajeChat()" style="background:#6366f1; border:none; color:white; font-weight:bold; padding:8px 14px; border-radius:8px; cursor:pointer; transition:0.2s; box-shadow:0 0 10px rgba(99,102,241,0.3);">Enviar</button>
     </div>
   </div>
@@ -20573,11 +20879,14 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
   <style>
     @keyframes pulseRed { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
     @keyframes pulseOrange { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+    @keyframes pulseGreen { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
     .status-critico { background:#ef4444 !important; animation: pulseRed 1.5s infinite !important; }
     .status-alerta { background:#f59e0b !important; animation: pulseOrange 2s infinite !important; }
+    .status-motivar { background:#10b981 !important; animation: pulseGreen 1.5s infinite !important; }
     #rr-urgent-chat.open { transform: translateY(0) !important; }
     #rr-urgent-chat.critico #chat-header { background:rgba(239,68,68,0.2) !important; border-bottom-color:rgba(239,68,68,0.4) !important; }
     #rr-urgent-chat.alerta #chat-header { background:rgba(245,158,11,0.15) !important; border-bottom-color:rgba(245,158,11,0.3) !important; }
+    #rr-urgent-chat.motivar #chat-header { background:rgba(16,185,129,0.15) !important; border-bottom-color:rgba(16,185,129,0.3) !important; }
   </style>
 
   <script>
@@ -20585,30 +20894,34 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     function playBeep(type) {
-      if(audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      
-      if(type === 'alarm') {
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-      } else if (type === 'bell') {
-        osc.type = 'sine'; osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.7, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
-        osc.start(); osc.stop(audioCtx.currentTime + 1);
-      } else {
-        osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+      try {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        if(type === 'alarm') {
+          osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } else if (type === 'bell') {
+          osc.type = 'sine'; osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.7, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
+          osc.start(); osc.stop(audioCtx.currentTime + 1);
+        } else {
+          osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        }
+      } catch (e) {
+        console.warn("Falla de audio contextual: ", e);
       }
     }
 
     function playTestSound() { playBeep(document.getElementById('chat-sound-sel').value); }
 
-    // Solicitar Permisos Push
+    // Solicitar Permisos Push y configurar UI inicial del Chat
     window.addEventListener('load', () => {
       setTimeout(() => {
         if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -20620,67 +20933,351 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       
       // Iniciar el Protocolo "Ghost in the Machine"
       iniciarMonitoreoGhost();
+      
+      // Configurar controles si es Monitor o Admin
+      setTimeout(() => {
+        if (typeof currentRole !== 'undefined' && (currentRole === 'monitor' || currentRole === 'admin')) {
+          const sels = document.getElementById('rr-chat-monitor-selectors');
+          if (sels) sels.style.display = 'flex';
+          
+          const headerTitle = document.getElementById('rr-chat-header-title');
+          if (headerTitle) headerTitle.textContent = "CONSOLA DE MONITOREO";
+          
+          const inputField = document.getElementById('rr-chat-input');
+          if (inputField) inputField.placeholder = "Enviar mensaje de monitoreo...";
+          
+          llenarSelectorOperadores();
+        } else if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+          cargarHistorialChatSeleccionado();
+        }
+      }, 1500);
     });
+
+    function llenarSelectorOperadores() {
+      const select = document.getElementById('rr-chat-op-select');
+      if (!select) return;
+      select.innerHTML = '<option value="">-- SELECCIONAR OPERADOR --</option>';
+      if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+        const list = [...operatorsData].sort((a,b) => a.name.localeCompare(b.name));
+        list.forEach(op => {
+          const opt = document.createElement('option');
+          opt.value = op.name;
+          opt.textContent = op.name.toUpperCase();
+          select.appendChild(opt);
+        });
+      }
+    }
+
+    window.chatSelectedOp = '';
+    function seleccionarOperadorChat(opName) {
+      window.chatSelectedOp = opName;
+      cargarHistorialChatSeleccionado();
+    }
+
+    function cargarHistorialChatSeleccionado() {
+      const box = document.getElementById('rr-chat-msgs');
+      if (!box) return;
+
+      let opName = '';
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+        opName = typeof currentOpName !== 'undefined' ? currentOpName : '';
+      } else {
+        opName = window.chatSelectedOp;
+      }
+
+      if (!opName) {
+        box.innerHTML = '<div style="text-align:center; font-size:0.6rem; color:#475569; margin-top:20px;">Selecciona un operador en la parte superior para ver el chat.</div>';
+        return;
+      }
+
+      const key = `rr_chat_${opName.toLowerCase()}`;
+      let history = [];
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          history = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error("Error cargando historial de chat:", e);
+      }
+
+      box.innerHTML = `<div style="text-align:center; font-size:0.6rem; color:#475569; margin-bottom:10px;">Chat Sincronizado: ${opName.toUpperCase()}</div>`;
+      
+      if (history.length === 0) {
+        box.innerHTML += `
+         <div style="align-self:flex-start; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); padding:10px 14px; border-radius:12px; max-width:85%;">
+           <div style="font-size:0.6rem; color:#94a3b8; font-weight:bold; margin-bottom:4px;">Sistema RR</div>
+           <div style="font-size:0.8rem; color:#e2e8f0;">No hay mensajes previos. Escribe un mensaje para iniciar la conversación.</div>
+         </div>
+        `;
+      } else {
+        history.forEach(msg => {
+          const isMe = (currentRole === 'operador' && msg.sender === 'operador') || 
+                       ((currentRole === 'monitor' || currentRole === 'admin') && msg.sender === 'monitor');
+          const senderLabel = msg.sender === 'operador' ? 'Operador' : 'Monitor';
+          const bubbleBg = isMe ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)';
+          const bubbleBorder = isMe ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.1)';
+          const labelColor = msg.sender === 'operador' ? '#2dd4bf' : '#a78bfa';
+          const align = isMe ? 'flex-end' : 'flex-start';
+          const radius = isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px';
+
+          box.innerHTML += `
+            <div style="align-self:${align}; background:${bubbleBg}; border:1px solid ${bubbleBorder}; padding:8px 12px; border-radius:${radius}; max-width:85%; margin-bottom:2px;">
+              <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:2px;">
+                <span style="font-size:0.55rem; color:${labelColor}; font-weight:900;">${senderLabel}</span>
+                <span style="font-size:0.5rem; color:#64748b;">${msg.time || ''}</span>
+              </div>
+              <div style="font-size:0.8rem; color:#f8fafc; line-height:1.3; word-break:break-word;">${msg.text}</div>
+            </div>
+          `;
+        });
+      }
+      box.scrollTop = box.scrollHeight;
+    }
 
     function enviarMensajeChat() {
       const input = document.getElementById('rr-chat-input');
       const text = input.value.trim();
       if(!text) return;
       
-      const box = document.getElementById('rr-chat-msgs');
-      box.innerHTML += `
-       <div style="align-self:flex-end; background:rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.3); padding:10px 14px; border-radius:12px 12px 2px 12px; max-width:85%;">
-         <div style="font-size:0.6rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">Tú (Operador)</div>
-         <div style="font-size:0.85rem; color:#fff;">${text}</div>
-       </div>
-      `;
+      let opName = '';
+      let sender = 'monitor';
+
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+        opName = typeof currentOpName !== 'undefined' ? currentOpName : '';
+        sender = 'operador';
+      } else {
+        opName = window.chatSelectedOp;
+        sender = 'monitor';
+      }
+
+      if (!opName) {
+        alert("Por favor selecciona un operador primero.");
+        return;
+      }
+
+      const chatKey = `rr_chat_${opName.toLowerCase()}`;
+      let history = [];
+      try {
+        const stored = localStorage.getItem(chatKey);
+        if (stored) history = JSON.parse(stored);
+      } catch (e) { console.error(e); }
+
+      const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const newMsg = {
+        sender: sender,
+        text: text,
+        time: timeStr,
+        ts: Date.now()
+      };
+      
+      history.push(newMsg);
+      if (history.length > 50) history.shift();
+      
+      // Save locally and sync in Supabase
+      localStorage.setItem(chatKey, JSON.stringify(history));
+
+      // Trigger custom alerts if monitor sends warning/critical/motivar alert
+      if (sender === 'monitor') {
+        const alertLevelSelect = document.getElementById('rr-chat-alert-level');
+        const nivel = alertLevelSelect ? alertLevelSelect.value : 'INFO';
+        if (nivel !== 'INFO') {
+          const alertKey = `rr_custom_alert_${opName.toLowerCase()}`; // corrected key format
+          localStorage.setItem(`rr_custom_alert_${opName.toLowerCase()}`, JSON.stringify({
+            nivel: nivel,
+            msg: text,
+            ts: Date.now()
+          }));
+        }
+      }
+
       input.value = '';
-      box.scrollTop = box.scrollHeight;
+      cargarHistorialChatSeleccionado();
       playBeep('pulse');
       
-      // Resetear estado visual de alerta si el operador responde
-      document.getElementById('rr-urgent-chat').classList.remove('critico', 'alerta');
-      document.getElementById('chat-status-dot').className = '';
-      ghostVars.lastInteraction = Date.now();
+      // Reset visual alarm state if operator replies
+      if (sender === 'operador') {
+        document.getElementById('rr-urgent-chat').classList.remove('critico', 'alerta');
+        document.getElementById('chat-status-dot').className = '';
+        ghostVars.lastInteraction = Date.now();
+      }
     }
 
-    // GHOST PROTOCOL: Rastreo de inactividad
+    function enviarPredefinida(opName, type) {
+      let text = "";
+      let nivel = 'INFO';
+      
+      if (type === 'motivar') {
+        const frases = [
+          "¡Excelente ritmo hoy! Tus métricas están subiendo de forma exponencial. Sigue así. ⭐🚀",
+          "¡Gran trabajo! Tus perfiles muestran excelente densidad y respuesta. Felicitaciones por la productividad hoy. ⭐👏"
+        ];
+        text = frases[Math.floor(Math.random() * frases.length)];
+        nivel = 'MOTIVAR';
+      } else if (type === 'tactica') {
+        const frases = [
+          "Sugerencia del Monitor: Los VIPs están activos en la sala. Intenta enviar una ronda rápida de guiños o cartas de cortesía ahora mismo. ✉️💡",
+          "Sugerencia del Monitor: Tus métricas de chat muestran baja densidad. Intenta iniciar audios privados o cambiar la dinámica de conversación de inmediato. 🎙️⚡",
+          "Sugerencia del Monitor: Tu ritmo horario ha bajado ligeramente. Cambia la música de fondo y refresca las imágenes del perfil para reactivar el tráfico. 🎵📸"
+        ];
+        text = frases[Math.floor(Math.random() * frases.length)];
+        nivel = 'WARNING';
+      } else if (type === 'inactivo') {
+        text = "🚨 ALERTA DEL MONITOR: Hemos detectado inactividad de más de 3 minutos sin reportar puntos en tus perfiles. Por favor, reacciona y reactiva tu producción de inmediato.";
+        nivel = 'CRITICAL';
+      }
+      
+      const chatKey = `rr_chat_${opName.toLowerCase()}`; // corrected
+      localStorage.setItem(`rr_chat_${opName.toLowerCase()}`, JSON.stringify((() => {
+        let history = [];
+        try {
+          const stored = localStorage.getItem(`rr_chat_${opName.toLowerCase()}`);
+          if (stored) history = JSON.parse(stored);
+        } catch(e){}
+        const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        history.push({
+          sender: 'monitor',
+          text: text,
+          time: timeStr,
+          ts: Date.now()
+        });
+        if (history.length > 50) history.shift();
+        return history;
+      })()));
+
+      // Guardar alerta personalizada en Supabase
+      localStorage.setItem(`rr_custom_alert_${opName.toLowerCase()}`, JSON.stringify({
+        nivel: nivel,
+        msg: text,
+        ts: Date.now()
+      }));
+
+      if (typeof _toastSync === 'function') {
+        _toastSync(`✨ Alerta tipo [${nivel}] enviada a ${opName.toUpperCase()}`);
+      } else {
+        alert(`Alerta enviada a ${opName}`);
+      }
+    }
+
+    // GHOST PROTOCOL: Monitoreo inteligente de inactividad por Operador
     const ghostVars = {
       lastInteraction: Date.now(),
-      lastPoints: 0,
-      flatlineTimer: 0
+      lastPoints: -1,
+      flatlineMinutes: 0
     };
 
     document.addEventListener('mousemove', () => ghostVars.lastInteraction = Date.now());
     document.addEventListener('keydown', () => ghostVars.lastInteraction = Date.now());
-    document.addEventListener('click', () => ghostVars.lastInteraction = Date.now());
+    document.addEventListener('click', () => {
+      ghostVars.lastInteraction = Date.now();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    });
 
     function iniciarMonitoreoGhost() {
+      // Registrar click global para Web Audio API
+      document.addEventListener('click', () => {
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }, { once: false });
+
       setInterval(() => {
-        // Calcular Puntos Globales Actuales sumando a todos los operadores
+        if (typeof currentRole === 'undefined' || currentRole !== 'operador' || !currentOpName) return;
+
+        // Obtener puntos de hoy del operador
         let ptsActuales = 0;
-        if(typeof operatorsData !== 'undefined') {
-           const hoy = localDateStr();
-           operatorsData.forEach(op => {
-             const cortesOp = getCortesOp(op.name);
-             cortesOp.forEach(c => {
-                if (c.fecha && add2DaysGlobal(c.fecha) === hoy) ptsActuales += Number(c.puntos)||0;
-             });
-           });
+        if (typeof getPuntosHoy === 'function') {
+          ptsActuales = Number(getPuntosHoy(currentOpName)) || 0;
         }
 
-        const now = Date.now();
-        const inactiveMs = now - ghostVars.lastInteraction;
-        const noPointGrowth = (ptsActuales <= ghostVars.lastPoints);
+        if (ghostVars.lastPoints === -1) {
+          ghostVars.lastPoints = ptsActuales;
+          return;
+        }
 
-        if (inactiveMs > 180000 && noPointGrowth) {
-           // 3 minutos sin mover mouse en dashboard Y sin generar un solo punto nuevo
-           lanzarAlertaMonitor("WARNING", "Inactividad detectada. Tu ritmo de puntos no ha subido en los últimos 3 minutos. Revisa el Módulo de Tendencias y cambia de táctica inmediatamente.");
-           ghostVars.lastInteraction = Date.now(); // Reset para evitar spam infinito
+        const delta = ptsActuales - ghostVars.lastPoints;
+
+        if (delta > 0) {
+          // 🎉 ¡INCREMENTO DE FACTURACIÓN DETECTADO! 🎉
+          playBeep('bell');
+          lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de facturar +${delta.toFixed(2)} puntos. Tu acumulado es de ${ptsActuales.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
+          
+          crearEfectoConfeti();
+
+          ghostVars.flatlineMinutes = 0;
+          ghostVars.lastInteraction = Date.now();
+        } else {
+          ghostVars.flatlineMinutes += 1;
+          
+          if (ghostVars.flatlineMinutes >= 3) {
+            // 🚨 3 Minutos sin facturación: smart coaching advice 🚨
+            const consejos = [
+              "Intenta cambiar la música de tu transmisión para refrescar el ambiente y subir la energía. 🎵",
+              "Los VIPs responden mejor cuando les envías una ronda rápida de guiños o una carta manuscrita. ✉️",
+              "Revisa la iluminación de tu cámara y actualiza la foto de portada del perfil para llamar más la atención. 📸✨",
+              "Inicia una conversación privada por chat de audio o video con tus seguidores recurrentes para asegurar tracción. 🎙️📹",
+              "Revisa los mensajes pendientes en tu bandeja de entrada; responder en menos de 2 minutos duplica la conversión. 📥⚡",
+              "Saluda cordialmente con un mensaje personalizado a los nuevos usuarios que acaban de entrar a la sala. 👋💡"
+            ];
+            const consejoAleatorio = consejos[Math.floor(Math.random() * consejos.length)];
+            
+            lanzarAlertaMonitor("WARNING", `⚠️ Baja actividad detectada. Llevas 3 minutos sin reportar nuevos puntos. \n\n💡 TIP PARA SUBIR RITMO: ${consejoAleatorio}`);
+            
+            // Reset para evitar spamming
+            ghostVars.flatlineMinutes = 0;
+          }
         }
 
         ghostVars.lastPoints = ptsActuales;
-      }, 60000); // Chequear cada minuto
+      }, 60000); // Revisión minuciosa cada minuto
+    }
+
+    function crearEfectoConfeti() {
+      const container = document.createElement('div');
+      container.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:999999; overflow:hidden;';
+      document.body.appendChild(container);
+      
+      const emojis = ['🎉', '🚀', '⭐', '💎', '🔥', '🏆', '👍', '✨'];
+      for (let i = 0; i < 35; i++) {
+        const item = document.createElement('div');
+        const emo = emojis[Math.floor(Math.random() * emojis.length)];
+        item.textContent = emo;
+        
+        const size = Math.random() * 20 + 20;
+        const left = Math.random() * 100;
+        const animDuration = Math.random() * 2 + 1.5;
+        const delay = Math.random() * 0.4;
+        
+        item.style.cssText = `
+          position: absolute;
+          bottom: -50px;
+          left: ${left}%;
+          font-size: ${size}px;
+          opacity: 0;
+          transform: translateY(0) rotate(0deg);
+          animation: floatConfeti ${animDuration}s cubic-bezier(0.1, 0.8, 0.3, 1) ${delay}s forwards;
+        `;
+        
+        container.appendChild(item);
+      }
+      
+      if (!document.getElementById('rr-confeti-style')) {
+        const s = document.createElement('style');
+        s.id = 'rr-confeti-style';
+        s.textContent = `
+          @keyframes floatConfeti {
+            0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+            10% { opacity: 1; }
+            90% { opacity: 0.9; }
+            100% { opacity: 0; transform: translateY(-100vh) rotate(180deg); }
+          }
+        `;
+        document.head.appendChild(s);
+      }
+      
+      setTimeout(() => container.remove(), 4000);
     }
 
     function add2DaysGlobal(ds) {
@@ -20688,14 +21285,18 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
        const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + 2); return d.toISOString().slice(0, 10);
     }
 
-    // API Unificada para Mensajes de Monitor (INFO, WARNING, CRITICAL)
+    // API Unificada para Mensajes de Monitor (INFO, WARNING, CRITICAL, MOTIVAR)
     function lanzarAlertaMonitor(nivel, msg) {
       const chat = document.getElementById('rr-urgent-chat');
       const box = document.getElementById('rr-chat-msgs');
+      if (!chat || !box) return;
+
       let bgColor, borderColor, titleColor, titleText, soundType;
 
+      chat.classList.remove('critico', 'alerta', 'motivar');
+
       if(nivel === 'CRITICAL') {
-         bgColor = 'rgba(239,68,68,0.15)'; borderColor = 'rgba(239,68,68,0.4)'; titleColor = '#fca5a5'; titleText = '🚨 MONITOR CRÍTICO';
+         bgColor = 'rgba(239,68,68,0.15)'; borderColor = 'rgba(239,68,68,0.4)'; titleColor = '#fca5a5'; titleText = '🚨 ALERTA CRÍTICA';
          chat.classList.add('critico', 'open');
          document.getElementById('chat-status-dot').className = 'status-critico';
          soundType = 'alarm';
@@ -20704,32 +21305,72 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
          chat.classList.add('alerta', 'open');
          document.getElementById('chat-status-dot').className = 'status-alerta';
          soundType = 'bell';
+      } else if(nivel === 'MOTIVAR') {
+         bgColor = 'rgba(16,185,129,0.15)'; borderColor = 'rgba(16,185,129,0.4)'; titleColor = '#6ee7b7'; titleText = '🎉 EXCELENTE TRABAJO';
+         chat.classList.add('motivar', 'open');
+         document.getElementById('chat-status-dot').className = 'status-motivar';
+         soundType = 'bell';
       } else {
          bgColor = 'rgba(255,255,255,0.05)'; borderColor = 'rgba(255,255,255,0.2)'; titleColor = '#94a3b8'; titleText = 'ℹ️ MONITOR';
          soundType = 'pulse';
-         // Info no fuerza a abrirse a menos que esté cerrado, pero sin clase de peligro
          document.getElementById('chat-status-dot').className = '';
       }
 
       playBeep(soundType);
       
+      const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       box.innerHTML += `
-       <div style="align-self:flex-start; background:${bgColor}; border:1px solid ${borderColor}; padding:10px 14px; border-radius:12px 12px 12px 2px; max-width:85%;">
-         <div style="font-size:0.6rem; color:${titleColor}; font-weight:bold; margin-bottom:4px;">${titleText}</div>
-         <div style="font-size:0.85rem; color:#fff;">${msg}</div>
+       <div style="align-self:flex-start; background:${bgColor}; border:1px solid ${borderColor}; padding:10px 14px; border-radius:12px 12px 12px 2px; max-width:85%; margin-bottom: 2px;">
+         <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:2px;">
+           <span style="font-size:0.6rem; color:${titleColor}; font-weight:bold;">${titleText}</span>
+           <span style="font-size:0.5rem; color:#64748b;">${timeStr}</span>
+         </div>
+         <div style="font-size:0.85rem; color:#fff; line-height:1.3; word-break:break-word;">${msg}</div>
        </div>
       `;
+
       box.scrollTop = box.scrollHeight;
 
-      if (Notification.permission === "granted" && (nivel==='CRITICAL' || nivel==='WARNING')) {
+      if (Notification.permission === "granted" && (nivel==='CRITICAL' || nivel==='WARNING' || nivel==='MOTIVAR')) {
         new Notification(titleText, { body: msg, icon: "https://cdn-icons-png.flaticon.com/512/564/564276.png", requireInteraction: true });
       }
     }
     
     function toggleChatCollapse() { document.getElementById('rr-urgent-chat').classList.toggle('open'); }
     
-    // Atajo de teclado (Ctrl+Shift+M)
     document.addEventListener('keydown', e => { if(e.ctrlKey && e.shiftKey && e.key.toLowerCase()==='m') toggleChatCollapse(); });
+
+    // Client-side dynamic filtering function for productivity
+    window.filtrarOperadoresProductividad = function() {
+      const search = (document.getElementById('op-search-filter')?.value || '').toLowerCase().trim();
+      const status = document.getElementById('op-status-filter')?.value || 'ALL';
+      const cards = document.querySelectorAll('.op-prod-card');
+      
+      cards.forEach(card => {
+        const name = card.getAttribute('data-name') || '';
+        const logueado = card.getAttribute('data-logueado') === 'true';
+        const statusText = card.getAttribute('data-status') || '';
+        
+        let matchesSearch = !search || name.includes(search);
+        let matchesStatus = true;
+        
+        if (status === 'ONLINE') {
+          matchesStatus = logueado;
+        } else if (status === 'OFFLINE') {
+          matchesStatus = !logueado;
+        } else if (status === 'ACTIVE') {
+          matchesStatus = logueado && statusText.includes('ALTA');
+        } else if (status === 'INACTIVE') {
+          matchesStatus = logueado && (statusText.includes('INACTIVO') || statusText.includes('CRÍTI'));
+        }
+        
+        if (matchesSearch && matchesStatus) {
+          card.style.display = '';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    };
   </script>
 </body>
 </html>

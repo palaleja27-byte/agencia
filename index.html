@@ -6824,7 +6824,7 @@
               const from = page * pageSize;
               const to = (page + 1) * pageSize - 1;
               const { data, error: fetchErr } = await _sb.from('operaciones')
-                .select('fecha_dia, puntos_neto, jornada')
+                .select('fecha_dia, puntos_neto, puntos_total, id_perfil, jornada')
                 .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
                 .neq('jornada', 'Auto')
                 .range(from, to);
@@ -6881,6 +6881,25 @@
           const mesKey = r.fecha_dia.slice(0, 7);
           historialMap[mesKey] = (historialMap[mesKey] || 0) + (r.puntos_neto || 0);
         });
+
+        // Aplicar Overrides Oficiales Estáticos (Cortes Manuales)
+        historialMap['2026-02'] = 68049.53;
+        historialMap['2026-03'] = 68675.84;
+        historialMap['2026-04'] = 86341.74;
+
+        // Calcular Mayo dinámicamente sumando el máximo acumulado (puntos_total) de cada operador
+        const mayoOps = ops.filter(r => r.fecha_dia && r.fecha_dia.startsWith('2026-05'));
+        const mayoProfiles = {};
+        mayoOps.forEach(r => {
+          if (r.id_perfil) {
+            const val = parseFloat(r.puntos_total) || 0;
+            if (val > (mayoProfiles[r.id_perfil] || 0)) {
+              mayoProfiles[r.id_perfil] = val;
+            }
+          }
+        });
+        const mayoSum = Object.values(mayoProfiles).reduce((acc, v) => acc + v, 0);
+        historialMap['2026-05'] = Math.max(59240.94, mayoSum);
 
         // Crear el array para el modal de crecimiento (desde Febrero hasta ahora)
         const extHist = [];
@@ -10109,7 +10128,29 @@
     // Admin la setea manualmente para meses anteriores al sistema
     const BASE_MESES_KEY = 'rr_base_meses';
     function getBaseMeses() {
-      return JSON.parse(localStorage.getItem(BASE_MESES_KEY) || '{}');
+      let base = {};
+      try {
+        base = JSON.parse(localStorage.getItem(BASE_MESES_KEY) || '{}');
+      } catch (e) {
+        base = {};
+      }
+      const defaults = {
+        '2026-02': 68049.53,
+        '2026-03': 68675.84,
+        '2026-04': 86341.74,
+        '2026-05': 59240.94
+      };
+      let changed = false;
+      for (const [k, v] of Object.entries(defaults)) {
+        if (base[k] !== v) {
+          base[k] = v;
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem(BASE_MESES_KEY, JSON.stringify(base));
+      }
+      return base;
     }
     function setBaseMes(mesStr, pts) {
       const base = getBaseMeses();

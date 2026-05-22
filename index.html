@@ -6754,23 +6754,28 @@
           // Verificar si el turno ya terminó:
           // 1. salidaTS ya pasó
           const opName = k.replace('||operador', '');
-          const horaInfo = allHoras[opName];
+          const normOpName = opName.toUpperCase().trim();
+          const foundHorasKey = Object.keys(allHoras).find(hKey => hKey.toUpperCase().trim() === normOpName);
+          const horaInfo = foundHorasKey ? allHoras[foundHorasKey] : null;
           if (horaInfo?.salidaTS && Date.now() > horaInfo.salidaTS) return; // turno terminado
+
+          const _es12h = horaInfo && horaInfo.horas === 12 && horaInfo.fecha === fecha;
 
           // 2. Verificar por hora Colombia según turno del operador
           const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name.toUpperCase() === opNameUpper) : null;
           const opTurno = op?.turno || '';
           // Horas de fin de turno estándar (8h) por turno
           const turnoFin = { 'Mañana': 14, 'Tarde': 22, 'Noche': 6 };
-          if (opTurno && turnoFin[opTurno] !== undefined) {
-            const finH = turnoFin[opTurno];
-            // Turno Noche: termina a las 6 (madrugada del día siguiente)
-            // A las 6:01+ AM el turno noche ya terminó
-            if (opTurno === 'Noche') {
-              // Si es de madrugada (0-5h) el turno sigue, si es 6h+ terminó
-              if (_horaColNow >= 6 && _horaColNow < 14) return; // Noche terminó, es Mañana
+          if (opTurno && (turnoFin[opTurno] !== undefined || opTurno === 'Completo')) {
+            // Si el operador tiene turno de 12 horas registrado hoy, su turno termina más tarde:
+            // Mañana (12h) -> 18h, Tarde (12h) -> 2h del día siguiente, Noche (12h) -> 10h del día siguiente
+            const finH = _es12h
+              ? (opTurno === 'Mañana' ? 18 : opTurno === 'Tarde' ? 2 : 10)
+              : (turnoFin[opTurno] || 14);
+
+            if (opTurno === 'Noche' || (opTurno === 'Tarde' && _es12h)) {
+              if (_horaColNow >= finH && _horaColNow < 14) return; // turno terminado por hora
             } else {
-              // Mañana termina a las 14h, Tarde termina a las 22h
               if (_horaColNow >= finH) return; // turno terminado por hora
             }
           }
@@ -7192,7 +7197,9 @@
         let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
 
         // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar AMBAS jornadas
-        const _horasOp = _horasHoyAll[op.name] || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
+        const _normOpNameForHoras = _n(op.name);
+        const _foundHorasKey = Object.keys(_horasHoyAll).find(k => _n(k) === _normOpNameForHoras);
+        const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === _hoy;
         if (_es12h) {
           jornadaALeer = 'Completo'; // Suma Mañana + Tarde para operadores de 12h
@@ -9434,7 +9441,7 @@
                 if (currentRole === 'operador' && currentOpName && currentOpName.toLowerCase() === targetOpName.toLowerCase()) {
                   try {
                     const alertData = JSON.parse(row.value);
-                    lanzarAlertaMonitor(alertData.nivel, alertData.msg);
+                    lanzarAlertaMonitor(alertData.nivel, alertData.msg, alertData.sound);
                     
                     // Borrar alerta en Supabase para no re-procesarla
                     if (_sb) {
@@ -14313,6 +14320,14 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           const el = document.getElementById(id);
           if (el) el.style.display = 'none';
         });
+        // Ocultar selectores de monitor en el chat flotante
+        const selWrap = document.getElementById('rr-chat-monitor-selectors');
+        if (selWrap) selWrap.style.display = 'none';
+        
+        // Ocultar la opción de alerta sonora para operadores
+        const soundSelContainer = document.getElementById('chat-sound-sel-container');
+        if (soundSelContainer) soundSelContainer.style.display = 'none';
+
         // Ocultar botones de exportar/importar en ambos headers
         document.querySelectorAll('[onclick*="exportarDatos"], [onclick*="importarDatos"], [onclick*="import-file-input"]')
           .forEach(btn => btn.style.display = 'none');
@@ -14325,6 +14340,13 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           const el = document.getElementById(id);
           if (el && id !== 'btn-change-pin' && id !== 'btn-change-pin-mob') el.style.display = '';
         });
+        // Mostrar selectores de monitor en el chat flotante
+        const selWrap = document.getElementById('rr-chat-monitor-selectors');
+        if (selWrap) selWrap.style.display = 'flex';
+
+        // Mostrar la opción de alerta sonora para monitor/admin
+        const soundSelContainer = document.getElementById('chat-sound-sel-container');
+        if (soundSelContainer) soundSelContainer.style.display = 'flex';
       }
 
       // Ganancia Líder
@@ -20409,7 +20431,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                     // ⏱️ 12H SHIFT™: Prioritizar al operador que esté en turno de 12h hoy y cuya cobertura incluya esta jornada
                     const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
                     const opCoversJornada12h = (o, j) => {
-                      const _horasOp = _horasHoyAll[o.name];
+                      const _normO = _n(o.name);
+                      const _foundK = Object.keys(_horasHoyAll).find(k => _n(k) === _normO);
+                      const _horasOp = _foundK ? _horasHoyAll[_foundK] : null;
                       const es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoy;
                       if (!es12h) return false;
                       if (o.turno === j) return true;
@@ -20800,7 +20824,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const opData = (typeof operatorsData !== 'undefined' ? operatorsData : [])
           .find(o => _n(o.name) === _n(opName));
         const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
-        const _horasOp = _horasHoyAll[opName] || (opData ? { horas: (opData.turno === 'Completo' ? 12 : 8) } : { horas: 8 });
+        const _normOpNameForRt = typeof _n === 'function' ? _n(opName) : opName.toUpperCase().trim();
+        const _foundHorasKeyRt = Object.keys(_horasHoyAll).find(k => (typeof _n === 'function' ? _n(k) : k.toUpperCase().trim()) === _normOpNameForRt);
+        const _horasOp = (_foundHorasKeyRt ? _horasHoyAll[_foundHorasKeyRt] : null) || (opData ? { horas: (opData.turno === 'Completo' ? 12 : 8) } : { horas: 8 });
         const is12h = _horasOp.horas === 12;
 
         let query = _sb.from('operaciones')
@@ -21002,16 +21028,23 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
           // Si ya inicializó todo
           if (window._servicesInitDone) {
-            if (plays.length > 0) {
+            if (diff > 0) {
+              // Real-time point increase detected!
+              playBeep('coin');
+              lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de facturar +${diff.toFixed(2)} puntos en tiempo real. Tu acumulado es de ${_opRtPtosSesion.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
+              crearEfectoConfeti();
+              
+              if (typeof ghostVars !== 'undefined') {
+                ghostVars.lastPoints = Number(getPuntosHoy(opName)) || 0;
+                ghostVars.flatlineMinutes = 0;
+                ghostVars.lastInteraction = Date.now();
+              }
+            } else if (plays.length > 0) {
               plays.forEach(svc => {
                 if (typeof playMoneySound === 'function') {
                   playMoneySound(svc);
                 }
               });
-            } else if (diff > 0) {
-              if (typeof playMoneySound === 'function') {
-                playMoneySound('DEFAULT');
-              }
             }
 
             if (diff > 0 && typeof window.mostrarAnimacionPuntos === 'function') {
@@ -21816,7 +21849,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     </div>
 
     <!-- Ajustes generales -->
-    <div style="padding:6px 16px; background:rgba(0,0,0,0.4); border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+    <div id="chat-sound-sel-container" style="padding:6px 16px; background:rgba(0,0,0,0.4); border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
       <span style="font-size:0.65rem; color:#64748b;">🔊 Alerta Sonora:</span>
       <select id="chat-sound-sel" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:2px 4px; border-radius:4px; outline:none; cursor:pointer;" onchange="playTestSound()">
         <option value="pulse">Suave (Bip)</option>
@@ -22118,9 +22151,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const nivel = alertLevelSelect ? alertLevelSelect.value : 'INFO';
         if (nivel !== 'INFO') {
           const alertKey = `rr_custom_alert_${opName.toLowerCase()}`; // corrected key format
+          const soundSel = document.getElementById('chat-sound-sel');
           localStorage.setItem(`rr_custom_alert_${opName.toLowerCase()}`, JSON.stringify({
             nivel: nivel,
             msg: text,
+            sound: soundSel ? soundSel.value : '',
             ts: Date.now()
           }));
         }
@@ -22182,9 +22217,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       })()));
 
       // Guardar alerta personalizada en Supabase
+      const soundSel = document.getElementById('chat-sound-sel');
       localStorage.setItem(`rr_custom_alert_${opName.toLowerCase()}`, JSON.stringify({
         nivel: nivel,
         msg: text,
+        sound: soundSel ? soundSel.value : '',
         ts: Date.now()
       }));
 
@@ -22275,22 +22312,31 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       container.style.cssText = 'position:fixed; inset:0; pointer-events:none; z-index:999999; overflow:hidden;';
       document.body.appendChild(container);
       
-      const emojis = ['🎉', '🚀', '⭐', '💎', '🔥', '🏆', '👍', '✨'];
       for (let i = 0; i < 35; i++) {
         const item = document.createElement('div');
-        const emo = emojis[Math.floor(Math.random() * emojis.length)];
-        item.textContent = emo;
-        
-        const size = Math.random() * 20 + 20;
+        const size = Math.random() * 20 + 24; // 24px to 44px
         const left = Math.random() * 100;
-        const animDuration = Math.random() * 2 + 1.5;
-        const delay = Math.random() * 0.4;
+        const animDuration = Math.random() * 2.5 + 2.0;
+        const delay = Math.random() * 0.5;
         
+        item.innerHTML = '₿';
         item.style.cssText = `
           position: absolute;
-          bottom: -50px;
+          bottom: -60px;
           left: ${left}%;
-          font-size: ${size}px;
+          width: ${size}px;
+          height: ${size}px;
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          border: 2px solid #fbbf24;
+          border-radius: 50%;
+          color: #fff;
+          font-weight: 900;
+          font-family: 'Outfit', 'Inter', sans-serif;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: ${size * 0.6}px;
+          box-shadow: 0 4px 10px rgba(217, 119, 6, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.4);
           opacity: 0;
           transform: translateY(0) rotate(0deg);
           animation: floatConfeti ${animDuration}s cubic-bezier(0.1, 0.8, 0.3, 1) ${delay}s forwards;
@@ -22304,16 +22350,17 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         s.id = 'rr-confeti-style';
         s.textContent = `
           @keyframes floatConfeti {
-            0% { opacity: 0; transform: translateY(0) rotate(0deg); }
-            10% { opacity: 1; }
-            90% { opacity: 0.9; }
-            100% { opacity: 0; transform: translateY(-100vh) rotate(180deg); }
+            0% { opacity: 0; transform: translateY(0) rotate(0deg) scale(0.8); }
+            15% { opacity: 1; transform: translateY(-20vh) rotate(45deg) scale(1.1); }
+            50% { transform: translateY(-50vh) rotate(180deg) scale(1); }
+            85% { opacity: 0.9; }
+            100% { opacity: 0; transform: translateY(-105vh) rotate(360deg) scale(0.9); }
           }
         `;
         document.head.appendChild(s);
       }
       
-      setTimeout(() => container.remove(), 4000);
+      setTimeout(() => container.remove(), 5000);
     }
 
     function add2DaysGlobal(ds) {
@@ -22322,7 +22369,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     // API Unificada para Mensajes de Monitor (INFO, WARNING, CRITICAL, MOTIVAR)
-    function lanzarAlertaMonitor(nivel, msg) {
+    function lanzarAlertaMonitor(nivel, msg, customSound = null) {
       const chat = document.getElementById('rr-urgent-chat');
       const box = document.getElementById('rr-chat-msgs');
       if (!chat || !box) return;
@@ -22356,7 +22403,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
          const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = '';
       }
 
-      playBeep(soundType);
+      playBeep(customSound || soundType);
       
       const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
       box.innerHTML += `

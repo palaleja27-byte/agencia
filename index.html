@@ -10275,9 +10275,17 @@
             // Determinar jornada del operador (su turno oficial o la actual si está logueado)
             const opsEnTurnoDraft2 = typeof _getOpsEnTurnoHoy === 'function' ? _getOpsEnTurnoHoy('') : new Set();
             const estaLogueado2 = op ? opsEnTurnoDraft2.has(op.name.toUpperCase()) : false;
-            let jornadaOp = estaLogueado2 ? jornadaActual : (op?.turno || jornadaActual);
+            // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar AMBAS jornadas
+            const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
+            const _normOpNameForHoras = typeof _normName === 'function' ? _normName(realName) : realName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+            const _foundHorasKey = Object.keys(_horasHoyAll).find(k => (typeof _normName === 'function' ? _normName(k) : k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()) === _normOpNameForHoras);
+            const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op?.turno === 'Completo' ? { horas: 12, fecha: hoyStr } : { horas: 8, fecha: hoyStr });
+            const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoyStr;
+
+            let jornadaOp = _es12h ? 'Completo' : (estaLogueado2 ? jornadaActual : (op?.turno || jornadaActual));
+
             // Perfiles dinámicos del draft → forzar jornada actual
-            if (!estaLogueado2) {
+            if (!_es12h && !estaLogueado2) {
               try {
                 const df2 = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
                 const de2 = df2[realName + '||operador'] || df2[realName.toUpperCase() + '||operador'];
@@ -12965,12 +12973,40 @@ function exportarDatos() {
       // ── CONSULTAR DATOS YTD REALES DESDE SUPABASE (Fase 8) ──
       let opsSupabase = [];
       let supabaseCargado = false;
+      if (typeof window._reportCompanyView === 'undefined') {
+        window._reportCompanyView = 'global';
+      }
+      if (typeof window._changeReportCompanyView === 'undefined') {
+        window._changeReportCompanyView = function(view) {
+          window._reportCompanyView = view;
+          renderOperators();
+        };
+      }
+
+      const belongsToCompany = (op) => {
+        if (!op) return false;
+        if (window._reportCompanyView === 'global') return true;
+        const emp = (op.empresa || '').toUpperCase();
+        const plat = (op.plataforma || '').toUpperCase();
+        const belongsRomero = emp.includes('ROMERO') || plat.includes('ROMERO');
+        const belongsCamilo = emp.includes('CAMILO') || plat.includes('CAMILO');
+
+        if (window._reportCompanyView === 'romero') {
+          return belongsRomero;
+        } else if (window._reportCompanyView === 'camilo') {
+          return belongsCamilo;
+        }
+        return false;
+      };
+
       const profileToOpMap = {};
       operatorsData.forEach(op => {
-        if (Array.isArray(op.profiles)) {
-          op.profiles.forEach(p => {
-            if (p.id) profileToOpMap[String(p.id).trim()] = op.name;
-          });
+        if (belongsToCompany(op)) {
+          if (Array.isArray(op.profiles)) {
+            op.profiles.forEach(p => {
+              if (p.id) profileToOpMap[String(p.id).trim()] = op.name;
+            });
+          }
         }
       });
 
@@ -13032,16 +13068,18 @@ function exportarDatos() {
           if (net <= 0) return;
 
           // Encontrar operador asociado al perfil
-          const opName = profileToOpMap[String(r.id_perfil).trim()] || 'Sin Asignar';
-          if (!rankOp[opName]) rankOp[opName] = 0;
+          const opName = profileToOpMap[String(r.id_perfil).trim()];
+          if (!opName && window._reportCompanyView !== 'global') return;
+          const finalOpName = opName || 'Sin Asignar';
+          if (!rankOp[finalOpName]) rankOp[finalOpName] = 0;
 
           if (fechaReal === hoy)  ptsHoy  += net;
           if (fechaReal === ayer) ptsAyer += net;
 
           if (getWk(fechaReal) === currentWk) {
             ptsSemana += net;
-            if (opName !== 'Sin Asignar') {
-              rankOp[opName] += net;
+            if (finalOpName !== 'Sin Asignar') {
+              rankOp[finalOpName] += net;
             }
             const dIdx = new Date(fechaReal + 'T12:00:00').getDay();
             ptsPorDiaSemana[dIdx === 0 ? 6 : dIdx - 1] += net;
@@ -13066,6 +13104,7 @@ function exportarDatos() {
       } else {
         // Fallback local legacy (localStorage)
         operatorsData.forEach(op => {
+          if (!belongsToCompany(op)) return;
           const cortesOp = getCortesOp(op.name);
           if (!rankOp[op.name]) rankOp[op.name] = 0;
           cortesOp.forEach(c => {
@@ -13170,13 +13209,26 @@ function exportarDatos() {
         <div style="padding:10px;">
 
           <!-- ENCABEZADO -->
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:12px;">
             <h2 style="font-size:1.4rem;font-weight:800;color:#fff;letter-spacing:1px;display:flex;align-items:center;gap:8px;margin:0;">
               <span style="font-size:1.6rem;">&#127758;</span> Operacion Global Inteligente
               <span style="font-size:0.65rem;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);padding:3px 8px;border-radius:8px;font-weight:700;">LIVE DATA</span>
             </h2>
             <button onclick="exportarInformeDirectivo()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#c7d2fe;padding:8px 14px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:6px;">
               <span>&#128200;</span> Exportar Informe Directivo
+            </button>
+          </div>
+
+          <!-- PESTAÑAS DE EMPRESA (Romero vs Camilo) -->
+          <div style="display:flex;gap:10px;margin-bottom:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);padding:4px;border-radius:10px;width:max-content;">
+            <button onclick="window._changeReportCompanyView('global')" style="background:${window._reportCompanyView === 'global' ? 'rgba(99,102,241,0.3)' : 'transparent'};border:${window._reportCompanyView === 'global' ? '1px solid rgba(99,102,241,0.5)' : '1px solid transparent'};color:${window._reportCompanyView === 'global' ? '#fff' : '#94a3b8'};padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">
+              &#127760; Consolidado Global
+            </button>
+            <button onclick="window._changeReportCompanyView('romero')" style="background:${window._reportCompanyView === 'romero' ? 'rgba(52,211,153,0.3)' : 'transparent'};border:${window._reportCompanyView === 'romero' ? '1px solid rgba(52,211,153,0.5)' : '1px solid transparent'};color:${window._reportCompanyView === 'romero' ? '#fff' : '#94a3b8'};padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">
+              &#128188; División Romero
+            </button>
+            <button onclick="window._changeReportCompanyView('camilo')" style="background:${window._reportCompanyView === 'camilo' ? 'rgba(56,189,248,0.3)' : 'transparent'};border:${window._reportCompanyView === 'camilo' ? '1px solid rgba(56,189,248,0.5)' : '1px solid transparent'};color:${window._reportCompanyView === 'camilo' ? '#fff' : '#94a3b8'};padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">
+              &#128188; División Camilo
             </button>
           </div>
 
@@ -13407,7 +13459,12 @@ function exportarDatos() {
         return 0.5 + 3.5 * (Math.exp(-Math.pow(hour - 10, 2) / 12) + 0.8 * Math.exp(-Math.pow(hour - 20, 2) / 10));
       });
 
-      new Chart(document.getElementById('chart-hora'), {
+      if (window._chartHora) { try { window._chartHora.destroy(); } catch(e){} }
+      if (window._chartDia) { try { window._chartDia.destroy(); } catch(e){} }
+      if (window._chartSemana) { try { window._chartSemana.destroy(); } catch(e){} }
+      if (window._chartMes) { try { window._chartMes.destroy(); } catch(e){} }
+
+      window._chartHora = new Chart(document.getElementById('chart-hora'), {
         type: 'line',
         data: {
           labels: Array.from({length:24},(_,i)=>i+'h'),
@@ -13419,7 +13476,7 @@ function exportarDatos() {
         }, options: commonOpts
       });
 
-      new Chart(document.getElementById('chart-dia'), {
+      window._chartDia = new Chart(document.getElementById('chart-dia'), {
         type: 'bar',
         data: {
           labels: ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'],
@@ -13431,7 +13488,7 @@ function exportarDatos() {
         options: { ...commonOpts, plugins:{ ...commonOpts.plugins, legend:{ display:true, labels:{ color:'#64748b', font:{ size:9 } } } } }
       });
 
-      new Chart(document.getElementById('chart-semana'), {
+      window._chartSemana = new Chart(document.getElementById('chart-semana'), {
         type: 'bar',
         data: {
           labels: ['Sem 1','Sem 2','Sem 3','Sem 4+'],
@@ -13439,7 +13496,7 @@ function exportarDatos() {
         }, options: commonOpts
       });
 
-      new Chart(document.getElementById('chart-mes'), {
+      window._chartMes = new Chart(document.getElementById('chart-mes'), {
         type: 'bar',
         data: {
           labels: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],
@@ -14956,13 +15013,22 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const hace14 = localDateStr(14);
       const mesActual = hoy.slice(0, 7);
 
+      // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar AMBAS jornadas
+      const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
+      const _normOpName = typeof _n === 'function' ? _n(name) : (typeof _normName === 'function' ? _normName(name) : name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
+      const _foundHorasKey = Object.keys(_horasHoyAll).find(k => (typeof _n === 'function' ? _n(k) : (typeof _normName === 'function' ? _normName(k) : k.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim())) === _normOpName);
+      const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (typeof operatorsData !== 'undefined' && operatorsData.find(o => _n(o.name) === _normOpName)?.turno === 'Completo' ? { horas: 12, fecha: hoy } : { horas: 8, fecha: hoy });
+      const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoy;
+
       const porDia = {};
       try {
         if (typeof _opRtCortesRaw !== 'undefined' && _opRtCortesRaw.length > 0) {
           _opRtCortesRaw.forEach(c => {
             const f = c.fecha;
-            // Si hay filtro de jornada, ignorar si no coincide
-            if (shiftFilter && c.jornada && c.jornada !== shiftFilter) return;
+            // Si hay filtro de jornada, ignorar si no coincide. Pero si es 12h hoy, no aplicar filtro para la fecha de HOY.
+            if (shiftFilter && c.jornada && c.jornada !== shiftFilter) {
+              if (!(_es12h && f === hoy)) return;
+            }
             porDia[f] = (porDia[f] || 0) + (c.puntos || 0);
           });
         }
@@ -14997,14 +15063,14 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
               combinedProfiles.forEach(p => {
                  const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                  if (turnosPerfil) {
-                    if (shiftFilter) {
+                    if (shiftFilter && !_es12h) {
                       // Solo sumar la jornada solicitada
                       const key = shiftFilter === 'Mañana' ? 'Mañana' : shiftFilter;
                       datamePtsHoy += (turnosPerfil[key] || 0);
                       if (key === 'Mañana') datamePtsHoy += (turnosPerfil['manana'] || 0);
                     } else {
                       // Sumar TODO el día (comportamiento por defecto)
-                      datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                      datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
                     }
                  }
               });
@@ -21849,7 +21915,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     </div>
 
     <!-- Ajustes generales -->
-    <div id="chat-sound-sel-container" style="padding:6px 16px; background:rgba(0,0,0,0.4); border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+    <div id="chat-sound-sel-container" style="padding:6px 16px; background:rgba(0,0,0,0.4); border-bottom:1px solid rgba(255,255,255,0.05); display:none; justify-content:space-between; align-items:center;">
       <span style="font-size:0.65rem; color:#64748b;">🔊 Alerta Sonora:</span>
       <select id="chat-sound-sel" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:2px 4px; border-radius:4px; outline:none; cursor:pointer;" onchange="playTestSound()">
         <option value="pulse">Suave (Bip)</option>

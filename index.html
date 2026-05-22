@@ -12887,17 +12887,24 @@ function exportarDatos() {
 
       if (typeof _sb !== 'undefined') {
         try {
-          const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 8000));
-          const query = _sb.from('operaciones')
-            .select('id_perfil, puntos_total, puntos_neto, jornada, fecha_dia, agencia')
-            .gte('fecha_dia', '2026-01-01')
-            .limit(20000);
-          
-          const { data, error } = await Promise.race([query, timeoutPromise]);
-          if (!error && data && data.length > 0) {
-            opsSupabase = data;
+          if (window._opsSupabaseCache && window._opsSupabaseCache.length > 0) {
+            opsSupabase = window._opsSupabaseCache;
             supabaseCargado = true;
-            console.log('[REPORT-SUPABASE] Cargados', opsSupabase.length, 'registros YTD desde Supabase.');
+            console.log('[REPORT-SUPABASE] Usando cache global de Supabase:', opsSupabase.length, 'registros.');
+          } else {
+            const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 8000));
+            const query = _sb.from('operaciones')
+              .select('id_perfil, puntos_total, puntos_neto, jornada, fecha_dia, agencia')
+              .gte('fecha_dia', '2026-01-01')
+              .limit(20000);
+            
+            const { data, error } = await Promise.race([query, timeoutPromise]);
+            if (!error && data && data.length > 0) {
+              opsSupabase = data;
+              window._opsSupabaseCache = data;
+              supabaseCargado = true;
+              console.log('[REPORT-SUPABASE] Cargados', opsSupabase.length, 'registros YTD desde Supabase.');
+            }
           }
         } catch (e) {
           console.warn('[REPORT-SUPABASE] Error consultando Supabase:', e);
@@ -20136,6 +20143,21 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           ops = opsFallback;
         }
 
+        // ── ACTUALIZAR CACHE DE SUPABASE YTD EN REALTIME ───────────────
+        if (window._opsSupabaseCache && ops && ops.length > 0) {
+          const oldCache = window._opsSupabaseCache.filter(r => !r.fecha_dia || r.fecha_dia < FECHA_INICIO);
+          const newMerged = ops.map(r => ({
+            id_perfil: r.id_perfil,
+            puntos_total: r.puntos_total || r.puntos || 0,
+            puntos_neto: r.puntos_neto || 0,
+            jornada: r.jornada,
+            fecha_dia: r.fecha_dia,
+            agencia: r.agencia
+          }));
+          window._opsSupabaseCache = [...oldCache, ...newMerged];
+          console.log('[SYNC] Cache YTD sincronizada en real-time con', ops.length, 'registros nuevos.');
+        }
+
         // ── Procesar registros ───────────────────────────────────────
         const nuevosDatos = {};
         const turnosHoy   = {};
@@ -20310,6 +20332,12 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (typeof renderRanking === 'function') {
           clearTimeout(window._dpRankingTimer);
           window._dpRankingTimer = setTimeout(renderRanking, 300);
+        }
+
+        // 🔥 REALTIME: Re-render operational report in real-time
+        if (typeof renderOperators === 'function') {
+          clearTimeout(window._dpOperatorsTimer);
+          window._dpOperatorsTimer = setTimeout(renderOperators, 400);
         }
 
         const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });

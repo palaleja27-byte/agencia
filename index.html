@@ -14919,6 +14919,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
         switchTab(0);
       }
+      
+      // Mostrar chat de monitoreo en vista de admin, monitor y operador
+      const chatEl = document.getElementById('rr-urgent-chat');
+      if (chatEl) chatEl.style.display = 'flex';
     }
 
     // ── Barra competitiva de turno para operadores ──────────────────
@@ -15675,6 +15679,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       loginUpdateDots();
       document.getElementById('login-error').textContent = '';
       document.getElementById('login-attempts').textContent = '';
+      
+      // Ocultar chat de monitoreo al cerrar sesión
+      const chatEl = document.getElementById('rr-urgent-chat');
+      if (chatEl) chatEl.style.display = 'none';
     }
 
     function loginAbrirCambioPin() {
@@ -20398,7 +20406,19 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                     srcOp = candidatos[0];
                   } else if (candidatos.length > 1) {
                     // Multiple operators share this profile — pick the one matching this jornada
-                    srcOp = candidatos.find(o => o.turno === op.jornada) || candidatos[0];
+                    // ⏱️ 12H SHIFT™: Prioritizar al operador que esté en turno de 12h hoy y cuya cobertura incluya esta jornada
+                    const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
+                    const opCoversJornada12h = (o, j) => {
+                      const _horasOp = _horasHoyAll[o.name];
+                      const es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoy;
+                      if (!es12h) return false;
+                      if (o.turno === j) return true;
+                      if (o.turno === 'Mañana') return j === 'Tarde';
+                      if (o.turno === 'Tarde') return j === 'Mañana' || j === 'Noche';
+                      if (o.turno === 'Noche') return j === 'Tarde' || j === 'Mañana';
+                      return false;
+                    };
+                    srcOp = candidatos.find(o => opCoversJornada12h(o, op.jornada)) || candidatos.find(o => o.turno === op.jornada) || candidatos[0];
                   }
                   // Fallback: match by agency name prefix
                   if (!srcOp && op.agencia && op.agencia.trim().length > 1) {
@@ -21759,7 +21779,13 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
   </script>
   
   <!-- ==================== MONITOR CENTRAL GHOST (FASE 7) ==================== -->
-  <div id="rr-urgent-chat" style="position:fixed; bottom:20px; right:20px; width:360px; background:rgba(15,23,42,0.98); border:1px solid rgba(255,255,255,0.1); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.8); z-index:99999; display:flex; flex-direction:column; overflow:hidden; backdrop-filter:blur(15px); transform:translateY(150%); transition:all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); font-family: 'Inter', sans-serif;">
+  <div id="rr-urgent-chat">
+    
+    <!-- Icono de burbuja flotante (solo visible minimizado) -->
+    <div id="chat-bubble-icon" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 1.8rem; position: absolute; inset: 0; cursor: pointer; transition: 0.2s; background: rgba(99,102,241,0.15);" onclick="document.getElementById('rr-urgent-chat').classList.add('open'); event.stopPropagation();">
+      💬
+      <span id="chat-bubble-badge" style="position: absolute; top: 12px; right: 12px; width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981;"></span>
+    </div>
     
     <!-- Cabecera -->
     <div id="chat-header" style="background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); padding:12px 16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleChatCollapse()">
@@ -21795,6 +21821,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       <select id="chat-sound-sel" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:2px 4px; border-radius:4px; outline:none; cursor:pointer;" onchange="playTestSound()">
         <option value="pulse">Suave (Bip)</option>
         <option value="bell">Normal (Campana)</option>
+        <option value="coin">Monedas Mario (Éxito)</option>
         <option value="alarm">Crítica (Alarma)</option>
       </select>
     </div>
@@ -21825,7 +21852,56 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     .status-critico { background:#ef4444 !important; animation: pulseRed 1.5s infinite !important; }
     .status-alerta { background:#f59e0b !important; animation: pulseOrange 2s infinite !important; }
     .status-motivar { background:#10b981 !important; animation: pulseGreen 1.5s infinite !important; }
-    #rr-urgent-chat.open { transform: translateY(0) !important; }
+    
+    /* 💬 CHAT FLOTANTE PREMIUM Y BURBUJA DE MONITOREO */
+    #rr-urgent-chat {
+      display: none; /* Oculto por defecto en pantalla de login */
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 360px;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(15px);
+      font-family: 'Inter', sans-serif;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    #rr-urgent-chat:not(.open) {
+      width: 60px !important;
+      height: 60px !important;
+      border-radius: 50% !important;
+      cursor: pointer;
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.6) !important;
+      border: 2px solid rgba(99, 102, 241, 0.5) !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+      transform: translateY(0) !important;
+    }
+    #rr-urgent-chat:not(.open):hover {
+      transform: scale(1.1) !important;
+      box-shadow: 0 10px 35px rgba(99, 102, 241, 0.8) !important;
+      border-color: rgba(99, 102, 241, 0.8) !important;
+    }
+    #rr-urgent-chat:not(.open) > :not(#chat-bubble-icon) {
+      display: none !important;
+    }
+    #rr-urgent-chat:not(.open) #chat-bubble-icon {
+      display: flex !important;
+    }
+    #rr-urgent-chat.open {
+      width: 360px !important;
+      height: 520px !important;
+      border-radius: 12px !important;
+      transform: translateY(0) !important;
+    }
+    #rr-urgent-chat.open #chat-bubble-icon {
+      display: none !important;
+    }
     #rr-urgent-chat.critico #chat-header { background:rgba(239,68,68,0.2) !important; border-bottom-color:rgba(239,68,68,0.4) !important; }
     #rr-urgent-chat.alerta #chat-header { background:rgba(245,158,11,0.15) !important; border-bottom-color:rgba(245,158,11,0.3) !important; }
     #rr-urgent-chat.motivar #chat-header { background:rgba(16,185,129,0.15) !important; border-bottom-color:rgba(16,185,129,0.3) !important; }
@@ -21851,6 +21927,23 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           osc.type = 'sine'; osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
           gain.gain.setValueAtTime(0.7, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
           osc.start(); osc.stop(audioCtx.currentTime + 1);
+        } else if (type === 'coin') {
+          // B5 (987.77 Hz) for 0.08s -> E6 (1318.51 Hz) for 0.37s
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(987.77, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+          osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.08);
+
+          const osc2 = audioCtx.createOscillator();
+          const gain2 = audioCtx.createGain();
+          osc2.connect(gain2);
+          gain2.connect(audioCtx.destination);
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08);
+          gain2.gain.setValueAtTime(0.4, audioCtx.currentTime + 0.08);
+          gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.45);
+          osc2.start(audioCtx.currentTime + 0.08); osc2.stop(audioCtx.currentTime + 0.45);
         } else {
           osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
           gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
@@ -22040,7 +22133,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Reset visual alarm state if operator replies
       if (sender === 'operador') {
         document.getElementById('rr-urgent-chat').classList.remove('critico', 'alerta');
-        document.getElementById('chat-status-dot').className = '';
+        const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = '';
+        const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = '';
         ghostVars.lastInteraction = Date.now();
       }
     }
@@ -22143,7 +22237,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         if (delta > 0) {
           // 🎉 ¡INCREMENTO DE FACTURACIÓN DETECTADO! 🎉
-          playBeep('bell');
+          playBeep('coin');
           lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de facturar +${delta.toFixed(2)} puntos. Tu acumulado es de ${ptsActuales.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
           
           crearEfectoConfeti();
@@ -22240,22 +22334,26 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       if(nivel === 'CRITICAL') {
          bgColor = 'rgba(239,68,68,0.15)'; borderColor = 'rgba(239,68,68,0.4)'; titleColor = '#fca5a5'; titleText = '🚨 ALERTA CRÍTICA';
          chat.classList.add('critico', 'open');
-         document.getElementById('chat-status-dot').className = 'status-critico';
+         const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = 'status-critico';
+         const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = 'status-critico';
          soundType = 'alarm';
       } else if(nivel === 'WARNING') {
          bgColor = 'rgba(245,158,11,0.15)'; borderColor = 'rgba(245,158,11,0.4)'; titleColor = '#fcd34d'; titleText = '⚠️ ADVERTENCIA OPERATIVA';
          chat.classList.add('alerta', 'open');
-         document.getElementById('chat-status-dot').className = 'status-alerta';
+         const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = 'status-alerta';
+         const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = 'status-alerta';
          soundType = 'bell';
       } else if(nivel === 'MOTIVAR') {
          bgColor = 'rgba(16,185,129,0.15)'; borderColor = 'rgba(16,185,129,0.4)'; titleColor = '#6ee7b7'; titleText = '🎉 EXCELENTE TRABAJO';
          chat.classList.add('motivar', 'open');
-         document.getElementById('chat-status-dot').className = 'status-motivar';
-         soundType = 'bell';
+         const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = 'status-motivar';
+         const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = 'status-motivar';
+         soundType = 'coin';
       } else {
          bgColor = 'rgba(255,255,255,0.05)'; borderColor = 'rgba(255,255,255,0.2)'; titleColor = '#94a3b8'; titleText = 'ℹ️ MONITOR';
          soundType = 'pulse';
-         document.getElementById('chat-status-dot').className = '';
+         const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = '';
+         const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = '';
       }
 
       playBeep(soundType);

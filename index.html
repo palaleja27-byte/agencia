@@ -7234,12 +7234,14 @@
                   // Si turno = 'Completo' → sumar todos los turnos del día.
                   let pts = 0;
                   if (jornadaALeer === 'Completo') {
-                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
                   } else {
                     // Normalizar 'Mañana' con/sin tilde
                     const key = jornadaLeer === 'Mañana' ? 'Mañana' : jornadaLeer;
                     pts = (turnosPerfil[key] || 0);
                     if (key === 'Mañana') pts += (turnosPerfil['manana'] || 0);
+                    if (key === 'Tarde') pts += (turnosPerfil['tarde'] || 0);
+                    if (key === 'Noche') pts += (turnosPerfil['noche'] || 0);
                   }
                   datamePts += pts;
                }
@@ -7328,7 +7330,7 @@
             const turnosPerfil = typeof _dpTurnosData !== 'undefined' ? (_dpTurnosData[p.id] || _dpTurnosData[String(p.id)]) : null;
             let datameDia = 0;
             if (turnosPerfil) {
-              datameDia = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['manana'] || 0);
+              datameDia = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
             }
             const ptsDia = Math.max(datameDia, legacyDia);
 
@@ -10300,10 +10302,10 @@
                   // DELTA-SHIFT™: solo el turno del operador para evitar cruce con otros turnos
                   let pts = 0;
                   if (jornadaOp === 'Completo') {
-                    pts = (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['Noche'] || 0);
+                    pts = (t['Mañana'] || 0) + (t['manana'] || 0) + (t['Tarde'] || 0) + (t['tarde'] || 0) + (t['Noche'] || 0) + (t['noche'] || 0);
                   } else {
                     const key2 = jornadaOp === 'Mañana' ? 'Mañana' : jornadaOp;
-                    pts = (t[key2] || 0) + (key2 === 'Mañana' ? (t['manana'] || 0) : 0);
+                    pts = (t[key2] || 0) + (key2 === 'Mañana' ? (t['manana'] || 0) : key2 === 'Tarde' ? (t['tarde'] || 0) : key2 === 'Noche' ? (t['noche'] || 0) : 0);
                   }
                   ptsSup += pts;
                }
@@ -15068,9 +15070,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                       const key = shiftFilter === 'Mañana' ? 'Mañana' : shiftFilter;
                       datamePtsHoy += (turnosPerfil[key] || 0);
                       if (key === 'Mañana') datamePtsHoy += (turnosPerfil['manana'] || 0);
+                      if (key === 'Tarde') datamePtsHoy += (turnosPerfil['tarde'] || 0);
+                      if (key === 'Noche') datamePtsHoy += (turnosPerfil['noche'] || 0);
                     } else {
                       // Sumar TODO el día (comportamiento por defecto)
-                      datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                      datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
                     }
                  }
               });
@@ -15232,7 +15236,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
               combinedProfiles.forEach(p => {
                  const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                  if (turnosPerfil) {
-                    datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['Noche'] || 0);
+                    datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
                  }
               });
            }
@@ -19604,9 +19608,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Calcular Totales Globales (Todos los paneles)
       let gMan = 0, gTar = 0, gNoc = 0;
       Object.values(_dpTurnosData).forEach(t => {
-        gMan += t['Mañana'] || 0;
-        gTar += t['Tarde']  || 0;
-        gNoc += t['Noche']  || 0;
+        gMan += (t['Mañana'] || 0) + (t['manana'] || 0);
+        gTar += (t['Tarde']  || 0) + (t['tarde']  || 0);
+        gNoc += (t['Noche']  || 0) + (t['noche']  || 0);
       });
       const gHoy = gMan + gTar + gNoc;
 
@@ -19619,14 +19623,17 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         totalMesPts    += totalMes;
         // Acumular netos de HOY por turno para la barra inferior
         const _t = _dpTurnosData[p.id] || {};
-        acumMan += _t['Mañana'] || 0;
-        acumTar += _t['Tarde']  || 0;
-        acumNoc += _t['Noche']  || 0;
+        acumMan += (_t['Mañana'] || 0) + (_t['manana'] || 0);
+        acumTar += (_t['Tarde']  || 0) + (_t['tarde']  || 0);
+        acumNoc += (_t['Noche']  || 0) + (_t['noche']  || 0);
 
         // ── TURNOS HOY: puntos_neto (solo lo del turno, empieza en 0) ─
         const turnos    = _dpTurnosData[p.id] || {};
         const fmtTurno  = (t) => {
-          const v = turnos[t] || 0;
+          let v = turnos[t] || 0;
+          if (t === 'Mañana') v += turnos['manana'] || 0;
+          if (t === 'Tarde') v += turnos['tarde'] || 0;
+          if (t === 'Noche') v += turnos['noche'] || 0;
           return { v, str: v > 0 ? v.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '0,0' };
         };
         const manana  = fmtTurno('Mañana');
@@ -20893,7 +20900,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const _normOpNameForRt = typeof _n === 'function' ? _n(opName) : opName.toUpperCase().trim();
         const _foundHorasKeyRt = Object.keys(_horasHoyAll).find(k => (typeof _n === 'function' ? _n(k) : k.toUpperCase().trim()) === _normOpNameForRt);
         const _horasOp = (_foundHorasKeyRt ? _horasHoyAll[_foundHorasKeyRt] : null) || (opData ? { horas: (opData.turno === 'Completo' ? 12 : 8) } : { horas: 8 });
-        const is12h = _horasOp.horas === 12;
+        const is12h = _horasOp && _horasOp.horas === 12 && (!_horasOp.fecha || _horasOp.fecha === hoy);
 
         let query = _sb.from('operaciones')
           .select('id_perfil, puntos_total, puntos_baseline, puntos_neto, jornada, agencia')

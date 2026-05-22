@@ -6810,20 +6810,40 @@
         const m0Key = formatMes(d0);
         const m0Name = nombresMeses[d0.getMonth()];
 
-        // Timeout para que no bloquee infinitamente
-        const fetchPromise = _sb.from('operaciones')
-          .select('fecha_dia, puntos_neto, jornada')
-          .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
-          .neq('jornada', 'Auto')
-          .limit(20000);
-        
+        // Timeout para que no bloquee infinitamente - Paginado para evitar límite de 1,000 del servidor
         let ops = null;
         let error = null;
         try {
-          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 12000));
-          const result = await Promise.race([fetchPromise, timeoutPromise]);
-          ops = result.data;
-          error = result.error;
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout general de paginación')), 12000));
+          const paginatedFetch = async () => {
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+            let results = [];
+            while (hasMore) {
+              const from = page * pageSize;
+              const to = (page + 1) * pageSize - 1;
+              const { data, error: fetchErr } = await _sb.from('operaciones')
+                .select('fecha_dia, puntos_neto, jornada')
+                .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
+                .neq('jornada', 'Auto')
+                .range(from, to);
+              
+              if (fetchErr) throw fetchErr;
+              if (!data || data.length === 0) {
+                hasMore = false;
+              } else {
+                results = results.concat(data);
+                if (data.length < pageSize) {
+                  hasMore = false;
+                } else {
+                  page++;
+                }
+              }
+            }
+            return results;
+          };
+          ops = await Promise.race([paginatedFetch(), timeoutPromise]);
         } catch(raceErr) {
           error = raceErr;
         }
@@ -11030,17 +11050,38 @@
       const pd = {};
       try {
         if (typeof _sb !== 'undefined') {
-          const fetchP = _sb.from('operaciones')
-            .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
-            .gte('fecha_dia', desde).lte('fecha_dia', hasta)
-            .gt('puntos_neto', 0).neq('jornada','Auto')
-            .limit(20000);
-          const timeoutP = new Promise((resolve) => setTimeout(()=>resolve({data:[], error:new Error('Timeout')}), 12000));
-          const result = await Promise.race([fetchP, timeoutP]);
-          const rawRows = result.data;
-          const error = result.error;
-          if (error || !rawRows || !rawRows.length) throw new Error('Timeout or empty');
-          rows = rawRows;
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout general de paginación')), 12000));
+          const paginatedFetch = async () => {
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+            let results = [];
+            while (hasMore) {
+              const from = page * pageSize;
+              const to = (page + 1) * pageSize - 1;
+              const { data, error: fetchErr } = await _sb.from('operaciones')
+                .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
+                .gte('fecha_dia', desde).lte('fecha_dia', hasta)
+                .gt('puntos_neto', 0).neq('jornada','Auto')
+                .range(from, to);
+              
+              if (fetchErr) throw fetchErr;
+              if (!data || data.length === 0) {
+                hasMore = false;
+              } else {
+                results = results.concat(data);
+                if (data.length < pageSize) {
+                  hasMore = false;
+                } else {
+                  page++;
+                }
+              }
+            }
+            return results;
+          };
+          const results = await Promise.race([paginatedFetch(), timeoutPromise]);
+          if (!results || !results.length) throw new Error('Empty result');
+          rows = results;
         }
       } catch(e) { 
         console.warn('[CMV] Fallback a datos reales de localStorage:', e);
@@ -12892,18 +12933,41 @@ function exportarDatos() {
             supabaseCargado = true;
             console.log('[REPORT-SUPABASE] Usando cache global de Supabase:', opsSupabase.length, 'registros.');
           } else {
-            const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 8000));
-            const query = _sb.from('operaciones')
-              .select('id_perfil, puntos_total, puntos_neto, jornada, fecha_dia, agencia')
-              .gte('fecha_dia', '2026-01-01')
-              .limit(20000);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout YTD')), 12000));
+            const paginatedFetch = async () => {
+              let page = 0;
+              const pageSize = 1000;
+              let hasMore = true;
+              let results = [];
+              while (hasMore) {
+                const from = page * pageSize;
+                const to = (page + 1) * pageSize - 1;
+                const { data, error: fetchErr } = await _sb.from('operaciones')
+                  .select('id_perfil, puntos_total, puntos_neto, jornada, fecha_dia, agencia')
+                  .gte('fecha_dia', '2026-01-01')
+                  .range(from, to);
+                
+                if (fetchErr) throw fetchErr;
+                if (!data || data.length === 0) {
+                  hasMore = false;
+                } else {
+                  results = results.concat(data);
+                  if (data.length < pageSize) {
+                    hasMore = false;
+                  } else {
+                    page++;
+                  }
+                }
+              }
+              return results;
+            };
             
-            const { data, error } = await Promise.race([query, timeoutPromise]);
-            if (!error && data && data.length > 0) {
-              opsSupabase = data;
-              window._opsSupabaseCache = data;
+            const results = await Promise.race([paginatedFetch(), timeoutPromise]);
+            if (results && results.length > 0) {
+              opsSupabase = results;
+              window._opsSupabaseCache = results;
               supabaseCargado = true;
-              console.log('[REPORT-SUPABASE] Cargados', opsSupabase.length, 'registros YTD desde Supabase.');
+              console.log('[REPORT-SUPABASE] Cargados', opsSupabase.length, 'registros YTD desde Supabase paginado.');
             }
           }
         } catch (e) {
@@ -20113,34 +20177,94 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const hoy = localDateStr();
         dpLog('Iniciando sincronización dinámica...', 'info');
 
-        // ── Intento 1: columnas nuevas (Buscamos TODOS los perfiles activos del mes) ─────
+        // ── Intento 1: columnas nuevas (Buscamos TODOS los perfiles activos del mes) - Paginado para evitar límite de 1,000 del servidor
         let ops = null;
         let modoCompleto = false;
-        const { data: opsNuevo, error: errNuevo } = await _sb
-          .from('operaciones')
-          .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
-          .gte('fecha_dia', FECHA_INICIO)
-          .order('id', { ascending: false })
-          .limit(20000);
+        let errNuevo = null;
+        
+        try {
+          let page = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+          let results = [];
+          while (hasMore) {
+            const from = page * pageSize;
+            const to = (page + 1) * pageSize - 1;
+            const { data, error: fetchErr } = await _sb
+              .from('operaciones')
+              .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
+              .gte('fecha_dia', FECHA_INICIO)
+              .order('id', { ascending: false })
+              .range(from, to);
+            
+            if (fetchErr) {
+              errNuevo = fetchErr;
+              break;
+            }
+            if (!data || data.length === 0) {
+              hasMore = false;
+            } else {
+              results = results.concat(data);
+              if (data.length < pageSize) {
+                hasMore = false;
+              } else {
+                page++;
+              }
+            }
+          }
+          if (!errNuevo && results.length > 0) {
+            ops = results;
+            modoCompleto = true;
+            dpLog(`Recuperados ${ops.length} registros (Modo Completo Paginado)`, 'success');
+          }
+        } catch(e) {
+          errNuevo = e;
+        }
 
-        if (!errNuevo && opsNuevo) {
-          ops = opsNuevo;
-          modoCompleto = true;
-          dpLog(`Recuperados ${ops.length} registros (Modo Completo)`, 'success');
-        } else {
+        if (errNuevo || !ops || ops.length === 0) {
           // ── Fallback ──────
           dpLog('Error en modo completo, intentando fallback...', 'warn');
-          const { data: opsFallback, error: errFallback } = await _sb
-            .from('operaciones')
-            .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
-            .gte('fecha_dia', FECHA_INICIO)
-            .order('id', { ascending: false })
-            .limit(20000);
-          if (errFallback) { 
-            dpLog('Error crítico Supabase: ' + errFallback.message, 'error');
-            return; 
+          let errFallback = null;
+          let resultsFallback = [];
+          try {
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+            while (hasMore) {
+              const from = page * pageSize;
+              const to = (page + 1) * pageSize - 1;
+              const { data, error: fetchErr } = await _sb
+                .from('operaciones')
+                .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
+                .gte('fecha_dia', FECHA_INICIO)
+                .order('id', { ascending: false })
+                .range(from, to);
+              
+              if (fetchErr) {
+                errFallback = fetchErr;
+                break;
+              }
+              if (!data || data.length === 0) {
+                hasMore = false;
+              } else {
+                resultsFallback = resultsFallback.concat(data);
+                if (data.length < pageSize) {
+                  hasMore = false;
+                } else {
+                  page++;
+                }
+              }
+            }
+            if (!errFallback && resultsFallback.length > 0) {
+              ops = resultsFallback;
+            } else {
+              dpLog('Error crítico Supabase: ' + (errFallback ? errFallback.message : 'No data found'), 'error');
+              return;
+            }
+          } catch(e) {
+            dpLog('Error crítico Supabase en Fallback: ' + e.message, 'error');
+            return;
           }
-          ops = opsFallback;
         }
 
         // ── ACTUALIZAR CACHE DE SUPABASE YTD EN REALTIME ───────────────

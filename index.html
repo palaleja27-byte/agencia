@@ -6814,7 +6814,8 @@
         const fetchPromise = _sb.from('operaciones')
           .select('fecha_dia, puntos_neto, jornada')
           .gte('fecha_dia', `${dFeb.getFullYear()}-02-01`)
-          .neq('jornada', 'Auto');
+          .neq('jornada', 'Auto')
+          .limit(20000);
         
         let ops = null;
         let error = null;
@@ -11032,7 +11033,8 @@
           const fetchP = _sb.from('operaciones')
             .select('fecha_dia,puntos_neto,id_perfil,agencia,jornada')
             .gte('fecha_dia', desde).lte('fecha_dia', hasta)
-            .gt('puntos_neto', 0).neq('jornada','Auto');
+            .gt('puntos_neto', 0).neq('jornada','Auto')
+            .limit(20000);
           const timeoutP = new Promise((resolve) => setTimeout(()=>resolve({data:[], error:new Error('Timeout')}), 12000));
           const result = await Promise.race([fetchP, timeoutP]);
           const rawRows = result.data;
@@ -20111,7 +20113,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           .from('operaciones')
           .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
           .gte('fecha_dia', FECHA_INICIO)
-            .order('id', { ascending: false });
+          .order('id', { ascending: false })
+          .limit(20000);
 
         if (!errNuevo && opsNuevo) {
           ops = opsNuevo;
@@ -20124,7 +20127,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             .from('operaciones')
             .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
             .gte('fecha_dia', FECHA_INICIO)
-            .order('id', { ascending: false });
+            .order('id', { ascending: false })
+            .limit(20000);
           if (errFallback) { 
             dpLog('Error crítico Supabase: ' + errFallback.message, 'error');
             return; 

@@ -12985,18 +12985,47 @@ function exportarDatos() {
         };
       }
 
+      const camiloProfileIds = new Set([
+        '167493871', '158644203', '164812184', '93461947', '166575347', 
+        '153037229', '101245945', '167273716', '167279664', '145839775', 
+        '113752797', '151410237', '113579174', '114851358'
+      ]);
+
+      const romeroProfileIds = new Set([
+        '88243516', '95956014', '91360720', '143017065', '91733663', 
+        '153039388', '79679899', '109551682', '131130713', '10165076', 
+        '108018336', '103289167', '118179794', '130338853', '160352260', 
+        '145834230', '120720195', '139247498', '120275229', '157067734', 
+        '103291980', '130431310', '98389135', '139245989', '98540781', 
+        '156881990', '151070498', '130422416', '138130329', '133085188', 
+        '118692242', '143014129', '95955130', '145211163', '144863124', 
+        '145844971', '156716207', '137163229', '157112125'
+      ]);
+
       const belongsToCompany = (op) => {
         if (!op) return false;
         if (window._reportCompanyView === 'global') return true;
+
+        let hasCamiloProfile = false;
+        let hasRomeroProfile = false;
+        if (Array.isArray(op.profiles)) {
+          op.profiles.forEach(p => {
+            const pid = String(p.id).trim();
+            if (camiloProfileIds.has(pid)) hasCamiloProfile = true;
+            if (romeroProfileIds.has(pid)) hasRomeroProfile = true;
+          });
+        }
+
         const emp = (op.empresa || '').toUpperCase();
         const plat = (op.plataforma || '').toUpperCase();
-        const belongsRomero = emp.includes('ROMERO') || plat.includes('ROMERO');
-        const belongsCamilo = emp.includes('CAMILO') || plat.includes('CAMILO');
+
+        const belongsRomero = hasRomeroProfile || emp.includes('ROMERO') || plat.includes('ROMERO') || (!hasCamiloProfile && plat === 'PRIME');
+        const belongsCamilo = hasCamiloProfile || emp.includes('CAMILO') || plat.includes('CAMILO');
 
         if (window._reportCompanyView === 'romero') {
-          return belongsRomero;
+          return belongsRomero && !hasCamiloProfile;
         } else if (window._reportCompanyView === 'camilo') {
-          return belongsCamilo;
+          return belongsCamilo && !hasRomeroProfile;
         }
         return false;
       };
@@ -13069,8 +13098,12 @@ function exportarDatos() {
           const net = val > 1500 ? 0 : val;
           if (net <= 0) return;
 
+          const pid = String(r.id_perfil).trim();
+          if (window._reportCompanyView === 'romero' && !romeroProfileIds.has(pid)) return;
+          if (window._reportCompanyView === 'camilo' && !camiloProfileIds.has(pid)) return;
+
           // Encontrar operador asociado al perfil
-          const opName = profileToOpMap[String(r.id_perfil).trim()];
+          const opName = profileToOpMap[pid];
           if (!opName && window._reportCompanyView !== 'global') return;
           const finalOpName = opName || 'Sin Asignar';
           if (!rankOp[finalOpName]) rankOp[finalOpName] = 0;

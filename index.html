@@ -6892,14 +6892,28 @@
         historialMap['2026-03'] = 68675.84;
         historialMap['2026-04'] = 86341.74;
 
+        const romeroProfileIds = new Set([
+          '88243516', '95956014', '91360720', '143017065', '91733663', 
+          '153039388', '79679899', '109551682', '131130713', '10165076', 
+          '108018336', '103289167', '118179794', '130338853', '160352260', 
+          '145834230', '120720195', '139247498', '120275229', '157067734', 
+          '103291980', '130431310', '98389135', '139245989', '98540781', 
+          '156881990', '151070498', '130422416', '138130329', '133085188', 
+          '118692242', '143014129', '95955130', '145211163', '144863124', 
+          '145844971', '156716207', '137163229', '157112125'
+        ]);
+
         // Calcular Mayo dinámicamente sumando el máximo acumulado (puntos_total) de cada operador
         const mayoOps = ops.filter(r => r.fecha_dia && r.fecha_dia.startsWith('2026-05'));
         const mayoProfiles = {};
         mayoOps.forEach(r => {
           if (r.id_perfil) {
-            const val = parseFloat(r.puntos_total) || 0;
-            if (val > (mayoProfiles[r.id_perfil] || 0)) {
-              mayoProfiles[r.id_perfil] = val;
+            const pid = String(r.id_perfil).trim();
+            if (romeroProfileIds.has(pid)) {
+              const val = parseFloat(r.puntos_total) || 0;
+              if (val > (mayoProfiles[r.id_perfil] || 0)) {
+                mayoProfiles[r.id_perfil] = val;
+              }
             }
           }
         });
@@ -13104,8 +13118,11 @@ function exportarDatos() {
 
           // Encontrar operador asociado al perfil
           const opName = profileToOpMap[pid];
-          if (!opName && window._reportCompanyView !== 'global') return;
-          const finalOpName = opName || 'Sin Asignar';
+          const isMatch = (window._reportCompanyView === 'romero' && romeroProfileIds.has(pid)) || 
+                          (window._reportCompanyView === 'camilo' && camiloProfileIds.has(pid));
+          
+          if (!opName && !isMatch && window._reportCompanyView !== 'global') return;
+          const finalOpName = opName || r.agencia || 'Sin Asignar';
           if (!rankOp[finalOpName]) rankOp[finalOpName] = 0;
 
           if (fechaReal === hoy)  ptsHoy  += net;

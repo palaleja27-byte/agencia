@@ -13257,6 +13257,86 @@ function exportarDatos() {
       const dSemana = btoa(JSON.stringify({ ptsMes, ptsPorSemanaMes, ptsMesAnterior, pctMoM, proyeccionMes }));
       const dMes    = btoa(JSON.stringify({ ptsPorMes }));
 
+      // --- CALCULAR DATA DÍA A DÍA ÚLTIMOS 7 DÍAS ---
+      const ultimos7Dias = [];
+      for (let i = 6; i >= 0; i--) {
+        const dStr = localDateStr(i);
+        ultimos7Dias.push({ fecha: dStr, puntos: 0 });
+      }
+
+      if (supabaseCargado) {
+        opsSupabase.forEach(r => {
+          if (!r.fecha_dia) return;
+          const pid = String(r.id_perfil).trim();
+          if (window._reportCompanyView === 'romero' && !romeroProfileIds.has(pid)) return;
+          if (window._reportCompanyView === 'camilo' && !camiloProfileIds.has(pid)) return;
+
+          const val = Number(r.puntos_neto) || 0;
+          const net = val > 1500 ? 0 : val;
+          if (net <= 0) return;
+
+          const match = ultimos7Dias.find(d => d.fecha === r.fecha_dia);
+          if (match) match.puntos += net;
+        });
+      } else {
+        operatorsData.forEach(op => {
+          if (!belongsToCompany(op)) return;
+          const cortesOp = getCortesOp(op.name);
+          cortesOp.forEach(c => {
+            if (!c.fecha) return;
+            const fechaReal = add2Days(c.fecha);
+            const val = Number(c.puntos) || 0;
+            const net = val > 1500 ? 0 : val;
+            if (net <= 0) return;
+
+            const match = ultimos7Dias.find(d => d.fecha === fechaReal);
+            if (match) match.puntos += net;
+          });
+        });
+      }
+
+      for (let idx = 0; idx < ultimos7Dias.length; idx++) {
+        const item = ultimos7Dias[idx];
+        // DoD %
+        let dod = 0;
+        if (idx > 0 && ultimos7Dias[idx - 1].puntos > 0) {
+          dod = ((item.puntos - ultimos7Dias[idx - 1].puntos) / ultimos7Dias[idx - 1].puntos) * 100;
+        }
+        item.dod = dod;
+
+        // SMA-3
+        let sumSma = 0;
+        let countSma = 0;
+        for (let sIdx = Math.max(0, idx - 2); sIdx <= idx; sIdx++) {
+          sumSma += ultimos7Dias[sIdx].puntos;
+          countSma++;
+        }
+        item.sma = countSma > 0 ? sumSma / countSma : 0;
+      }
+
+      const activeProfileIds = new Set();
+      if (supabaseCargado) {
+        opsSupabase.forEach(r => {
+          if (!r.fecha_dia) return;
+          const pid = String(r.id_perfil).trim();
+          if (window._reportCompanyView === 'romero' && !romeroProfileIds.has(pid)) return;
+          if (window._reportCompanyView === 'camilo' && !camiloProfileIds.has(pid)) return;
+          if (r.fecha_dia >= localDateStr(7)) activeProfileIds.add(pid);
+        });
+      } else {
+        operatorsData.forEach(op => {
+          if (!belongsToCompany(op)) return;
+          (op.profiles || []).forEach(p => {
+            if (p.id) activeProfileIds.add(String(p.id).trim());
+          });
+        });
+      }
+      const activeProfilesCount = activeProfileIds.size || 1;
+      const arppHoy = ptsHoy / activeProfilesCount;
+      const arppSemana = ptsSemana / activeProfilesCount;
+      const velocityIndex = pctVsAyer >= 0 ? 'Acelerando ▲' : 'Desacelerando ▼';
+      const velocityColor = pctVsAyer >= 0 ? '#34d399' : '#f87171';
+
       container.innerHTML = `
         <div style="padding:10px;">
 
@@ -13394,6 +13474,123 @@ function exportarDatos() {
               <div style="height:140px;width:100%;"><canvas id="chart-mes"></canvas></div>
             </div>
 
+          </div>
+
+          <!-- MÓDULO EXPERTO EN DATA & CRECIMIENTO DÍA A DÍA (DATING KPI HUB) -->
+          <div style="background:linear-gradient(135deg, rgba(30, 27, 75, 0.4), rgba(15, 23, 42, 0.4)); border:1px solid rgba(99, 102, 241, 0.25); border-radius:12px; padding:20px; margin-bottom:24px; box-shadow:0 8px 32px rgba(0,0,0,0.4); backdrop-filter:blur(8px);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h3 style="font-size:1rem; font-weight:800; color:#fff; margin:0; display:flex; align-items:center; gap:6px; letter-spacing:1px; text-transform:uppercase;">
+                  📈 DATING GROWTH VELOCITY & RUN-RATE MATRIX
+                </h3>
+                <p style="font-size:0.65rem; color:#64748b; margin:2px 0 0 0;">Análisis en tiempo real de velocidad de facturación, promedios móviles (SMA-3) y ARPP (Average Revenue Per Profile).</p>
+              </div>
+              <div style="background:rgba(99, 102, 241, 0.15); border:1px solid rgba(99, 102, 241, 0.3); padding:4px 10px; border-radius:8px; font-size:0.6rem; color:#818cf8; font-weight:bold; letter-spacing:1px;">
+                DATING ANALYTICS CORE v2026
+              </div>
+            </div>
+
+            <!-- DATING KPI HUB GRID -->
+            <div style="display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
+              <div style="flex:1; min-width:130px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px 14px;">
+                <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Perfiles Activos</div>
+                <div style="font-size:1.2rem; font-weight:900; color:#fff; margin-top:2px;">${activeProfilesCount} <span style="font-size:0.65rem; color:#64748b; font-weight:400;">perfiles</span></div>
+                <div style="font-size:0.5rem; color:#94a3b8; margin-top:2px;">En los últimos 7 días</div>
+              </div>
+              <div style="flex:1; min-width:130px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px 14px;">
+                <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">ARPP Hoy (Ptos/Perfil)</div>
+                <div style="font-size:1.2rem; font-weight:900; color:#5eead4; margin-top:2px;">${arppHoy.toFixed(1)} <span style="font-size:0.65rem; color:#64748b; font-weight:400;">pts/perfil</span></div>
+                <div style="font-size:0.5rem; color:#34d399; margin-top:2px;">ARPP Semanal: ${arppSemana.toFixed(1)} pts</div>
+              </div>
+              <div style="flex:1; min-width:130px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px 14px;">
+                <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Aceleración (GVI)</div>
+                <div style="font-size:1.2rem; font-weight:900; color:${velocityColor}; margin-top:2px;">${velocityIndex}</div>
+                <div style="font-size:0.5rem; color:#94a3b8; margin-top:2px;">Indexado a cambio diario</div>
+              </div>
+              <div style="flex:1; min-width:130px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px 14px;">
+                <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Dating Run-Rate</div>
+                <div style="font-size:1.2rem; font-weight:900; color:#fbbf24; margin-top:2px;">$${Math.round(paceHourly * 24 * COP_POR_PUNTO).toLocaleString('es-CO')} <span style="font-size:0.55rem; color:#64748b; font-weight:400;">COP/24h</span></div>
+                <div style="font-size:0.5rem; color:#94a3b8; margin-top:2px;">Pace proyectado diario</div>
+              </div>
+            </div>
+
+            <!-- DATING GROWTH DAY-BY-DAY INTERACTIVE GRID -->
+            <div style="overflow-x:auto;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.75rem; color:#cbd5e1;">
+                <thead>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.08); color:#94a3b8; font-size:0.6rem; text-transform:uppercase; letter-spacing:1px;">
+                    <th style="padding:10px 8px;">Fecha</th>
+                    <th style="padding:10px 8px;">Día</th>
+                    <th style="padding:10px 8px; text-align:right;">Puntos Netos</th>
+                    <th style="padding:10px 8px; text-align:right;">Ingreso Diario</th>
+                    <th style="padding:10px 8px; text-align:right;">Cambio DoD %</th>
+                    <th style="padding:10px 8px; text-align:right;">Media Móvil (SMA-3)</th>
+                    <th style="padding:10px 8px; text-align:center;">Estado Operativo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${ultimos7Dias.map((d, idx) => {
+                    const diaSemanaLargo = new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long' });
+                    const diaSemanaCap = diaSemanaLargo.charAt(0).toUpperCase() + diaSemanaLargo.slice(1);
+                    const ingreso = Math.round(d.puntos * COP_POR_PUNTO);
+                    
+                    // DoD styling
+                    let dodHTML = '—';
+                    if (idx > 0 && d.dod !== 0) {
+                      const sign = d.dod >= 0 ? '▲ +' : '▼ ';
+                      const col = d.dod >= 0 ? '#34d399' : '#f87171';
+                      dodHTML = `<span style="color:${col}; font-weight:bold;">${sign}${d.dod.toFixed(1)}%</span>`;
+                    }
+                    
+                    // Status Badge
+                    let statusLabel = 'Estable ☕';
+                    let statusBg = 'rgba(148, 163, 184, 0.15)';
+                    let statusBorder = 'rgba(148, 163, 184, 0.3)';
+                    let statusText = '#94a3b8';
+                    
+                    if (idx > 0) {
+                      if (d.dod >= 15) {
+                        statusLabel = 'Explosivo 🚀';
+                        statusBg = 'rgba(52, 211, 153, 0.15)';
+                        statusBorder = 'rgba(52, 211, 153, 0.35)';
+                        statusText = '#34d399';
+                      } else if (d.dod >= 3) {
+                        statusLabel = 'Acelerando 📈';
+                        statusBg = 'rgba(56, 189, 248, 0.15)';
+                        statusBorder = 'rgba(56, 189, 248, 0.35)';
+                        statusText = '#38bdf8';
+                      } else if (d.dod <= -15) {
+                        statusLabel = 'Crítico 🚨';
+                        statusBg = 'rgba(248, 113, 113, 0.15)';
+                        statusBorder = 'rgba(248, 113, 113, 0.35)';
+                        statusText = '#f87171';
+                      } else if (d.dod <= -3) {
+                        statusLabel = 'En Caída 📉';
+                        statusBg = 'rgba(251, 191, 36, 0.15)';
+                        statusBorder = 'rgba(251, 191, 36, 0.35)';
+                        statusText = '#fbbf24';
+                      }
+                    }
+                    
+                    return `
+                      <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(255,255,255,${d.fecha === hoy ? 0.03 : 0}); transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,${d.fecha === hoy ? 0.03 : 0})'">
+                        <td style="padding:10px 8px; font-weight:700; ${d.fecha === hoy ? 'color:#5eead4;' : 'color:#cbd5e1;'}">${d.fecha} ${d.fecha === hoy ? '<span style="font-size:0.5rem; background:rgba(94,234,212,0.15); color:#5eead4; padding:1px 4px; border-radius:3px; font-weight:800; margin-left:3px; vertical-align:middle;">HOY</span>' : ''}</td>
+                        <td style="padding:10px 8px; color:#94a3b8;">${diaSemanaCap}</td>
+                        <td style="padding:10px 8px; text-align:right; font-weight:800; color:#fff;">${d.puntos.toFixed(1)}</td>
+                        <td style="padding:10px 8px; text-align:right; color:#bae6fd; font-weight:600;">$${ingreso.toLocaleString('es-CO')}</td>
+                        <td style="padding:10px 8px; text-align:right;">${dodHTML}</td>
+                        <td style="padding:10px 8px; text-align:right; color:#a78bfa; font-weight:600;">${d.sma.toFixed(1)}</td>
+                        <td style="padding:10px 8px; text-align:center;">
+                          <span style="font-size:0.55rem; background:${statusBg}; border:1px solid ${statusBorder}; color:${statusText}; padding:2px 7px; border-radius:6px; font-weight:800; white-space:nowrap;">
+                            ${statusLabel}
+                          </span>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <!-- PANEL INFERIOR: ANALISIS + CHAT -->

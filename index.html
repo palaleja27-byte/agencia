@@ -6881,16 +6881,13 @@
         }
 
         // Agrupar por mes para el historial extendido
-        const historialMap = {};
-        ops.forEach(r => {
-          const mesKey = r.fecha_dia.slice(0, 7);
-          historialMap[mesKey] = (historialMap[mesKey] || 0) + (r.puntos_neto || 0);
-        });
+        const viewMode = window._reportCompanyView || 'global';
 
-        // Aplicar Overrides Oficiales Estáticos (Cortes Manuales)
-        historialMap['2026-02'] = 68049.53;
-        historialMap['2026-03'] = 68675.84;
-        historialMap['2026-04'] = 86341.74;
+        const camiloProfileIds = new Set([
+          '167493871', '158644203', '164812184', '93461947', '166575347', 
+          '153037229', '101245945', '167273716', '167279664', '145839775', 
+          '113752797', '151410237', '113579174', '114851358'
+        ]);
 
         const romeroProfileIds = new Set([
           '88243516', '95956014', '91360720', '143017065', '91733663', 
@@ -6903,22 +6900,75 @@
           '145844971', '156716207', '137163229', '157112125'
         ]);
 
-        // Calcular Mayo dinámicamente sumando el máximo acumulado (puntos_total) de cada operador
-        const mayoOps = ops.filter(r => r.fecha_dia && r.fecha_dia.startsWith('2026-05'));
-        const mayoProfiles = {};
-        mayoOps.forEach(r => {
-          if (r.id_perfil) {
-            const pid = String(r.id_perfil).trim();
-            if (romeroProfileIds.has(pid)) {
-              const val = parseFloat(r.puntos_total) || 0;
-              if (val > (mayoProfiles[r.id_perfil] || 0)) {
-                mayoProfiles[r.id_perfil] = val;
-              }
-            }
+        // Filtrar ops por división activa
+        const filteredOpsForMayo = ops.filter(r => {
+          if (!r.id_perfil) return false;
+          const pid = String(r.id_perfil).trim();
+          if (viewMode === 'romero') return romeroProfileIds.has(pid);
+          if (viewMode === 'camilo') return camiloProfileIds.has(pid);
+          return romeroProfileIds.has(pid) || camiloProfileIds.has(pid);
+        });
+
+        const historialMap = {};
+        filteredOpsForMayo.forEach(r => {
+          if (r.fecha_dia) {
+            const mesKey = r.fecha_dia.slice(0, 7);
+            const val = Number(r.puntos_neto) || 0;
+            const net = val > 1500 ? 0 : val;
+            historialMap[mesKey] = (historialMap[mesKey] || 0) + net;
           }
         });
-        const mayoSum = Object.values(mayoProfiles).reduce((acc, v) => acc + v, 0);
-        historialMap['2026-05'] = Math.max(59240.94, mayoSum);
+
+        // Calcular Mayo por max(puntos_total)
+        const mayoOps = filteredOpsForMayo.filter(r => r.fecha_dia && r.fecha_dia.startsWith('2026-05'));
+        
+        if (viewMode === 'romero') {
+          historialMap['2026-02'] = 68049.53;
+          historialMap['2026-03'] = 68675.84;
+          historialMap['2026-04'] = 86341.74;
+          
+          const romeroProfilesTemp = {};
+          mayoOps.forEach(r => {
+            const pid = String(r.id_perfil).trim();
+            const val = parseFloat(r.puntos_total) || 0;
+            if (val > (romeroProfilesTemp[pid] || 0)) romeroProfilesTemp[pid] = val;
+          });
+          const romeroMayoSum = Object.values(romeroProfilesTemp).reduce((acc, v) => acc + v, 0);
+          historialMap['2026-05'] = Math.max(59240.94, romeroMayoSum);
+        } else if (viewMode === 'camilo') {
+          historialMap['2026-02'] = 0;
+          historialMap['2026-03'] = 0;
+          historialMap['2026-04'] = 0;
+          
+          const camiloProfilesTemp = {};
+          mayoOps.forEach(r => {
+            const pid = String(r.id_perfil).trim();
+            const val = parseFloat(r.puntos_total) || 0;
+            if (val > (camiloProfilesTemp[pid] || 0)) camiloProfilesTemp[pid] = val;
+          });
+          const camiloMayoSum = Object.values(camiloProfilesTemp).reduce((acc, v) => acc + v, 0);
+          historialMap['2026-05'] = camiloMayoSum;
+        } else {
+          // Global consolidado
+          historialMap['2026-02'] = 68049.53;
+          historialMap['2026-03'] = 68675.84;
+          historialMap['2026-04'] = 86341.74;
+          
+          const romeroProfilesTemp = {};
+          const camiloProfilesTemp = {};
+          mayoOps.forEach(r => {
+            const pid = String(r.id_perfil).trim();
+            const val = parseFloat(r.puntos_total) || 0;
+            if (romeroProfileIds.has(pid)) {
+              if (val > (romeroProfilesTemp[pid] || 0)) romeroProfilesTemp[pid] = val;
+            } else if (camiloProfileIds.has(pid)) {
+              if (val > (camiloProfilesTemp[pid] || 0)) camiloProfilesTemp[pid] = val;
+            }
+          });
+          const romeroMayoSum = Object.values(romeroProfilesTemp).reduce((acc, v) => acc + v, 0);
+          const camiloMayoSum = Object.values(camiloProfilesTemp).reduce((acc, v) => acc + v, 0);
+          historialMap['2026-05'] = Math.max(59240.94, romeroMayoSum) + camiloMayoSum;
+        }
 
         // Crear el array para el modal de crecimiento (desde Febrero hasta ahora)
         const extHist = [];
@@ -6953,7 +7003,7 @@
         };
 
         // Puntos por día del mes anterior
-        const opsM1 = ops.filter(r => r.fecha_dia.startsWith(m1Key));
+        const opsM1 = filteredOpsForMayo.filter(r => r.fecha_dia.startsWith(m1Key));
         const diasM1Map = {};
         opsM1.forEach(r => { diasM1Map[r.fecha_dia] = (diasM1Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
         const diasM1ConDatos = Object.keys(diasM1Map).length || diasM1;
@@ -6965,7 +7015,7 @@
         }
 
         // Puntos por día del mes actual
-        const opsM2 = ops.filter(r => r.fecha_dia.startsWith(m2Key));
+        const opsM2 = filteredOpsForMayo.filter(r => r.fecha_dia.startsWith(m2Key));
         const diasM2Map = {};
         opsM2.forEach(r => { diasM2Map[r.fecha_dia] = (diasM2Map[r.fecha_dia]||0) + (r.puntos_neto||0); });
         const diasM2ConDatos = Object.keys(diasM2Map).length || Math.max(currentDay, 1);
@@ -6991,7 +7041,20 @@
 
         if (elTotal) elTotal.textContent = m2Total.toLocaleString('es-CO', {minimumFractionDigits: 1});
         if (elCop) elCop.textContent = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
-        const numOps = operatorsData.length || 1;
+        
+        const numOps = operatorsData.filter(o => {
+          if (viewMode === 'global') return true;
+          const emp = (o.empresa || '').toUpperCase();
+          const plat = (o.plataforma || '').toUpperCase();
+          const hasCamiloProfile = o.profiles && o.profiles.some(p => camiloProfileIds.has(String(p.id).trim()));
+          const hasRomeroProfile = o.profiles && o.profiles.some(p => romeroProfileIds.has(String(p.id).trim()));
+          const belongsRomero = hasRomeroProfile || emp.includes('ROMERO') || plat.includes('ROMERO') || (!hasCamiloProfile && plat === 'PRIME');
+          const belongsCamilo = hasCamiloProfile || emp.includes('CAMILO') || plat.includes('CAMILO');
+          if (viewMode === 'romero') return belongsRomero && !hasCamiloProfile;
+          if (viewMode === 'camilo') return belongsCamilo && !hasRomeroProfile;
+          return false;
+        }).length || 1;
+
         if (elAvg) elAvg.textContent = (m2Total / numOps).toFixed(1);
         if (elCrec) {
           elCrec.style.color = color;
@@ -13017,6 +13080,9 @@ function exportarDatos() {
         window._changeReportCompanyView = function(view) {
           window._reportCompanyView = view;
           renderOperators();
+          if (typeof rkFetchSupabaseTotals === 'function') {
+            rkFetchSupabaseTotals();
+          }
         };
       }
 

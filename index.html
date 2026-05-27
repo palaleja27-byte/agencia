@@ -22311,7 +22311,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     <!-- Input -->
     <div style="padding:12px; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.05); display:flex; gap:8px; align-items:center;">
       <button onclick="document.getElementById('chat-file-upload').click()" title="Adjuntar foto/archivo" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem; transition:0.2s;">📎</button>
-      <input type="file" id="chat-file-upload" style="display:none" onchange="alert('Simulación: Archivo listo para subir')">
+      <input type="file" id="chat-file-upload" style="display:none" onchange="manejadorSubidaArchivoChat(this)">
       
       <input type="text" id="rr-chat-input" placeholder="Responder..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
       <button onclick="enviarMensajeChat()" style="background:#6366f1; border:none; color:white; font-weight:bold; padding:8px 14px; border-radius:8px; cursor:pointer; transition:0.2s; box-shadow:0 0 10px rgba(99,102,241,0.3);">Enviar</button>
@@ -22442,6 +22442,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Iniciar el Protocolo "Ghost in the Machine"
       iniciarMonitoreoGhost();
       
+      // Polling de chat sincronizado en tiempo real (cada 3 segundos)
+      setInterval(cargarHistorialChatSeleccionado, 3000);
+      
       // Configurar controles si es Monitor o Admin
       setTimeout(() => {
         if (typeof currentRole !== 'undefined' && (currentRole === 'monitor' || currentRole === 'admin')) {
@@ -22509,6 +22512,51 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         console.error("Error cargando historial de chat:", e);
       }
 
+      // Renderizado inicial local
+      renderChatHTML(history, opName);
+
+      // Sincronizar asíncronamente desde Supabase (kv_store)
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').select('value').eq('key', key).maybeSingle().then(({ data, error }) => {
+          if (!error && data && data.value) {
+            let remoteHistory = [];
+            try {
+              remoteHistory = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            } catch(e) { remoteHistory = data.value; }
+            if (Array.isArray(remoteHistory)) {
+              const lastRemoteTs = remoteHistory.length > 0 ? remoteHistory[remoteHistory.length - 1].ts : 0;
+              const lastLocalTs = history.length > 0 ? history[history.length - 1].ts : 0;
+              if (lastRemoteTs !== lastLocalTs || !window._lastRenderedChatKey || window._lastRenderedChatKey !== key) {
+                // Alerta sonora al recibir un mensaje nuevo del otro extremo
+                const hasNewMessage = remoteHistory.length > history.length;
+                if (hasNewMessage && remoteHistory.length > 0) {
+                  const lastMsg = remoteHistory[remoteHistory.length - 1];
+                  const currentIsMe = (currentRole === 'operador' && lastMsg.sender === 'operador') || 
+                                      ((currentRole === 'monitor' || currentRole === 'admin') && lastMsg.sender === 'monitor');
+                  if (!currentIsMe) {
+                    playBeep('pulse');
+                    // Mostrar badge si no está abierto el chat
+                    const chatOpen = document.getElementById('rr-urgent-chat').classList.contains('open');
+                    if (!chatOpen) {
+                      const badge = document.getElementById('chat-bubble-badge');
+                      if (badge) badge.style.display = 'block';
+                    }
+                  }
+                }
+                
+                window._lastRenderedChatKey = key;
+                localStorage.setItem(key, JSON.stringify(remoteHistory));
+                renderChatHTML(remoteHistory, opName);
+              }
+            }
+          }
+        }).catch(e => console.warn('[CHAT-SYNC] Fetch error:', e));
+      }
+    }
+
+    function renderChatHTML(history, opName) {
+      const box = document.getElementById('rr-chat-msgs');
+      if (!box) return;
       box.innerHTML = `<div style="text-align:center; font-size:0.6rem; color:#475569; margin-bottom:10px;">Chat Sincronizado: ${opName.toUpperCase()}</div>`;
       
       if (history.length === 0) {
@@ -22529,6 +22577,25 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           const align = isMe ? 'flex-end' : 'flex-start';
           const radius = isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px';
 
+          let attachmentHTML = '';
+          if (msg.file) {
+            if (msg.file.type.startsWith('image/')) {
+              attachmentHTML = `
+                <div style="margin-top:6px;">
+                  <img src="${msg.file.data}" style="max-width:100%; max-height:160px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); cursor:pointer;" onclick="window.open('${msg.file.data}')" title="Haga clic para ver tamaño completo">
+                </div>
+              `;
+            } else {
+              attachmentHTML = `
+                <div style="margin-top:6px;">
+                  <a href="${msg.file.data}" download="${msg.file.name}" style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); padding:6px 10px; border-radius:6px; color:#fff; text-decoration:none; font-size:0.7rem;">
+                    <span style="font-size:0.9rem;">📄</span> ${msg.file.name}
+                  </a>
+                </div>
+              `;
+            }
+          }
+
           box.innerHTML += `
             <div style="align-self:${align}; background:${bubbleBg}; border:1px solid ${bubbleBorder}; padding:8px 12px; border-radius:${radius}; max-width:85%; margin-bottom:2px;">
               <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:2px;">
@@ -22536,6 +22603,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 <span style="font-size:0.5rem; color:#64748b;">${msg.time || ''}</span>
               </div>
               <div style="font-size:0.8rem; color:#f8fafc; line-height:1.3; word-break:break-word;">${msg.text}</div>
+              ${attachmentHTML}
             </div>
           `;
         });
@@ -22584,13 +22652,17 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       
       // Save locally and sync in Supabase
       localStorage.setItem(chatKey, JSON.stringify(history));
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' }).then(() => {
+          console.log('[CHAT] Mensaje sincronizado en Supabase');
+        }).catch(e => console.warn('[CHAT] Sync error:', e));
+      }
 
       // Trigger custom alerts if monitor sends warning/critical/motivar alert
       if (sender === 'monitor') {
         const alertLevelSelect = document.getElementById('rr-chat-alert-level');
         const nivel = alertLevelSelect ? alertLevelSelect.value : 'INFO';
         if (nivel !== 'INFO') {
-          const alertKey = `rr_custom_alert_${opName.toLowerCase()}`; // corrected key format
           const soundSel = document.getElementById('chat-sound-sel');
           localStorage.setItem(`rr_custom_alert_${opName.toLowerCase()}`, JSON.stringify({
             nivel: nivel,
@@ -22612,6 +22684,75 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = '';
         ghostVars.lastInteraction = Date.now();
       }
+    }
+
+    function enviarMensajeChatConArchivo(fileData) {
+      let opName = '';
+      let sender = 'monitor';
+
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+        opName = typeof currentOpName !== 'undefined' ? currentOpName : '';
+        sender = 'operador';
+      } else {
+        opName = window.chatSelectedOp;
+        sender = 'monitor';
+      }
+
+      if (!opName) {
+        alert("Por favor selecciona un operador primero.");
+        return;
+      }
+
+      const chatKey = `rr_chat_${opName.toLowerCase()}`;
+      let history = [];
+      try {
+        const stored = localStorage.getItem(chatKey);
+        if (stored) history = JSON.parse(stored);
+      } catch (e) { console.error(e); }
+
+      const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const newMsg = {
+        sender: sender,
+        text: `📎 Archivo adjunto: ${fileData.name}`,
+        file: fileData,
+        time: timeStr,
+        ts: Date.now()
+      };
+      
+      history.push(newMsg);
+      if (history.length > 50) history.shift();
+      
+      // Save locally and sync in Supabase
+      localStorage.setItem(chatKey, JSON.stringify(history));
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' }).then(() => {
+          console.log('[CHAT-FILE] Archivo sincronizado con Supabase');
+        }).catch(e => console.warn('[CHAT-FILE] Sync error:', e));
+      }
+
+      cargarHistorialChatSeleccionado();
+      playBeep('pulse');
+    }
+
+    function manejadorSubidaArchivoChat(input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 1.5 * 1024 * 1024) {
+        alert("El tamaño máximo permitido para adjuntos es de 1.5 MB.");
+        input.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const fileData = {
+          name: file.name,
+          type: file.type,
+          data: e.target.result
+        };
+        enviarMensajeChatConArchivo(fileData);
+        input.value = '';
+      };
+      reader.readAsDataURL(file);
     }
 
     function enviarPredefinida(opName, type) {

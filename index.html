@@ -22534,12 +22534,31 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                   const currentIsMe = (currentRole === 'operador' && lastMsg.sender === 'operador') || 
                                       ((currentRole === 'monitor' || currentRole === 'admin') && lastMsg.sender === 'monitor');
                   if (!currentIsMe) {
-                    playBeep('pulse');
-                    // Mostrar badge si no está abierto el chat
-                    const chatOpen = document.getElementById('rr-urgent-chat').classList.contains('open');
-                    if (!chatOpen) {
-                      const badge = document.getElementById('chat-bubble-badge');
-                      if (badge) badge.style.display = 'block';
+                    if (currentRole === 'operador') {
+                      playBeep('alarm');
+                      // Poner en primer plano inmediatamente (abrir chat automáticamente)
+                      const chatPanel = document.getElementById('rr-urgent-chat');
+                      if (chatPanel) {
+                        chatPanel.classList.add('open');
+                        const header = document.getElementById('chat-header');
+                        if (header) {
+                          header.classList.add('status-critico');
+                          // Remover status-critico al enfocar el input para responder
+                          const inputField = document.getElementById('rr-chat-input');
+                          if (inputField) {
+                            inputField.addEventListener('focus', () => {
+                              header.classList.remove('status-critico');
+                            }, { once: true });
+                          }
+                        }
+                      }
+                    } else {
+                      playBeep('pulse');
+                      const chatOpen = document.getElementById('rr-urgent-chat').classList.contains('open');
+                      if (!chatOpen) {
+                        const badge = document.getElementById('chat-bubble-badge');
+                        if (badge) badge.style.display = 'block';
+                      }
                     }
                   }
                 }

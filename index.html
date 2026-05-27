@@ -22652,12 +22652,6 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
 
       const chatKey = `rr_chat_${opName.toLowerCase()}`;
-      let history = [];
-      try {
-        const stored = localStorage.getItem(chatKey);
-        if (stored) history = JSON.parse(stored);
-      } catch (e) { console.error(e); }
-
       const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const newMsg = {
         sender: sender,
@@ -22665,16 +22659,52 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         time: timeStr,
         ts: Date.now()
       };
+
+      input.value = '';
+      playBeep('pulse');
       
-      history.push(newMsg);
-      if (history.length > 50) history.shift();
-      
-      // Save locally and sync in Supabase
-      localStorage.setItem(chatKey, JSON.stringify(history));
+      // Reset visual alarm state if operator replies
+      if (sender === 'operador') {
+        document.getElementById('rr-urgent-chat').classList.remove('critico', 'alerta');
+        const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = '';
+        const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = '';
+        ghostVars.lastInteraction = Date.now();
+      }
+
+      // Protocolo Fetch-Append-Save atómico
       if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' }).then(() => {
-          console.log('[CHAT] Mensaje sincronizado en Supabase');
-        }).catch(e => console.warn('[CHAT] Sync error:', e));
+        _sb.from('kv_store').select('value').eq('key', chatKey).maybeSingle().then(({ data, error }) => {
+          let history = [];
+          if (!error && data && data.value) {
+            try {
+              history = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            } catch(e) { history = data.value; }
+          }
+          if (!Array.isArray(history)) history = [];
+          
+          history.push(newMsg);
+          if (history.length > 50) history.shift();
+          
+          _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' }).then(() => {
+            localStorage.setItem(chatKey, JSON.stringify(history));
+            cargarHistorialChatSeleccionado();
+          }).catch(err => {
+            console.warn('[CHAT] Fallo upsert, guardado local:', err);
+            localStorage.setItem(chatKey, JSON.stringify(history));
+            cargarHistorialChatSeleccionado();
+          });
+        });
+      } else {
+        let history = [];
+        try {
+          const stored = localStorage.getItem(chatKey);
+          if (stored) history = JSON.parse(stored);
+        } catch(e) {}
+        if (!Array.isArray(history)) history = [];
+        history.push(newMsg);
+        if (history.length > 50) history.shift();
+        localStorage.setItem(chatKey, JSON.stringify(history));
+        cargarHistorialChatSeleccionado();
       }
 
       // Trigger custom alerts if monitor sends warning/critical/motivar alert
@@ -22690,18 +22720,6 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             ts: Date.now()
           }));
         }
-      }
-
-      input.value = '';
-      cargarHistorialChatSeleccionado();
-      playBeep('pulse');
-      
-      // Reset visual alarm state if operator replies
-      if (sender === 'operador') {
-        document.getElementById('rr-urgent-chat').classList.remove('critico', 'alerta');
-        const dot = document.getElementById('chat-status-dot'); if (dot) dot.className = '';
-        const badge = document.getElementById('chat-bubble-badge'); if (badge) badge.className = '';
-        ghostVars.lastInteraction = Date.now();
       }
     }
 
@@ -22723,12 +22741,6 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
 
       const chatKey = `rr_chat_${opName.toLowerCase()}`;
-      let history = [];
-      try {
-        const stored = localStorage.getItem(chatKey);
-        if (stored) history = JSON.parse(stored);
-      } catch (e) { console.error(e); }
-
       const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const newMsg = {
         sender: sender,
@@ -22738,19 +22750,42 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         ts: Date.now()
       };
       
-      history.push(newMsg);
-      if (history.length > 50) history.shift();
-      
-      // Save locally and sync in Supabase
-      localStorage.setItem(chatKey, JSON.stringify(history));
-      if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' }).then(() => {
-          console.log('[CHAT-FILE] Archivo sincronizado con Supabase');
-        }).catch(e => console.warn('[CHAT-FILE] Sync error:', e));
-      }
-
-      cargarHistorialChatSeleccionado();
       playBeep('pulse');
+
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').select('value').eq('key', chatKey).maybeSingle().then(({ data, error }) => {
+          let history = [];
+          if (!error && data && data.value) {
+            try {
+              history = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            } catch(e) { history = data.value; }
+          }
+          if (!Array.isArray(history)) history = [];
+          
+          history.push(newMsg);
+          if (history.length > 50) history.shift();
+
+          _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' }).then(() => {
+            localStorage.setItem(chatKey, JSON.stringify(history));
+            cargarHistorialChatSeleccionado();
+          }).catch(err => {
+            console.warn('[CHAT-FILE] Fallo upsert:', err);
+            localStorage.setItem(chatKey, JSON.stringify(history));
+            cargarHistorialChatSeleccionado();
+          });
+        });
+      } else {
+        let history = [];
+        try {
+          const stored = localStorage.getItem(chatKey);
+          if (stored) history = JSON.parse(stored);
+        } catch(e) {}
+        if (!Array.isArray(history)) history = [];
+        history.push(newMsg);
+        if (history.length > 50) history.shift();
+        localStorage.setItem(chatKey, JSON.stringify(history));
+        cargarHistorialChatSeleccionado();
+      }
     }
 
     function manejadorSubidaArchivoChat(input) {

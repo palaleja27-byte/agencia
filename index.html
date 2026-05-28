@@ -9335,6 +9335,38 @@
     const _SB_BOOT_MAX_RETRIES = 3;
     const _SB_BOOT_TIMEOUT_MS = 4000; // 4s — extremadamente rápido para dar entrada con datos locales si Supabase tarda
 
+    function syncMergeOperatorsData(remoteVal) {
+      let localArr = [];
+      try {
+        const stored = localStorage.getItem('primeOperatorsData2026');
+        if (stored) localArr = JSON.parse(stored);
+      } catch(e) {}
+      let remoteArr = [];
+      try {
+        remoteArr = typeof remoteVal === 'string' ? JSON.parse(remoteVal) : remoteVal;
+      } catch(e) {}
+      
+      if (Array.isArray(localArr) && Array.isArray(remoteArr)) {
+        const merged = [...remoteArr];
+        localArr.forEach(lOp => {
+          const exists = merged.some(rOp => rOp.name.toUpperCase() === lOp.name.toUpperCase());
+          if (!exists) merged.push(lOp);
+        });
+        const mergedStr = JSON.stringify(merged);
+        _origSetItem('primeOperatorsData2026', mergedStr);
+        _sbMemCache['primeOperatorsData2026'] = mergedStr;
+        
+        if (merged.length > remoteArr.length && _sb) {
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedStr }, { onConflict: 'key' })
+            .catch(e => console.warn('[Sync-Boot] Fallo al subir combinacion de operadores:', e));
+        }
+      } else {
+        const strVal = typeof remoteVal === 'string' ? remoteVal : JSON.stringify(remoteVal);
+        _origSetItem('primeOperatorsData2026', strVal);
+        _sbMemCache['primeOperatorsData2026'] = strVal;
+      }
+    }
+
     async function _sbSyncOnLoad() {
       if (!_sbBootReady) {
         _bootProgress(20, 'Conectando con Supabase...');
@@ -9346,7 +9378,15 @@
           _bootProgress(40, `Descargando datos${_sbBootRetries > 0 ? ' (intento ' + (_sbBootRetries + 1) + ')' : ''}...`);
         }
 
-        const fetchPromise = _sb.from('kv_store').select('key, value');
+        // Consulta altamente optimizada: Filtra y omite datos multimedia y chat pesados (ahorra 90% ancho de banda)
+        const fetchPromise = _sb.from('kv_store')
+          .select('key, value')
+          .not('key', 'ilike', 'rr_chat_%')
+          .not('key', 'ilike', 'rr_op_banner_%')
+          .not('key', 'ilike', 'rr_op_avatar_%')
+          .not('key', 'ilike', 'rr_heatmap_%')
+          .not('key', 'ilike', 'rr_prime_asistencia_draft_%');
+
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Supabase Timeout')), _SB_BOOT_TIMEOUT_MS)
         );
@@ -9359,8 +9399,12 @@
         }
         data.forEach(({ key, value }) => {
           if (_sbShouldExclude(key)) return;
-          _origSetItem(key, value);
-          _sbMemCache[key] = value;
+          if (key === 'primeOperatorsData2026') {
+            syncMergeOperatorsData(value);
+          } else {
+            _origSetItem(key, value);
+            _sbMemCache[key] = value;
+          }
         });
 
         _sbOnline = true;
@@ -9476,9 +9520,13 @@
               // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
               const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
               // rr_prime_cortes NUNCA se ignora — es la fuente de puntos del operador
-              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes') return;
-              _origSetItem(row.key, row.value);
-              _sbMemCache[row.key] = row.value; // memory cache actualizado por realtime
+              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && row.key !== 'primeOperatorsData2026') return;
+              if (row.key === 'primeOperatorsData2026') {
+                syncMergeOperatorsData(row.value);
+              } else {
+                _origSetItem(row.key, row.value);
+                _sbMemCache[row.key] = row.value; // memory cache actualizado por realtime
+              }
               // Recargar datos en memoria si es una clave de negocio crítica
               const critical = [
                 'primeOperatorsData2026', 'rr_prime_cortes', 'rr_prime_asistencia',

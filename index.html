@@ -22445,6 +22445,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Polling de chat sincronizado en tiempo real (cada 3 segundos)
       setInterval(cargarHistorialChatSeleccionado, 3000);
       
+      // Polling global para detectar mensajes nuevos de cualquier operador (cada 4 segundos)
+      setInterval(monitorearNuevosMensajesGlobales, 4000);
+      
       // Configurar controles si es Monitor o Admin
       setTimeout(() => {
         if (typeof currentRole !== 'undefined' && (currentRole === 'monitor' || currentRole === 'admin')) {
@@ -22589,6 +22592,125 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         } else {
           alert("Por favor permite las ventanas emergentes en tu navegador para ver la imagen.");
         }
+      }
+    }
+
+    function crearNotificacionToastChat(opNameReal, lastMsg) {
+      let container = document.getElementById('rr-chat-toasts-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'rr-chat-toasts-container';
+        container.style.cssText = 'position:fixed; top:20px; right:20px; z-index:100000; display:flex; flex-direction:column; gap:10px; max-width:320px;';
+        document.body.appendChild(container);
+      }
+
+      const toast = document.createElement('div');
+      toast.style.cssText = 'background:rgba(15, 23, 42, 0.95); backdrop-filter:blur(12px); border:1px solid rgba(99,102,241,0.45); box-shadow:0 10px 25px -5px rgba(0,0,0,0.5), 0 0 15px rgba(99,102,241,0.3); border-radius:12px; padding:14px; color:#fff; cursor:pointer; transform:translateX(120%); transition:all 0.35s cubic-bezier(0.16, 1, 0.3, 1); display:flex; flex-direction:column; gap:6px; font-family:\'Outfit\', \'Inter\', sans-serif;';
+      
+      toast.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <span style="font-size:0.65rem; color:#818cf8; font-weight:900; letter-spacing:0.05em;">💬 NUEVO MENSAJE</span>
+          <span style="font-size:0.55rem; color:#64748b;">${lastMsg.time || ''}</span>
+        </div>
+        <div style="font-size:0.85rem; font-weight:bold; color:#f8fafc;">${opNameReal}</div>
+        <div style="font-size:0.75rem; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px;">
+          ${lastMsg.text}
+        </div>
+      `;
+
+      toast.onclick = function() {
+        const select = document.getElementById('rr-chat-op-select');
+        if (select) {
+          let matchedVal = '';
+          Array.from(select.options).forEach(opt => {
+            if (opt.value.toLowerCase() === opNameReal.toLowerCase()) {
+              matchedVal = opt.value;
+            }
+          });
+          if (matchedVal) {
+            select.value = matchedVal;
+            window.chatSelectedOp = matchedVal;
+          } else {
+            window.chatSelectedOp = opNameReal;
+          }
+        } else {
+          window.chatSelectedOp = opNameReal;
+        }
+
+        const chatPanel = document.getElementById('rr-urgent-chat');
+        if (chatPanel) {
+          chatPanel.classList.add('open');
+          const header = document.getElementById('chat-header');
+          if (header) header.classList.add('status-critico');
+        }
+
+        cargarHistorialChatSeleccionado();
+        toast.style.transform = 'translateX(120%)';
+        setTimeout(() => toast.remove(), 400);
+      };
+
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.transform = 'translateX(0)';
+      }, 50);
+
+      playBeep('coin');
+
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.style.transform = 'translateX(120%)';
+          setTimeout(() => toast.remove(), 400);
+        }
+      }, 6000);
+    }
+
+    function monitorearNuevosMensajesGlobales() {
+      if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').select('key, value').like('key', 'rr_chat_%').then(({ data, error }) => {
+          if (!error && data) {
+            data.forEach(row => {
+              let remoteHistory = [];
+              try {
+                remoteHistory = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+              } catch(e) { remoteHistory = row.value; }
+              
+              if (Array.isArray(remoteHistory) && remoteHistory.length > 0) {
+                const opNameReal = row.key.replace('rr_chat_', '');
+                const lastMsg = remoteHistory[remoteHistory.length - 1];
+                
+                let localHistory = [];
+                try {
+                  const stored = localStorage.getItem(row.key);
+                  if (stored) localHistory = JSON.parse(stored);
+                } catch(e) {}
+                if (!Array.isArray(localHistory)) localHistory = [];
+
+                const lastRemoteTs = lastMsg.ts;
+                const lastLocalTs = localHistory.length > 0 ? localHistory[localHistory.length - 1].ts : 0;
+
+                if (lastRemoteTs !== lastLocalTs) {
+                  if (lastMsg.sender === 'operador') {
+                    const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && document.getElementById('rr-urgent-chat').classList.contains('open'));
+                    
+                    if (!isViewingCurrent) {
+                      crearNotificacionToastChat(opNameReal.toUpperCase(), lastMsg);
+                      
+                      const badge = document.getElementById('chat-bubble-badge');
+                      if (badge) badge.style.display = 'block';
+                    } else {
+                      renderChatHTML(remoteHistory, window.chatSelectedOp);
+                      playBeep('pulse');
+                    }
+                  }
+                  localStorage.setItem(row.key, JSON.stringify(remoteHistory));
+                }
+              }
+            });
+          }
+        }).catch(e => console.warn('[GLOBAL-CHAT-SYNC] Fetch error:', e));
       }
     }
 

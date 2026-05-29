@@ -23210,9 +23210,32 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               remoteHistory = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
             } catch(e) { remoteHistory = data.value; }
             if (Array.isArray(remoteHistory)) {
+              // Update seen state dynamically
+              let updatedSeen = false;
+              remoteHistory.forEach(msg => {
+                if (currentRole === 'monitor' || currentRole === 'admin') {
+                  if (msg.sender === 'operador' && !msg.seen) {
+                    msg.seen = true;
+                    updatedSeen = true;
+                  }
+                } else if (currentRole === 'operador') {
+                  if (msg.sender === 'monitor' && !msg.seen) {
+                    msg.seen = true;
+                    updatedSeen = true;
+                  }
+                }
+              });
+
+              if (updatedSeen) {
+                _sb.from('kv_store').upsert({ key: key, value: JSON.stringify(remoteHistory) }, { onConflict: 'key' })
+                  .then(() => {
+                    localStorage.setItem(key, JSON.stringify(remoteHistory));
+                  }).catch(e => console.warn('[CHAT-SEEN-SYNC] Seen update failed:', e));
+              }
+
               const lastRemoteTs = remoteHistory.length > 0 ? remoteHistory[remoteHistory.length - 1].ts : 0;
               const lastLocalTs = history.length > 0 ? history[history.length - 1].ts : 0;
-              if (lastRemoteTs !== lastLocalTs || !window._lastRenderedChatKey || window._lastRenderedChatKey !== key) {
+              if (lastRemoteTs !== lastLocalTs || updatedSeen || !window._lastRenderedChatKey || window._lastRenderedChatKey !== key) {
                 // Alerta sonora al recibir un mensaje nuevo del otro extremo
                 const hasNewMessage = remoteHistory.length > history.length;
                 if (hasNewMessage && remoteHistory.length > 0) {
@@ -23350,6 +23373,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
     function monitorearNuevosMensajesGlobales() {
       if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+      window._toastedMessages = window._toastedMessages || new Set();
 
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').select('key, value').like('key', 'rr_chat_%').then(({ data, error }) => {
@@ -23379,11 +23403,32 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                     const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && document.getElementById('rr-urgent-chat').classList.contains('open'));
                     
                     if (!isViewingCurrent) {
-                      crearNotificacionToastChat(opNameReal.toUpperCase(), lastMsg);
+                      // Only trigger toast for very recent, real-time incoming messages
+                      const isRecent = Math.abs(Date.now() - lastMsg.ts) < 25000;
+                      const toastKey = `${opNameReal.toLowerCase()}_${lastMsg.ts}`;
+                      
+                      if (isRecent && !window._toastedMessages.has(toastKey)) {
+                        window._toastedMessages.add(toastKey);
+                        crearNotificacionToastChat(opNameReal.toUpperCase(), lastMsg);
+                      }
                       
                       const badge = document.getElementById('chat-bubble-badge');
                       if (badge) badge.style.display = 'block';
                     } else {
+                      // Actively viewing: automatically mark incoming operator message as read!
+                      let updated = false;
+                      remoteHistory.forEach(msg => {
+                        if (msg.sender === 'operador' && !msg.seen) {
+                          msg.seen = true;
+                          updated = true;
+                        }
+                      });
+                      if (updated) {
+                        _sb.from('kv_store').upsert({ key: row.key, value: JSON.stringify(remoteHistory) }, { onConflict: 'key' })
+                          .then(() => {
+                            localStorage.setItem(row.key, JSON.stringify(remoteHistory));
+                          }).catch(e => console.warn('[GLOBAL-CHAT-SEEN] Seen update failed:', e));
+                      }
                       renderChatHTML(remoteHistory, window.chatSelectedOp);
                       playBeep('pulse');
                     }
@@ -23444,11 +23489,13 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             }
           }
 
+          const checkmarkHTML = isMe ? (msg.seen ? '<span style="color:#5eead4; margin-left:4px; font-weight:900; font-size:0.65rem; text-shadow:0 0 4px rgba(94, 234, 212, 0.4);" title="Leído">✓✓</span>' : '<span style="color:#64748b; margin-left:4px; font-weight:900; font-size:0.65rem;" title="Entregado">✓</span>') : '';
+
           box.innerHTML += `
             <div style="align-self:${align}; background:${bubbleBg}; border:1px solid ${bubbleBorder}; padding:8px 12px; border-radius:${radius}; max-width:85%; margin-bottom:2px;">
               <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:2px;">
                 <span style="font-size:0.55rem; color:${labelColor}; font-weight:900;">${senderLabel}</span>
-                <span style="font-size:0.5rem; color:#64748b;">${msg.time || ''}</span>
+                <span style="font-size:0.5rem; color:#64748b; display:inline-flex; align-items:center;">${msg.time || ''}${checkmarkHTML}</span>
               </div>
               <div style="font-size:0.8rem; color:#f8fafc; line-height:1.3; word-break:break-word;">${msg.text}</div>
               ${attachmentHTML}
@@ -23486,7 +23533,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         sender: sender,
         text: text,
         time: timeStr,
-        ts: Date.now()
+        ts: Date.now(),
+        seen: false
       };
 
       input.value = '';
@@ -23576,7 +23624,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         text: `📎 Archivo adjunto: ${fileData.name}`,
         file: fileData,
         time: timeStr,
-        ts: Date.now()
+        ts: Date.now(),
+        seen: false
       };
       
       playBeep('pulse');
@@ -23672,7 +23721,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           sender: 'monitor',
           text: text,
           time: timeStr,
-          ts: Date.now()
+          ts: Date.now(),
+          seen: false
         });
         if (history.length > 50) history.shift();
         return history;

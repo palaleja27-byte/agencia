@@ -9886,9 +9886,12 @@
     }
 
     // High Definition (HD) Cybernetic Mesh Particle Canvas Animation
+    let _cyberBgInitialized = false;
     function initCyberneticBg() {
+      if (_cyberBgInitialized) return;
       const canvas = document.getElementById('cyber-mesh-canvas');
       if (!canvas) return;
+      _cyberBgInitialized = true;
       const ctx = canvas.getContext('2d');
 
       // HD Retina DPI resolution scaling
@@ -10033,9 +10036,10 @@
           if (mouseActive) {
             const dxM = p1.x - mouseX;
             const dyM = p1.y - mouseY;
-            const distM = Math.sqrt(dxM * dxM + dyM * dyM);
+            const distMSq = dxM * dxM + dyM * dyM;
             
-            if (distM < 260) {
+            if (distMSq < 67600) { // 260 * 260
+              const distM = Math.sqrt(distMSq);
               const pullForce = (260 - distM) / 260;
               // Add magnetic drift towards the cursor
               p1.x -= (dxM / distM) * pullForce * 1.5;
@@ -10049,8 +10053,9 @@
           if (mouseActive) {
             const dxMouse = p1.x - mouseX;
             const dyMouse = p1.y - mouseY;
-            const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
-            if (distMouse < 260) {
+            const distMouseSq = dxMouse * dxMouse + dyMouse * dyMouse;
+            if (distMouseSq < 67600) { // 260 * 260
+              const distMouse = Math.sqrt(distMouseSq);
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(mouseX, mouseY);
@@ -10068,8 +10073,9 @@
             const p2 = particles[j];
             const dx = p1.x - p2.x;
             const dy = p1.y - p2.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 145) {
+            const distSq = dx * dx + dy * dy;
+            if (distSq < 21025) { // 145 * 145
+              const dist = Math.sqrt(distSq);
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(p2.x, p2.y);
@@ -10273,12 +10279,16 @@
           console.warn('[Supabase] Fallback inmediato a datos locales para evitar bloqueos.');
           _sbBootReady = true;
           _bootProgress(100, `⚠️ Conectando en segundo plano...`);
-          if (typeof loadData === 'function') loadData();
-          if (currentRole === 'operador' && currentOpName) {
-            if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
-            if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
-          } else {
-            if (typeof renderRanking === 'function') renderRanking();
+          try {
+            if (typeof loadData === 'function') loadData();
+            if (currentRole === 'operador' && currentOpName) {
+              if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
+              if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
+            } else {
+              if (typeof renderRanking === 'function') renderRanking();
+            }
+          } catch (renderError) {
+            console.error('[Supabase Boot Fallback] Error renderizando UI en fallback local:', renderError);
           }
           _toastSync('⚠️ Modo local activo (conectando a Supabase...)', true);
         }
@@ -10638,6 +10648,28 @@
 
     // Arrancar al cargar la página
     window.addEventListener('load', _initSupabase);
+    
+    // Temporizador de Seguridad Infallible (Fail-Safe Boot Timer)
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const boot = document.getElementById('rr-boot-screen');
+        if (boot && boot.style.display !== 'none') {
+          console.warn('[Boot Fail-Safe] Forzando el desvanecimiento de la pantalla de carga para evitar bloqueos visuales...');
+          boot.style.opacity = '0';
+          setTimeout(() => {
+            boot.style.display = 'none';
+          }, 500);
+          // Asegurar que el canvas y los live stats se disparen
+          try {
+            initCyberneticBg();
+            updateLoginLiveStats();
+          } catch (e) {
+            console.error('[Boot Fail-Safe] Error al inicializar en fallback forzado:', e);
+          }
+        }
+      }, 5000); // 5 segundos de gracia antes de forzar el desbloqueo
+    });
+
     window.addEventListener('load', () => setTimeout(_migratePinsToHash, 2000));
     window.addEventListener('load', () => setTimeout(_migratePinsToHash, 2000)); // migrate legacy PINs silently
 

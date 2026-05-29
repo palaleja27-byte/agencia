@@ -9596,21 +9596,21 @@
 
       // HD Retina DPI resolution scaling
       let dpi = window.devicePixelRatio || 1;
-      let width = 0;
-      let height = 0;
+      let width = window.innerWidth || 1024;
+      let height = window.innerHeight || 768;
 
       function resize() {
         if (!canvas.parentElement) return;
         const rect = canvas.parentElement.getBoundingClientRect();
-        width = rect.width;
-        height = rect.height;
+        width = rect.width || window.innerWidth || 1024;
+        height = rect.height || window.innerHeight || 768;
         
         // Scale dimensions based on DPI for razor sharp rendering
         canvas.width = width * dpi;
         canvas.height = height * dpi;
         
-        // Reset scale transform
-        ctx.resetTransform();
+        // Reset scale transform using universally supported setTransform
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpi, dpi);
       }
       window.addEventListener('resize', resize);
@@ -9807,6 +9807,13 @@
       }
       
       animate();
+    }
+
+    // Run immediately to ensure background animation is active during boot loading
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initCyberneticBg);
+    } else {
+      initCyberneticBg();
     }
 
     // Dynamic Live Stats reflected on the Login Screen

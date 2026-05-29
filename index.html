@@ -12610,6 +12610,44 @@
             }
           }
 
+          // Generar desglose inteligente de perfiles
+          const profilesBreakdownHtml = op.profiles.map(p => {
+            const val = p.dia || 0;
+            const profileStatus = p.r05 > 0.1 ? '⚡ Activo' : p.r10 > 0.05 ? '⏱ Lento' : '💤 Inactivo';
+            const profileStatusColor = p.r05 > 0.1 ? '#10b981' : p.r10 > 0.05 ? '#eab308' : '#64748b';
+            return `
+              <div style="font-size:0.52rem; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.03); padding:4px 0;">
+                <span style="font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+                  📂 ${p.pm}
+                  <span style="font-size:0.42rem; color:${profileStatusColor}; background:rgba(255,255,255,0.02); padding:1px 4px; border-radius:4px; font-weight:bold;">${profileStatus}</span>
+                </span>
+                <span style="font-weight:900; color:#cbd5e1;">${val.toFixed(1)} pts</span>
+              </div>
+            `;
+          }).join('');
+
+          // Generar diagnóstico de rendimiento inteligente de Cerebro RR
+          let smartDiagnostic = '💤 Operador fuera de turno o desconectado.';
+          let diagColor = '#64748b';
+          if (estaLogueado) {
+            if (pct >= 100) {
+              smartDiagnostic = '🔥 Excelente: Meta del día superada. Manteniendo pulso estelar.';
+              diagColor = '#10b981';
+            } else if (op.dia === 0) {
+              smartDiagnostic = '🚨 Crítico: Conectado sin registrar puntos. Enviar alerta inactivo.';
+              diagColor = '#ef4444';
+            } else if (elapsedMin <= 3) {
+              smartDiagnostic = '⚡ Ritmo óptimo: Actividad reciente registrada en los perfiles.';
+              diagColor = '#10b981';
+            } else if (elapsedMin <= 10) {
+              smartDiagnostic = `⚠️ Advertencia: ${elapsedMin}m sin reportar puntos. Sugerir cambio de táctica.`;
+              diagColor = '#f59e0b';
+            } else {
+              smartDiagnostic = `🚨 Alerta Crítica: ${elapsedMin}m sin reportar puntos. Enviar recordatorio.`;
+              diagColor = '#ef4444';
+            }
+          }
+
           return `
             <div class="op-prod-card" data-name="${op.name.toLowerCase()}" data-logueado="${estaLogueado}" data-status="${statusText}" style="background:rgba(15,23,42,0.85); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:10px; transition:all 0.3s; position:relative; backdrop-filter:blur(5px); ${glowClass}">
               <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -12617,7 +12655,7 @@
                   <div style="width:28px; height:28px; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#818cf8; font-weight:bold; font-size:0.75rem;">${avatarChar}</div>
                   <div>
                     <div style="font-size:0.7rem; font-weight:900; color:#f8fafc; line-height:1.2;">${op.name}</div>
-                    <div style="font-size:0.5rem; color:#475569; margin-top:2px;">Perfiles: ${op.profiles.length}</div>
+                    <div style="font-size:0.5rem; color:#475569; margin-top:2px;">Perfiles asignados: ${op.profiles.length}</div>
                   </div>
                 </div>
                 
@@ -12648,10 +12686,27 @@
                   <span>Último cobro: ${maxTs > 0 ? new Date(maxTs).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}) : 'Ninguno'}</span>
                 </div>
               </div>
+
+              <!-- Intelligent Diagnostic & Profiles Breakdown -->
+              <div style="background:rgba(99,102,241,0.03); border:1px solid rgba(99,102,241,0.1); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:6px;">
+                <div style="font-size:0.5rem; color:#818cf8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; display:flex; justify-content:space-between; align-items:center;">
+                  <span>🧠 CEREBRO RR: PRODUCTIVIDAD</span>
+                  <span style="color:${diagColor}; font-weight:900; font-size:0.45rem;">EN VIVO</span>
+                </div>
+                <div style="font-size:0.52rem; color:${diagColor}; font-weight:700; line-height:1.3; background:rgba(0,0,0,0.15); padding:4px 6px; border-radius:4px;">
+                  ${smartDiagnostic}
+                </div>
+                <div style="font-size:0.5rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-top:2px;">
+                  📂 DESGLOSE DE PERFILES (${op.profiles.length})
+                </div>
+                <div style="display:flex; flex-direction:column; max-height:85px; overflow-y:auto; padding-right:4px;" class="custom-scrollbar">
+                  ${profilesBreakdownHtml}
+                </div>
+              </div>
               
               <div>
                 <div style="font-size:0.5rem; color:#64748b; font-weight:700; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Servicios Realizados (Tableau UK)</div>
-                <div style="display:flex; flex-direction:column; gap:2px; max-height:100px; overflow-y:auto; padding-right:4px;" class="custom-scrollbar">
+                <div style="display:flex; flex-direction:column; gap:2px; max-height:80px; overflow-y:auto; padding-right:4px;" class="custom-scrollbar">
                   ${serviceRowsHtml}
                 </div>
               </div>
@@ -12713,20 +12768,16 @@
             }
             
             let bg = 'rgba(15,23,42,0.6)', fg = '#475569';
+            let cellStyle = `padding:1px;background:${bg};border:1px solid rgba(0,0,0,0.05);`;
             if (val > 0) {
-               if (prevVal === null) {
-                  bg = 'rgba(30,58,80,0.9)'; fg = '#94a3b8';
-               } else if (val > prevVal) {
-                  bg = 'rgba(16,185,129,0.4)'; fg = '#34d399';
-               } else if (val < prevVal) {
-                  bg = 'rgba(239,68,68,0.4)'; fg = '#fca5a5';
-               } else {
-                  bg = 'rgba(245,158,11,0.4)'; fg = '#fbbf24';
-               }
+               bg = val > 0.5 ? '#10b981' : val > 0.2 ? '#34d399' : val > 0.05 ? '#fbbf24' : '#f87171';
+               fg = val > 0.2 ? '#042f2e' : '#ffffff';
+               const opacity = 0.35 + Math.min(val, 1) * 0.65;
+               cellStyle = `padding:1px;background:${bg};opacity:${opacity};border:1px solid rgba(0,0,0,0.05);color:${fg};font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.4);`;
             }
             if (val > 0) prevVal = val;
             
-            return `<td style="padding:1px;background:${bg};border:1px solid rgba(0,0,0,0.05);"><div style="font-size:0.48rem;font-weight:900;color:${fg};text-align:center;">${val>0?fm(val).replace('$',''):'&middot;'}</div></td>`;
+            return `<td style="${cellStyle}"><div style="font-size:0.48rem;font-weight:900;text-align:center;">${val>0?fm(val).replace('$',''):'&middot;'}</div></td>`;
           }).join('');
           
           const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';

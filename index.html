@@ -10431,6 +10431,8 @@
                 if (currentRole === 'monitor' || currentRole === 'admin') {
                   if (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === chatOpName.toLowerCase()) {
                     cargarHistorialChatSeleccionado();
+                  } else {
+                    procesarMensajeChatRealtime(row);
                   }
                 } else if (currentRole === 'operador') {
                   if (currentOpName && currentOpName.toLowerCase() === chatOpName.toLowerCase()) {
@@ -10629,10 +10631,11 @@
       }
     }
 
-    // Correr cada 30 segundos (Resync Global fluido)
-    setInterval(_sbPeriodicResync, 30 * 1000);
+    // Correr cada 5 minutos como respaldo pasivo (Resync Global fluido)
+    setInterval(_sbPeriodicResync, 300 * 1000);
 
     // Sync frecuente para el operador (para detectar comandos remotos como capacitación)
+    // Optimizado a 5 minutos (300000ms) ya que los cambios de turno y capacitación se propagan en tiempo real vía Postgres Changes.
     setInterval(async () => {
        if (typeof currentOpName !== 'undefined' && currentOpName && _sb && _sbOnline) {
           const shift = (typeof getPTShiftKey === 'function') ? getPTShiftKey(detectarTurno()) : detectarTurno().toLowerCase();
@@ -10648,7 +10651,7 @@
              }
           }
        }
-    }, 15000); 
+    }, 300000); 
 
 
 
@@ -23496,11 +23499,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Iniciar el Protocolo "Ghost in the Machine"
       iniciarMonitoreoGhost();
       
-      // Polling de chat sincronizado en tiempo real (cada 3 segundos)
-      setInterval(cargarHistorialChatSeleccionado, 3000);
+      // Polling de chat desactivado: sincronizado 100% en tiempo real mediante Postgres Changes Realtime
+      // setInterval(cargarHistorialChatSeleccionado, 3000);
       
-      // Polling global para detectar mensajes nuevos de cualquier operador (cada 4 segundos)
-      setInterval(monitorearNuevosMensajesGlobales, 4000);
+      // Polling global desactivado: notificaciones y badges procesados en tiempo real por postgres_changes sin llamadas extras
+      // setInterval(monitorearNuevosMensajesGlobales, 4000);
       
       // Configurar controles si es Monitor o Admin
       setTimeout(() => {
@@ -23743,73 +23746,47 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     function monitorearNuevosMensajesGlobales() {
+      // Optimización profesional: Desactivado el polling activo para ahorrar cuota de base de datos.
+      // Los nuevos mensajes se procesan en tiempo real usando procesarMensajeChatRealtime(row) en postgres_changes.
+    }
+
+    function procesarMensajeChatRealtime(row) {
+      if (!row || !row.key || !row.value) return;
       if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
-      window._toastedMessages = window._toastedMessages || new Set();
-
-      if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').select('key, value').like('key', 'rr_chat_%').then(({ data, error }) => {
-          if (!error && data) {
-            data.forEach(row => {
-              let remoteHistory = [];
-              try {
-                remoteHistory = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
-              } catch(e) { remoteHistory = row.value; }
-              
-              if (Array.isArray(remoteHistory) && remoteHistory.length > 0) {
-                const opNameReal = row.key.replace('rr_chat_', '');
-                const lastMsg = remoteHistory[remoteHistory.length - 1];
-                
-                let localHistory = [];
-                try {
-                  const stored = localStorage.getItem(row.key);
-                  if (stored) localHistory = JSON.parse(stored);
-                } catch(e) {}
-                if (!Array.isArray(localHistory)) localHistory = [];
-
-                const lastRemoteTs = lastMsg.ts;
-                const lastLocalTs = localHistory.length > 0 ? localHistory[localHistory.length - 1].ts : 0;
-
-                if (lastRemoteTs !== lastLocalTs) {
-                  if (lastMsg.sender === 'operador') {
-                    const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && document.getElementById('rr-urgent-chat').classList.contains('open'));
-                    
-                    if (!isViewingCurrent) {
-                      // Only trigger toast for very recent, real-time incoming messages
-                      const isRecent = Math.abs(Date.now() - lastMsg.ts) < 25000;
-                      const toastKey = `${opNameReal.toLowerCase()}_${lastMsg.ts}`;
-                      
-                      if (isRecent && !window._toastedMessages.has(toastKey)) {
-                        window._toastedMessages.add(toastKey);
-                        crearNotificacionToastChat(opNameReal.toUpperCase(), lastMsg);
-                      }
-                      
-                      const badge = document.getElementById('chat-bubble-badge');
-                      if (badge) badge.style.display = 'block';
-                    } else {
-                      // Actively viewing: automatically mark incoming operator message as read!
-                      let updated = false;
-                      remoteHistory.forEach(msg => {
-                        if (msg.sender === 'operador' && !msg.seen) {
-                          msg.seen = true;
-                          updated = true;
-                        }
-                      });
-                      if (updated) {
-                        _sb.from('kv_store').upsert({ key: row.key, value: JSON.stringify(remoteHistory) }, { onConflict: 'key' })
-                          .then(() => {
-                            localStorage.setItem(row.key, JSON.stringify(remoteHistory));
-                          }).catch(e => console.warn('[GLOBAL-CHAT-SEEN] Seen update failed:', e));
-                      }
-                      renderChatHTML(remoteHistory, window.chatSelectedOp);
-                      playBeep('pulse');
-                    }
-                  }
-                  localStorage.setItem(row.key, JSON.stringify(remoteHistory));
-                }
-              }
-            });
+      
+      const opNameReal = row.key.replace('rr_chat_', '');
+      const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && document.getElementById('rr-urgent-chat').classList.contains('open'));
+      
+      if (isViewingCurrent) {
+        // Si el monitor ya tiene abierto el chat de este operador, la vista se actualiza automáticamente.
+        return;
+      }
+      
+      let remoteHistory = [];
+      try {
+        remoteHistory = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+      } catch(e) { remoteHistory = row.value; }
+      
+      if (Array.isArray(remoteHistory) && remoteHistory.length > 0) {
+        const lastMsg = remoteHistory[remoteHistory.length - 1];
+        if (lastMsg.sender === 'operador') {
+          const toastKey = `${opNameReal.toLowerCase()}_${lastMsg.ts}`;
+          window._toastedMessages = window._toastedMessages || new Set();
+          
+          const isRecent = Math.abs(Date.now() - lastMsg.ts) < 25000;
+          if (isRecent && !window._toastedMessages.has(toastKey)) {
+            window._toastedMessages.add(toastKey);
+            if (typeof crearNotificacionToastChat === 'function') {
+              crearNotificacionToastChat(opNameReal.toUpperCase(), lastMsg);
+            }
           }
-        }).catch(e => console.warn('[GLOBAL-CHAT-SYNC] Fetch error:', e));
+          
+          // Guardar en el almacenamiento local para que coincida con el estado de sincronía
+          localStorage.setItem(row.key, JSON.stringify(remoteHistory));
+          
+          const badge = document.getElementById('chat-bubble-badge');
+          if (badge) badge.style.display = 'block';
+        }
       }
     }
 

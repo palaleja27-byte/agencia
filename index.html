@@ -9864,7 +9864,7 @@
       try {
         _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
         _sbSyncOnLoad();
-        _sbRealtime();
+        // _sbRealtime() se inicializa en _bootDone para evitar suscripciones duplicadas y cuelgues
       } catch (e) {
         console.warn('[Supabase] Error al inicializar:', e.message);
       }
@@ -10649,26 +10649,28 @@
     // Arrancar al cargar la página
     window.addEventListener('load', _initSupabase);
     
-    // Temporizador de Seguridad Infallible (Fail-Safe Boot Timer)
-    window.addEventListener('load', () => {
-      setTimeout(() => {
-        const boot = document.getElementById('rr-boot-screen');
-        if (boot && boot.style.display !== 'none') {
-          console.warn('[Boot Fail-Safe] Forzando el desvanecimiento de la pantalla de carga para evitar bloqueos visuales...');
-          boot.style.opacity = '0';
-          setTimeout(() => {
-            boot.style.display = 'none';
-          }, 500);
+    // TEMPORIZADOR DE SEGURIDAD INFALIBLE (AGRESIVO Y SIN BLOQUEOS)
+    // Se ejecuta de inmediato sin esperar el evento 'load' (que puede ser bloqueado por recursos pesados).
+    const FORCE_BOOT_MAX_TIME_MS = 6000;
+    setTimeout(() => {
+      const boot = document.getElementById('rr-boot-screen');
+      if (boot && boot.style.display !== 'none') {
+        console.warn(`[Boot Fail-Safe] ⚠️ Forzando el desvanecimiento inmediato tras ${FORCE_BOOT_MAX_TIME_MS}ms para evitar bloqueos visuales...`);
+        boot.style.transition = 'opacity 0.2s ease-out';
+        boot.style.opacity = '0';
+        setTimeout(() => {
+          boot.style.display = 'none';
+        }, 300);
+        
+        try {
           // Asegurar que el canvas y los live stats se disparen
-          try {
-            initCyberneticBg();
-            updateLoginLiveStats();
-          } catch (e) {
-            console.error('[Boot Fail-Safe] Error al inicializar en fallback forzado:', e);
-          }
+          if (typeof initCyberneticBg === 'function') initCyberneticBg();
+          if (typeof updateLoginLiveStats === 'function') updateLoginLiveStats();
+        } catch (e) {
+          console.error('[Boot Fail-Safe] Error crítico en inicialización forzada:', e);
         }
-      }, 5000); // 5 segundos de gracia antes de forzar el desbloqueo
-    });
+      }
+    }, FORCE_BOOT_MAX_TIME_MS);
 
     window.addEventListener('load', () => setTimeout(_migratePinsToHash, 2000));
     window.addEventListener('load', () => setTimeout(_migratePinsToHash, 2000)); // migrate legacy PINs silently

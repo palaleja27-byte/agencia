@@ -9583,51 +9583,89 @@
       if (txt) txt.textContent = msg;
     }
 
-    // Cybernetic Mesh Particle Canvas Animation
+    // High Definition (HD) Cybernetic Mesh Particle Canvas Animation
     function initCyberneticBg() {
       const canvas = document.getElementById('cyber-mesh-canvas');
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
-      let width = canvas.width = canvas.offsetWidth || canvas.parentElement.offsetWidth || 500;
-      let height = canvas.height = canvas.offsetHeight || canvas.parentElement.offsetHeight || 800;
+
+      // HD Retina DPI resolution scaling
+      let dpi = window.devicePixelRatio || 1;
+      let width = 0;
+      let height = 0;
 
       function resize() {
         if (!canvas.parentElement) return;
-        width = canvas.width = canvas.parentElement.offsetWidth || 500;
-        height = canvas.height = canvas.parentElement.offsetHeight || 800;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        
+        // Scale dimensions based on DPI for razor sharp rendering
+        canvas.width = width * dpi;
+        canvas.height = height * dpi;
+        
+        // Reset scale transform
+        ctx.resetTransform();
+        ctx.scale(dpi, dpi);
       }
       window.addEventListener('resize', resize);
+      resize();
       setTimeout(resize, 200);
 
       const particles = [];
-      const particleCount = 45;
+      const particleCount = 120; // Massive particle density ("haz mas celulas")
       
       class Particle {
         constructor() {
           this.x = Math.random() * width;
           this.y = Math.random() * height;
-          this.vx = (Math.random() - 0.5) * 0.4;
-          this.vy = (Math.random() - 0.5) * 0.4;
-          this.radius = Math.random() * 2 + 1;
-          this.glow = Math.random() > 0.45;
+          
+          // Speed vectors
+          this.vx = (Math.random() - 0.5) * 0.45;
+          this.vy = (Math.random() - 0.5) * 0.45;
+          
+          // Organic particle size
+          this.radius = Math.random() * 2.5 + 1;
+          this.glow = Math.random() > 0.4;
+          this.pulseSpeed = 0.02 + Math.random() * 0.03;
+          this.pulsePhase = Math.random() * Math.PI;
+          
+          // Native coordinates caching
+          this.ox = this.x;
+          this.oy = this.y;
         }
         update() {
           this.x += this.vx;
           this.y += this.vy;
-          if (this.x < 0 || this.x > width) this.vx *= -1;
-          if (this.y < 0 || this.y > height) this.vy *= -1;
+
+          // Boundary bounce with slight padding
+          if (this.x < 0) { this.x = 0; this.vx *= -1; }
+          else if (this.x > width) { this.x = width; this.vx *= -1; }
+          
+          if (this.y < 0) { this.y = 0; this.vy *= -1; }
+          else if (this.y > height) { this.y = height; this.vy *= -1; }
+
+          this.pulsePhase += this.pulseSpeed;
         }
         draw() {
           ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-          ctx.fillStyle = this.glow ? 'rgba(94, 234, 212, 0.75)' : 'rgba(99, 102, 241, 0.45)';
-          ctx.fill();
+          
+          // Pulsating radius to simulate organic breathing cells
+          const currentRadius = this.radius * (1 + Math.sin(this.pulsePhase) * 0.25);
+          ctx.arc(this.x, this.y, currentRadius, 0, Math.PI * 2);
+          
           if (this.glow) {
-            ctx.shadowBlur = 6;
+            ctx.fillStyle = 'rgba(94, 234, 212, 0.85)';
+            ctx.fill();
+            
+            ctx.shadowBlur = 8;
             ctx.shadowColor = '#5eead4';
           } else {
+            ctx.fillStyle = 'rgba(99, 102, 241, 0.5)';
+            ctx.fill();
             ctx.shadowBlur = 0;
           }
+          ctx.shadowBlur = 0; // Restore shadow
         }
       }
 
@@ -9655,9 +9693,9 @@
         
         // Draw grid lines
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = 'rgba(94, 234, 212, 0.025)';
-        ctx.lineWidth = 1;
-        const gridSize = 65;
+        ctx.strokeStyle = 'rgba(94, 234, 212, 0.018)';
+        ctx.lineWidth = 0.8;
+        const gridSize = 70;
         for (let x = 0; x < width; x += gridSize) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
@@ -9671,39 +9709,70 @@
           ctx.stroke();
         }
 
+        // Mouse interactive radial ambient glow underneath the hexagonal grid
+        if (mouseActive) {
+          const radialGlow = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 250);
+          radialGlow.addColorStop(0, 'rgba(94, 234, 212, 0.05)');
+          radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = radialGlow;
+          ctx.beginPath();
+          ctx.arc(mouseX, mouseY, 250, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         // Draw particle connections
         for (let i = 0; i < particles.length; i++) {
           const p1 = particles[i];
           p1.update();
+          
+          // Fluid mouse magnetic attraction and synchronization ("sincronizada con el mouse")
+          if (mouseActive) {
+            const dxM = p1.x - mouseX;
+            const dyM = p1.y - mouseY;
+            const distM = Math.sqrt(dxM * dxM + dyM * dyM);
+            
+            if (distM < 260) {
+              const pullForce = (260 - distM) / 260;
+              // Add magnetic drift towards the cursor
+              p1.x -= (dxM / distM) * pullForce * 1.5;
+              p1.y -= (dyM / distM) * pullForce * 1.5;
+            }
+          }
+
           p1.draw();
           
-          // Connect to mouse if active
+          // Connect cells to mouse cursor
           if (mouseActive) {
             const dxMouse = p1.x - mouseX;
             const dyMouse = p1.y - mouseY;
             const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
-            if (distMouse < 180) {
+            if (distMouse < 240) {
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(mouseX, mouseY);
-              ctx.strokeStyle = `rgba(94, 234, 212, ${0.16 * (1 - distMouse / 180)})`;
-              ctx.lineWidth = 1.2;
+              
+              // Brighter lines close to mouse
+              const alpha = 0.22 * (1 - distMouse / 240);
+              ctx.strokeStyle = `rgba(94, 234, 212, ${alpha})`;
+              ctx.lineWidth = 1.4 * (1 - distMouse / 240);
               ctx.stroke();
             }
           }
 
-          // Connect to neighboring particles
+          // Neural connection to neighboring particles
           for (let j = i + 1; j < particles.length; j++) {
             const p2 = particles[j];
             const dx = p1.x - p2.x;
             const dy = p1.y - p2.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 120) {
+            if (dist < 130) {
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(p2.x, p2.y);
-              ctx.strokeStyle = `rgba(99, 102, 241, ${0.08 * (1 - dist / 120)})`;
-              ctx.lineWidth = 0.8;
+              
+              const alpha = 0.1 * (1 - dist / 130);
+              ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
+              ctx.lineWidth = 0.8 * (1 - dist / 130);
               ctx.stroke();
             }
           }

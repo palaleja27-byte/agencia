@@ -102,7 +102,7 @@
       inset: 0;
       z-index: 9999;
       background: #030508;
-      background-image: radial-gradient(circle at 75% 30%, #0d172a 0%, #030508 100%);
+      background-image: radial-gradient(circle at 50% 50%, #0c1527 0%, #020406 100%);
       display: grid;
       grid-template-columns: 1.15fr 0.85fr;
       overflow-y: auto;
@@ -131,6 +131,8 @@
       justify-content: space-between;
       border-right: 1px solid rgba(94, 234, 212, 0.08);
       overflow: hidden;
+      background: transparent !important;
+      z-index: 2;
     }
 
     .cyber-bg-grid {
@@ -313,8 +315,9 @@
       align-items: center;
       justify-content: center;
       padding: 40px;
-      background: radial-gradient(circle at 50% 50%, rgba(13, 22, 42, 0.4) 0%, rgba(3, 5, 8, 0.95) 100%);
+      background: transparent !important;
       overflow: hidden;
+      z-index: 2;
     }
 
     .cyber-mesh-canvas {
@@ -324,6 +327,8 @@
       height: 100% !important;
       z-index: 1; /* Por debajo de paneles de texto y formulario, pero arriba del gradiente de fondo */
       pointer-events: none;
+      grid-column: 1 / -1;
+      grid-row: 1 / -1;
     }
 
     .login-box {
@@ -9613,7 +9618,7 @@
       setTimeout(resize, 200);
 
       const particles = [];
-      const particleCount = 120; // Massive particle density ("haz mas celulas")
+      const particleCount = 135; // Massive particle density ("haz mas celulas")
       
       class Particle {
         constructor() {
@@ -9625,9 +9630,9 @@
           this.vy = (Math.random() - 0.5) * 0.45;
           
           // Organic particle size
-          this.radius = Math.random() * 2.5 + 1;
-          this.glow = Math.random() > 0.4;
-          this.pulseSpeed = 0.02 + Math.random() * 0.03;
+          this.radius = Math.random() * 3.2 + 1.5;
+          this.glow = Math.random() > 0.35;
+          this.pulseSpeed = 0.02 + Math.random() * 0.035;
           this.pulsePhase = Math.random() * Math.PI;
           
           // Native coordinates caching
@@ -9651,19 +9656,20 @@
           ctx.beginPath();
           
           // Pulsating radius to simulate organic breathing cells
-          const currentRadius = this.radius * (1 + Math.sin(this.pulsePhase) * 0.25);
+          const currentRadius = this.radius * (1 + Math.sin(this.pulsePhase) * 0.3);
           ctx.arc(this.x, this.y, currentRadius, 0, Math.PI * 2);
           
           if (this.glow) {
-            ctx.fillStyle = 'rgba(94, 234, 212, 0.85)';
+            ctx.fillStyle = 'rgba(94, 234, 212, 0.9)';
             ctx.fill();
             
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 12;
             ctx.shadowColor = '#5eead4';
           } else {
-            ctx.fillStyle = 'rgba(99, 102, 241, 0.5)';
+            ctx.fillStyle = 'rgba(99, 102, 241, 0.65)';
             ctx.fill();
-            ctx.shadowBlur = 0;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = '#6366f1';
           }
           ctx.shadowBlur = 0; // Restore shadow
         }
@@ -9711,12 +9717,13 @@
 
         // Mouse interactive radial ambient glow underneath the hexagonal grid
         if (mouseActive) {
-          const radialGlow = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 250);
-          radialGlow.addColorStop(0, 'rgba(94, 234, 212, 0.05)');
+          const radialGlow = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 280);
+          radialGlow.addColorStop(0, 'rgba(94, 234, 212, 0.08)');
+          radialGlow.addColorStop(0.5, 'rgba(99, 102, 241, 0.03)');
           radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = radialGlow;
           ctx.beginPath();
-          ctx.arc(mouseX, mouseY, 250, 0, Math.PI * 2);
+          ctx.arc(mouseX, mouseY, 280, 0, Math.PI * 2);
           ctx.fill();
         }
 
@@ -9746,15 +9753,15 @@
             const dxMouse = p1.x - mouseX;
             const dyMouse = p1.y - mouseY;
             const distMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
-            if (distMouse < 240) {
+            if (distMouse < 260) {
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(mouseX, mouseY);
               
-              // Brighter lines close to mouse
-              const alpha = 0.22 * (1 - distMouse / 240);
+              // Much brighter, high-visibility connections!
+              const alpha = 0.35 * (1 - distMouse / 260);
               ctx.strokeStyle = `rgba(94, 234, 212, ${alpha})`;
-              ctx.lineWidth = 1.4 * (1 - distMouse / 240);
+              ctx.lineWidth = 1.8 * (1 - distMouse / 260);
               ctx.stroke();
             }
           }
@@ -9765,17 +9772,35 @@
             const dx = p1.x - p2.x;
             const dy = p1.y - p2.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 130) {
+            if (dist < 145) {
               ctx.beginPath();
               ctx.moveTo(p1.x, p1.y);
               ctx.lineTo(p2.x, p2.y);
               
-              const alpha = 0.1 * (1 - dist / 130);
+              const alpha = 0.22 * (1 - dist / 145);
               ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
-              ctx.lineWidth = 0.8 * (1 - dist / 130);
+              ctx.lineWidth = 1.0 * (1 - dist / 145);
               ctx.stroke();
             }
           }
+        }
+
+        // Draw highly immersive glowing center core at mouse position
+        if (mouseActive) {
+          ctx.beginPath();
+          ctx.arc(mouseX, mouseY, 6, 0, Math.PI * 2);
+          ctx.fillStyle = '#5eead4';
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = '#5eead4';
+          ctx.fill();
+          
+          ctx.beginPath();
+          ctx.arc(mouseX, mouseY, 12, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(94, 234, 212, 0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          
+          ctx.shadowBlur = 0;
         }
         
         requestAnimationFrame(animate);

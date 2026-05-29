@@ -9347,18 +9347,52 @@
       } catch(e) {}
       
       if (Array.isArray(localArr) && Array.isArray(remoteArr)) {
-        const merged = [...remoteArr];
+        // 1. Crear una copia de remoteArr fusionando perfiles para operadores coincidentes
+        const merged = remoteArr.map(rOp => {
+          const lOp = localArr.find(l => l.name.toUpperCase() === rOp.name.toUpperCase());
+          if (lOp) {
+            const mergedOp = { ...rOp };
+            
+            // Fusionar perfiles sin duplicados por ID de perfil
+            const mergedProfiles = [...(rOp.profiles || [])];
+            (lOp.profiles || []).forEach(lp => {
+              if (lp && lp.id && !mergedProfiles.some(rp => rp && rp.id === lp.id)) {
+                mergedProfiles.push(lp);
+              }
+            });
+            mergedOp.profiles = mergedProfiles;
+
+            // Conservar campos editados localmente si el remoto no los tiene
+            ['doc_type', 'doc', 'phone', 'email', 'empresa', 'turno', 'group'].forEach(f => {
+              if (lOp[f] && !rOp[f]) {
+                mergedOp[f] = lOp[f];
+              }
+            });
+            return mergedOp;
+          }
+          return rOp;
+        });
+
+        // 2. Añadir operadores locales que no existen remotos
         localArr.forEach(lOp => {
           const exists = merged.some(rOp => rOp.name.toUpperCase() === lOp.name.toUpperCase());
-          if (!exists) merged.push(lOp);
+          if (!exists) {
+            merged.push(lOp);
+          }
         });
+
         const mergedStr = JSON.stringify(merged);
         _origSetItem('primeOperatorsData2026', mergedStr);
         _sbMemCache['primeOperatorsData2026'] = mergedStr;
         
-        if (merged.length > remoteArr.length && _sb) {
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedStr }, { onConflict: 'key' })
-            .catch(e => console.warn('[Sync-Boot] Fallo al subir combinacion de operadores:', e));
+        // Si hay cambios respecto a la version remota, subir la fusion a Supabase
+        if (_sb) {
+          const remoteStr = typeof remoteVal === 'string' ? remoteVal : JSON.stringify(remoteVal);
+          if (mergedStr !== remoteStr) {
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedStr }, { onConflict: 'key' })
+              .then(() => console.info('[Sync] Fusión de operadores y perfiles sincronizada en Supabase'))
+              .catch(e => console.warn('[Sync] Fallo al subir fusión de perfiles:', e));
+          }
         }
       } else {
         const strVal = typeof remoteVal === 'string' ? remoteVal : JSON.stringify(remoteVal);
@@ -14739,6 +14773,13 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (cubreSel) { cubreSel.value = ''; cubreSel.style.display = 'none'; }
       document.getElementById(`add-form-${globalIndex}`).style.display = 'none';
       saveData();
+      if (typeof _localSaveTs !== 'undefined') {
+        _localSaveTs['primeOperatorsData2026'] = Date.now();
+      }
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+          .catch(e => console.warn('[addProfile] Supabase sync error:', e));
+      }
       renderOperators();
     };
 
@@ -14746,6 +14787,13 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (confirm("¿Eliminar este perfil?")) {
         operatorsData[globalIndex].profiles.splice(profileIndex, 1);
         saveData();
+        if (typeof _localSaveTs !== 'undefined') {
+          _localSaveTs['primeOperatorsData2026'] = Date.now();
+        }
+        if (typeof _sb !== 'undefined' && _sb) {
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+            .catch(e => console.warn('[removeProfile] Supabase sync error:', e));
+        }
         renderOperators();
       }
     };

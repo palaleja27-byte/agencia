@@ -12799,76 +12799,153 @@
             ${opCards}
           </div>
         `;
-      } else if (tab === '5m' || tab === '10m') {
-        const interval = tab === '5m' ? 5 : 10;
-        const nSlots = 30;
-        
-        const key = interval === 5 ? 'rr_heatmap_5m_history_v1' : 'rr_heatmap_10m_history_v1';
-        const historyData = JSON.parse(localStorage.getItem(key) || '{}');
+      } else if (tab === '5m' || tab === '10m' || tab === 'dia' || tab === 'sem' || tab === 'mes') {
+        const interval = tab === '5m' ? 5 : (tab === '10m' ? 10 : 0);
+        let slots = [];
         const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const dayData = historyData[hoyStr] || [];
         
-        const now = new Date();
-        const currentMins = now.getHours() * 60 + now.getMinutes();
-        const currentSlotIdx = Math.floor(currentMins / interval);
+        if (tab === '5m' || tab === '10m') {
+          const nSlots = 30;
+          const key = interval === 5 ? 'rr_heatmap_5m_history_v1' : 'rr_heatmap_10m_history_v1';
+          const historyData = JSON.parse(localStorage.getItem(key) || '{}');
+          const dayData = historyData[hoyStr] || [];
+          
+          const now = new Date();
+          const currentMins = now.getHours() * 60 + now.getMinutes();
+          const currentSlotIdx = Math.floor(currentMins / interval);
+          
+          slots = Array.from({length: nSlots}, (_, i) => {
+            const sIdx = currentSlotIdx - (nSlots - 1 - i);
+            let h = Math.floor(sIdx * interval / 60);
+            let m = (sIdx * interval) % 60;
+            if (h < 0) { h += 24; }
+            return { type: 'time', slot: sIdx, label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`, key: sIdx, dayData };
+          });
+        } else if (tab === 'dia') {
+          // Últimos 7 días
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const fStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            slots.push({ type: 'dia', label: fStr.slice(5), key: fStr });
+          }
+        } else if (tab === 'sem') {
+          // Últimas 4 semanas rodantes (7 días cada una)
+          for (let i = 3; i >= 0; i--) {
+            const dEnd = new Date();
+            dEnd.setDate(dEnd.getDate() - i * 7);
+            const dStart = new Date();
+            dStart.setDate(dStart.getDate() - (i + 1) * 7 + 1);
+            const label = `${dStart.getDate()}-${dEnd.getDate()} ${dEnd.toLocaleDateString('es-CO', {month:'short'})}`;
+            slots.push({ type: 'sem', label, startTs: dStart.setHours(0,0,0,0), endTs: dEnd.setHours(23,59,59,999) });
+          }
+        } else if (tab === 'mes') {
+          // Últimos 3 meses (incluyendo el actual)
+          const tempD = new Date();
+          for (let i = 2; i >= 0; i--) {
+            const d = new Date(tempD.getFullYear(), tempD.getMonth() - i, 1);
+            const mKey = d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7);
+            const mLabel = d.toLocaleDateString('es-CO', { month: 'short' }).toUpperCase();
+            slots.push({ type: 'mes', label: mLabel, key: mKey });
+          }
+        }
         
-        const slots = Array.from({length: nSlots}, (_, i) => {
-          const sIdx = currentSlotIdx - (nSlots - 1 - i);
-          let h = Math.floor(sIdx * interval / 60);
-          let m = (sIdx * interval) % 60;
-          if (h < 0) { h += 24; }
-          return { slot: sIdx, label: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}` };
-        });
+        const hCols = slots.map(s => `<th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:38px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:center;">${s.label}</th>`).join('');
         
-        const hCols = slots.map(s => `<th style="padding:4px;font-size:0.42rem;background:#1e293b;color:#64748b;min-width:35px;border-bottom:1px solid rgba(255,255,255,0.05);">${s.label}</th>`).join('');
+        // Configuración de escala de color según temporilidad
+        let thresh = [0.05, 0.2, 0.5]; // 5m/10m
+        if (tab === 'dia') thresh = [5, 20, 50];
+        if (tab === 'sem') thresh = [30, 100, 300];
+        if (tab === 'mes') thresh = [100, 400, 1000];
+
+        // Función formateadora según unidad elegida
+        const formatVal = val => {
+          if (val <= 0.001) return '&middot;';
+          const unit = window.heatmapUnit || 'puntos';
+          if (unit === 'usd') return '$' + val.toFixed(1);
+          if (unit === 'cop') {
+            const cop = val * 1400;
+            if (cop >= 1000) return '$' + (cop / 1000).toFixed(1) + 'k';
+            return '$' + Math.round(cop);
+          }
+          return val.toFixed(1); // 'puntos'
+        };
         
         const trs = rows.map(r => {
           let prevVal = null;
           const history = slots.map(s => {
-            const snap = dayData.find(d => d.slot === s.slot);
-            const entry = snap ? snap.data.find(d => d.pm === r.pm) : null;
-            let val = entry ? entry.pts : 0;
-            
-            if (!entry) {
-               const t = new Date();
-               t.setHours(Math.floor(s.slot * interval / 60));
-               t.setMinutes((s.slot * interval) % 60);
-               const tsEnd = t.getTime();
-               const tsStart = tsEnd - (interval * 60000);
-               val = (r.cortes || []).filter(c => c.ts && c.ts > tsStart && c.ts <= tsEnd).reduce((sum,c)=>sum+(c.puntos||0),0);
+            let val = 0;
+            if (s.type === 'time') {
+              const snap = s.dayData.find(d => d.slot === s.key);
+              const entry = snap ? snap.data.find(d => d.pm === r.pm) : null;
+              val = entry ? entry.pts : 0;
+              
+              if (!entry) {
+                 const t = new Date();
+                 t.setHours(Math.floor(s.key * interval / 60));
+                 t.setMinutes((s.key * interval) % 60);
+                 const tsEnd = t.getTime();
+                 const tsStart = tsEnd - (interval * 60000);
+                 val = (r.cortes || []).filter(c => c.ts && c.ts > tsStart && c.ts <= tsEnd).reduce((sum,c)=>sum+(c.puntos||0),0);
+              }
+            } else if (s.type === 'dia') {
+              val = (r.cortes || []).filter(c => c.fecha === s.key).reduce((sum,c)=>sum+(c.puntos||0),0);
+            } else if (s.type === 'sem') {
+              val = (r.cortes || []).filter(c => c.ts && c.ts >= s.startTs && c.ts <= s.endTs).reduce((sum,c)=>sum+(c.puntos||0),0);
+            } else if (s.type === 'mes') {
+              val = (r.cortes || []).filter(c => c.fecha && c.fecha.startsWith(s.key)).reduce((sum,c)=>sum+(c.puntos||0),0);
             }
             
             let bg = 'rgba(15,23,42,0.6)', fg = '#475569';
             let cellStyle = `padding:1px;background:${bg};border:1px solid rgba(0,0,0,0.05);`;
             if (val > 0) {
-               bg = val > 0.5 ? '#10b981' : val > 0.2 ? '#34d399' : val > 0.05 ? '#fbbf24' : '#f87171';
-               fg = val > 0.2 ? '#042f2e' : '#ffffff';
-               const opacity = 0.35 + Math.min(val, 1) * 0.65;
-               cellStyle = `padding:1px;background:${bg};opacity:${opacity};border:1px solid rgba(0,0,0,0.05);color:${fg};font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.4);`;
+               bg = val > thresh[2] ? '#10b981' : val > thresh[1] ? '#34d399' : val > thresh[0] ? '#fbbf24' : '#f87171';
+               fg = val > thresh[1] ? '#042f2e' : '#ffffff';
+               const opacity = 0.35 + Math.min(val / thresh[2], 1) * 0.65;
+               cellStyle = `padding:2px;background:${bg};opacity:${opacity};border:1px solid rgba(0,0,0,0.05);color:${fg};font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,0.4);text-align:center;`;
             }
             if (val > 0) prevVal = val;
             
-            return `<td style="${cellStyle}"><div style="font-size:0.48rem;font-weight:900;text-align:center;">${val>0?fm(val).replace('$',''):'&middot;'}</div></td>`;
+            return `<td style="${cellStyle}"><div style="font-size:0.48rem;font-weight:900;text-align:center;white-space:nowrap;">${formatVal(val)}</div></td>`;
           }).join('');
           
           const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);"><div style="font-size:0.58rem;font-weight:950;color:#f1f5f9;">${r.op.split(' ')[0]}</div></td>` : '';
           return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${history}</tr>`;
         }).join('');
+        
+        const unitSelHtml = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:rgba(15,23,42,0.6); padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.05); flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.58rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">Métrica:</span>
+              <div style="display:flex; gap:3px; background:rgba(0,0,0,0.3); padding:2px; border-radius:8px;">
+                ${['puntos', 'usd', 'cop'].map(u => `
+                  <button onclick="window.heatmapUnit='${u}'; renderAlertas();" style="padding:4px 8px; border-radius:6px; font-size:0.55rem; font-weight:800; cursor:pointer; border:none; transition:0.2s; background:${(window.heatmapUnit||'puntos')===u?'#2dd4bf':'transparent'}; color:${(window.heatmapUnit||'puntos')===u?'#0f172a':'#94a3b8'};">
+                    ${u === 'puntos' ? '🪙 PUNTOS' : u === 'usd' ? '💵 USD ($)' : '🇨🇴 COP ($.000)'}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+            <div style="font-size:0.55rem; color:#64748b; font-weight:800; text-transform:uppercase;">
+              Intervalo: <span style="color:#2dd4bf;">${tab.toUpperCase()}</span>
+            </div>
+          </div>
+        `;
+
         const descHeatmap = `<div style="margin-bottom:10px;padding:10px 14px;background:linear-gradient(135deg,rgba(45,212,191,0.07),rgba(99,102,241,0.05));border:1px solid rgba(45,212,191,0.15);border-radius:10px;display:flex;gap:10px;align-items:flex-start;">
           <span style="font-size:1.1rem;flex-shrink:0;">⚡</span>
           <div>
-            <div style="font-size:0.58rem;font-weight:900;color:#2dd4bf;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">¿POR QUÉ MEDIR CADA ${interval} MINUTOS?</div>
+            <div style="font-size:0.58rem;font-weight:900;color:#2dd4bf;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;">DIAGNÓSTICO DE SENSIBILIDAD POR TEMPORALIDAD (${tab.toUpperCase()})</div>
             <div style="font-size:0.52rem;color:#94a3b8;line-height:1.5;">
-              Cada celda representa <b style="color:#f1f5f9;">${interval} minutos de producción real</b>. 
-              <span style="color:#34d399;">Verde = crecimiento</span>, 
-              <span style="color:#fbbf24;">Amarillo = estable</span>, 
-              <span style="color:#f87171;">Rojo = caída</span>. 
-              Detectar una caída a tiempo permite <b style="color:#f1f5f9;">reasignar perfiles o motivar al operador</b> antes de que impacte el resultado del turno. 
-              A ${interval}m puedes tomar decisiones 8-16 veces dentro de una sola jornada — eso es <b style="color:#a78bfa;">rentabilidad en tiempo real</b>.
+              Cada celda muestra la producción bajo la métrica seleccionada.
+              <span style="color:#34d399;">Verde = Óptimo</span>, 
+              <span style="color:#fbbf24;">Amarillo = Estable</span>, 
+              <span style="color:#f87171;">Rojo = Crítico</span>.
+              Monitorea el proceso de forma inteligente para tomar decisiones de asignación, reaccionar a tiempo y garantizar la <b style="color:#a78bfa;">máxima rentabilidad en tiempo real</b>.
             </div>
           </div>
         </div>`;
-        content = descHeatmap + `<div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
+        content = descHeatmap + unitSelHtml + `<div style="overflow-x:auto;background:rgba(0,0,0,0.6);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1200px;"><thead><tr><th style="padding:10px;position:sticky;left:0;background:#1e293b;z-index:10;font-size:0.55rem;color:#94a3b8;width:110px;">OPERADOR</th><th style="padding:10px;background:#1e293b;font-size:0.55rem;color:#94a3b8;width:110px;">PERFIL</th>${hCols}</tr></thead><tbody>${trs}</tbody></table></div>`;
+      }
       }
       if (tab === 'mapa') { content = `<div id="heatmap10m-mount" style="min-height:120px;"></div>`; }
       const recentFeed = (window._rrLiveFeed || []).map(entry => `<div style="font-size:0.52rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;color:#94a3b8;"><span>${entry.op.split(' ')[0]} <small style="color:#475569;">(${entry.modelo})</small></span><b style="color:#2dd4bf">+$${(entry.pts||0).toFixed(2)}</b></div>`).join('');
@@ -12920,7 +12997,20 @@
              </div>
           </div>
           <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
-            ${['resumen', 'productividad', '5m', '10m', 'mapa'].map(t => `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${t === 'productividad' ? '📈 PRODUCTIVIDAD' : t.toUpperCase()}</button>`).join('')}
+            ${['resumen', 'productividad', '5m', '10m', 'dia', 'sem', 'mes', 'mapa'].map(t => {
+              const labelMap = {
+                'resumen': 'RESUMEN',
+                'productividad': '📈 PRODUCTIVIDAD',
+                '5m': '5M LIVE',
+                '10m': '10M PULSO',
+                'dia': '📅 DÍA',
+                'sem': '🗓️ SEMANA',
+                'mes': '📊 MES',
+                'mapa': '🗺️ MAPA COMPLETO'
+              };
+              const displayLabel = labelMap[t] || t.toUpperCase();
+              return `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${displayLabel}</button>`;
+            }).join('')}
           </div>
           ${content}
           
@@ -23094,7 +23184,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (typeof window.guardarHeatmapSnap10m === 'function') window.guardarHeatmapSnap10m();
         // Si el tab 5m o 10m está activo, refrescar la vista en tiempo real
         const tabActivo = window.activeAlertaTab;
-        if (tabActivo === '5m' || tabActivo === '10m') {
+        const heatmapTabs = ['5m', '10m', 'dia', 'sem', 'mes'];
+        if (heatmapTabs.includes(tabActivo)) {
           if (typeof renderAlertas === 'function') renderAlertas();
         }
       };
@@ -23102,10 +23193,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       setTimeout(_snap, 10000);
       // Repetir cada 5 minutos exactos
       setInterval(_snap, 300000);
-      // Refresco visual liviano cada 30s cuando el tab 5m/10m está abierto
+      // Refresco visual liviano cada 30s cuando algún tab de heatmap está abierto
       setInterval(() => {
         const t = window.activeAlertaTab;
-        if ((t === '5m' || t === '10m') && typeof renderAlertas === 'function') {
+        const heatmapTabs = ['5m', '10m', 'dia', 'sem', 'mes'];
+        if (heatmapTabs.includes(t) && typeof renderAlertas === 'function') {
           renderAlertas();
         }
       }, 30000);

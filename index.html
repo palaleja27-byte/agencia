@@ -10189,10 +10189,32 @@
     }
 
     async function _sbSyncOnLoad() {
-      if (!_sbBootReady) {
+      // 🚀 ZERO-WAIT OFFLINE-FIRST: Si tenemos datos locales, no bloqueamos la UI.
+      const hasLocalData = localStorage.getItem('primeOperatorsData2026') !== null || localStorage.getItem('rr_prime_cortes') !== null;
+      
+      if (hasLocalData && !_sbBootReady) {
+        console.info('[Boot] ⚡ Datos locales detectados. Arrancando UI instantáneamente (Zero-Wait). Sincronizando silenciosamente en background...');
+        _sbBootReady = true;
+        try {
+          if (typeof loadData === 'function') loadData();
+          if (currentRole === 'operador' && currentOpName) {
+            if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
+            if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
+          } else {
+            if (typeof renderRanking === 'function') renderRanking();
+          }
+        } catch (renderError) {
+          console.error('[Boot Zero-Wait] Error renderizando UI local:', renderError);
+        }
+        _bootDone(); // Ocultar pantalla de carga INMEDIATAMENTE
+      } else if (!_sbBootReady) {
         _bootProgress(20, 'Conectando con Supabase...');
       }
-      if (!_sb) { _sbBootReady = true; _bootDone(); return; }
+
+      if (!_sb) { 
+        if (!_sbBootReady) { _sbBootReady = true; _bootDone(); }
+        return; 
+      }
 
       try {
         if (!_sbBootReady) {
@@ -10267,16 +10289,22 @@
           if (typeof renderCrecimientoAnalisis === 'function') renderCrecimientoAnalisis();
           if (typeof renderAlertas === 'function') renderAlertas();
         }
-        _toastSync('🟢 Datos sincronizados con Supabase');
+        
+        // Notificar sutilmente que el live-sync terminó si arrancamos en zero-wait
+        if (hasLocalData) {
+          console.info('[Boot] ☁️ Sincronización transparente en background completada exitosamente.');
+        } else {
+          _toastSync('🟢 Datos sincronizados con Supabase');
+        }
         _sbBootReady = true;
 
       } catch (e) {
         const errMsg = (e.message || e.toString());
         console.warn('[Supabase] sync load error:', errMsg);
 
-        // Fallback inmediato a datos locales para agilizar el arranque
+        // Fallback para usuarios NUEVOS sin caché local
         if (!_sbBootReady) {
-          console.warn('[Supabase] Fallback inmediato a datos locales para evitar bloqueos.');
+          console.warn('[Supabase] Fallback inmediato a datos locales para evitar bloqueos en usuarios nuevos.');
           _sbBootReady = true;
           _bootProgress(100, `⚠️ Conectando en segundo plano...`);
           try {
@@ -10288,9 +10316,9 @@
               if (typeof renderRanking === 'function') renderRanking();
             }
           } catch (renderError) {
-            console.error('[Supabase Boot Fallback] Error renderizando UI en fallback local:', renderError);
+            console.error('[Supabase Boot Fallback] Error renderizando UI en fallback:', renderError);
           }
-          _toastSync('⚠️ Modo local activo (conectando a Supabase...)', true);
+          if (!hasLocalData) _toastSync('⚠️ Modo local activo (conectando a Supabase...)', true);
         }
 
         // Retry automático en segundo plano para timeouts (máx 3 intentos con backoff de 5s)
@@ -10301,7 +10329,13 @@
           setTimeout(() => _sbSyncOnLoad(), backoff);
         } else {
           _sbOnline = false;
-          _toastSync('🔴 Sin conexión Supabase — datos locales', true);
+          // 🤫 MODO PROFESIONAL: Si ya tenemos datos locales (99% de los casos), no fastidiar al usuario con alertas rojas. 
+          // Solo mostrar el toast rojo si el usuario está completamente en blanco sin datos.
+          if (!hasLocalData) {
+            _toastSync('🔴 Sin conexión Supabase — Base de datos offline', true);
+          } else {
+            console.warn('[Supabase] Proyecto inactivo/pausado. App operando silenciosamente al 100% en modo caché offline.');
+          }
         }
       } finally {
         if (_sbBootReady) setTimeout(_bootDone, 400);

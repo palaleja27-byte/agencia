@@ -9571,13 +9571,14 @@
          return;
        }
 
-       fetch(cfg.url + '/api/generate', {
+       let baseUrl = cfg.url;
+       if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+
+       fetch(baseUrl + '/api/chat', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({
-           model: 'qwen2.5:7b',
-           prompt: promptText,
-           stream: false
+           message: promptText
          })
        })
        .then(res => {
@@ -9585,7 +9586,8 @@
          return res.json();
        })
        .then(data => {
-         const seleccionada = data.response ? data.response.trim().replace(/^["']|["']$/g, '') : "Sin respuesta del agente.";
+         let textResponse = data.response || data.reply || "";
+         const seleccionada = textResponse ? textResponse.trim().replace(/^["']|["']$/g, '') : "Sin respuesta del agente.";
          out.innerHTML = `
             <div style="display:flex; flex-direction:column; justify-content:space-between; height:100%; min-height:110px;">
                <div style="font-size:0.7rem; color:#e2e8f0; line-height:1.4; font-style:italic;">"${seleccionada}"</div>
@@ -9753,13 +9755,14 @@
       
       const promptText = `Eres el Agente OpenClaw, un asistente de IA avanzado para un operador de chat. Responde al usuario de forma muy breve, profesional, al punto y siempre en español.\n\nUsuario: ${msg}\nAgente OpenClaw:`;
       
-      fetch(cfg.url + '/api/generate', {
+      let baseUrl = cfg.url;
+      if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+      
+      fetch(baseUrl + '/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'qwen2.5:7b',
-          prompt: promptText,
-          stream: false
+          message: promptText
         })
       })
       .then(res => {
@@ -9767,7 +9770,8 @@
          return res.json();
       })
       .then(data => {
-        const respuesta = data.response ? data.response.trim() : "Sin respuesta del agente.";
+        let textResponse = data.response || data.reply || "";
+        const respuesta = textResponse ? textResponse.trim() : "Sin respuesta del agente.";
         ocAddMessage(respuesta, 'bot');
       })
       .catch(err => {

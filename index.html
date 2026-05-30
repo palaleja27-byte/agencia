@@ -9601,7 +9601,14 @@
        })
        .catch(err => {
          console.error('AI Proxy Error:', err);
-         out.innerHTML = `<div style="color:#ef4444; font-size:0.65rem; text-align:center; padding-top:40px;">Error conectando con la IA. Verifica que tu URL (${cfg.url}) esté respondiendo correctamente.</div>`;
+         out.innerHTML = `
+           <div style="color:#ef4444; font-size:0.6rem; text-align:left; padding:8px; line-height:1.3; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.15); border-radius:8px; height:100%; box-sizing:border-box; overflow-y:auto;">
+             <strong style="color:#f87171; display:block; margin-bottom:4px; font-size:0.62rem;">❌ Error al conectar con la IA:</strong>
+             • Si estás usando <b>HTTPS</b>, haz clic en el candado del navegador ➔ Configuración de sitio ➔ <b>Permitir Contenido no seguro</b> y recarga.<br>
+             • Agrega <code>app.use(cors())</code> en tu servidor Node.js backend.<br>
+             • Asegúrate de que el servidor en <code>${cfg.url}</code> esté encendido.
+           </div>
+         `;
        });
     };
 
@@ -9776,7 +9783,15 @@
       })
       .catch(err => {
         console.error('OpenClaw API Error:', err);
-        ocAddMessage('❌ Error: No se pudo conectar a tu API en ' + cfg.url, 'bot');
+        ocAddMessage(`
+          <div style="color:#ef4444; font-size:0.75rem; text-align:left; line-height:1.4;">
+            <strong style="color:#f87171; display:block; margin-bottom:4px;">❌ Error al conectar a tu API en ${cfg.url}</strong>
+            Causas probables y soluciones:<br>
+            1. <b>Contenido Mixto (HTTPS ➔ HTTP)</b>: Haz clic en el candado/icono a la izquierda del URL ➔ <i>Configuración del sitio</i> ➔ Busca <i>"Contenido no seguro"</i> y cámbialo a <b>Permitir</b>. Luego recarga la página.<br>
+            2. <b>Falta habilitar CORS</b>: Tu servidor Node.js (Express) debe incluir el middleware <code>cors()</code>.<br>
+            3. <b>Servidor caído</b>: Verifica que tu Node.js esté corriendo en la IP y puerto especificados.
+          </div>
+        `, 'bot');
       });
     }
 

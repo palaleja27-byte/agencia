@@ -5026,7 +5026,7 @@
       <div id="openclaw-config-panel" style="display:none; background:rgba(0,0,0,0.3); border-radius:14px; padding:15px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.05);">
         <div style="font-size:0.6rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">🔧 Configuración OpenClaw</div>
         <div style="display:flex; flex-direction:column; gap:8px;">
-          <input id="oc-api-url" type="text" placeholder="URL del agente (ej: https://...)" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <input id="oc-api-url" type="text" placeholder="URL de Ollama (ej: http://localhost:11434)" value="http://localhost:11434" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
           <input id="oc-api-key" type="password" placeholder="API Key de OpenClaw" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
           <input id="oc-agent-id" type="text" placeholder="Agent ID / Workspace ID" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
           <button onclick="ocSaveConfig()" style="background:rgba(52,211,153,0.15); border:1px solid #34d399; color:#34d399; padding:8px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">💾 Guardar configuración</button>
@@ -9557,17 +9557,30 @@
          "Tienes 3 mensajes para impresionarme y hacer que quiera mostrarte algo especial. Corre tiempo."
        ];
        
-       setTimeout(() => {
-          let lista = frasesAgresivas;
-          if (mode === 'intriga') lista = frasesIntriga;
-          else if (mode === 'reto') lista = frasesReto;
-          
-          let seleccionada = lista[Math.floor(Math.random() * lista.length)];
-          if (context) {
-             seleccionada = `[Adaptado a "${context}"] — ${seleccionada}`;
-          }
-          
-          out.innerHTML = `
+       const systemPrompts = {
+         agresiva: "Actúa como un experto en seducción directa y atrevida. Escribe una sola frase (máximo 20 palabras) provocativa y audaz para iniciar una conversación.",
+         intriga: "Actúa como un experto en seducción basada en curiosidad y misterio. Escribe una sola frase (máximo 20 palabras) que deje a la otra persona con mucha intriga y ganas de responder obligatoriamente.",
+         reto: "Actúa como un experto en psicología inversa y retos. Escribe una sola frase (máximo 20 palabras) que desafíe el ego de la otra persona y la haga querer demostrarte su valor."
+       };
+
+       const promptText = `${systemPrompts[mode]}\n\nContexto del chat (si lo hay): ${context || 'Ninguno, inventa un abridor viral.'}\nResponde SOLO con la frase, sin comillas adicionales ni explicaciones.`;
+
+       fetch('http://localhost:11434/api/generate', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           model: 'qwen2.5:7b',
+           prompt: promptText,
+           stream: false
+         })
+       })
+       .then(res => {
+         if (!res.ok) throw new Error('Error en Ollama');
+         return res.json();
+       })
+       .then(data => {
+         const seleccionada = data.response.trim().replace(/^["']|["']$/g, '');
+         out.innerHTML = `
             <div style="display:flex; flex-direction:column; justify-content:space-between; height:100%; min-height:110px;">
                <div style="font-size:0.7rem; color:#e2e8f0; line-height:1.4; font-style:italic;">"${seleccionada}"</div>
                <button onclick="window.copiarGrokTexto(\`${seleccionada.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" 
@@ -9577,7 +9590,11 @@
                </button>
             </div>
           `;
-       }, 1200);
+       })
+       .catch(err => {
+         console.error('Ollama Error:', err);
+         out.innerHTML = `<div style="color:#ef4444; font-size:0.65rem; text-align:center; padding-top:40px;">Error conectando con la IA local. Verifica que Ollama esté corriendo en el puerto 11434.</div>`;
+       });
     };
 
     // --- SUBMÓDULO: HUSOS HORARIOS INTELIGENTES EXPANDIDO ---
@@ -9722,16 +9739,31 @@
         setTimeout(() => ocAddMessage('⚠️ No estoy conectado aún. Configura y conecta el agente primero.', 'bot'), 500);
         return;
       }
-      // Simulate agent response (replace with real API call)
-      setTimeout(() => {
-        const responses = [
-          '📊 Procesando tu solicitud...',
-          '🔍 Analizando métricas del turno actual.',
-          '💡 Sugerencia: enfócate en usuarios recurrentes con alta intención.',
-          '⚡ Detecté una oportunidad de conversión en el perfil activo.',
-        ];
-        ocAddMessage(responses[Math.floor(Math.random() * responses.length)], 'bot');
-      }, 1200);
+      const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
+      const apiUrl = cfg.url || 'http://localhost:11434';
+      
+      const promptText = `Eres el Agente OpenClaw, un asistente de IA avanzado para un operador de chat. Responde al usuario de forma muy breve, profesional, al punto y siempre en español.\n\nUsuario: ${msg}\nAgente OpenClaw:`;
+      
+      fetch(apiUrl + '/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'qwen2.5:7b',
+          prompt: promptText,
+          stream: false
+        })
+      })
+      .then(res => {
+         if (!res.ok) throw new Error('Network response was not ok');
+         return res.json();
+      })
+      .then(data => {
+        ocAddMessage(data.response.trim(), 'bot');
+      })
+      .catch(err => {
+        console.error('OpenClaw API Error:', err);
+        ocAddMessage('❌ Error: No se pudo conectar a Ollama en ' + apiUrl, 'bot');
+      });
     }
 
     function ocHeroSend() {

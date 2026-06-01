@@ -20383,6 +20383,13 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     function asiAutoRelease() {
+      // 🛡️ SEGURIDAD DE ADMINISTRADOR:
+      // Si el usuario es Admin o Monitor, no queremos que el sistema auto-libere 
+      // y borre la asistencia que el admin está editando o registrando manualmente.
+      if (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor')) {
+        return;
+      }
+
       const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
       const now = Date.now();
       let changed = false;
@@ -22620,9 +22627,15 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             _opRtBaselineMap[id] = v.total;
           }
           
-          // DELTA-SHIFT™: Usar puntos_neto calibrado de la BD en lugar de recalcularlo
-          // Esto garantiza que se respeten los scripts de mantenimiento y cortes manuales
-          const neto = Math.max(0, v.neto);
+          // DELTA-SHIFT™: Usar puntos_neto calibrado de la BD, pero sanitizarlo contra baselines corruptos/vacíos
+          let neto = Math.max(0, v.neto);
+          if (v.baseline <= 0 || neto > v.total * 0.60) {
+             // Forzar recálculo seguro usando la memoria de login local para evitar puntos inflados
+             if (_opRtBaselineMap[id] === undefined || _opRtBaselineMap[id] === 0) {
+                _opRtBaselineMap[id] = v.total;
+             }
+             neto = Math.max(0, v.total - _opRtBaselineMap[id]);
+          }
           
           const nombrePerfil = opData?.profiles?.find(p => String(p.id) === String(id))?.name || v.agencia || id;
           return { id, nombre: nombrePerfil, total: v.total, baseline: _opRtBaselineMap[id], neto };

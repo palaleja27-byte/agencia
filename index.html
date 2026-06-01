@@ -5466,6 +5466,48 @@
     </div>
 
     <script>
+      // 🛡️ SHIELD GLOBAL DE PERSISTENCIA (Evita QuotaExceededError en navegadores saturados)
+      (function() {
+        try {
+          const originalSetItem = localStorage.setItem;
+          localStorage.setItem = function(key, value) {
+            try {
+              originalSetItem.call(localStorage, key, value);
+            } catch (e) {
+              if (e.name === 'QuotaExceededError' || e.code === 22 || e.message.includes('quota') || e.message.includes('Quota')) {
+                console.warn('[Storage] QuotaExceededError detectado. Liberando espacio de caché no crítica...');
+                // 1. Eliminar datos históricos no críticos que saturan el almacenamiento (ej: heatmaps)
+                localStorage.removeItem('rr_heatmap_5m_history_v1');
+                localStorage.removeItem('rr_heatmap_10m_history_v1');
+                localStorage.removeItem('rr_heatmap_5m_history');
+                localStorage.removeItem('rr_heatmap_10m_history');
+                
+                // 2. Intentar re-guardar
+                try {
+                  originalSetItem.call(localStorage, key, value);
+                  console.info(`[Storage] Guardado exitoso tras liberar espacio para clave: ${key} ✅`);
+                } catch (retryError) {
+                  // 3. Si aún falla, liberar logs viejos de entrada
+                  localStorage.removeItem('rr_logs_entrada');
+                  localStorage.removeItem('rr_prime_logs_entrada');
+                  localStorage.removeItem('rr_prime_logs_entrada_draft');
+                  try {
+                    originalSetItem.call(localStorage, key, value);
+                    console.info(`[Storage] Guardado exitoso (reintento 2) para clave: ${key} ✅`);
+                  } catch (finalError) {
+                    console.error('[Storage] Capacidad máxima alcanzada persistentemente:', finalError.message);
+                  }
+                }
+              } else {
+                throw e; // lanzar otros errores normalmente
+              }
+            }
+          };
+        } catch (initialErr) {
+          console.error('[Storage] No se pudo instalar el Shield de persistencia:', initialErr.message);
+        }
+      })();
+
       // ── SHIMS GLOBALES (deben existir ANTES que cualquier otro script) ──
       if (typeof currentRole === 'undefined') { window.currentRole = null; }
       if (typeof detectarTurno === 'undefined') {

@@ -5735,7 +5735,6 @@
         }
 
         // --- CALCULAR SUMA GLOBAL POR SERVICIO ---
-        // --- CALCULAR SUMA GLOBAL POR SERVICIO ---
         const sumGlobal = {};
         const svcIcons = {
           'ALL':'📊','MAILS':'📧','STICKERS':'🎨','CHAT AUDIO':'🎙️','CHAT POSTS':'💬',
@@ -5767,6 +5766,35 @@
           const nombreReal = idToModelo[String(id).trim()] || 'Perfil ' + id;
           const opAsignado = idToOp[String(id).trim()] || dj['Admin'] || dj['admin'] || 'No Asignado';
 
+          const sourceID = dj['source ID'] || dj['source_id'] || '';
+          const maxHour = dj['Max Hour'] !== undefined ? dj['Max Hour'] : (dj['max_hour'] !== undefined ? dj['max_hour'] : '');
+          const idTrustedUser = dj['ID Trusted User'] || dj['id_trusted_user'] || '';
+
+          // 1. Extraer nombre real e info del Trusted User (ej: "Patricia, 55")
+          let trustedInfo = '';
+          if (idTrustedUser) {
+            const parts = idTrustedUser.split('-');
+            trustedInfo = parts.length > 1 ? parts[1].trim() : idTrustedUser.trim();
+          }
+
+          // 2. Extraer nombre de operador oficial (ej: "Jose Lugo")
+          let officialOp = '';
+          if (sourceID) {
+            const parts = sourceID.split('-');
+            officialOp = parts.length > 1 ? parts[1].trim() : sourceID.trim();
+          }
+
+          // 3. Formatear Hora de Mayor Venta
+          let maxHourDisplay = '';
+          if (maxHour !== '') {
+            const hr = parseInt(maxHour);
+            if (!isNaN(hr)) {
+              const ampm = hr >= 12 ? 'PM' : 'AM';
+              const hr12 = hr % 12 || 12;
+              maxHourDisplay = `${hr12} ${ampm}`;
+            }
+          }
+
           // Procesar TODA la info posible de los endpoints (Audit Full UK)
           const metricasExtra = Object.entries(dj)
             .filter(([k, v]) => {
@@ -5774,6 +5802,7 @@
                // Ocultar solo campos de sistema irrelevantes
                return !kUp.includes('ID_') && kUp !== 'ID' && !kUp.includes('NAME') && !kUp.includes('USER')
                  && !kUp.includes('TYPE') && kUp !== 'SOURCE' && !kUp.startsWith('_')
+                 && kUp !== 'MAX HOUR' && kUp !== 'ADMIN' && kUp !== 'REVENUE'
                  && v != null && v !== '' && v !== 'N/A';
             })
             .map(([k, v]) => {
@@ -5828,18 +5857,25 @@
               <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${id}</div>
               <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
-            <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${nombreReal}</div>
+            <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px;">${nombreReal}</div>
+            ${trustedInfo ? `<div style="font-size:0.55rem;color:#2dd4bf;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px;">🌸 Real: ${trustedInfo}</div>` : ''}
+            
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <div style="font-size:0.75rem;">👤</div>
-                <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;">${opAsignado}</div>
+              <div style="display:flex;align-items:center;gap:6px;max-width:80%;">
+                <div style="font-size:0.75rem;flex-shrink:0;">👤</div>
+                <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Operador asignado en web">${opAsignado}</div>
+                ${officialOp && officialOp.toLowerCase() !== opAsignado.toLowerCase() ? `<div style="font-size:0.52rem;color:#cbd5e1;opacity:0.8;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Operador registrado en Tableau (Source ID)">(${officialOp})</div>` : ''}
               </div>
               <button onclick="alert('📋 AUDITORÍA INTEGRAL: PERFIL ${id}\\n\\n1. ¿QUÉ ES?\\nEs un sistema de validación cruzada que extrae la data oficial del servidor UK para auditar la producción real de cada operador.\\n\\n2. ¿CÓMO FUNCIONA?\\nUn Scraper inteligente (Python) lee los endpoints oficiales, desglosa los puntos por servicio (Chat, Mails, Regalos) y los sincroniza con nuestra base de datos cada 1-2 horas.\\n\\n3. ¿CÓMO NOS AYUDA?\\nElimina errores de reporte, asegura pagos exactos basados en la fuente oficial y permite ver el comportamiento detallado de cada perfil y sus clientes.')" 
-                style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
+                style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;flex-shrink:0;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
             </div>
+            
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
                <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}</div>
-               <div style="font-size:0.48rem;color:#334155;">#${idx+1}</div>
+               <div style="font-size:0.48rem;color:#334155;display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                 ${maxHourDisplay ? `<span style="font-size:0.48rem;background:rgba(251,191,36,0.1);color:#fbbf24;padding:1px 4px;border-radius:3px;font-weight:700;white-space:nowrap;">🕒 Max: ${maxHourDisplay}</span>` : ''}
+                 <span>#${idx+1}</span>
+               </div>
             </div>
             <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;margin-bottom:4px;">
               <div style="width:${percent||8}%;height:100%;background:#818cf8;border-radius:2px;opacity:${val>0?1:0.3};"></div>

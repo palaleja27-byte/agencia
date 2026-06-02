@@ -5943,11 +5943,16 @@
 
       async function tableauSyncConFeedback() {
         const btn = document.getElementById('tableau-sync-btn');
-        const pat = localStorage.getItem('github_pat_sync');
+        let pat = localStorage.getItem('github_pat_sync');
         if (!pat) { 
-          tableauLog('ERROR: PAT de GitHub no configurado', 'error');
-          alert("Configure el PAT de GitHub en Datame Sync primero."); 
-          return; 
+          pat = prompt("Por única vez, ingresa tu GitHub PAT (Personal Access Token con permisos actions:write) para autorizar la sincronización de Tableau:");
+          if (pat) {
+            localStorage.setItem('github_pat_sync', pat);
+          } else {
+            tableauLog('ERROR: PAT de GitHub no configurado', 'error');
+            alert("Debe configurar el PAT de GitHub para forzar la sincronización.");
+            return; 
+          }
         }
         
         tableauLog('🚀 Disparando GitHub Action (tableau_sync.yml)...', 'info');
@@ -5964,7 +5969,12 @@
             alert('🚀 Sincronización con Tableau iniciada.\nLos datos aparecerán en 1-2 minutos.');
           } else {
             tableauLog(`❌ Error GitHub (Status ${res.status})`, 'error');
-            alert('❌ Error al contactar GitHub: ' + res.status);
+            if (res.status === 401 || res.status === 404) {
+              alert('❌ Token inválido, expirado o sin permisos. Se borrará el token guardado para que puedas ingresar uno nuevo.');
+              localStorage.removeItem('github_pat_sync');
+            } else {
+              alert('❌ Error al contactar GitHub: ' + res.status);
+            }
           }
         } catch (e) { 
           tableauLog('❌ Error de red al contactar GitHub', 'error');

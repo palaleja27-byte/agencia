@@ -4478,6 +4478,11 @@
       outline: none !important;
     }
     
+    select option {
+      background-color: #0f172a !important;
+      color: #ffffff !important;
+    }
+    
     input[type="text"]:focus, input[type="password"]:focus, select:focus, textarea:focus, .pin-change-inp:focus {
       border-color: rgba(94, 234, 212, 0.4) !important;
       box-shadow: 0 0 15px rgba(94, 234, 212, 0.12) !important;
@@ -12086,33 +12091,21 @@
       operatorsData.splice(idx, 1);
       const newValue = JSON.stringify(operatorsData);
 
-      // 1. Guardar en localStorage inmediatamente
-      _origSetItem('primeOperatorsData2026', newValue);
+      // 1. Guardar en localStorage inmediatamente (usando el wrapper para actualizar timestamps y Supabase)
+      localStorage.setItem('primeOperatorsData2026', newValue);
       _localSaveTs['primeOperatorsData2026'] = Date.now();
-
-      // 2. Guardar en Supabase y ESPERAR confirmación antes de continuar
-      if (_sb) {
-        try {
-          const { error } = await _sb.from('kv_store')
-            .upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' });
-          if (error) console.warn('[Supabase] delete op:', error.message);
-          else _toastSync('✅ Operador eliminado y sincronizado');
-        } catch (e) {
-          console.warn('[Supabase] delete op error:', e.message);
-        }
-      }
 
       // Limpiar cortes del operador eliminado
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       delete allCortes[name];
-      _origSetItem(CORTE_KEY, JSON.stringify(allCortes));
+      localStorage.setItem(CORTE_KEY, JSON.stringify(allCortes));
 
       // Limpiar perfiles del operador eliminado
       const allPerfiles = getPerfilMetrics();
       Object.keys(allPerfiles).forEach(k => {
         if (k.startsWith(name + '::')) delete allPerfiles[k];
       });
-      _origSetItem(PERFIL_KEY, JSON.stringify(allPerfiles));
+      localStorage.setItem(PERFIL_KEY, JSON.stringify(allPerfiles));
 
       if (typeof detOpName !== 'undefined' && detOpName === name) cerrarDetalle();
       
@@ -14287,26 +14280,10 @@ function exportarDatos() {
 
       operatorsData.push(newOp);
       
-      // 1. Guardar en localStorage de inmediato
+      // 1. Guardar en localStorage de inmediato (usando el wrapper para actualizar timestamps y Supabase)
       const newValue = JSON.stringify(operatorsData);
-      if (typeof _origSetItem === 'function') {
-        _origSetItem('primeOperatorsData2026', newValue);
-      } else {
-        localStorage.setItem('primeOperatorsData2026', newValue);
-      }
+      localStorage.setItem('primeOperatorsData2026', newValue);
       _localSaveTs['primeOperatorsData2026'] = Date.now();
-
-      // 2. Guardar en Supabase y ESPERAR confirmación para evitar race conditions en realtime
-      if (typeof _sb !== 'undefined' && _sb) {
-        try {
-          const { error } = await _sb.from('kv_store')
-            .upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' });
-          if (error) console.warn('[Supabase] add op error:', error.message);
-          else console.info('[Supabase] add op synced successfully');
-        } catch (e) {
-          console.warn('[Supabase] add op exception:', e.message);
-        }
-      }
 
       document.getElementById('modal-add-op').classList.remove('open');
       renderRanking();

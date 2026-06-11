@@ -7530,6 +7530,9 @@
       if (tabIndex === 4) {
         try {
           renderHandoversAdminView();
+          if (typeof currentRole !== 'undefined' && currentRole === 'admin') {
+            renderHandoverHistoryView();
+          }
         } catch(e) { console.error("Err Tab 4:", e); }
       }
     }
@@ -9939,11 +9942,16 @@
       // Obtener puntos actuales de hoy del operador desde localStorage para mostrárselos
       const opDataRaw = localStorage.getItem('primeOperatorsData2026') || '[]';
       let currentPts = 0;
+      let myGroup = '';
+      const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+        .filter(o => o.group !== 'SP' && o.group !== 'N/A');
+
       try {
         const ops = JSON.parse(opDataRaw);
         const currentOp = ops.find(o => o.name.toLowerCase() === opName.toLowerCase());
         if (currentOp) {
           currentPts = currentOp.points_hoy || 0;
+          myGroup = currentOp.group || '';
         }
       } catch (e) {}
 
@@ -9959,6 +9967,60 @@
           badge.style.color = '#ef4444';
           badge.style.border = '1px solid rgba(239,68,68,0.2)';
         }
+      }
+
+      // Generar listado de reportes del mismo grupo para hoy (exclusivo del grupo)
+      let groupHtml = '';
+      if (myGroup) {
+        const groupHandovers = handovers.filter(h => {
+          if (h.date !== todayStr) return false;
+          const otherOp = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
+          return otherOp && otherOp.group === myGroup;
+        });
+
+        groupHtml += `
+          <div style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.08); padding-top:15px;">
+            <h4 style="margin:0 0 10px; font-size:0.7rem; color:#a78bfa; text-transform:uppercase; font-weight:800; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">
+              👥 Empalmes de tu Grupo (${myGroup}) hoy
+            </h4>
+        `;
+
+        if (groupHandovers.length === 0) {
+          groupHtml += `
+            <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center; color:#64748b; font-size:0.65rem; font-style:italic;">
+              Ningún compañero de tu grupo ha enviado empalme hoy.
+            </div>
+          `;
+        } else {
+          groupHtml += `<div style="display:flex; flex-direction:column; gap:10px;">`;
+          groupHandovers.forEach(h => {
+            let shiftBadge = '';
+            if (h.shift === 'manana') shiftBadge = `<span style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); color:#fbbf24; padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800; text-transform:uppercase;">☀️ Mañana</span>`;
+            else if (h.shift === 'tarde') shiftBadge = `<span style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800; text-transform:uppercase;">🌆 Tarde</span>`;
+            else shiftBadge = `<span style="background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.3); color:#c084fc; padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800; text-transform:uppercase;">🌙 Noche</span>`;
+
+            groupHtml += `
+              <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:8px; padding:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:0.7rem; font-weight:800; color:white;">👤 ${h.operator} ${shiftBadge}</span>
+                  <span style="font-size:0.6rem; color:#475569;">${new Date(h.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr; gap:6px; font-size:0.65rem; margin-top:4px;">
+                  <div style="background:rgba(0,0,0,0.15); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.01);">
+                    <strong style="color:#818cf8; display:block; margin-bottom:2px; font-size:0.55rem; text-transform:uppercase;">🎯 Clientes Nuevos</strong>
+                    <span style="color:#cbd5e1; white-space:pre-wrap;">${h.newClients}</span>
+                  </div>
+                  <div style="background:rgba(0,0,0,0.15); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.01);">
+                    <strong style="color:#c084fc; display:block; margin-bottom:2px; font-size:0.55rem; text-transform:uppercase;">🔄 Instrucciones</strong>
+                    <span style="color:#cbd5e1; white-space:pre-wrap;">${h.notes || 'Ninguna instrucción.'}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          });
+          groupHtml += `</div>`;
+        }
+        groupHtml += `</div>`;
       }
 
       if (existing && !container.dataset.editing) {
@@ -9994,6 +10056,7 @@
               <button onclick="document.getElementById('handover-container').dataset.editing='true'; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:bold;">Editar Reporte</button>
             </div>
           </div>
+          ${groupHtml}
         `;
         return;
       }
@@ -10032,6 +10095,7 @@
             <button onclick="submitHandoverReport('${opName}')" style="background:linear-gradient(90deg, #6366f1, #a855f7); border:none; color:white; font-size:0.65rem; font-weight:bold; padding:6px 15px; border-radius:6px; cursor:pointer; box-shadow:0 4px 10px rgba(99, 102, 241, 0.2);">Enviar Reporte</button>
           </div>
         </div>
+        ${groupHtml}
       `;
     }
 
@@ -10090,17 +10154,31 @@
         dateInput.value = todayStr;
       }
       const filterDate = dateInput ? dateInput.value : '';
+      const groupFilter = document.getElementById('ho-admin-filter-group')?.value || '';
 
       const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
-      const filtered = handovers.filter(h => h.date === filterDate);
-
-      // Obtener todos los operadores activos
+      
+      // Filtrar empalmes por fecha y grupo
+      let filtered = handovers.filter(h => h.date === filterDate);
       const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
         .filter(o => o.group !== 'SP' && o.group !== 'N/A');
 
+      if (groupFilter) {
+        filtered = filtered.filter(h => {
+          const op = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
+          return op && op.group === groupFilter;
+        });
+      }
+
+      // Obtener todos los operadores activos (filtrados si corresponde)
+      let activeOpsFiltered = activeOps;
+      if (groupFilter) {
+        activeOpsFiltered = activeOps.filter(o => o.group === groupFilter);
+      }
+
       // Separar reportados de pendientes
       const reportedNames = new Set(filtered.map(h => h.operator.toLowerCase()));
-      const pendingOps = activeOps.filter(o => !reportedNames.has(o.name.toLowerCase()));
+      const pendingOps = activeOpsFiltered.filter(o => !reportedNames.has(o.name.toLowerCase()));
 
       let html = '';
 
@@ -10109,7 +10187,7 @@
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
           <div style="background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.15); padding:15px; border-radius:12px; text-align:center;">
             <div style="font-size:0.65rem; color:#94a3b8; text-transform:uppercase; font-weight:800; margin-bottom:5px;">Entregados</div>
-            <div style="font-size:1.5rem; font-weight:900; color:#38bdf8;">${filtered.length} / ${activeOps.length}</div>
+            <div style="font-size:1.5rem; font-weight:900; color:#38bdf8;">${filtered.length} / ${activeOpsFiltered.length}</div>
           </div>
           <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.15); padding:15px; border-radius:12px; text-align:center;">
             <div style="font-size:0.65rem; color:#94a3b8; text-transform:uppercase; font-weight:800; margin-bottom:5px;">Pendientes</div>
@@ -10124,7 +10202,7 @@
       if (filtered.length === 0) {
         html += `
           <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:12px; padding:30px; text-align:center; color:#64748b; font-size:0.8rem; font-style:italic;">
-            No se han registrado reportes de empalme para esta fecha.
+            No se han registrado reportes de empalme para esta fecha y grupo.
           </div>
         `;
       } else {
@@ -10135,8 +10213,10 @@
           const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
           
           let pointsComparison = '';
+          const opInRank = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
+          const opGroup = opInRank ? opInRank.group : 'Sin Grupo';
+
           if (h.date === todayStr) {
-            const opInRank = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
             const actualPts = opInRank ? (opInRank.points_hoy || 0) : 0;
             if (actualPts !== h.points) {
               pointsComparison = `<span style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; padding:2px 6px; border-radius:6px; font-size:0.6rem; font-weight:bold; margin-left:8px;" title="Desfase: El ranking registra ${actualPts} pts hoy">⚠️ Desfase Rank: ${actualPts} PTS</span>`;
@@ -10155,6 +10235,7 @@
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
                 <div style="display:flex; align-items:center; gap:8px;">
                   <strong style="color:white; font-size:0.85rem;">${h.operator}</strong>
+                  <span style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:2px 6px; border-radius:6px; font-size:0.6rem; font-weight:bold;">G-${opGroup}</span>
                   ${shiftBadge}
                   <span style="font-size:0.75rem; font-weight:700; color:#94a3b8; margin-left:10px;">${h.points} PTS</span>
                   ${pointsComparison}
@@ -10203,6 +10284,11 @@
       }
 
       listContainer.innerHTML = html;
+
+      // Actualizar automáticamente la sección de historial si es admin
+      if (typeof currentRole !== 'undefined' && currentRole === 'admin') {
+        renderHandoverHistoryView();
+      }
     }
 
     function deleteHandoverAdmin(id) {
@@ -10214,6 +10300,113 @@
         _sbSafeSave('rr_shift_handovers', filtered);
       }
       _toastSync('🗑️ Reporte de empalme eliminado');
+      renderHandoversAdminView();
+    }
+
+    function renderHandoverHistoryView() {
+      const listContainer = document.getElementById('handovers-history-list');
+      if (!listContainer) return;
+
+      const searchOp = document.getElementById('ho-hist-search-op')?.value.trim().toLowerCase() || '';
+      const groupFilter = document.getElementById('ho-hist-filter-group')?.value || '';
+      const startDate = document.getElementById('ho-hist-start-date')?.value || '';
+      const endDate = document.getElementById('ho-hist-end-date')?.value || '';
+
+      const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
+      const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+        .filter(o => o.group !== 'SP' && o.group !== 'N/A');
+
+      // Filtrar el historial
+      let filtered = handovers;
+
+      // Buscar por operador
+      if (searchOp) {
+        filtered = filtered.filter(h => h.operator.toLowerCase().includes(searchOp));
+      }
+
+      // Filtrar por grupo
+      if (groupFilter) {
+        filtered = filtered.filter(h => {
+          const op = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
+          return op && op.group === groupFilter;
+        });
+      }
+
+      // Filtrar por rango de fechas
+      if (startDate) {
+        filtered = filtered.filter(h => h.date >= startDate);
+      }
+      if (endDate) {
+        filtered = filtered.filter(h => h.date <= endDate);
+      }
+
+      // Ordenar por fecha y timestamp descendente (más recientes primero)
+      filtered.sort((a, b) => b.timestamp - a.timestamp);
+
+      let html = '';
+
+      if (filtered.length === 0) {
+        html += `
+          <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:12px; padding:30px; text-align:center; color:#64748b; font-size:0.8rem; font-style:italic;">
+            No se encontraron reportes históricos que coincidan con los filtros.
+          </div>
+        `;
+      } else {
+        html += `<div style="display:grid; grid-template-columns:1fr; gap:12px;">`;
+        filtered.forEach(h => {
+          const opInRank = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
+          const opGroup = opInRank ? opInRank.group : 'Sin Grupo';
+          
+          let shiftBadge = '';
+          if (h.shift === 'manana') shiftBadge = `<span style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:800; text-transform:uppercase;">☀️ Mañana</span>`;
+          else if (h.shift === 'tarde') shiftBadge = `<span style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:800; text-transform:uppercase;">🌆 Tarde</span>`;
+          else shiftBadge = `<span style="background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.3); color:#c084fc; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:800; text-transform:uppercase;">🌙 Noche</span>`;
+
+          html += `
+            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <strong style="color:white; font-size:0.85rem;">${h.operator}</strong>
+                  <span style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; padding:2px 6px; border-radius:6px; font-size:0.6rem; font-weight:bold;">G-${opGroup}</span>
+                  ${shiftBadge}
+                  <span style="font-size:0.75rem; font-weight:700; color:#94a3b8; margin-left:10px;">${h.points} PTS</span>
+                  <span style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); color:#cbd5e1; padding:2px 6px; border-radius:6px; font-size:0.6rem; font-weight:bold; margin-left:8px;">📅 ${h.date}</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:0.6rem; color:#475569;">${new Date(h.timestamp).toLocaleString()}</span>
+                  <button onclick="deleteHandoverHistory('${h.id}')" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); color:#f87171; border-radius:6px; font-size:0.6rem; padding:4px 8px; cursor:pointer; font-weight:bold;">Eliminar</button>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:8px; border-top:1px solid rgba(255,255,255,0.03); padding-top:10px;">
+                <div>
+                  <div style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🎯 Clientes Nuevos Capturados</div>
+                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
+                </div>
+                <div>
+                  <div style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🔄 Coberturas e Instrucciones</div>
+                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.notes || 'Ninguna.'}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      listContainer.innerHTML = html;
+    }
+
+    function deleteHandoverHistory(id) {
+      if (!confirm('¿Estás seguro de que deseas eliminar este reporte del historial?')) return;
+      const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
+      const filtered = handovers.filter(h => h.id !== id);
+      localStorage.setItem('rr_shift_handovers', JSON.stringify(filtered));
+      if (typeof _sbSafeSave === 'function') {
+        _sbSafeSave('rr_shift_handovers', filtered);
+      }
+      _toastSync('🗑️ Reporte eliminado del historial');
+      renderHandoverHistoryView();
       renderHandoversAdminView();
     }
 
@@ -16489,6 +16682,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (tabBtnHandovers) {
         tabBtnHandovers.style.display = (role === 'monitor' || role === 'admin') ? 'inline-block' : 'none';
       }
+
+      // Módulo Histórico de Empalmes (Solo Administrador)
+      const hoHistorySection = document.getElementById('ho-history-admin-section');
+      if (hoHistorySection) {
+        hoHistorySection.style.display = (role === 'admin') ? 'block' : 'none';
+      }
     }
 
     // ==================== INICIO ====================
@@ -20427,7 +20626,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
   <!-- TAB 4: EMPALMES DE TURNO (MONITOR/ADMIN) -->
   <div id="tab-handovers" class="tab-content" style="max-width:1200px; margin:20px auto; padding:0 16px; box-sizing:border-box;">
-    <div style="background:var(--panel); border:1px solid rgba(168,85,247,0.25); border-radius:20px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+    <!-- Vista de Empalmes del Día -->
+    <div style="background:var(--panel); border:1px solid rgba(168,85,247,0.25); border-radius:20px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,0.4); margin-bottom:25px;">
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:15px; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
         <div style="display:flex; align-items:center; gap:12px;">
           <span style="font-size:1.8rem;">📋</span>
@@ -20436,7 +20636,25 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             <div style="font-size:0.65rem; color:#94a3b8;">Monitorea los reportes diarios de empalme de los operadores y sus clientes nuevos capturados</div>
           </div>
         </div>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="ho-admin-filter-group" onchange="renderHandoversAdminView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none; cursor:pointer;">
+            <option value="">Todos los grupos</option>
+            <option value="1">Grupo 1</option>
+            <option value="2">Grupo 2</option>
+            <option value="3">Grupo 3</option>
+            <option value="4">Grupo 4</option>
+            <option value="5">Grupo 5</option>
+            <option value="6">Grupo 6</option>
+            <option value="7">Grupo 7</option>
+            <option value="8">Grupo 8</option>
+            <option value="9">Grupo 9</option>
+            <option value="10">Grupo 10</option>
+            <option value="11">Grupo 11</option>
+            <option value="12">Grupo 12</option>
+            <option value="13">Grupo 13</option>
+            <option value="14">Grupo 14</option>
+            <option value="15">Grupo 15</option>
+          </select>
           <input type="date" id="ho-admin-filter-date" onchange="renderHandoversAdminView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none;">
           <button onclick="renderHandoversAdminView()" style="background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.3); color:#c084fc; font-weight:bold; font-size:0.8rem; padding:8px 15px; border-radius:10px; cursor:pointer;">🔄 Actualizar</button>
         </div>
@@ -20444,6 +20662,51 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
       <div id="handovers-admin-list" style="display:flex; flex-direction:column; gap:15px;">
         <!-- Se renderizan los empalmes vía JS -->
+      </div>
+    </div>
+
+    <!-- Módulo Histórico de Empalmes (Solo Administrador) -->
+    <div id="ho-history-admin-section" style="display:none; background:var(--panel); border:1px solid rgba(139,92,246,0.3); border-radius:20px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:15px; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:1.8rem;">📜</span>
+          <div>
+            <h2 style="margin:0; font-size:1.1rem; font-weight:900; color:white; text-transform:uppercase; letter-spacing:1px;">Historial Completo de Empalmes</h2>
+            <div style="font-size:0.65rem; color:#94a3b8;">Revisión global y auditoría de reportes anteriores</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <input type="text" id="ho-hist-search-op" placeholder="Buscar por operador..." oninput="renderHandoverHistoryView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none; width:170px;">
+          
+          <select id="ho-hist-filter-group" onchange="renderHandoverHistoryView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none; cursor:pointer;">
+            <option value="">Todos los grupos</option>
+            <option value="1">Grupo 1</option>
+            <option value="2">Grupo 2</option>
+            <option value="3">Grupo 3</option>
+            <option value="4">Grupo 4</option>
+            <option value="5">Grupo 5</option>
+            <option value="6">Grupo 6</option>
+            <option value="7">Grupo 7</option>
+            <option value="8">Grupo 8</option>
+            <option value="9">Grupo 9</option>
+            <option value="10">Grupo 10</option>
+            <option value="11">Grupo 11</option>
+            <option value="12">Grupo 12</option>
+            <option value="13">Grupo 13</option>
+            <option value="14">Grupo 14</option>
+            <option value="15">Grupo 15</option>
+          </select>
+
+          <input type="date" id="ho-hist-start-date" onchange="renderHandoverHistoryView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none;">
+          <span style="color:#64748b; font-size:0.8rem;">a</span>
+          <input type="date" id="ho-hist-end-date" onchange="renderHandoverHistoryView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none;">
+          
+          <button onclick="renderHandoverHistoryView()" style="background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.3); color:#a78bfa; font-weight:bold; font-size:0.8rem; padding:8px 15px; border-radius:10px; cursor:pointer;">🔍 Buscar</button>
+        </div>
+      </div>
+
+      <div id="handovers-history-list" style="display:flex; flex-direction:column; gap:15px; max-height:450px; overflow-y:auto; padding-right:5px;">
+        <!-- Se renderizan los empalmes históricos vía JS -->
       </div>
     </div>
   </div>

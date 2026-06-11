@@ -5129,6 +5129,26 @@
          <button onclick="fechasCarouselScroll(1)" style="position:absolute; right:0; z-index:2; background:rgba(0,0,0,0.7); color:white; border:none; border-radius:50%; width:24px; height:24px; cursor:pointer;">›</button>
        </div>
     </div>
+    <!-- REPORTE DIARIO DE EMPALME -->
+    <div class="op-section" id="op-handover-section" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(168, 85, 247, 0.04)); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 20px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); width: 100%; box-sizing: border-box;">
+      <div class="op-section-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px; margin-bottom:15px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:1.4rem;">📋</span>
+          <div>
+            <div style="font-size:0.85rem; font-weight:900; color:white; letter-spacing:1px; text-transform:uppercase;">Reporte Diario & Empalme de Turno</div>
+            <div style="font-size:0.55rem; color:#94a3b8;">Garantiza la consistencia de conversaciones y reporta tus clientes nuevos obligatorios</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="handover-status-badge" style="font-size:0.55rem; font-weight:800; background:rgba(94,234,212,0.1); color:#5eead4; border:1px solid rgba(94,234,212,0.2); padding:2px 8px; border-radius:6px; text-transform:uppercase;">Listo</span>
+        </div>
+      </div>
+      
+      <div id="handover-container" style="width:100%; box-sizing:border-box;">
+        <!-- Se renderiza vía JS -->
+      </div>
+    </div>
+
     <div class="op-section" id="op-ice-section" style="grid-column: 1 / -1; display: flex; flex-direction: column; width: 100%; box-sizing: border-box;">
       <div class="op-section-title" style="display:flex; justify-content:space-between; align-items:center;">
         <span>🔥 Icebreakers TalkyTimes</span>
@@ -5289,6 +5309,7 @@
     <button class="tab-btn" onclick="switchTab(1)">📋 Reporte Operación</button>
     <button class="tab-btn" onclick="switchTab(2)">📊 Monitoreo de Tareas</button>
     <button class="tab-btn" onclick="switchTab(3)">✅ Asistencia</button>
+    <button class="tab-btn" id="tab-btn-handovers" onclick="switchTab(4)" style="display:none;">📋 Empalmes</button>
   </div>
 
   <!-- TAB 0: RANKING PRINCIPAL -->
@@ -7197,6 +7218,7 @@
       { name: "OMAR JOSE GOMEZ GUERRA", group: "G4", plataforma: "AmoLatina", ene: 2456.78, feb: 2198.34, mar: 0, abr: 0, profiles: [], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2023-03-13" },
       { name: "OSCAR JOSE GOMEZ GUERRA", group: "5", plataforma: "Prime", ene: 3732.5, feb: 3144.22, mar: 0, abr: 0, profiles: [{ "id": "118179794", "model": "HORACIO" }, { "id": "137163229", "model": "SEBASTIAN" }, { "id": "130338853", "model": "IVALDO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-03" },
       { name: "SKERLY NAILEX VALERO BRICEÑO", group: "3", plataforma: "Prime", ene: 2200.51, feb: 2728.72, mar: 0, abr: 0, profiles: [{ "id": "131130713", "model": "LUIS JOAO" }, { "id": "109551682", "model": "RENATO" }, { "id": "118692242", "model": "FRANCISCO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-10-14" },
+      { name: "LAURA YATE", group: "1", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-06-11" },
       { name: "VERONICA YOLYANA PATIÑO ESCORIHUELA", group: "10", plataforma: "Prime", ene: 0, feb: 204.78, mar: 0, abr: 0, profiles: [{ "id": "143014129", "model": "RENEE" }, { "id": "143017065", "model": "MARIO" }, { "id": "145211163", "model": "FERMIN" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-13" },
       { name: "WILLIANNYS DEL VALLE GUZMAN ANGULO", group: "7", plataforma: "Prime", ene: 1828.87, feb: 1321.74, mar: 0, abr: 0, profiles: [{ "id": "103291980", "model": "ARMANDO" }, { "id": "130431310", "model": "RAFAEL" }, { "id": "157067734", "model": "VALDEMIR" }, { "id": "98540781", "model": "LEANDRO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-11-20" },
       { name: "YARELIS ESTHER SEVILLA PADILLA", group: "9", plataforma: "Prime", ene: 549.29, feb: 594.58, mar: 0, abr: 0, profiles: [{ "id": "133085188", "model": "MARCOS" }, { "id": "132062039", "model": "BEATRIZ" }, { "id": "138130329", "model": "AGUSTIN" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-12-24" },
@@ -7504,6 +7526,11 @@
             if (typeof asiRender === 'function') asiRender();
           } catch(e) { console.error("Err Tab 3:", e); }
         }, 0);
+      }
+      if (tabIndex === 4) {
+        try {
+          renderHandoversAdminView();
+        } catch(e) { console.error("Err Tab 4:", e); }
       }
     }
 
@@ -9896,6 +9923,301 @@
     // Legacy alias so setTimeout hook still works
     function cargarNoticias() {}
 
+    // ── EMPALMES DE TURNO / SHIFT HANDOVERS ──────────────────────────────────
+    function renderHandoverModule(opName) {
+      const container = document.getElementById('handover-container');
+      const badge = document.getElementById('handover-status-badge');
+      if (!container) return;
+
+      const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
+      const today = new Date();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+
+      // Buscar si este operador ya tiene un reporte para hoy
+      const existing = handovers.find(h => h.operator.toLowerCase() === opName.toLowerCase() && h.date === todayStr);
+
+      // Obtener puntos actuales de hoy del operador desde localStorage para mostrárselos
+      const opDataRaw = localStorage.getItem('primeOperatorsData2026') || '[]';
+      let currentPts = 0;
+      try {
+        const ops = JSON.parse(opDataRaw);
+        const currentOp = ops.find(o => o.name.toLowerCase() === opName.toLowerCase());
+        if (currentOp) {
+          currentPts = currentOp.points_hoy || 0;
+        }
+      } catch (e) {}
+
+      if (badge) {
+        if (existing) {
+          badge.textContent = 'Reportado';
+          badge.style.background = 'rgba(16,185,129,0.1)';
+          badge.style.color = '#10b981';
+          badge.style.border = '1px solid rgba(16,185,129,0.2)';
+        } else {
+          badge.textContent = 'Pendiente hoy';
+          badge.style.background = 'rgba(239,68,68,0.1)';
+          badge.style.color = '#ef4444';
+          badge.style.border = '1px solid rgba(239,68,68,0.2)';
+        }
+      }
+
+      if (existing && !container.dataset.editing) {
+        // Mostrar vista de resumen de reporte entregado
+        container.innerHTML = `
+          <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:15px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <span style="font-size:0.75rem; font-weight:800; color:#5eead4; text-transform:uppercase;">Empalme del día registrado con éxito</span>
+              <span style="font-size:0.6rem; color:#64748b;">${new Date(existing.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+              <div style="background:rgba(255,255,255,0.01); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03);">
+                <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; font-weight:800;">Turno Reportado</div>
+                <div style="font-size:0.75rem; font-weight:700; color:white; text-transform:capitalize;">${existing.shift}</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.01); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03);">
+                <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; font-weight:800;">Puntos Registrados</div>
+                <div style="font-size:0.75rem; font-weight:700; color:white;">${existing.points} PTS</div>
+              </div>
+            </div>
+            
+            <div style="margin-bottom:8px;">
+              <div style="font-size:0.6rem; color:#818cf8; text-transform:uppercase; font-weight:800; margin-bottom:2px;">Clientes Nuevos</div>
+              <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:6px; border-radius:6px;">${existing.newClients || 'Ninguno reportado.'}</div>
+            </div>
+            
+            <div style="margin-bottom:8px;">
+              <div style="font-size:0.6rem; color:#c084fc; text-transform:uppercase; font-weight:800; margin-bottom:2px;">Instrucciones / Coberturas</div>
+              <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:6px; border-radius:6px;">${existing.notes || 'Ninguna instrucción reportada.'}</div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+              <button onclick="document.getElementById('handover-container').dataset.editing='true'; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:bold;">Editar Reporte</button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // De lo contrario, renderizar formulario
+      container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:15px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">Tu Turno de Hoy</label>
+              <select id="ho-shift" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:6px; border-radius:6px; outline:none;">
+                <option value="manana" ${existing?.shift === 'manana' ? 'selected' : ''}>☀️ Mañana</option>
+                <option value="tarde" ${existing?.shift === 'tarde' ? 'selected' : ''}>🌆 Tarde</option>
+                <option value="noche" ${existing?.shift === 'noche' ? 'selected' : ''}>🌙 Noche</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">Puntos Acumulados</label>
+              <input type="number" id="ho-points" value="${existing ? existing.points : currentPts}" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:5px; border-radius:6px; outline:none;" readonly>
+              <span style="font-size:0.5rem; color:#475569;">Autocalculado del ranking</span>
+            </div>
+          </div>
+
+          <div>
+            <label style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">🎯 Clientes Nuevos Capturados (Obligatorio)</label>
+            <textarea id="ho-new-clients" placeholder="Lista los IDs y detalles de los clientes capturados durante tu turno. Ejemplo:\n- ID: 12345 (Cliente caliente, le gusta viajar)\n- ID: 67890 (Preguntó por VIP)" style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:8px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${existing ? existing.newClients : ''}</textarea>
+          </div>
+
+          <div>
+            <label style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">🔄 Coberturas e Instrucciones de Empalme</label>
+            <textarea id="ho-notes" placeholder="Indica qué perfiles cubriste, en qué horario, qué clientes quedaron pendientes y cualquier instrucción para el siguiente operador." style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:8px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${existing ? existing.notes : ''}</textarea>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:8px;">
+            ${existing ? `<button onclick="delete document.getElementById('handover-container').dataset.editing; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); color:#64748b; font-size:0.65rem; padding:6px 12px; border-radius:6px; cursor:pointer;">Cancelar</button>` : ''}
+            <button onclick="submitHandoverReport('${opName}')" style="background:linear-gradient(90deg, #6366f1, #a855f7); border:none; color:white; font-size:0.65rem; font-weight:bold; padding:6px 15px; border-radius:6px; cursor:pointer; box-shadow:0 4px 10px rgba(99, 102, 241, 0.2);">Enviar Reporte</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function submitHandoverReport(opName) {
+      const shift = document.getElementById('ho-shift')?.value;
+      const points = parseInt(document.getElementById('ho-points')?.value || '0');
+      const newClients = document.getElementById('ho-new-clients')?.value.trim();
+      const notes = document.getElementById('ho-notes')?.value.trim();
+
+      if (!newClients) {
+        alert('Por favor reporta los clientes nuevos capturados en tu turno (es obligatorio).');
+        return;
+      }
+
+      const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
+      const today = new Date();
+      const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+
+      // Eliminar reporte previo del mismo operador para hoy si existe (actualización)
+      const filtered = handovers.filter(h => !(h.operator.toLowerCase() === opName.toLowerCase() && h.date === todayStr));
+
+      const newReport = {
+        id: 'ho_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        operator: opName,
+        date: todayStr,
+        shift: shift,
+        points: points,
+        newClients: newClients,
+        notes: notes,
+        timestamp: Date.now()
+      };
+
+      filtered.push(newReport);
+      localStorage.setItem('rr_shift_handovers', JSON.stringify(filtered));
+      
+      // Guardar y sincronizar con Supabase
+      if (typeof _sbSafeSave === 'function') {
+        _sbSafeSave('rr_shift_handovers', filtered);
+      }
+
+      const container = document.getElementById('handover-container');
+      if (container) delete container.dataset.editing;
+
+      _toastSync('📋 Reporte de Empalme enviado y sincronizado');
+      renderHandoverModule(opName);
+    }
+
+    function renderHandoversAdminView() {
+      const listContainer = document.getElementById('handovers-admin-list');
+      if (!listContainer) return;
+
+      const dateInput = document.getElementById('ho-admin-filter-date');
+      if (dateInput && !dateInput.value) {
+        const today = new Date();
+        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        dateInput.value = todayStr;
+      }
+      const filterDate = dateInput ? dateInput.value : '';
+
+      const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
+      const filtered = handovers.filter(h => h.date === filterDate);
+
+      // Obtener todos los operadores activos
+      const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+        .filter(o => o.group !== 'SP' && o.group !== 'N/A');
+
+      // Separar reportados de pendientes
+      const reportedNames = new Set(filtered.map(h => h.operator.toLowerCase()));
+      const pendingOps = activeOps.filter(o => !reportedNames.has(o.name.toLowerCase()));
+
+      let html = '';
+
+      // --- Sección de Estadísticas Rápidas ---
+      html += `
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
+          <div style="background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.15); padding:15px; border-radius:12px; text-align:center;">
+            <div style="font-size:0.65rem; color:#94a3b8; text-transform:uppercase; font-weight:800; margin-bottom:5px;">Entregados</div>
+            <div style="font-size:1.5rem; font-weight:900; color:#38bdf8;">${filtered.length} / ${activeOps.length}</div>
+          </div>
+          <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.15); padding:15px; border-radius:12px; text-align:center;">
+            <div style="font-size:0.65rem; color:#94a3b8; text-transform:uppercase; font-weight:800; margin-bottom:5px;">Pendientes</div>
+            <div style="font-size:1.5rem; font-weight:900; color:#f87171;">${pendingOps.length}</div>
+          </div>
+        </div>
+      `;
+
+      // --- Lista de Reportes Entregados ---
+      html += `<h3 style="margin:10px 0 5px; font-size:0.85rem; color:#a78bfa; text-transform:uppercase; font-weight:800; letter-spacing:0.5px;">Reportes Entregados (${filtered.length})</h3>`;
+
+      if (filtered.length === 0) {
+        html += `
+          <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:12px; padding:30px; text-align:center; color:#64748b; font-size:0.8rem; font-style:italic;">
+            No se han registrado reportes de empalme para esta fecha.
+          </div>
+        `;
+      } else {
+        html += `<div style="display:grid; grid-template-columns:1fr; gap:12px;">`;
+        filtered.forEach(h => {
+          // Intentar cruzar puntos con su ranking actual de hoy si la fecha es hoy
+          const today = new Date();
+          const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+          
+          let pointsComparison = '';
+          if (h.date === todayStr) {
+            const opInRank = activeOps.find(o => o.name.toLowerCase() === h.operator.toLowerCase());
+            const actualPts = opInRank ? (opInRank.points_hoy || 0) : 0;
+            if (actualPts !== h.points) {
+              pointsComparison = `<span style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; padding:2px 6px; border-radius:6px; font-size:0.6rem; font-weight:bold; margin-left:8px;" title="Desfase: El ranking registra ${actualPts} pts hoy">⚠️ Desfase Rank: ${actualPts} PTS</span>`;
+            } else {
+              pointsComparison = `<span style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#34d399; padding:2px 6px; border-radius:6px; font-size:0.6rem; font-weight:bold; margin-left:8px;">Puntos Sincronizados</span>`;
+            }
+          }
+
+          let shiftBadge = '';
+          if (h.shift === 'manana') shiftBadge = `<span style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:800; text-transform:uppercase;">☀️ Mañana</span>`;
+          else if (h.shift === 'tarde') shiftBadge = `<span style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:800; text-transform:uppercase;">🌆 Tarde</span>`;
+          else shiftBadge = `<span style="background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.3); color:#c084fc; padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:800; text-transform:uppercase;">🌙 Noche</span>`;
+
+          html += `
+            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <strong style="color:white; font-size:0.85rem;">${h.operator}</strong>
+                  ${shiftBadge}
+                  <span style="font-size:0.75rem; font-weight:700; color:#94a3b8; margin-left:10px;">${h.points} PTS</span>
+                  ${pointsComparison}
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:0.6rem; color:#475569;">${new Date(h.timestamp).toLocaleString()}</span>
+                  <button onclick="deleteHandoverAdmin('${h.id}')" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); color:#f87171; border-radius:6px; font-size:0.6rem; padding:4px 8px; cursor:pointer; font-weight:bold;">Eliminar</button>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:8px; border-top:1px solid rgba(255,255,255,0.03); padding-top:10px;">
+                <div>
+                  <div style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🎯 Clientes Nuevos Capturados</div>
+                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
+                </div>
+                <div>
+                  <div style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🔄 Coberturas e Instrucciones</div>
+                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.notes || 'Ninguna.'}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+      }
+
+      // --- Lista de Pendientes ---
+      html += `<h3 style="margin:20px 0 5px; font-size:0.85rem; color:#f87171; text-transform:uppercase; font-weight:800; letter-spacing:0.5px;">Operadores Pendientes (${pendingOps.length})</h3>`;
+      if (pendingOps.length === 0) {
+        html += `
+          <div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.15); border-radius:12px; padding:15px; text-align:center; color:#34d399; font-size:0.75rem; font-weight:700;">
+            🎉 ¡Excelente! Todos los operadores activos han entregado su empalme para este día.
+          </div>
+        `;
+      } else {
+        const listStr = pendingOps.map(o => `
+          <span style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); padding:5px 10px; border-radius:8px; font-size:0.7rem; color:#cbd5e1; display:inline-flex; align-items:center; gap:5px;">
+            👤 ${o.name} <span style="font-size:0.55rem; color:#64748b;">(Grupo ${o.group})</span>
+          </span>
+        `).join(' ');
+        html += `
+          <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:12px; padding:15px; display:flex; flex-wrap:wrap; gap:8px;">
+            ${listStr}
+          </div>
+        `;
+      }
+
+      listContainer.innerHTML = html;
+    }
+
+    function deleteHandoverAdmin(id) {
+      if (!confirm('¿Estás seguro de que deseas eliminar este reporte de empalme?')) return;
+      const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
+      const filtered = handovers.filter(h => h.id !== id);
+      localStorage.setItem('rr_shift_handovers', JSON.stringify(filtered));
+      if (typeof _sbSafeSave === 'function') {
+        _sbSafeSave('rr_shift_handovers', filtered);
+      }
+      _toastSync('🗑️ Reporte de empalme eliminado');
+      renderHandoversAdminView();
+    }
+
+
     // ── OPENCLAW AI AGENT ──────────────────────────────────────────────────
     let _ocConnected = false;
     let _ocConfig = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
@@ -10655,7 +10977,7 @@
                 'primeOperatorsData2026', 'rr_prime_cortes', 'rr_prime_asistencia',
                 'rr_perfil_metrics', 'rr_alertas_sistema', 'rr_metas_operacion',
                 'rr_prime_logs_entrada', 'rr_prime_consejos_2026',
-                'rr_prime_op_pins'
+                'rr_prime_op_pins', 'rr_shift_handovers'
               ];
               const ptKeys = ['rr_prime_v15_mañana', 'rr_prime_v15_tarde', 'rr_prime_v15_noche'];
 
@@ -10714,12 +11036,20 @@
                     if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
                     if (typeof renderOpStats === 'function') renderOpStats(currentOpName);
                   }
+                  // Actualizar módulo de empalmes si recibe cambio de empalmes
+                  if (row.key === 'rr_shift_handovers' && typeof renderHandoverModule === 'function' && currentOpName) {
+                    renderHandoverModule(currentOpName);
+                  }
                 } else if (typeof renderRanking === 'function') {
                   renderRanking();
                   // Monitor: también refrescar asistencia si recibe cambio de operadores
                   if (row.key === 'primeOperatorsData2026' &&
                     typeof asiLoadDraft === 'function' && typeof asiRender === 'function') {
                     asiLoadDraft(); asiRender();
+                  }
+                  // Monitor/admin: refrescar vista de empalmes si recibe cambio de empalmes
+                  if (row.key === 'rr_shift_handovers' && typeof renderHandoversAdminView === 'function') {
+                    renderHandoversAdminView();
                   }
                 }
               }
@@ -10838,7 +11168,8 @@
       'rr_metas_operacion',
       'rr_prime_v15_manana',
       'rr_prime_v15_tarde',
-      'rr_prime_v15_noche'
+      'rr_prime_v15_noche',
+      'rr_shift_handovers'
     ];
 
     async function _sbPeriodicResync() {
@@ -10847,16 +11178,49 @@
         const { data, error } = await _sb
           .from('kv_store')
           .select('key, value')
-          .in('key', _CRITICAL_KEYS);
+          .in('key', [..._CRITICAL_KEYS, 'primeOperatorsData2026_ts']);
         if (error) return;
 
         let changed = false;
+
+        // 1. Obtener timestamp remoto de los operadores
+        const remoteTsRow = data.find(d => d.key === 'primeOperatorsData2026_ts');
+        const remoteTsVal = remoteTsRow ? remoteTsRow.value : '0';
+
         data.forEach(({ key, value }) => {
-          // Solo actualizar si el valor es diferente al memCache
-          if (_sbMemCache[key] !== value) {
-            _origSetItem(key, value);
-            _sbMemCache[key] = value;
-            changed = true;
+          if (key === 'primeOperatorsData2026_ts') return;
+
+          if (key === 'primeOperatorsData2026') {
+            const localTs = parseInt(localStorage.getItem('primeOperatorsData2026_ts') || '0');
+            const remoteTs = parseInt(remoteTsVal || '0');
+
+            if (remoteTs > localTs) {
+              const strVal = typeof value === 'string' ? value : JSON.stringify(value);
+              if (_sbMemCache['primeOperatorsData2026'] !== strVal) {
+                _origSetItem('primeOperatorsData2026', strVal);
+                _sbMemCache['primeOperatorsData2026'] = strVal;
+                _origSetItem('primeOperatorsData2026_ts', String(remoteTs));
+                _sbMemCache['primeOperatorsData2026_ts'] = String(remoteTs);
+                changed = true;
+              }
+            } else if (localTs > remoteTs) {
+              // Si el local es más nuevo, lo subimos
+              const localVal = localStorage.getItem('primeOperatorsData2026');
+              if (localVal) {
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: localVal }, { onConflict: 'key' }).then(()=>{});
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: String(localTs) }, { onConflict: 'key' }).then(()=>{});
+              }
+            }
+          } else {
+            // Para otras claves críticas, protegemos escrituras locales recientes (últimos 15 seg)
+            const msSinceLocalSave = Date.now() - (_localSaveTs[key] || 0);
+            if (msSinceLocalSave < 15000) return;
+
+            if (_sbMemCache[key] !== value) {
+              _origSetItem(key, value);
+              _sbMemCache[key] = value;
+              changed = true;
+            }
           }
         });
 
@@ -10866,12 +11230,14 @@
             if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
             if (typeof renderOpStats === 'function') renderOpStats(currentOpName);
             if (typeof PT !== 'undefined' && PT.checkTrainingPending) PT.checkTrainingPending(currentOpName);
+            if (typeof renderHandoverModule === 'function') renderHandoverModule(currentOpName);
           } else {
             if (typeof renderRanking === 'function') renderRanking();
             if (typeof renderPSAPanel === 'function') renderPSAPanel();
             if (typeof PT !== 'undefined' && typeof PT.loadData === 'function') PT.loadData();
+            if (typeof renderHandoversAdminView === 'function') renderHandoversAdminView();
           }
-          console.log('[Supabase] Re-sync: datos actualizados (PT included)');
+          console.log('[Supabase] Re-sync: datos actualizados (PT e Handovers incluidos)');
         }
       } catch (e) {
         console.warn('[Supabase] Re-sync error:', e.message);
@@ -16117,6 +16483,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Ganancia Líder
       const supUi = document.getElementById('supervisor-ui');
       if (supUi) supUi.style.display = (role === 'monitor' || role === 'admin') ? 'block' : 'none';
+
+      // Botón de Empalmes
+      const tabBtnHandovers = document.getElementById('tab-btn-handovers');
+      if (tabBtnHandovers) {
+        tabBtnHandovers.style.display = (role === 'monitor' || role === 'admin') ? 'inline-block' : 'none';
+      }
     }
 
     // ==================== INICIO ====================
@@ -17447,6 +17819,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       // Load news portal accordion
       setTimeout(() => { renderNewsAcordeon(); }, 300);
+
+      // Render handover module
+      if (typeof renderHandoverModule === 'function') {
+        renderHandoverModule(op.name);
+      }
     }
 
     function loginLogout() {
@@ -20044,6 +20421,29 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         <button onclick="confirmarExportarAsistencia()"
           style="flex:1;padding:11px;background:linear-gradient(135deg,#5eead4,#34d399);color:#000;border:none;border-radius:12px;font-weight:800;cursor:pointer;font-size:.85rem;">📥
           Exportar Excel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: EMPALMES DE TURNO (MONITOR/ADMIN) -->
+  <div id="tab-handovers" class="tab-content" style="max-width:1200px; margin:20px auto; padding:0 16px; box-sizing:border-box;">
+    <div style="background:var(--panel); border:1px solid rgba(168,85,247,0.25); border-radius:20px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:15px; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:1.8rem;">📋</span>
+          <div>
+            <h2 style="margin:0; font-size:1.1rem; font-weight:900; color:white; text-transform:uppercase; letter-spacing:1px;">Control de Empalmes & Turnos</h2>
+            <div style="font-size:0.65rem; color:#94a3b8;">Monitorea los reportes diarios de empalme de los operadores y sus clientes nuevos capturados</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <input type="date" id="ho-admin-filter-date" onchange="renderHandoversAdminView()" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.8rem; padding:8px 12px; border-radius:10px; outline:none;">
+          <button onclick="renderHandoversAdminView()" style="background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.3); color:#c084fc; font-weight:bold; font-size:0.8rem; padding:8px 15px; border-radius:10px; cursor:pointer;">🔄 Actualizar</button>
+        </div>
+      </div>
+
+      <div id="handovers-admin-list" style="display:flex; flex-direction:column; gap:15px;">
+        <!-- Se renderizan los empalmes vía JS -->
       </div>
     </div>
   </div>

@@ -10056,12 +10056,28 @@
               <button onclick="document.getElementById('handover-container').dataset.editing='true'; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:bold;">Editar Reporte</button>
             </div>
           </div>
-          ${groupHtml}
+          <div id="handover-group-list-container">${groupHtml}</div>
         `;
         return;
       }
 
-      // De lo contrario, renderizar formulario
+      // Si es formulario (creación o edición)
+      // Verificar si el formulario ya está dibujado en el DOM
+      const txtClients = document.getElementById('ho-new-clients');
+      const txtNotes = document.getElementById('ho-notes');
+
+      if (txtClients && txtNotes) {
+        // El formulario ya existe en pantalla.
+        // NO lo re-renderizamos para no perder el foco ni el texto que el operador está escribiendo.
+        // Solo actualizamos el listado de empalmes del grupo hoy si el contenedor existe
+        const grpContainer = document.getElementById('handover-group-list-container');
+        if (grpContainer) {
+          grpContainer.innerHTML = groupHtml;
+        }
+        return;
+      }
+
+      // De lo contrario, renderizar el formulario completo por primera vez
       container.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:15px;">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
@@ -10095,7 +10111,7 @@
             <button onclick="submitHandoverReport('${opName}')" style="background:linear-gradient(90deg, #6366f1, #a855f7); border:none; color:white; font-size:0.65rem; font-weight:bold; padding:6px 15px; border-radius:6px; cursor:pointer; box-shadow:0 4px 10px rgba(99, 102, 241, 0.2);">Enviar Reporte</button>
           </div>
         </div>
-        ${groupHtml}
+        <div id="handover-group-list-container">${groupHtml}</div>
       `;
     }
 

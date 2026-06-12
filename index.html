@@ -21659,29 +21659,32 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         ]).then(() => {
           console.info('[Asistencia] Guardado en Supabase ✅');
           
-          // 🔥 AUTO-SYNC CON DATAME_PERFILES 🔥
-          // Evita que el admin tenga que ir manualmente a Supabase a agregar los IDs para el scraper
-          const perfilesDB = [];
-          operatorsData.forEach(o => {
-            if (o.profiles && Array.isArray(o.profiles)) {
-              o.profiles.forEach(p => {
-                 if (p.id) {
-                    perfilesDB.push({
-                       id_perfil: String(p.id).trim(),
-                       modelo: (p.model || o.name).toUpperCase(),
-                       activo: true
-                    });
-                 }
+          // 🔥 DIAGNÓSTICO DE PERFILES EN DATAME_PERFILES 🔥
+          // Compara los perfiles de operatorsData con los registrados en la base de datos
+          _sb.from('datame_perfiles').select('id_datame, modelo, panel_id, activo')
+            .then(({ data: dbPerfiles, error }) => {
+              if (error) {
+                console.error('[Asistencia] Error al validar perfiles en DB:', error);
+                return;
+              }
+              const dbIds = new Set((dbPerfiles || []).map(p => String(p.id_datame).trim()));
+              const missing = [];
+              operatorsData.forEach(o => {
+                if (o.profiles && Array.isArray(o.profiles)) {
+                  o.profiles.forEach(p => {
+                    if (p.id && !dbIds.has(String(p.id).trim())) {
+                      missing.push({ id: p.id, model: p.model || o.name, operator: o.name });
+                    }
+                  });
+                }
               });
-            }
-          });
-          if (perfilesDB.length > 0) {
-            _sb.from('datame_perfiles').upsert(perfilesDB, { onConflict: 'id_perfil' })
-              .then(({error}) => {
-                if (error) console.error('Error auto-sincronizando datame_perfiles:', error);
-                else console.info(`[Asistencia] ${perfilesDB.length} perfiles sincronizados automáticamente con el scraper 🤖`);
-              });
-          }
+              if (missing.length > 0) {
+                console.warn(`[Asistencia] ⚠️ Detectados ${missing.length} perfiles nuevos no registrados en 'datame_perfiles':`, missing);
+                console.warn(`[Asistencia] Estos perfiles no serán leídos por el Watcher hasta que se registren vía SQL.`);
+              } else {
+                console.info('[Asistencia] Todos los perfiles están correctamente registrados en datame_perfiles. ✅');
+              }
+            });
         });
       }
 

@@ -1,0 +1,29 @@
+name: Insert Missing Database Profiles
+
+on:
+  push:
+    paths:
+      - '.github/workflows/db_insert.yml'
+      - 'scripts/insert_profiles_prod.js'
+  workflow_dispatch:
+
+jobs:
+  db-insert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js
+
+      - name: Run insertion script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/insert_profiles_prod.js

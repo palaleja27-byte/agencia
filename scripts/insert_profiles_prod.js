@@ -8,6 +8,18 @@ if (!SUPABASE_SERVICE_KEY) {
   process.exit(1);
 }
 
+function decodeJwtRole(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return 'invalid format';
+    const payload = Buffer.from(parts[1], 'base64').toString('utf8');
+    const data = JSON.parse(payload);
+    return { role: data.role || 'unknown', iss: data.iss || 'unknown' };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const profilesToInsert = [
@@ -23,6 +35,8 @@ const profilesToInsert = [
 ];
 
 async function run() {
+  console.log("=== JWT DECODE ===");
+  console.log("Decoded SUPABASE_SERVICE_KEY info:", decodeJwtRole(SUPABASE_SERVICE_KEY));
   console.log("=== INSERTING MISSING PROFILES VIA SERVICE ROLE ===");
   
   for (const p of profilesToInsert) {

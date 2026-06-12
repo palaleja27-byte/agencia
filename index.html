@@ -7219,6 +7219,9 @@
       { name: "OSCAR JOSE GOMEZ GUERRA", group: "5", plataforma: "Prime", ene: 3732.5, feb: 3144.22, mar: 0, abr: 0, profiles: [{ "id": "118179794", "model": "HORACIO" }, { "id": "137163229", "model": "SEBASTIAN" }, { "id": "130338853", "model": "IVALDO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-04-03" },
       { name: "SKERLY NAILEX VALERO BRICEÑO", group: "3", plataforma: "Prime", ene: 2200.51, feb: 2728.72, mar: 0, abr: 0, profiles: [{ "id": "131130713", "model": "LUIS JOAO" }, { "id": "109551682", "model": "RENATO" }, { "id": "118692242", "model": "FRANCISCO" }], turno: "Tarde", cargo: "Operador", area: "Operativa", fecha_ingreso: "2024-10-14" },
       { name: "LAURA YATE", group: "1", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-06-11" },
+      { name: "SARA RINCON", group: "13", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [{ "id": "79679899", "model": "NORBERTO" }, { "id": "109551682", "model": "RENATO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-06-12" },
+      { name: "DANIEL TORREALBA", group: "3", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-06-12" },
+      { name: "GUSTAVO", group: "1", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [{ "id": "168486464", "model": "GUSTAVO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-06-12" },
       { name: "VERONICA YOLYANA PATIÑO ESCORIHUELA", group: "10", plataforma: "Prime", ene: 0, feb: 204.78, mar: 0, abr: 0, profiles: [{ "id": "143014129", "model": "RENEE" }, { "id": "143017065", "model": "MARIO" }, { "id": "145211163", "model": "FERMIN" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-02-13" },
       { name: "WILLIANNYS DEL VALLE GUZMAN ANGULO", group: "7", plataforma: "Prime", ene: 1828.87, feb: 1321.74, mar: 0, abr: 0, profiles: [{ "id": "103291980", "model": "ARMANDO" }, { "id": "130431310", "model": "RAFAEL" }, { "id": "157067734", "model": "VALDEMIR" }, { "id": "98540781", "model": "LEANDRO" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-11-20" },
       { name: "YARELIS ESTHER SEVILLA PADILLA", group: "9", plataforma: "Prime", ene: 549.29, feb: 594.58, mar: 0, abr: 0, profiles: [{ "id": "133085188", "model": "MARCOS" }, { "id": "132062039", "model": "BEATRIZ" }, { "id": "138130329", "model": "AGUSTIN" }], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-12-24" },
@@ -11318,10 +11321,61 @@
       // Capturar cambios en operadores y actualizar timestamp de sincronización
       if (key === 'primeOperatorsData2026') {
         const tsVal = String(Date.now());
-        _origSetItem('primeOperatorsData2026_ts', tsVal);
-        _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
-        if (_sb) {
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }).then(()=>{});
+        
+        // Si el rol es operador, realizar una fusión (merge) segura para no machacar a otros
+        if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName && _sb) {
+          _sb.from('kv_store').select('value').eq('key', 'primeOperatorsData2026').single().then(({ data, error }) => {
+            let remoteOps = [];
+            if (!error && data && data.value) {
+              try { remoteOps = JSON.parse(data.value); } catch(e){}
+            }
+            if (remoteOps.length > 0) {
+              let localOps = [];
+              try { localOps = JSON.parse(value); } catch(e){}
+              const myLocalOp = localOps.find(o => o.name.toLowerCase() === currentOpName.toLowerCase());
+              if (myLocalOp) {
+                // Encontrar el operador en la lista remota
+                const idx = remoteOps.findIndex(o => o.name.toLowerCase() === currentOpName.toLowerCase());
+                if (idx !== -1) {
+                  // Actualizar SOLO los perfiles, plataforma y turno del operador actual
+                  remoteOps[idx].profiles = myLocalOp.profiles || [];
+                  remoteOps[idx].turno = myLocalOp.turno || remoteOps[idx].turno;
+                  remoteOps[idx].plataforma = myLocalOp.plataforma || remoteOps[idx].plataforma;
+                } else {
+                  // Si no existe remotamente, lo añadimos
+                  remoteOps.push(myLocalOp);
+                }
+                const mergedValue = JSON.stringify(remoteOps);
+                
+                // Actualizar localmente con la lista remota fusionada (para no perder operadores nuevos)
+                _origSetItem('primeOperatorsData2026', mergedValue);
+                _sbMemCache['primeOperatorsData2026'] = mergedValue;
+                _origSetItem('primeOperatorsData2026_ts', tsVal);
+                _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
+                
+                // Upsert a Supabase
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedValue }, { onConflict: 'key' }).then(() => {
+                  _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }).then(()=>{});
+                });
+              }
+            } else {
+              // Si no hay remoto o da error, upsert directo
+              _origSetItem('primeOperatorsData2026_ts', tsVal);
+              _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
+              Promise.all([
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: value }, { onConflict: 'key' }),
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
+              ]);
+            }
+          });
+          return; // Detener el flujo para evitar el upsert directo redundante
+        } else {
+          // Admin o Monitor: upsert directo del timestamp
+          _origSetItem('primeOperatorsData2026_ts', tsVal);
+          _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
+          if (_sb) {
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }).then(()=>{});
+          }
         }
       }
 
@@ -21605,7 +21659,6 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         if (changed) {
           localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
-          saveData();
           try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }); } catch(e){}
           if (typeof loadData === 'function') loadData();
           if (typeof renderRanking === 'function') renderRanking();

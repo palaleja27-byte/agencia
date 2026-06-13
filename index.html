@@ -22686,7 +22686,28 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       const hoy = localDateStr();
       console.log(`🔧 [DELTA-SHIFT] Iniciando Reconstrucción para ${hoy}...`);
       
-      // 🧹 LIMPIEZA AGRESIVA: Eliminar TODO el rastro de hoy en cache local
+      // ─── PASO 0: CONGELAR REALTIME para evitar que los propios updates
+      // del Fix disparen actualizaciones duplicadas en la UI ────────────
+      let _rtFrozen = false;
+      try {
+        if (window._rkLiveEngine) {
+          window._rkLiveEngine.unsubscribe();
+          window._rkLiveEngine = null;
+          _rtFrozen = true;
+          console.log('🔒 [DELTA-SHIFT] Realtime congelado durante reparación');
+        }
+        if (window._dpRealtimeSub) {
+          window._dpRealtimeSub.unsubscribe();
+          window._dpRealtimeSub = null;
+          _rtFrozen = true;
+        }
+        // Cancelar cualquier debounce pendiente de sincronizarDatamePaneles
+        if (window._dpDebounceTimer) { clearTimeout(window._dpDebounceTimer); window._dpDebounceTimer = null; }
+        if (window._dpRankingTimer) { clearTimeout(window._dpRankingTimer); window._dpRankingTimer = null; }
+        if (window._rkLiveRenderTimer) { clearTimeout(window._rkLiveRenderTimer); window._rkLiveRenderTimer = null; }
+      } catch(e) { console.warn('⚠️ [DELTA-SHIFT] Error al congelar realtime:', e); }
+      
+      // 🧹 PASO 1: Limpiar caché local de HOY
       try {
         const raw = localStorage.getItem('rr_cortes');
         if (raw) {
@@ -22706,11 +22727,23 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
       try {
         // Obtener TODOS los registros de hoy, ordenados por fecha de corte
-        const { data: ops } = await _sb.from('operaciones').select('*').gte('fecha_dia', hoy).order('fecha_corte', { ascending: true });
+        const { data: ops } = await _sb.from('operaciones').select('*').eq('fecha_dia', hoy).order('fecha_corte', { ascending: true });
         if (!ops || ops.length === 0) {
           if (!silent) alert('No hay datos para reparar hoy.');
           if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; btn.style.opacity = '1'; }
           return;
+        }
+
+        // PASO 2: Limpiar _dpTurnosData para los perfiles de hoy ANTES de recalcular
+        // Esto garantiza que no queden valores fantasma del estado anterior
+        if (typeof _dpTurnosData !== 'undefined') {
+          const idsHoy = [...new Set(ops.map(o => o.id_perfil))];
+          idsHoy.forEach(id => {
+            if (_dpTurnosData[id]) {
+              _dpTurnosData[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
+            }
+          });
+          console.log(`🧹 [DELTA-SHIFT] _dpTurnosData limpiado para ${idsHoy.length} perfiles`);
         }
 
         const perfiles = {};
@@ -22741,13 +22774,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
             }
             
-            // Sanidad: El baseline no puede ser mayor que el total (excepto en reset mensual, no aplica hoy)
+            // Sanidad: El baseline no puede ser mayor que el total
             if (nuevoBase > rec.puntos_total) nuevoBase = rec.puntos_total;
 
             const nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-            
-            // Si el neto resultante es absurdo (> 1000 en un turno), probablemente el baseline anterior era corrupto
-            // pero no tenemos mejor referencia, así que lo mantenemos para revisión manual si es necesario.
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
               await _sb.from('operaciones').update({ 
@@ -22757,20 +22787,17 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               corregidos++;
             }
             lastTotal = rec.puntos_total;
+
+            // PASO 3: Actualizar _dpTurnosData directamente con el valor recalculado (sin pasar por realtime)
+            if (typeof _dpTurnosData !== 'undefined' && rec.jornada && rec.jornada !== 'Auto') {
+              if (!_dpTurnosData[id]) _dpTurnosData[id] = {};
+              _dpTurnosData[id][rec.jornada] = nuevoNeto;
+            }
           }
         }
 
         if (!silent) alert(`✅ Reconstrucción DELTA-SHIFT™ completada.\n${corregidos} turnos corregidos matemáticamente.\n\nEl dashboard se actualizará ahora.`);
         
-        // Refresh individual op if logged in
-        if (typeof _opRtSync === 'function' && window._opRtOpName) {
-           _opRtSync(window._opRtOpName);
-        }
-        
-        // Refresh UI components
-        if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
-        if (typeof renderRanking === 'function') renderRanking();
-
       } catch (err) {
         console.error('Error en sincronizarDeltaShift:', err);
       } finally {
@@ -22780,6 +22807,45 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           btn.style.opacity = '1';
         }
       }
+
+      // PASO 4: Sincronizar UI una sola vez al final (no múltiples veces)
+      // Pequeño delay para dejar que los UPDATEs de Supabase asienten
+      await new Promise(r => setTimeout(r, 800));
+
+      if (typeof renderRanking === 'function') renderRanking();
+      if (typeof _opRtSync === 'function' && window._opRtOpName) {
+         _opRtSync(window._opRtOpName);
+      }
+      
+      // PASO 5: Reactivar Realtime DESPUÉS de la sincronización final
+      setTimeout(() => {
+        try {
+          // Reactivar canal Datame-Paneles (dpIniciarRealtime)
+          if (typeof dpIniciarRealtime === 'function') dpIniciarRealtime();
+          // Reactivar canal Ranking Live Engine si fue suspendido
+          if (!window._rkLiveEngine && typeof _sb !== 'undefined') {
+            window._rkLiveEngine = _sb
+              .channel('rr-live-ops')
+              .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
+                const r = payload.new || payload.record;
+                if (!r) return;
+                const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+                if (r.fecha_dia !== hoy) return;
+                if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada && r.jornada !== 'Auto') {
+                  if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = {};
+                  const pn = Number(r.puntos_neto) || 0;
+                  const pt = Number(r.puntos_total) || 0;
+                  const pb = Number(r.puntos_baseline) || 0;
+                  _dpTurnosData[r.id_perfil][r.jornada] = (pt > 0 && pt > pb) ? Math.max(pn, pt - pb) : pn;
+                }
+                clearTimeout(window._rkLiveRenderTimer);
+                window._rkLiveRenderTimer = setTimeout(() => { if (typeof renderRanking === 'function') renderRanking(); }, 1500);
+              })
+              .subscribe();
+          }
+          console.log('🔓 [DELTA-SHIFT] Realtime reactivado.');
+        } catch(e) { console.warn('Error reactivando realtime:', e); }
+      }, 3000);
     };
     // CALIBRAR BASELINE MAÑANA — llamar desde consola del admin:
     //   calibrarManana()

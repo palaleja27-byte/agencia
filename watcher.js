@@ -1,5 +1,7 @@
 const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
+// ws requerido por @supabase/supabase-js v2 en Node.js 18 (sin WebSocket nativo)
+const WebSocket = require('ws');
 
 // ═══════════════════════════════════════════════════════════════
 // ⚡ WATCHER MODE — Agencia RR 2026
@@ -10,7 +12,12 @@ const { createClient } = require('@supabase/supabase-js');
 
 const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+// Pasar WebSocket explícitamente y deshabilitar Realtime (el watcher solo usa REST)
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  global: { headers: {} },
+  realtime: { transport: WebSocket },
+  db: { schema: 'public' },
+});
 
 const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
 const CICLO_PAUSA_MS  = 5 * 60 * 1000;    // 5 min entre ciclos

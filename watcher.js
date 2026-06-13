@@ -242,107 +242,120 @@ async function watchPanel(panel, perfiles) {
   const { nombre, email, password } = panel;
   log(`🟢 Iniciando watcher: ${nombre} (${email})`);
 
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
-  const page    = await context.newPage();
-
-  // RADAR XHR — intercepta respuestas de Datame con mayor cobertura de campos
-  page.on('response', async (response) => {
-    const rType = response.request().resourceType();
-    if (rType !== 'fetch' && rType !== 'xhr') return;
-    try {
-      const json = await response.json();
-      let list = Array.isArray(json) ? json : (json.data || json.result || json.items || [json]);
-      if (!Array.isArray(list)) list = [list];
-      for (const item of list) {
-        // Buscar el valor de puntos en todos los campos conocidos de Datame
-        const rawPts = item.bonuses        ||
-                       item.total          ||
-                       item.total_points   ||
-                       item.bonuses_total  ||
-                       item.points         ||
-                       item.amount         ||
-                       item.tokens         ||
-                       item.score          || 0;
-        const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
-        if (pts <= 0 || pts > 1000000) continue;
-
-        // Extraer ID del perfil de la URL o del cuerpo del JSON
-        let id = (response.url().match(/\d{7,10}/) || [])[0];
-        if (!id) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
-        if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
-        if (!id || id.length < 7) continue;
-
-        const perfil = perfiles.find(p => p.id_datame === id);
-        if (!perfil) continue;
-
-        await upsertTurno(id, pts, perfil.modelo, nombre);
-      }
-    } catch (_) {}
-  });
-
-  // LOGIN
+  let browser;
   try {
-    await page.goto('https://datame.cloud/login', { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('input[type="text"],input[type="email"]', { timeout: 12000 });
-    await page.fill('input[type="text"],input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
-    await page.click('button.q-btn,button:has-text("LOG IN")')
-              .catch(() => page.press('input[type="password"]', 'Enter'));
-    await page.waitForTimeout(7000);
-    log(`✅ Login OK: ${nombre}`);
-  } catch (err) {
-    log(`❌ Login FAILED ${nombre}: ${err.message}`);
-    await browser.close();
-    return;
-  }
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    const context = await browser.newContext();
+    const page    = await context.newPage();
 
-  const { start, end } = rangoMesActual(); // Rango mensual para total del mes
-
-  // ── EJECUCIÓN ÚNICA (30 min manejados por GitHub Actions) ──
-  log(`\n🔄 Ciclo Único — ${nombre} | ${perfiles.length} perfiles | jornada: ${detectarJornada()}`);
-
-  try {
-    await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(4000);
-
-    // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
-    await page.evaluate(({ s, e }) => {
-      const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
-      if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
-      if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
-    }, { s: start, e: end });
-    await page.waitForTimeout(1200);
-
-    for (const perfil of perfiles) {
+    // RADAR XHR — intercepta respuestas de Datame con mayor cobertura de campos
+    page.on('response', async (response) => {
+      const rType = response.request().resourceType();
+      if (rType !== 'fetch' && rType !== 'xhr') return;
       try {
-        await page.evaluate((v) => {
-          const ins = Array.from(document.querySelectorAll('input'));
-          let t = ins.find(i =>
-            (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
-            (i.placeholder || '').toLowerCase().includes('profile')
-          );
-          if (!t && ins.length >= 3) t = ins[2];
-          if (t) {
-            t.value = v;
-            t.dispatchEvent(new Event('input',  { bubbles: true }));
-            t.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-        }, perfil.id_datame);
-        await page.waitForTimeout(500);
-        await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
-        await page.waitForTimeout(PAUSA_PERFIL_MS);
-      } catch (e) {
-        log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);
-      }
-    }
-    log(`✅ Ciclo completado — ${nombre}.`);
-  } catch (err) {
-    log(`❌ Error crítico ${nombre}: ${err.message}`);
-  }
+        const json = await response.json();
+        let list = Array.isArray(json) ? json : (json.data || json.result || json.items || [json]);
+        if (!Array.isArray(list)) list = [list];
+        for (const item of list) {
+          // Buscar el valor de puntos en todos los campos conocidos de Datame
+          const rawPts = item.bonuses        ||
+                         item.total          ||
+                         item.total_points   ||
+                         item.bonuses_total  ||
+                         item.points         ||
+                         item.amount         ||
+                         item.tokens         ||
+                         item.score          || 0;
+          const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
+          if (pts <= 0 || pts > 1000000) continue;
 
-  log(`🏁 ${nombre} — Sesión finalizada tras ${((Date.now() - startTime) / 3600000).toFixed(1)}h`);
-  await browser.close();
+          // Extraer ID del perfil de la URL o del cuerpo del JSON
+          let id = (response.url().match(/\d{7,10}/) || [])[0];
+          if (!id) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
+          if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
+          if (!id || id.length < 7) continue;
+
+          const perfil = perfiles.find(p => p.id_datame === id);
+          if (!perfil) continue;
+
+          await upsertTurno(id, pts, perfil.modelo, nombre);
+        }
+      } catch (_) {}
+    });
+
+    // LOGIN
+    try {
+      await page.goto('https://datame.cloud/login', { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForSelector('input[type="text"],input[type="email"]', { timeout: 12000 });
+      await page.fill('input[type="text"],input[type="email"]', email);
+      await page.fill('input[type="password"]', password);
+      await page.click('button.q-btn,button:has-text("LOG IN")')
+                .catch(() => page.press('input[type="password"]', 'Enter'));
+      await page.waitForTimeout(7000);
+      log(`✅ Login OK: ${nombre}`);
+    } catch (err) {
+      log(`❌ Login FAILED ${nombre}: ${err.message}`);
+      await browser.close();
+      return;
+    }
+
+    const { start, end } = rangoMesActual(); // Rango mensual para total del mes
+
+    // ── EJECUCIÓN ÚNICA (30 min manejados por GitHub Actions) ──
+    log(`\n🔄 Ciclo Único — ${nombre} | ${perfiles.length} perfiles | jornada: ${detectarJornada()}`);
+
+    try {
+      await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForTimeout(4000);
+
+      // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
+      await page.evaluate(({ s, e }) => {
+        const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
+        if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
+        if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
+      }, { s: start, e: end });
+      await page.waitForTimeout(1200);
+
+      for (const perfil of perfiles) {
+        try {
+          await page.evaluate((v) => {
+            const ins = Array.from(document.querySelectorAll('input'));
+            let t = ins.find(i =>
+              (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
+              (i.placeholder || '').toLowerCase().includes('profile')
+            );
+            if (!t && ins.length >= 3) t = ins[2];
+            if (t) {
+              t.value = v;
+              t.dispatchEvent(new Event('input',  { bubbles: true }));
+              t.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }, perfil.id_datame);
+          await page.waitForTimeout(500);
+          await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(PAUSA_PERFIL_MS);
+        } catch (e) {
+          log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);
+        }
+      }
+      log(`✅ Ciclo completado — ${nombre}.`);
+    } catch (err) {
+      log(`❌ Error crítico ${nombre}: ${err.message}`);
+    }
+
+    log(`🏁 ${nombre} — Sesión finalizada tras ${((Date.now() - startTime) / 3600000).toFixed(1)}h`);
+    await browser.close();
+  } catch (err) {
+    log(`❌ Error al inicializar o ejecutar watcher para ${nombre}: ${err.message}`);
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (_) {}
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────

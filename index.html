@@ -17267,12 +17267,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       currentOpName = opName;
       // Aplicar permisos de UI según rol (admin/monitor/operador)
       applyRolePermissions(role);
-      // ── CRÍTICO: sessionStorage es por pestaña/PC, nunca se comparte con otros PCs ──
+      // ── CRÍTICO: Se guarda en localStorage y sessionStorage para mantener al operador logueado automáticamente ──
       const sessionData = role === 'operador'
         ? btoa(role + ':' + (opName || '') + ':' + Date.now())
         : btoa(role + ':' + Date.now());
-      sessionStorage.setItem(SESSION_KEY, sessionData);   // ← sessionStorage, no localStorage
-      localStorage.removeItem(SESSION_KEY);               // limpiar cualquier sesión vieja en localStorage
+      sessionStorage.setItem(SESSION_KEY, sessionData);
+      localStorage.setItem(SESSION_KEY, sessionData);
       document.getElementById('login-screen').classList.add('hidden');
       _autoFixActivePair(); // asegurar mes correcto en cada login
       document.getElementById('app-header-bar').style.display = 'block';
@@ -18125,6 +18125,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       loginFails = 0;
       loginRole = 'monitor';
       localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(SESSION_KEY);
       document.getElementById('login-screen').classList.remove('hidden');
       document.getElementById('app-header-bar').style.display = 'none';
       const _rbEl = document.getElementById('role-badge-inline'); if (_rbEl) _rbEl.innerHTML = '';
@@ -18208,13 +18209,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       alert('✅ PINs actualizados con cifrado SHA-256.');
     }
 
-    // Check existing session on load — sessionStorage es por pestaña/PC, nunca compartido
+    // Check existing session on load
     (function checkSession() {
-      // Migrate any old localStorage session to sessionStorage (compatibilidad)
-      const oldLS = localStorage.getItem(SESSION_KEY);
-      if (oldLS) { sessionStorage.setItem(SESSION_KEY, oldLS); localStorage.removeItem(SESSION_KEY); }
-
-      const s = sessionStorage.getItem(SESSION_KEY);
+      const s = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
       if (s) {
         try {
           const decoded = atob(s).split(':');

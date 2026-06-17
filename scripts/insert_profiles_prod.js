@@ -31,7 +31,9 @@ const profilesToInsert = [
   { id_datame: '168486464', modelo: 'GUSTAVO', panel_id: 2, activo: true },
   { id_datame: '118404407', modelo: 'MILENA', panel_id: 2, activo: true },
   { id_datame: '132062039', modelo: 'BEATRIZ', panel_id: 4, activo: true },
-  { id_datame: '166575347', modelo: 'MAX', panel_id: 2, activo: true }
+  { id_datame: '166575347', modelo: 'MAX', panel_id: 2, activo: true },
+  { id_datame: '170740935', modelo: 'ROBERTO', panel_id: 2, activo: true },
+  { id_datame: '171638277', modelo: 'RONALT', panel_id: 2, activo: true }
 ];
 
 async function run() {

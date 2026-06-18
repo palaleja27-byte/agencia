@@ -418,6 +418,101 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     for i, row in matched.head(5).iterrows():
         print(f"      [{i}] ID={row[col_id]} | Valor={row.get(col_val, 'N/A')}")
 
+    # ── EXTRAER CLIENTES PREMIUM (REGULAR USERS) DESDE VISTAS DE LÍMITES ──
+    clients_by_profile = {}
+    
+    def get_regular_user_col(dataframe, exclude_c):
+        return next(
+            (col for col in dataframe.columns
+             if col != exclude_c and any(k in col.upper() for k in ["REGULAR USER", "REGULAR_USER", "REGULARUSER", "REGULAR", "CLIENT"])),
+            None
+        )
+
+    for rec in found_records:
+        r_df = rec["df"]
+        r_col_id = rec["col_id"]
+        col_reg_user = get_regular_user_col(r_df, r_col_id)
+        if not col_reg_user:
+            continue
+            
+        print(f"      🔍 Procesando vista de clientes '{rec['workbook']}' / '{rec['vista']}'...")
+        
+        # Identificar columnas auxiliares
+        resets_col = next((c for c in r_df.columns if any(k in c.upper() for k in ["DIALOGS_RESET", "RESET", "#DIALOGS", "RESETS"])), None)
+        date_col = next((c for c in r_df.columns if any(k in c.upper() for k in ["DATE RESET", "DATE_RESET", "DATE", "FECHA"])), None)
+        reason_col = next((c for c in r_df.columns if any(k in c.upper() for k in ["REASON", "MOTIVO"])), None)
+        src_id_col = next((c for c in r_df.columns if any(k in c.upper() for k in ["SOURCE ID", "SOURCE_ID", "CAMP"])), None)
+
+        for _, row in rec["matched"].iterrows():
+            raw_id = str(row["_id_clean"]).strip()
+            nums = re.findall(r"\d{7,10}", raw_id)
+            profile_id = nums[0] if nums else raw_id
+            
+            client_raw = str(row[col_reg_user]).strip()
+            if not client_raw or client_raw.lower() == "nan" or client_raw.lower() == "none":
+                continue
+                
+            client_nums = re.findall(r"\d{7,10}", client_raw)
+            client_id = client_nums[0] if client_nums else client_raw
+            client_name = ""
+            if " - " in client_raw:
+                parts = client_raw.split(" - ")
+                if parts[0].strip() == client_id:
+                    client_name = " - ".join(parts[1:]).strip()
+                else:
+                    client_name = parts[0].strip()
+            else:
+                client_name = f"Cliente {client_id}"
+
+            resets_val = 0
+            if resets_col:
+                try:
+                    resets_val = int(float(str(row[resets_col]).replace(",","").replace(" ","").strip() or 0))
+                except Exception:
+                    pass
+                    
+            date_val = ""
+            if date_col:
+                date_val = str(row[date_col]).strip()
+                if date_val.lower() == "nan":
+                    date_val = ""
+                    
+            reason_val = ""
+            if reason_col:
+                reason_val = str(row[reason_col]).strip()
+                if reason_val.lower() == "nan":
+                    reason_val = ""
+
+            src_val = ""
+            if src_id_col:
+                src_val = str(row[src_id_col]).strip()
+                if src_val.lower() == "nan":
+                    src_val = ""
+                    
+            if profile_id not in clients_by_profile:
+                clients_by_profile[profile_id] = {}
+                
+            if client_id not in clients_by_profile[profile_id]:
+                clients_by_profile[profile_id][client_id] = {
+                    "client_id": client_id,
+                    "name": client_name,
+                    "resets": resets_val,
+                    "last_date": date_val,
+                    "reason": reason_val,
+                    "source_id": src_val
+                }
+            else:
+                existing = clients_by_profile[profile_id][client_id]
+                existing["resets"] += resets_val
+                if date_val:
+                    existing["last_date"] = date_val
+                if reason_val:
+                    existing["reason"] = reason_val
+                if src_val and not existing["source_id"]:
+                    existing["source_id"] = src_val
+
+    print(f"   👤 Total perfiles con clientes premium encontrados: {len(clients_by_profile)}")
+
     # ── Construir payload ─────────────────────────────────────────
     payload = []
     seen    = {}
@@ -523,6 +618,25 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             else:
                 payload[idx]["data_json"]["icebreakers"].append(icebreaker_entry)
 
+            # Merge premium clients
+            if id_clean in clients_by_profile:
+                if "premium_clients" not in payload[idx]["data_json"]:
+                    payload[idx]["data_json"]["premium_clients"] = []
+                existing_clients = {c["client_id"]: c for c in payload[idx]["data_json"]["premium_clients"]}
+                for c in clients_by_profile[id_clean].values():
+                    cid = c["client_id"]
+                    if cid in existing_clients:
+                        existing_clients[cid]["resets"] += c["resets"]
+                        if c["last_date"]:
+                            existing_clients[cid]["last_date"] = c["last_date"]
+                        if c["reason"]:
+                            existing_clients[cid]["reason"] = c["reason"]
+                        if c["source_id"] and not existing_clients[cid]["source_id"]:
+                            existing_clients[cid]["source_id"] = c["source_id"]
+                    else:
+                        existing_clients[cid] = c
+                payload[idx]["data_json"]["premium_clients"] = list(existing_clients.values())
+
             # Acumular numericos en data_json
             for k, v in row_json.items():
                 if k not in payload[idx]["data_json"]:
@@ -539,6 +653,11 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             continue
 
         row_json["icebreakers"] = [icebreaker_entry]
+        if id_clean in clients_by_profile:
+            row_json["premium_clients"] = list(clients_by_profile[id_clean].values())
+        else:
+            row_json["premium_clients"] = []
+
         seen[id_clean] = len(payload)
         payload.append({
             "perfil_id":    id_clean,
@@ -548,6 +667,24 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             "data_json":    row_json,
             "updated_at":   "now()"
         })
+
+    # Agregar perfiles que tienen clientes premium pero no tuvieron revenue hoy
+    for profile_id, clients_dict in clients_by_profile.items():
+        if profile_id not in seen:
+            if profile_id in datame_ids:
+                row_json = {
+                    "ID Trusted User": f"{profile_id}",
+                    "icebreakers": [],
+                    "premium_clients": list(clients_dict.values())
+                }
+                payload.append({
+                    "perfil_id":    profile_id,
+                    "panel_id":     panel_id,
+                    "panel_nombre": panel_nombre,
+                    "valor":        0.0,
+                    "data_json":    row_json,
+                    "updated_at":   "now()"
+                })
 
     print(f"   📦 {len(payload)} perfiles de la agencia listos para subir:")
     for rec in payload:

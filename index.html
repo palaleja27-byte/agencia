@@ -21685,14 +21685,119 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const sortedClients = Object.values(clientsMap)
           .sort((a, b) => b.totalSpent - a.totalSpent);
 
+        // Gather official premium clients from Tableau limits usage
+        const officialPremiumClients = [];
+        Object.entries(_dpTableauData).forEach(([perfilId, entry]) => {
+          if (!allMappedIds.has(String(perfilId).trim())) {
+            return;
+          }
+          const dj = entry.data_json || {};
+          const clientsList = dj.premium_clients || [];
+          
+          let modeloName = '';
+          let opName = '';
+          if (typeof operatorsData !== 'undefined') {
+            const op = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === perfilId));
+            if (op) {
+              opName = op.name;
+              const p = op.profiles.find(x => String(x.id) === perfilId);
+              modeloName = p ? p.model || p.modelo : '';
+            }
+          }
+          if (!modeloName) {
+            modeloName = dj['ID Trusted User'] || perfilId;
+          }
+
+          clientsList.forEach(c => {
+            const existing = officialPremiumClients.find(x => x.client_id === c.client_id && x.perfil_id === perfilId);
+            if (existing) {
+              existing.resets += c.resets || 0;
+            } else {
+              officialPremiumClients.push({
+                client_id: c.client_id,
+                name: c.name,
+                resets: c.resets || 0,
+                last_date: c.last_date || '',
+                reason: c.reason || '',
+                source_id: c.source_id || '',
+                perfil_id: perfilId,
+                modelo: modeloName,
+                operador: opName
+              });
+            }
+          });
+        });
+
+        officialPremiumClients.sort((a, b) => b.resets - a.resets);
+
         const clientsEl = document.getElementById('cia-clients-spent');
         if (clientsEl) {
-          if (sortedClients.length > 0) {
-            clientsEl.innerHTML = `
-              <div style="font-size:0.5rem;color:#818cf8;background:rgba(129,140,248,0.04);padding:6px 10px;border-radius:6px;margin-bottom:8px;border:1px solid rgba(129,140,248,0.1);line-height:1.4;">
-                💡 <b>Monitoreo de Créditos:</b> Los créditos acumulados no son expuestos directamente por Tableau UK. Sin embargo, su volumen de facturación y nivel VIP son un indicador preciso de su capacidad de compra actual.
+          let html = '';
+          
+          if (officialPremiumClients.length > 0) {
+            html += `
+              <div style="font-size:0.55rem;color:#c084fc;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;border-bottom:1px solid rgba(192,132,252,0.15);padding-bottom:4px;display:flex;align-items:center;gap:5px;">
+                <span>💎 CLIENTES PREMIUM CONFIRMADOS (LIMIT RESETS)</span>
               </div>
-            ` + sortedClients.map((client, idx) => {
+            `;
+            html += officialPremiumClients.map(client => {
+              let vipTag = 'CLIENTE ACTIVO';
+              let tagColor = '#94a3b8';
+              let tagBg = 'rgba(148,163,184,0.06)';
+              let border = 'rgba(148,163,184,0.15)';
+              
+              if (client.resets >= 30) {
+                vipTag = '💎 VIP SUPER PLATINUM';
+                tagColor = '#c084fc';
+                tagBg = 'rgba(192,132,252,0.1)';
+                border = 'rgba(192,132,252,0.2)';
+              } else if (client.resets >= 15) {
+                vipTag = '🥇 VIP PLATINUM';
+                tagColor = '#fbbf24';
+                tagBg = 'rgba(251,191,36,0.1)';
+                border = 'rgba(251,191,36,0.2)';
+              } else if (client.resets >= 5) {
+                vipTag = '🥈 VIP GOLD';
+                tagColor = '#38bdf8';
+                tagBg = 'rgba(56,189,248,0.1)';
+                border = 'rgba(56,189,248,0.2)';
+              } else {
+                vipTag = '👤 VIP SILVER';
+                tagColor = '#34d399';
+                tagBg = 'rgba(52,211,153,0.1)';
+                border = 'rgba(52,211,153,0.2)';
+              }
+              
+              return `
+              <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:6px;transition:.2s;"
+                   onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
+                <div style="font-size:1.1rem;color:${tagColor};font-weight:900;">👑</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${client.name} <span style="font-size:0.55rem;color:#64748b;font-weight:700;">(ID: ${client.client_id})</span>
+                  </div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">
+                    Modelo: <span style="color:#94a3b8;">${client.modelo}</span> ${client.operador ? '| Operador: <span style="color:#38bdf8;">' + client.operador + '</span>' : ''} ${client.source_id ? '| Campaña: <span style="color:#fbbf24;">' + client.source_id + '</span>' : ''}
+                  </div>
+                  ${client.reason ? `<div style="font-size:.5rem;color:#64748b;font-style:italic;margin-top:1px;">Motivo: ${client.reason}</div>` : ''}
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                  <div style="font-size:.75rem;color:${tagColor};font-weight:900;">${client.resets} Resets</div>
+                  <span style="font-size:0.45rem;font-weight:800;color:${tagColor};background:rgba(255,255,255,0.05);padding:1px 4px;border-radius:3px;">${vipTag}</span>
+                  ${client.last_date ? `<div style="font-size:0.45rem;color:#475569;margin-top:2px;">${client.last_date}</div>` : ''}
+                </div>
+              </div>`;
+            }).join('');
+          }
+          
+          html += `
+            <div style="font-size:0.55rem;color:#38bdf8;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-top:14px;margin-bottom:8px;border-bottom:1px solid rgba(56,189,248,0.15);padding-bottom:4px;">
+              👥 GASTO ESTIMADO POR CAMPAÑA/CLIENTE
+            </div>
+          `;
+          
+          if (sortedClients.length > 0) {
+            html += sortedClients.map(client => {
               let vipTag = 'CLIENTE ACTIVO';
               let tagColor = '#94a3b8';
               let tagBg = 'rgba(148,163,184,0.08)';
@@ -21720,7 +21825,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               const opList = [...client.operators].join(', ') || 'N/A';
               
               return `
-              <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;">
+              <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:6px;transition:.2s;">
                 <div style="font-size:0.9rem;color:${tagColor};font-weight:900;min-width:20px;text-align:center;">👤</div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${client.name}">${client.name}</div>
@@ -21735,8 +21840,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               </div>`;
             }).join('');
           } else {
-            clientsEl.innerHTML = '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin clientes detectados</div>';
+            html += '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin clientes detectados</div>';
           }
+          
+          clientsEl.innerHTML = html;
         }
 
         // 3. Parse and render Icebreaker campaign effectiveness (users brought)
@@ -21751,7 +21858,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               code,
               clients: new Set(),
               totalRevenue: 0,
-              profiles: new Set()
+              profiles: new Set(),
+              sent: 0,
+              replies: 0
             };
           }
           if (clientName) {
@@ -21759,15 +21868,25 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           }
           codesMap[code].totalRevenue += item.revenue;
           codesMap[code].profiles.add(item.modelo);
+          codesMap[code].sent += (item.sent || 0);
+          codesMap[code].replies += (item.replies || 0);
         });
 
         const sortedCodes = Object.values(codesMap)
-          .map(x => ({
-            code: x.code,
-            clientCount: x.clients.size,
-            revenue: x.totalRevenue,
-            profiles: [...x.profiles].join(', ')
-          }))
+          .map(x => {
+            const sent = x.sent || 0;
+            const replies = x.replies || 0;
+            const rate = sent > 0 ? (replies / sent) * 100 : 0;
+            return {
+              code: x.code,
+              clientCount: x.clients.size,
+              revenue: x.totalRevenue,
+              profiles: [...x.profiles].join(', '),
+              sent,
+              replies,
+              rate
+            };
+          })
           .filter(x => x.code !== '-1'); // exclude untracked
 
         const topCampaigns = [...sortedCodes].sort((a, b) => {
@@ -21785,16 +21904,23 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           if (topCampaigns.length > 0) {
             campTopEl.innerHTML = topCampaigns.map((item, idx) => {
               return `
-              <div style="background:rgba(52,211,153,0.03);border:1px solid rgba(52,211,153,0.1);border-radius:8px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.6rem;margin-bottom:4px;">
-                <div style="min-width:18px;color:#34d399;font-weight:900;">#${idx+1}</div>
-                <div style="flex:1;min-width:0;">
-                  <span style="font-family:monospace;color:#e2e8f0;font-weight:800;font-size:0.62rem;">${item.code}</span>
-                  <span style="color:#64748b;font-size:0.5rem;margin-left:6px;">(${item.profiles})</span>
+              <div style="background:rgba(52,211,153,0.03);border:1px solid rgba(52,211,153,0.1);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;font-size:0.6rem;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+                    <div style="color:#34d399;font-weight:900;">#${idx+1}</div>
+                    <span style="font-family:monospace;color:#e2e8f0;font-weight:800;font-size:0.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.code}</span>
+                    <span style="color:#64748b;font-size:0.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">(${item.profiles})</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <span style="color:#34d399;font-weight:700;">👥 ${item.clientCount} usuarios</span>
+                    <span style="color:#2dd4bf;font-weight:800;min-width:60px;text-align:right;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-                  <span style="color:#34d399;font-weight:700;">👥 ${item.clientCount} usuarios</span>
-                  <span style="color:#2dd4bf;font-weight:800;min-width:60px;text-align:right;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
+                ${item.sent > 0 ? `
+                <div style="font-size:0.52rem;color:#64748b;display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.02);padding-top:2px;">
+                  <span>✉️ Enviados: <b style="color:#94a3b8;">${item.sent}</b> | 💬 Respuestas: <b style="color:#94a3b8;">${item.replies}</b></span>
+                  <span>📊 Tasa: <b style="color:#34d399;">${item.rate.toFixed(1)}%</b></span>
+                </div>` : ''}
               </div>`;
             }).join('');
           } else {
@@ -21807,16 +21933,23 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           if (botCampaigns.length > 0) {
             campBotEl.innerHTML = botCampaigns.map((item, idx) => {
               return `
-              <div style="background:rgba(248,113,113,0.03);border:1px solid rgba(248,113,113,0.1);border-radius:8px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.6rem;margin-bottom:4px;">
-                <div style="min-width:18px;color:#f87171;font-weight:900;">#${idx+1}</div>
-                <div style="flex:1;min-width:0;">
-                  <span style="font-family:monospace;color:#e2e8f0;font-weight:800;font-size:0.62rem;">${item.code}</span>
-                  <span style="color:#64748b;font-size:0.5rem;margin-left:6px;">(${item.profiles})</span>
+              <div style="background:rgba(248,113,113,0.03);border:1px solid rgba(248,113,113,0.1);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;font-size:0.6rem;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                  <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+                    <div style="color:#f87171;font-weight:900;">#${idx+1}</div>
+                    <span style="font-family:monospace;color:#e2e8f0;font-weight:800;font-size:0.62rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.code}</span>
+                    <span style="color:#64748b;font-size:0.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">(${item.profiles})</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <span style="color:#f87171;font-weight:700;">👥 ${item.clientCount} usuarios</span>
+                    <span style="color:#64748b;font-weight:800;min-width:60px;text-align:right;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-                  <span style="color:#f87171;font-weight:700;">👥 ${item.clientCount} usuarios</span>
-                  <span style="color:#64748b;font-weight:800;min-width:60px;text-align:right;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
+                ${item.sent > 0 ? `
+                <div style="font-size:0.52rem;color:#64748b;display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,0.02);padding-top:2px;">
+                  <span>✉️ Enviados: <b style="color:#94a3b8;">${item.sent}</b> | 💬 Respuestas: <b style="color:#94a3b8;">${item.replies}</b></span>
+                  <span>📊 Tasa: <b style="color:#f87171;">${item.rate.toFixed(1)}%</b></span>
+                </div>` : ''}
               </div>`;
             }).join('');
           } else {

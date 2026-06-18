@@ -20943,6 +20943,34 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               </div>
             </div>
           </div>
+          
+          <!-- Clientes VIP y Efectividad de Campañas (Usuarios Traídos) -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;border-top:1px solid rgba(255,255,255,0.05);padding-top:16px;">
+            <div>
+              <div style="font-size:.58rem;color:#c084fc;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">👥 CLIENTES ACTIVOS Y GASTO REALTIME (CREDIT TRAJECTORY)</div>
+              <div id="cia-clients-spent" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
+                <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando clientes...</div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:.58rem;color:#fbbf24;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">📊 EFECTIVIDAD DE CAMPANAS (USUARIOS TRAÍDOS)</div>
+              <div id="cia-campaigns-stats" style="display:flex;flex-direction:column;gap:12px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
+                <div>
+                  <div style="font-size:0.5rem;color:#34d399;font-weight:800;margin-bottom:6px;text-transform:uppercase;">🔝 MÁS EFECTIVOS (Más Usuarios Traídos)</div>
+                  <div id="cia-camp-top" style="display:flex;flex-direction:column;gap:5px;">
+                    <div style="color:#475569;font-size:.65rem;padding:10px;">Cargando...</div>
+                  </div>
+                </div>
+                <div style="margin-top:10px;">
+                  <div style="font-size:0.5rem;color:#f87171;font-weight:800;margin-bottom:6px;text-transform:uppercase;">🚨 MENOS EFECTIVOS (Menos Usuarios Traídos o Sin Resultados)</div>
+                  <div id="cia-camp-bot" style="display:flex;flex-direction:column;gap:5px;">
+                    <div style="color:#475569;font-size:.65rem;padding:10px;">Cargando...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- Tendencia 7 días -->
           <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.05);padding-top:16px;">
             <div style="font-size:.58rem;color:#94a3b8;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">📈 Tendencia de Producción — Últimos 7 Días (Top 5 Perfiles)</div>
@@ -21400,7 +21428,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           } else {
             const singleSourceId = dj['source ID'] || dj['Source ID'];
             const singleRevenue = parseFloat(dj['Revenue'] || entry.valor || 0);
-            if (singleSourceId && singleSourceId !== '-1') {
+            if (singleSourceId && String(singleSourceId) !== '-1') {
               allIbs.push({
                 source_id: singleSourceId,
                 revenue: singleRevenue,
@@ -21412,7 +21440,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           }
         });
 
-        // Filter and sort
+        // 1. Filter and sort VIPs / Low performing campaigns
         const vips = allIbs.filter(x => x.revenue >= 10).sort((a,b) => b.revenue - a.revenue);
         const low = allIbs.filter(x => x.revenue < 10).sort((a,b) => a.revenue - b.revenue);
 
@@ -21422,7 +21450,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (topEl) {
           if (vips.length > 0) {
             topEl.innerHTML = vips.map((item, idx) => {
-              const parts = item.source_id.split(' - ');
+              const parts = String(item.source_id).split(' - ');
               const ibId = parts[0];
               const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
               
@@ -21454,7 +21482,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (botEl) {
           if (low.length > 0) {
             botEl.innerHTML = low.map((item, idx) => {
-              const parts = item.source_id.split(' - ');
+              const parts = String(item.source_id).split(' - ');
               const ibId = parts[0];
               const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
               
@@ -21480,6 +21508,168 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             }).join('');
           } else {
             botEl.innerHTML = '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin campañas de bajo rendimiento</div>';
+          }
+        }
+
+        // 2. Parse and render Clients list (Realtime Gasto/VIP)
+        const clientsMap = {};
+        allIbs.forEach(item => {
+          const parts = String(item.source_id).split(' - ');
+          const clientName = parts.slice(1).join(' - ').trim() || 'Campaña ' + parts[0];
+          
+          if (!clientsMap[clientName]) {
+            clientsMap[clientName] = {
+              name: clientName,
+              totalSpent: 0,
+              profiles: new Set(),
+              operators: new Set(),
+              codes: new Set()
+            };
+          }
+          clientsMap[clientName].totalSpent += item.revenue;
+          clientsMap[clientName].profiles.add(item.modelo);
+          if (item.operador) clientsMap[clientName].operators.add(item.operador);
+          clientsMap[clientName].codes.add(parts[0]);
+        });
+
+        const sortedClients = Object.values(clientsMap)
+          .sort((a, b) => b.totalSpent - a.totalSpent);
+
+        const clientsEl = document.getElementById('cia-clients-spent');
+        if (clientsEl) {
+          if (sortedClients.length > 0) {
+            clientsEl.innerHTML = `
+              <div style="font-size:0.5rem;color:#818cf8;background:rgba(129,140,248,0.04);padding:6px 10px;border-radius:6px;margin-bottom:8px;border:1px solid rgba(129,140,248,0.1);line-height:1.4;">
+                💡 <b>Monitoreo de Créditos:</b> Los créditos acumulados no son expuestos directamente por Tableau UK. Sin embargo, su volumen de facturación y nivel VIP son un indicador preciso de su capacidad de compra actual.
+              </div>
+            ` + sortedClients.map((client, idx) => {
+              let vipTag = 'CLIENTE ACTIVO';
+              let tagColor = '#94a3b8';
+              let tagBg = 'rgba(148,163,184,0.08)';
+              let border = 'rgba(148,163,184,0.15)';
+              
+              if (client.totalSpent >= 500) {
+                vipTag = '💎 VIP PLATINUM';
+                tagColor = '#c084fc';
+                tagBg = 'rgba(192,132,252,0.12)';
+                border = 'rgba(192,132,252,0.25)';
+              } else if (client.totalSpent >= 100) {
+                vipTag = '🥇 VIP GOLD';
+                tagColor = '#fbbf24';
+                tagBg = 'rgba(251,191,36,0.12)';
+                border = 'rgba(251,191,36,0.25)';
+              } else if (client.totalSpent >= 10) {
+                vipTag = '🥈 VIP SILVER';
+                tagColor = '#38bdf8';
+                tagBg = 'rgba(56,189,248,0.12)';
+                border = 'rgba(56,189,248,0.25)';
+              }
+              
+              const codeList = [...client.codes].join(', ');
+              const modelList = [...client.profiles].join(', ');
+              
+              return `
+              <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;">
+                <div style="font-size:0.9rem;color:${tagColor};font-weight:900;min-width:20px;text-align:center;">👤</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${client.name}">${client.name}</div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    Campaña: <span style="font-family:monospace;color:#94a3b8;">${codeList}</span> | Modelos: <span style="color:#64748b;">${modelList}</span>
+                  </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                  <div style="font-size:.75rem;color:${tagColor};font-weight:900;">$${client.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <span style="font-size:0.45rem;font-weight:800;color:${tagColor};background:rgba(255,255,255,0.05);padding:1px 4px;border-radius:3px;">${vipTag}</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else {
+            clientsEl.innerHTML = '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin clientes detectados</div>';
+          }
+        }
+
+        // 3. Parse and render Icebreaker campaign effectiveness (users brought)
+        const codesMap = {};
+        allIbs.forEach(item => {
+          const parts = String(item.source_id).split(' - ');
+          const code = parts[0].trim();
+          const clientName = parts.slice(1).join(' - ').trim();
+          
+          if (!codesMap[code]) {
+            codesMap[code] = {
+              code,
+              clients: new Set(),
+              totalRevenue: 0,
+              profiles: new Set()
+            };
+          }
+          if (clientName) {
+            codesMap[code].clients.add(clientName);
+          }
+          codesMap[code].totalRevenue += item.revenue;
+          codesMap[code].profiles.add(item.modelo);
+        });
+
+        const sortedCodes = Object.values(codesMap)
+          .map(x => ({
+            code: x.code,
+            clientCount: x.clients.size,
+            revenue: x.totalRevenue,
+            profiles: [...x.profiles].join(', ')
+          }))
+          .filter(x => x.code !== '-1'); // exclude untracked
+
+        const topCampaigns = [...sortedCodes].sort((a, b) => {
+          if (b.clientCount !== a.clientCount) return b.clientCount - a.clientCount;
+          return b.revenue - a.revenue;
+        }).slice(0, 5);
+
+        const botCampaigns = [...sortedCodes].sort((a, b) => {
+          if (a.clientCount !== b.clientCount) return a.clientCount - b.clientCount;
+          return a.revenue - b.revenue;
+        }).slice(0, 5);
+
+        const campTopEl = document.getElementById('cia-camp-top');
+        if (campTopEl) {
+          if (topCampaigns.length > 0) {
+            campTopEl.innerHTML = topCampaigns.map((item, idx) => {
+              return `
+              <div style="background:rgba(52,211,153,0.03);border:1px solid rgba(52,211,153,0.1);border-radius:8px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.6rem;margin-bottom:4px;">
+                <div style="min-width:18px;color:#34d399;font-weight:900;">#${idx+1}</div>
+                <div style="flex:1;min-width:0;">
+                  <span style="font-family:monospace;color:#e2e8f0;font-weight:800;font-size:0.62rem;">${item.code}</span>
+                  <span style="color:#64748b;font-size:0.5rem;margin-left:6px;">(${item.profiles})</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                  <span style="color:#34d399;font-weight:700;">👥 ${item.clientCount} usuarios</span>
+                  <span style="color:#2dd4bf;font-weight:800;min-width:60px;text-align:right;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else {
+            campTopEl.innerHTML = '<div style="color:#475569;font-size:.6rem;padding:10px;text-align:center;">Sin datos</div>';
+          }
+        }
+
+        const campBotEl = document.getElementById('cia-camp-bot');
+        if (campBotEl) {
+          if (botCampaigns.length > 0) {
+            campBotEl.innerHTML = botCampaigns.map((item, idx) => {
+              return `
+              <div style="background:rgba(248,113,113,0.03);border:1px solid rgba(248,113,113,0.1);border-radius:8px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:0.6rem;margin-bottom:4px;">
+                <div style="min-width:18px;color:#f87171;font-weight:900;">#${idx+1}</div>
+                <div style="flex:1;min-width:0;">
+                  <span style="font-family:monospace;color:#e2e8f0;font-weight:800;font-size:0.62rem;">${item.code}</span>
+                  <span style="color:#64748b;font-size:0.5rem;margin-left:6px;">(${item.profiles})</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                  <span style="color:#f87171;font-weight:700;">👥 ${item.clientCount} usuarios</span>
+                  <span style="color:#64748b;font-weight:800;min-width:60px;text-align:right;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else {
+            campBotEl.innerHTML = '<div style="color:#475569;font-size:.6rem;padding:10px;text-align:center;">Sin datos</div>';
           }
         }
       };

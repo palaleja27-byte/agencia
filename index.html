@@ -5378,14 +5378,94 @@
       </div>
     </div>
 
+    <style>
+      .rk-table-wrap.rk-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: 100vw !important;
+        margin: 0 !important;
+        padding: 24px !important;
+        background: #0a0c14 !important;
+        z-index: 999999 !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+    </style>
+
     <!-- Tabla (Moved Up as 'Operadores Conectados') -->
     <div class="rk-table-wrap" id="rk-table-desktop" style="max-width:1200px; margin:0 auto 20px; padding:0 16px;">
       <!-- Vista Día / Mes — único control de ordenamiento -->
-      <div class="rk-view-toggle" style="padding:10px 0 6px; display: flex; align-items: center; gap: 10px;">
-        <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')" style="display:none">📅 Mes</button>
-        <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy (Operadores Conectados)</button>
-        <span style="font-size: 0.65rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Control de Presencia Real-Time</span>
+      <div class="rk-view-toggle" style="padding:10px 0 6px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')" style="display:none">📅 Mes</button>
+          <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy (Operadores Conectados)</button>
+          <span style="font-size: 0.65rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Control de Presencia Real-Time</span>
+        </div>
+        <button id="rk-fullscreen-btn" onclick="toggleRkFullscreen()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(45,212,191,0.1)'; this.style.borderColor='#2dd4bf'; this.style.color='#2dd4bf';" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='#94a3b8';">
+          <span id="rk-fs-icon">🖵</span> <span id="rk-fs-text">Pantalla Completa</span>
+        </button>
       </div>
+
+      <script>
+        window.toggleRkFullscreen = function() {
+          const element = document.getElementById('rk-table-desktop');
+          if (!element) return;
+          
+          const isFS = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || element.classList.contains('rk-fullscreen');
+          
+          if (!isFS) {
+            element.classList.add('rk-fullscreen');
+            if (element.requestFullscreen) {
+              element.requestFullscreen().catch(err => {
+                console.log("Browser blocked native fullscreen, using CSS fallback: ", err);
+              });
+            } else if (element.webkitRequestFullscreen) {
+              element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) {
+              element.msRequestFullscreen();
+            }
+            
+            const icon = document.getElementById('rk-fs-icon');
+            const text = document.getElementById('rk-fs-text');
+            if (icon) icon.textContent = '❌';
+            if (text) text.textContent = 'Salir Pantalla Completa';
+          } else {
+            element.classList.remove('rk-fullscreen');
+            if (document.exitFullscreen) {
+              document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+              document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+              document.msExitFullscreen();
+            }
+            
+            const icon = document.getElementById('rk-fs-icon');
+            const text = document.getElementById('rk-fs-text');
+            if (icon) icon.textContent = '🖵';
+            if (text) text.textContent = 'Pantalla Completa';
+          }
+        };
+
+        document.addEventListener('fullscreenchange', () => {
+          const element = document.getElementById('rk-table-desktop');
+          if (!element) return;
+          const icon = document.getElementById('rk-fs-icon');
+          const text = document.getElementById('rk-fs-text');
+          
+          if (document.fullscreenElement === element) {
+            element.classList.add('rk-fullscreen');
+            if (icon) icon.textContent = '❌';
+            if (text) text.textContent = 'Salir Pantalla Completa';
+          } else if (!document.fullscreenElement) {
+            element.classList.remove('rk-fullscreen');
+            if (icon) icon.textContent = '🖵';
+            if (text) text.textContent = 'Pantalla Completa';
+          }
+        });
+      </script>
       <!-- Mantener IDs para compatibilidad con headers de tabla -->
       <span id="rth-0" style="display:none"></span>
       <span id="rth-1" style="display:none"></span>

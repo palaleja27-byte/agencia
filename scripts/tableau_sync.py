@@ -170,18 +170,19 @@ def fetch_datame_ids() -> set:
     Estos IDs son la LLAVE DE BÚSQUEDA en el CSV de Tableau.
     """
     rows = sb_get("datame_perfiles?select=id_datame&activo=eq.true")
+    ids = set()
     if rows:
         ids = {str(r["id_datame"]).strip() for r in rows if r.get("id_datame")}
         ids.discard("PENDING")
-        print(f"   🔑 {len(ids)} IDs propios de Agencia Romero cargados desde datame_perfiles:")
-        print(f"      {sorted(ids)}")
-        return ids
-    # Fallback hardcodeado con los IDs conocidos de la agencia
-    fallback = {
-        "7ROMERO", "ROMERO01", "ROMERO02"  # reemplazar con IDs reales si se conocen
-    }
-    print(f"   ⚠️  datame_perfiles vacío — usando fallback hardcodeado: {fallback}")
-    return fallback
+
+    # Asegurar que los perfiles nuevos (GUSTAVO 168486464, LUIZ 157112125, ROBERTO 170740935, RONALT 171638277)
+    # estén siempre incluidos en el set de escaneo de Tableau, resolviendo limitaciones de RLS/sincronización de base de datos
+    extra_ids = {"168486464", "157112125", "170740935", "171638277"}
+    ids.update(extra_ids)
+
+    print(f"   🔑 {len(ids)} IDs propios de Agencia Romero cargados:")
+    print(f"      {sorted(ids)}")
+    return ids
 
 
 

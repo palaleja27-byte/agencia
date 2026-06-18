@@ -313,7 +313,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
 
         # Filtrado rápido para no descargar 1000 CSVs: solo vistas que parezcan relevantes
         # Si el nombre tiene revenue, passport, kpi, usage, detail, etc.
-        if not any(k in view_name2.lower() or k in view_curl.lower() for k in ["revenue", "passport", "kpi", "usage", "detail", "score", "romero"]):
+        if not any(k in view_name2.lower() or k in view_curl.lower() for k in ["revenue", "passport", "kpi", "usage", "detail", "score", "romero", "ice", "breaker", "source", "reply", "response"]):
             continue
 
         # Descargar CSV de la vista (con manejo de timeout robusto)
@@ -462,10 +462,44 @@ def sync_panel(panel: dict, token_secret: str) -> int:
                 row_rev_val = valor
         else:
             row_rev_val = valor
+
+        # Extract icebreaker message statistics (sent, replies, response rate)
+        sent_col = next((c for c in df.columns if "SENT" in c.upper() or "ENVIADO" in c.upper()), None)
+        replies_col = next((c for c in df.columns if "REPLIES" in c.upper() or "REPLY" in c.upper() or "RESPUESTAS" in c.upper() or "RESPONDI" in c.upper()), None)
+        rate_col = next((c for c in df.columns if "RATE" in c.upper() or "PORCENTAJE" in c.upper() or "TASA" in c.upper() or "EFECTI" in c.upper()), None)
+
+        sent_val = 0
+        if sent_col:
+            try:
+                sent_val = int(float(str(row[sent_col]).replace(",","").replace(" ","").strip() or 0))
+            except Exception:
+                pass
+
+        replies_val = 0
+        if replies_col:
+            try:
+                replies_val = int(float(str(row[replies_col]).replace(",","").replace(" ","").strip() or 0))
+            except Exception:
+                pass
+
+        rate_val = 0.0
+        if rate_col:
+            try:
+                rate_val = float(str(row[rate_col]).replace("%","").replace(",","").replace(" ","").strip() or 0.0)
+                if rate_val < 1.0 and rate_val > 0.0:
+                    rate_val = round(rate_val * 100, 2)
+            except Exception:
+                pass
+
+        if not rate_val and sent_val > 0:
+            rate_val = round((replies_val / sent_val) * 100, 2)
             
         icebreaker_entry = {
             "source_id": src_id_val,
-            "revenue": round(row_rev_val, 2)
+            "revenue": round(row_rev_val, 2),
+            "sent": sent_val,
+            "replies": replies_val,
+            "response_rate": round(rate_val, 2)
         }
 
         if id_clean in seen:
@@ -480,6 +514,12 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             existing_ib = next((ib for ib in payload[idx]["data_json"]["icebreakers"] if ib["source_id"] == src_id_val), None)
             if existing_ib:
                 existing_ib["revenue"] = round(existing_ib["revenue"] + row_rev_val, 2)
+                existing_ib["sent"] = existing_ib.get("sent", 0) + sent_val
+                existing_ib["replies"] = existing_ib.get("replies", 0) + replies_val
+                if existing_ib["sent"] > 0:
+                    existing_ib["response_rate"] = round((existing_ib["replies"] / existing_ib["sent"]) * 100, 2)
+                else:
+                    existing_ib["response_rate"] = existing_ib.get("response_rate", 0.0) or round(rate_val, 2)
             else:
                 payload[idx]["data_json"]["icebreakers"].append(icebreaker_entry)
 

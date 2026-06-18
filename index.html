@@ -21280,6 +21280,46 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // ─────────────────────────────────────────────────────────────
       // RENDER ICE BREAKERS
       // ─────────────────────────────────────────────────────────────
+      function formatCampaignName(sourceId) {
+        const parts = String(sourceId).split(' - ');
+        const ibId = parts[0].trim();
+        let rawName = parts.slice(1).join(' - ').trim();
+        
+        if (ibId === '-1') {
+          return {
+            id: '-1',
+            name: '🌐 Tráfico Orgánico / Directo',
+            isClient: false,
+            isOperator: false
+          };
+        }
+        
+        if (!rawName || rawName.toLowerCase() === 'nan' || rawName.toLowerCase() === 'none') {
+          rawName = 'Campaña ' + ibId;
+        }
+        
+        // Check if it's named after an operator
+        const opNames = (typeof operatorsData !== 'undefined' ? operatorsData : []).map(o => o.name.toLowerCase());
+        const isOpCampaign = rawName.toLowerCase().includes('.romero') || 
+                             opNames.some(name => rawName.toLowerCase().includes(name));
+                             
+        if (isOpCampaign) {
+          return {
+            id: ibId,
+            name: `⚙️ Campaña: ${rawName}`,
+            isClient: false,
+            isOperator: true
+          };
+        } else {
+          return {
+            id: ibId,
+            name: `👤 Cliente: ${rawName}`,
+            isClient: true,
+            isOperator: false
+          };
+        }
+      }
+
       window.ciaRenderProfileIcebreakers = function(perfilId) {
         const detailsContainer = document.getElementById('cia-ib-details');
         if (!detailsContainer) return;
@@ -21305,7 +21345,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           if (singleSourceId && singleSourceId !== '-1') {
             ibs.push({
               source_id: singleSourceId,
-              revenue: singleRevenue
+              revenue: singleRevenue,
+              sent: dj['sent'] || dj['Sent'] || 0,
+              replies: dj['replies'] || dj['Replies'] || dj['reply'] || dj['Reply'] || 0,
+              response_rate: dj['response_rate'] || dj['Response Rate'] || 0.0
             });
           }
         }
@@ -21338,9 +21381,12 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             tagColor = '#f87171'; tagBg = 'rgba(248,113,113,0.12)'; tagText = '🔴 INACTIVO / CAMBIAR';
           }
 
-          const parts = item.source_id.split(' - ');
-          const ibId = parts[0];
-          const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
+          const fmt = formatCampaignName(item.source_id);
+          const ibId = fmt.id;
+          const ibName = fmt.name;
+          const sent = item.sent || 0;
+          const replies = item.replies || 0;
+          const rate = item.response_rate || 0.0;
 
           return `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.03);gap:10px;">
@@ -21348,6 +21394,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 <div style="font-size:0.7rem;color:#e2e8f0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                   <span style="color:#818cf8;font-family:monospace;margin-right:6px;">${ibId}</span>
                   ${ibName}
+                </div>
+                <div style="font-size:0.55rem;color:#64748b;margin-top:2px;">
+                  ✉️ Env: <b>${sent}</b> | 💬 Resp: <b>${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b>
                 </div>
               </div>
               <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
@@ -21420,6 +21469,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               allIbs.push({
                 source_id: ib.source_id,
                 revenue: ib.revenue,
+                sent: ib.sent || 0,
+                replies: ib.replies || 0,
+                response_rate: ib.response_rate || 0.0,
                 perfil_id: perfilId,
                 modelo: modeloName,
                 operador: opName
@@ -21432,6 +21484,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               allIbs.push({
                 source_id: singleSourceId,
                 revenue: singleRevenue,
+                sent: dj['sent'] || dj['Sent'] || 0,
+                replies: dj['replies'] || dj['Replies'] || dj['reply'] || dj['Reply'] || 0,
+                response_rate: dj['response_rate'] || dj['Response Rate'] || 0.0,
                 perfil_id: perfilId,
                 modelo: modeloName,
                 operador: opName
@@ -21450,9 +21505,12 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (topEl) {
           if (vips.length > 0) {
             topEl.innerHTML = vips.map((item, idx) => {
-              const parts = String(item.source_id).split(' - ');
-              const ibId = parts[0];
-              const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
+              const fmt = formatCampaignName(item.source_id);
+              const ibId = fmt.id;
+              const ibName = fmt.name;
+              const sent = item.sent || 0;
+              const replies = item.replies || 0;
+              const rate = item.response_rate || 0.0;
               
               let tagColor = '#34d399';
               let tagBg = 'rgba(52,211,153,0.06)';
@@ -21466,6 +21524,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                   <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${ibName}">${ibName}</div>
                   <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                     Código: <span style="font-family:monospace;color:#818cf8;">${ibId}</span> | Modelo: <span style="color:#94a3b8;">${item.modelo}</span> ${item.operador ? '· ' + item.operador : ''}
+                  </div>
+                  <div style="font-size:.55rem;color:#818cf8;font-weight:700;margin-top:2px;">
+                    ✉️ Env: <b>${sent}</b> | 💬 Resp: <b>${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b>
                   </div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
@@ -21482,9 +21543,12 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (botEl) {
           if (low.length > 0) {
             botEl.innerHTML = low.map((item, idx) => {
-              const parts = String(item.source_id).split(' - ');
-              const ibId = parts[0];
-              const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
+              const fmt = formatCampaignName(item.source_id);
+              const ibId = fmt.id;
+              const ibName = fmt.name;
+              const sent = item.sent || 0;
+              const replies = item.replies || 0;
+              const rate = item.response_rate || 0.0;
               
               let tagColor = '#f87171';
               let tagBg = 'rgba(248,113,113,0.06)';
@@ -21498,6 +21562,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                   <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${ibName}">${ibName}</div>
                   <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                     Código: <span style="font-family:monospace;color:#64748b;">${ibId}</span> | Modelo: <span style="color:#94a3b8;">${item.modelo}</span>
+                  </div>
+                  <div style="font-size:.55rem;color:#64748b;margin-top:2px;">
+                    ✉️ Env: <b>${sent}</b> | 💬 Resp: <b>${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b>
                   </div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
@@ -21514,22 +21581,25 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         // 2. Parse and render Clients list (Realtime Gasto/VIP)
         const clientsMap = {};
         allIbs.forEach(item => {
-          const parts = String(item.source_id).split(' - ');
-          const clientName = parts.slice(1).join(' - ').trim() || 'Campaña ' + parts[0];
+          const fmt = formatCampaignName(item.source_id);
+          const displayName = fmt.name;
           
-          if (!clientsMap[clientName]) {
-            clientsMap[clientName] = {
-              name: clientName,
+          if (!clientsMap[displayName]) {
+            clientsMap[displayName] = {
+              name: displayName,
               totalSpent: 0,
               profiles: new Set(),
               operators: new Set(),
-              codes: new Set()
+              codes: new Set(),
+              isClient: fmt.isClient,
+              isOperator: fmt.isOperator,
+              id: fmt.id
             };
           }
-          clientsMap[clientName].totalSpent += item.revenue;
-          clientsMap[clientName].profiles.add(item.modelo);
-          if (item.operador) clientsMap[clientName].operators.add(item.operador);
-          clientsMap[clientName].codes.add(parts[0]);
+          clientsMap[displayName].totalSpent += item.revenue;
+          clientsMap[displayName].profiles.add(item.modelo);
+          if (item.operador) clientsMap[displayName].operators.add(item.operador);
+          clientsMap[displayName].codes.add(fmt.id);
         });
 
         const sortedClients = Object.values(clientsMap)
@@ -21567,6 +21637,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               
               const codeList = [...client.codes].join(', ');
               const modelList = [...client.profiles].join(', ');
+              const opList = [...client.operators].join(', ') || 'N/A';
               
               return `
               <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;">
@@ -21574,7 +21645,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${client.name}">${client.name}</div>
                   <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    Campaña: <span style="font-family:monospace;color:#94a3b8;">${codeList}</span> | Modelos: <span style="color:#64748b;">${modelList}</span>
+                    Código: <span style="font-family:monospace;color:#94a3b8;">${codeList}</span> | Modelos: <span style="color:#64748b;">${modelList}</span> ${client.operators.size > 0 ? '| Operador: <span style="color:#38bdf8;">' + opList + '</span>' : ''}
                   </div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;">

@@ -448,9 +448,41 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             if rt and rt.lower() != "nan" and rt.lower() != "none":
                 row_json[rt] = valor
 
+        # Extract icebreaker Source ID and individual row revenue
+        src_id_col = next((c for c in df.columns if "SOURCE ID" in c.upper() or "SOURCE_ID" in c.upper()), None)
+        src_id_val = str(row[src_id_col]).strip() if src_id_col else "-1"
+        if not src_id_val or src_id_val.lower() == "nan" or src_id_val.lower() == "none":
+            src_id_val = "-1"
+            
+        row_rev_val = 0.0
+        if col_val:
+            try:
+                row_rev_val = float(str(row[col_val]).replace("$","").replace(",","").replace(" ","").strip() or 0.0)
+            except Exception:
+                row_rev_val = valor
+        else:
+            row_rev_val = valor
+            
+        icebreaker_entry = {
+            "source_id": src_id_val,
+            "revenue": round(row_rev_val, 2)
+        }
+
         if id_clean in seen:
             idx = seen[id_clean]
             payload[idx]["valor"] = round(payload[idx]["valor"] + valor, 2)
+            
+            # Accumulate in icebreakers list
+            if "icebreakers" not in payload[idx]["data_json"]:
+                payload[idx]["data_json"]["icebreakers"] = []
+                
+            # If there was a single icebreaker set previously, convert or append it
+            existing_ib = next((ib for ib in payload[idx]["data_json"]["icebreakers"] if ib["source_id"] == src_id_val), None)
+            if existing_ib:
+                existing_ib["revenue"] = round(existing_ib["revenue"] + row_rev_val, 2)
+            else:
+                payload[idx]["data_json"]["icebreakers"].append(icebreaker_entry)
+
             # Acumular numericos en data_json
             for k, v in row_json.items():
                 if k not in payload[idx]["data_json"]:
@@ -466,6 +498,7 @@ def sync_panel(panel: dict, token_secret: str) -> int:
                         pass
             continue
 
+        row_json["icebreakers"] = [icebreaker_entry]
         seen[id_clean] = len(payload)
         payload.append({
             "perfil_id":    id_clean,

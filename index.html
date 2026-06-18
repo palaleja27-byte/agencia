@@ -20911,6 +20911,24 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Es el perfil que rompe el hielo primero — el que más rápido genera puntos en el día. Un Ice Breaker fuerte indica un cliente activo y un operador efectivo. <strong style="color:#94a3b8;">Los mejores IceBreakers = perfiles VIP que el cliente ya ama.</strong> Los peores indican perfiles que necesitan estrategia diferente o cliente frío.</div>
             </div>
           </div>
+
+          <!-- Selector Interactivo de Icebreakers (Source IDs) de Tableau -->
+          <div style="background:rgba(129,140,248,0.04);border:1px solid rgba(129,140,248,0.15);border-radius:12px;padding:16px;margin-bottom:18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.1rem;">💬</span>
+                <span style="font-size:0.75rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:0.8px;">Auditoría de Icebreakers por Perfil (Tableau UK)</span>
+              </div>
+              <select id="cia-ib-selector" onchange="ciaRenderProfileIcebreakers(this.value)" style="background:#0f172a;border:1px solid rgba(129,140,248,0.3);border-radius:8px;padding:6px 12px;color:#e2e8f0;font-size:0.7rem;cursor:pointer;outline:none;min-width:220px;">
+                <option value="">— Seleccionar Perfil —</option>
+              </select>
+            </div>
+            
+            <!-- Contenedor del desglose de Icebreakers del perfil -->
+            <div id="cia-ib-details" style="display:none;background:rgba(0,0,0,0.15);border-radius:8px;padding:14px;border:1px solid rgba(255,255,255,0.03);">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div>
               <div style="font-size:.58rem;color:#34d399;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">🏆 TOP 10 MEJORES — Mes Actual</div>
@@ -21234,12 +21252,139 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // ─────────────────────────────────────────────────────────────
       // RENDER ICE BREAKERS
       // ─────────────────────────────────────────────────────────────
+      window.ciaRenderProfileIcebreakers = function(perfilId) {
+        const detailsContainer = document.getElementById('cia-ib-details');
+        if (!detailsContainer) return;
+        
+        if (!perfilId) {
+          detailsContainer.style.display = 'none';
+          return;
+        }
+
+        const dataEntry = _dpTableauData[perfilId];
+        if (!dataEntry) {
+          detailsContainer.innerHTML = `<div style="font-size:0.7rem;color:#f87171;text-align:center;padding:10px;">⚠️ No hay datos de Tableau disponibles para este perfil.</div>`;
+          detailsContainer.style.display = 'block';
+          return;
+        }
+
+        const dj = dataEntry.data_json || {};
+        const ibs = dj.icebreakers || [];
+
+        if (ibs.length === 0) {
+          const singleSourceId = dj['source ID'] || dj['Source ID'];
+          const singleRevenue = parseFloat(dj['Revenue'] || dataEntry.valor || 0);
+          if (singleSourceId && singleSourceId !== '-1') {
+            ibs.push({
+              source_id: singleSourceId,
+              revenue: singleRevenue
+            });
+          }
+        }
+
+        detailsContainer.style.display = 'block';
+
+        if (ibs.length === 0) {
+          detailsContainer.innerHTML = `
+            <div style="font-size:0.7rem;color:#64748b;text-align:center;padding:15px;line-height:1.4;">
+              ℹ️ No se encontraron campañas de Icebreakers registradas para este perfil en las últimas 5 semanas.<br>
+              <span style="font-size:0.6rem;opacity:0.8;">(Nota: los ingresos se reportan únicamente si el código de campaña/Source ID está configurado en Tableau)</span>
+            </div>`;
+          return;
+        }
+
+        const sortedIbs = [...ibs].sort((a,b) => b.revenue - a.revenue);
+        const totalIbRevenue = sortedIbs.reduce((sum, item) => sum + item.revenue, 0);
+
+        let listHtml = sortedIbs.map(item => {
+          const rev = item.revenue;
+          let tagColor, tagBg, tagText;
+          
+          if (rev >= 50.0) {
+            tagColor = '#34d399'; tagBg = 'rgba(52,211,153,0.12)'; tagText = '🔥 EXCELENTE (VIP)';
+          } else if (rev >= 10.0) {
+            tagColor = '#2dd4bf'; tagBg = 'rgba(45,212,191,0.12)'; tagText = '🟢 BUENO';
+          } else if (rev > 1.0) {
+            tagColor = '#fbbf24'; tagBg = 'rgba(251,191,36,0.12)'; tagText = '🟡 BAJO';
+          } else {
+            tagColor = '#f87171'; tagBg = 'rgba(248,113,113,0.12)'; tagText = '🔴 INACTIVO / CAMBIAR';
+          }
+
+          const parts = item.source_id.split(' - ');
+          const ibId = parts[0];
+          const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
+
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.03);gap:10px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.7rem;color:#e2e8f0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  <span style="color:#818cf8;font-family:monospace;margin-right:6px;">${ibId}</span>
+                  ${ibName}
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+                <span style="font-size:0.55rem;font-weight:800;color:${tagColor};background:${tagBg};padding:2px 8px;border-radius:4px;">${tagText}</span>
+                <span style="font-size:0.75rem;color:${rev > 0 ? '#34d399' : '#475569'};font-weight:900;min-width:80px;text-align:right;">
+                  $${rev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        detailsContainer.innerHTML = `
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:8px;">
+              <div style="font-size:0.65rem;color:#94a3b8;font-weight:700;">
+                MODELO: <span style="color:#fff;font-weight:800;margin-left:4px;">${dj['ID Trusted User'] || perfilId}</span>
+              </div>
+              <div style="font-size:0.65rem;color:#94a3b8;font-weight:700;">
+                REVENUE TOTAL CAMPAÑAS: <span style="color:#2dd4bf;font-weight:900;margin-left:4px;">$${totalIbRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;max-height:250px;overflow-y:auto;" class="custom-scrollbar">
+              ${listHtml}
+            </div>
+          </div>
+        `;
+      };
+
       function ciaRenderIceBreakers() {
         const ib     = window._ciaData.iceBreakers || [];
         const top10  = ib.slice(0, 10);
         const bot10  = ib.filter(x => x.media > 0).slice(-10).reverse();
         const hist7  = window._ciaData.hist7 || [];
         const maxVal = top10.length > 0 ? top10[0].media : 1;
+
+        // Populate interactive selector
+        const selector = document.getElementById('cia-ib-selector');
+        if (selector) {
+          const currVal = selector.value;
+          const tblProfiles = Object.keys(_dpTableauData).map(id => {
+            let modeloName = '';
+            let opName = '';
+            if (typeof operatorsData !== 'undefined') {
+              const op = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === id));
+              if (op) {
+                opName = op.name;
+                const p = op.profiles.find(x => String(x.id) === id);
+                modeloName = p ? p.model || p.modelo : '';
+              }
+            }
+            if (!modeloName) {
+              const dj = _dpTableauData[id]?.data_json || {};
+              modeloName = dj['ID Trusted User'] || id;
+            }
+            return { id, modelo: modeloName, op: opName };
+          }).sort((a,b) => a.modelo.localeCompare(b.modelo));
+
+          selector.innerHTML = '<option value="">— Seleccionar Perfil —</option>' + 
+            tblProfiles.map(p => `<option value="${p.id}">${p.modelo} (${p.id}) ${p.op ? '· ' + p.op : ''}</option>`).join('');
+          
+          if (currVal && tblProfiles.some(x => x.id === currVal)) {
+            selector.value = currVal;
+          }
+        }
 
         // Generar card IceBreaker
         function ibCard(item, rank, isTop) {

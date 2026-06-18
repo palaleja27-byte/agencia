@@ -20931,14 +20931,14 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
             <div>
-              <div style="font-size:.58rem;color:#34d399;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">🏆 TOP 10 MEJORES — Mes Actual</div>
-              <div id="cia-ib-top" style="display:flex;flex-direction:column;gap:6px;">
-                <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando Ice Breakers...</div>
+              <div style="font-size:.58rem;color:#34d399;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">💎 CLIENTES VIP & MEJORES CAMPAÑAS (Ingresos ≥ $10)</div>
+              <div id="cia-ib-top" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
+                <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando VIPs...</div>
               </div>
             </div>
             <div>
-              <div style="font-size:.58rem;color:#f87171;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">⚠️ BOTTOM 10 — Necesitan Atención</div>
-              <div id="cia-ib-bot" style="display:flex;flex-direction:column;gap:6px;">
+              <div style="font-size:.58rem;color:#f87171;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">⚙️ CAMPAÑAS DE BAJO RENDIMIENTO A ROTAR (Ingresos < $10)</div>
+              <div id="cia-ib-bot" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
                 <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando...</div>
               </div>
             </div>
@@ -21349,6 +21349,141 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         `;
       };
 
+      window.ciaRenderGlobalIcebreakers = function() {
+        const allIbs = [];
+        
+        // Filter by mapped IDs to only show Romero Agency data
+        const allMappedIds = new Set();
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            const plist = op.profiles || op.perfiles || [];
+            plist.forEach(p => {
+              const pid = String(typeof p === 'object' ? p.id : p).trim();
+              allMappedIds.add(pid);
+            });
+          });
+        }
+        
+        Object.entries(_dpTableauData).forEach(([perfilId, entry]) => {
+          // Only show information and metrics belonging to the Romero Agency
+          if (!allMappedIds.has(String(perfilId).trim())) {
+            return;
+          }
+          
+          const dj = entry.data_json || {};
+          const ibs = dj.icebreakers || [];
+          
+          let modeloName = '';
+          let opName = '';
+          if (typeof operatorsData !== 'undefined') {
+            const op = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === perfilId));
+            if (op) {
+              opName = op.name;
+              const p = op.profiles.find(x => String(x.id) === perfilId);
+              modeloName = p ? p.model || p.modelo : '';
+            }
+          }
+          if (!modeloName) {
+            modeloName = dj['ID Trusted User'] || perfilId;
+          }
+          
+          if (ibs.length > 0) {
+            ibs.forEach(ib => {
+              allIbs.push({
+                source_id: ib.source_id,
+                revenue: ib.revenue,
+                perfil_id: perfilId,
+                modelo: modeloName,
+                operador: opName
+              });
+            });
+          } else {
+            const singleSourceId = dj['source ID'] || dj['Source ID'];
+            const singleRevenue = parseFloat(dj['Revenue'] || entry.valor || 0);
+            if (singleSourceId && singleSourceId !== '-1') {
+              allIbs.push({
+                source_id: singleSourceId,
+                revenue: singleRevenue,
+                perfil_id: perfilId,
+                modelo: modeloName,
+                operador: opName
+              });
+            }
+          }
+        });
+
+        // Filter and sort
+        const vips = allIbs.filter(x => x.revenue >= 10).sort((a,b) => b.revenue - a.revenue);
+        const low = allIbs.filter(x => x.revenue < 10).sort((a,b) => a.revenue - b.revenue);
+
+        const topEl = document.getElementById('cia-ib-top');
+        const botEl = document.getElementById('cia-ib-bot');
+
+        if (topEl) {
+          if (vips.length > 0) {
+            topEl.innerHTML = vips.map((item, idx) => {
+              const parts = item.source_id.split(' - ');
+              const ibId = parts[0];
+              const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
+              
+              let tagColor = '#34d399';
+              let tagBg = 'rgba(52,211,153,0.06)';
+              let border = 'rgba(52,211,153,0.15)';
+              
+              return `
+              <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;"
+                   onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
+                <div style="font-size:1.1rem;color:${tagColor};font-weight:900;min-width:24px;text-align:center;">🔥</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${ibName}">${ibName}</div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    Código: <span style="font-family:monospace;color:#818cf8;">${ibId}</span> | Modelo: <span style="color:#94a3b8;">${item.modelo}</span> ${item.operador ? '· ' + item.operador : ''}
+                  </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                  <div style="font-size:.78rem;color:${tagColor};font-weight:900;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <span style="font-size:0.5rem;font-weight:800;color:${tagColor};background:rgba(52,211,153,0.1);padding:1px 5px;border-radius:3px;">VIP CLIENT</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else {
+            topEl.innerHTML = '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin campañas VIP detectadas (ingresos ≥ $10)</div>';
+          }
+        }
+
+        if (botEl) {
+          if (low.length > 0) {
+            botEl.innerHTML = low.map((item, idx) => {
+              const parts = item.source_id.split(' - ');
+              const ibId = parts[0];
+              const ibName = parts.slice(1).join(' - ') || 'Campaña sin nombre';
+              
+              let tagColor = '#f87171';
+              let tagBg = 'rgba(248,113,113,0.06)';
+              let border = 'rgba(248,113,113,0.15)';
+              
+              return `
+              <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;"
+                   onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
+                <div style="font-size:0.75rem;color:${tagColor};font-weight:900;min-width:24px;text-align:center;">#${idx+1}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${ibName}">${ibName}</div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    Código: <span style="font-family:monospace;color:#64748b;">${ibId}</span> | Modelo: <span style="color:#94a3b8;">${item.modelo}</span>
+                  </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                  <div style="font-size:.75rem;color:${tagColor};font-weight:900;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <span style="font-size:0.5rem;font-weight:800;color:${tagColor};background:rgba(248,113,113,0.1);padding:1px 5px;border-radius:3px;">ROTAR</span>
+                </div>
+              </div>`;
+            }).join('');
+          } else {
+            botEl.innerHTML = '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin campañas de bajo rendimiento</div>';
+          }
+        }
+      };
+
       function ciaRenderIceBreakers() {
         const ib     = window._ciaData.iceBreakers || [];
         const top10  = ib.slice(0, 10);
@@ -21422,10 +21557,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           </div>`;
         }
 
-        const topEl = document.getElementById('cia-ib-top');
-        const botEl = document.getElementById('cia-ib-bot');
-        if (topEl) topEl.innerHTML = top10.length > 0 ? top10.map((item, i) => ibCard(item, i, true)).join('') : '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin datos del mes</div>';
-        if (botEl) botEl.innerHTML = bot10.length > 0 ? bot10.map((item, i) => ibCard(item, i, false)).join('') : '<div style="color:#475569;font-size:.65rem;padding:20px;text-align:center;">Sin datos</div>';
+        // Call our new global campaign/VIP renderer to populate the columns
+        ciaRenderGlobalIcebreakers();
 
         // Tendencia 7 días — gráfico de barras SVG
         ciaRenderTrend7();

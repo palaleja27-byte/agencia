@@ -11604,7 +11604,26 @@
       // 1. Memory cache — lectura instantánea en runtime
       if (!_sbShouldExclude(key)) _sbMemCache[key] = value;
       // 2. localStorage — caché persistente offline
-      _origSetItem(key, value);
+      try {
+        _origSetItem(key, value);
+      } catch (e) {
+        if (e.name === 'QuotaExceededError' || e.message.includes('Quota')) {
+          console.warn('[LocalStorage] QuotaExceededError detectado. Forzando limpieza de espacio...');
+          Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('rr_heatmap_10m_history') || k.startsWith('rr_asi_draft_')) {
+              // Limpiar datos pesados y temporales si llegamos a la cuota
+              _origRemoveItem(k);
+            }
+          });
+          try {
+            _origSetItem(key, value);
+          } catch (e2) {
+            console.error('[LocalStorage] Falló setItem incluso después de limpiar:', e2);
+          }
+        } else {
+          console.error('[LocalStorage] Error en setItem:', e);
+        }
+      }
       _localSaveTs[key] = Date.now();
 
       // Capturar cambios en operadores y actualizar timestamp de sincronización
@@ -23138,12 +23157,32 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           const key = ASI_KEY + '_draft_' + date + '_' + sh;
           // Merge con lo existente para no borrar auto-marcados de otros
           const existing = JSON.parse(localStorage.getItem(key) || '{}');
-          localStorage.setItem(key, JSON.stringify({ ...existing, ...byShift[sh] }));
+          try {
+            localStorage.setItem(key, JSON.stringify({ ...existing, ...byShift[sh] }));
+          } catch (e) {
+            console.error('[asiSaveDraft] Error saving:', e);
+            if (e.name === 'QuotaExceededError') _forceClearSpace();
+          }
         });
       } else {
         const key = ASI_KEY + '_draft_' + date + '_' + asiShift;
-        localStorage.setItem(key, JSON.stringify(asiEstados));
+        try {
+          localStorage.setItem(key, JSON.stringify(asiEstados));
+        } catch (e) {
+          console.error('[asiSaveDraft] Error saving:', e);
+          if (e.name === 'QuotaExceededError') _forceClearSpace();
+        }
       }
+    }
+
+    function _forceClearSpace() {
+      console.warn('Forzando limpieza de espacio en localStorage...');
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('rr_heatmap_10m_history')) localStorage.removeItem(k);
+        if (k.startsWith('rr_asi_draft') && k < ASI_KEY + '_draft_' + localDateStr(new Date(Date.now() - 3*86400000))) {
+          localStorage.removeItem(k);
+        }
+      });
     }
 
     // ── Horas de turno desde asistencia ──────────────────────────
@@ -26340,9 +26379,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (exists !== -1) history[hoy][exists] = snap;
         else history[hoy].push(snap);
         
-        // Mantener solo 3 días
+        // Mantener solo 1 día (el actual) para evitar QuotaExceededError en navegadores
         const histKeys = Object.keys(history).sort();
-        while (histKeys.length > 3) delete history[histKeys.shift()];
+        while (histKeys.length > 1) delete history[histKeys.shift()];
         
         localStorage.setItem(key, JSON.stringify(history));
         console.log(`[HEATMAP-5M] ✅ Snapshot slot ${slotIdx} (${snap.t}) — ${snapData.length} perfiles guardados.`);
@@ -26392,9 +26431,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (exists !== -1) history[hoy][exists] = snap;
         else history[hoy].push(snap);
         
-        // Limpieza: solo 7 días
+        // Limpieza: solo 1 día (el actual) para evitar QuotaExceededError
         const histKeys = Object.keys(history).sort();
-        while (histKeys.length > 7) delete history[histKeys.shift()];
+        while (histKeys.length > 1) delete history[histKeys.shift()];
         
         localStorage.setItem(key, JSON.stringify(history));
         console.log(`[HEATMAP-10M] ✅ Snapshot slot ${slotIdx} (${snap.t}) — ${snapData.length} perfiles guardados.`);

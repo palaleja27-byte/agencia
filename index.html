@@ -21386,6 +21386,50 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       }
 
+      window.saveIcebreakerText = function(ibId) {
+          const currentMsg = window.icebreakerTexts[ibId] || '';
+          Swal.fire({
+            title: '📝 Texto Original del Mensaje',
+            html: `<p style="font-size:0.85rem;color:#94a3b8;margin-bottom:15px;text-align:left;">Guarda aquí el texto exacto que se usó como Icebreaker para <b>${ibId}</b>.<br><br><b>¿Para qué sirve esto?</b><br>Como el sistema solo nos da el ID y los números (cuántos se enviaron, cuántos respondieron), guardar el mensaje real nos permite <b>aprender</b> qué textos funcionan mejor y enseñarle a todo el equipo a replicar esos mensajes exitosos.</p>`,
+            input: 'textarea',
+            inputValue: currentMsg,
+            inputPlaceholder: 'Ej: Hola lindo, ¿cómo va tu día? (Inserte foto en el espejo)...',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar Mensaje',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#6366f1',
+            background: '#1e293b',
+            color: '#f8fafc',
+            inputAttributes: {
+              style: 'min-height: 120px; font-size: 0.9rem; line-height: 1.4;'
+            }
+          }).then((result) => {
+            if (result.isConfirmed && result.value !== null) {
+              window.icebreakerTexts[ibId] = result.value;
+              localStorage.setItem('icebreakerTexts', JSON.stringify(window.icebreakerTexts));
+              // Re-render
+              const sel = document.getElementById('cia-model-select');
+              if (sel && sel.value && typeof window.ciaRenderProfileIcebreakers === 'function') {
+                window.ciaRenderProfileIcebreakers(sel.value);
+              }
+              if (typeof window.ciaRenderGlobalIcebreakers === 'function') {
+                window.ciaRenderGlobalIcebreakers();
+              }
+              Swal.fire({
+                icon: 'success',
+                title: '¡Guardado!',
+                text: 'El mensaje ha sido guardado para referencia de todo el equipo.',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                background: '#0f172a',
+                color: '#fff'
+              });
+            }
+          });
+        };
+
       function ciaLast7Start() {
         const d = new Date();
         d.setDate(d.getDate() - 7);
@@ -21613,9 +21657,66 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         };
       }
 
+      window.icebreakerTexts = {};
+      
+      // Intentar cargar textos desde Supabase si está disponible
+      setTimeout(() => {
+        if (typeof _sb !== 'undefined') {
+          _sb.from('kv_store').select('value').eq('key', 'icebreaker_texts_db').single().then(({ data }) => {
+            if (data && data.value) {
+              try {
+                window.icebreakerTexts = JSON.parse(data.value);
+              } catch(e) {}
+            }
+          });
+        }
+      }, 3000);
+
+      window.saveIcebreakerText = function(id) {
+        let currentText = window.icebreakerTexts[id] || '';
+        let newText = prompt(`Introduce el mensaje original usado en la Campaña (ID: ${id})\n\nAsí toda la agencia podrá leerlo y saber qué mensaje funciona mejor.\n(Ejemplo: "Hola guapo, mira esta foto...")`, currentText);
+        
+        if (newText !== null) {
+          window.icebreakerTexts[id] = newText;
+          if (typeof _sb !== 'undefined') {
+             _sb.from('kv_store').upsert({ key: 'icebreaker_texts_db', value: JSON.stringify(window.icebreakerTexts) }, { onConflict: 'key' }).then(() => {
+                const sel = document.getElementById('cia-ib-selector');
+                if (sel && sel.value) {
+                  ciaRenderProfileIcebreakers(sel.value);
+                }
+             });
+          }
+        }
+      };
+
       window.ciaRenderProfileIcebreakers = function(perfilId) {
         const detailsContainer = document.getElementById('cia-ib-details');
         if (!detailsContainer) return;
+
+        if (!window.icebreakerTexts) {
+          try {
+            window.icebreakerTexts = JSON.parse(localStorage.getItem('icebreakerTexts')) || {};
+          } catch(e) {
+            window.icebreakerTexts = {};
+          }
+        }
+
+        window.saveIcebreakerText = function(ibId) {
+          const currentMsg = window.icebreakerTexts[ibId] || '';
+          const newMsg = prompt(`Ingresa o edita el mensaje (texto) original usado para el icebreaker ${ibId}:\\n(Esto te ayudará a recordar qué mensaje funciona mejor)`, currentMsg);
+          if (newMsg !== null) {
+            window.icebreakerTexts[ibId] = newMsg;
+            localStorage.setItem('icebreakerTexts', JSON.stringify(window.icebreakerTexts));
+            // Re-render
+            const sel = document.getElementById('cia-model-select');
+            if (sel && sel.value && typeof window.ciaRenderProfileIcebreakers === 'function') {
+              window.ciaRenderProfileIcebreakers(sel.value);
+            }
+            if (typeof window.ciaRenderGlobalIcebreakers === 'function') {
+              window.ciaRenderGlobalIcebreakers();
+            }
+          }
+        };
         
         if (!perfilId) {
           detailsContainer.style.display = 'none';
@@ -21681,6 +21782,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           const replies = item.replies || 0;
           const rate = item.response_rate || 0.0;
 
+          const storedMsg = window.icebreakerTexts && window.icebreakerTexts[ibId] ? window.icebreakerTexts[ibId] : '';
+          const msgBtn = `<button onclick="saveIcebreakerText('${ibId}')" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;padding:3px 8px;font-size:0.55rem;cursor:pointer;margin-top:5px;transition:0.2s;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.color='#94a3b8';this.style.background='rgba(255,255,255,0.05)'">📝 Añadir Texto Original</button>`;
+          const msgDisplay = storedMsg ? `<div style="margin-top:6px;background:rgba(0,0,0,0.3);padding:6px;border-radius:6px;border-left:2px solid #818cf8;font-size:0.65rem;color:#cbd5e1;white-space:pre-wrap;cursor:pointer;line-height:1.3;" onclick="saveIcebreakerText('${ibId}')" title="Clic para editar mensaje"><i>"${storedMsg}"</i></div>` : msgBtn;
+
           return `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.03);gap:10px;">
               <div style="flex:1;min-width:0;">
@@ -21691,6 +21796,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 <div style="font-size:0.55rem;color:#64748b;margin-top:2px;">
                   ✉️ Env: <b>${sent}</b> | 💬 Resp: <b>${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b>
                 </div>
+                ${msgDisplay}
               </div>
               <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
                 <span style="font-size:0.55rem;font-weight:800;color:${tagColor};background:${tagBg};padding:2px 8px;border-radius:4px;">${tagText}</span>
@@ -21808,7 +21914,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               let tagColor = '#34d399';
               let tagBg = 'rgba(52,211,153,0.06)';
               let border = 'rgba(52,211,153,0.15)';
-              
+              const storedMsg = window.icebreakerTexts && window.icebreakerTexts[ibId] ? window.icebreakerTexts[ibId] : '';
+              const msgBtn = `<button onclick="saveIcebreakerText('${ibId}')" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;padding:3px 8px;font-size:0.55rem;cursor:pointer;margin-top:5px;transition:0.2s;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.color='#94a3b8';this.style.background='rgba(255,255,255,0.05)'">📝 Añadir Texto Original</button>`;
+              const msgDisplay = storedMsg ? `<div style="margin-top:6px;background:rgba(0,0,0,0.3);padding:6px;border-radius:6px;border-left:2px solid #818cf8;font-size:0.65rem;color:#cbd5e1;white-space:pre-wrap;cursor:pointer;line-height:1.3;" onclick="saveIcebreakerText('${ibId}')" title="Clic para editar mensaje"><i>"${storedMsg}"</i></div>` : msgBtn;
+
               return `
               <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;"
                    onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
@@ -21821,6 +21930,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                   <div style="font-size:.55rem;color:#818cf8;font-weight:700;margin-top:2px;">
                     ✉️ Env: <b>${sent}</b> | 💬 Resp: <b>${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b>
                   </div>
+                  ${msgDisplay}
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
                   <div style="font-size:.78rem;color:${tagColor};font-weight:900;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -21846,7 +21956,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               let tagColor = '#f87171';
               let tagBg = 'rgba(248,113,113,0.06)';
               let border = 'rgba(248,113,113,0.15)';
-              
+              const storedMsg = window.icebreakerTexts && window.icebreakerTexts[ibId] ? window.icebreakerTexts[ibId] : '';
+              const msgBtn = `<button onclick="saveIcebreakerText('${ibId}')" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:6px;padding:3px 8px;font-size:0.55rem;cursor:pointer;margin-top:5px;transition:0.2s;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.color='#94a3b8';this.style.background='rgba(255,255,255,0.05)'">📝 Añadir Texto Original</button>`;
+              const msgDisplay = storedMsg ? `<div style="margin-top:6px;background:rgba(0,0,0,0.3);padding:6px;border-radius:6px;border-left:2px solid #818cf8;font-size:0.65rem;color:#cbd5e1;white-space:pre-wrap;cursor:pointer;line-height:1.3;" onclick="saveIcebreakerText('${ibId}')" title="Clic para editar mensaje"><i>"${storedMsg}"</i></div>` : msgBtn;
+
               return `
               <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;transition:.2s;margin-bottom:6px;"
                    onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
@@ -21859,6 +21972,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                   <div style="font-size:.55rem;color:#64748b;margin-top:2px;">
                     ✉️ Env: <b>${sent}</b> | 💬 Resp: <b>${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b>
                   </div>
+                  ${msgDisplay}
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
                   <div style="font-size:.75rem;color:${tagColor};font-weight:900;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>

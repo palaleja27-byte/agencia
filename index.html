@@ -21229,7 +21229,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             <div style="min-width:0;">
               <div style="font-size:.58rem;color:#34d399;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
                 <span>💎 VIP · Ingresos ≥ $10 <button onclick="showSmartInfo('vip')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;margin-left:4px;" onmouseover="this.style.color='#34d399'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></span>
-                <span style="font-size:.5rem;color:#374151;font-weight:600;text-transform:none;">por pts/día promedio</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <button onclick="exportVipJson()" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);color:#34d399;border-radius:4px;padding:2px 6px;font-size:.5rem;cursor:pointer;font-weight:800;transition:.2s;" onmouseover="this.style.background='rgba(52,211,153,0.2)'" onmouseout="this.style.background='rgba(52,211,153,0.1)'" title="Copiar lista de IDs VIP al portapapeles para el Agente en Ubuntu">📋 COPIAR JSON</button>
+                  <span style="font-size:.5rem;color:#374151;font-weight:600;text-transform:none;">por pts/día promedio</span>
+                </div>
               </div>
               <div id="cia-ib-top" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
                 <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando VIPs...</div>
@@ -21829,6 +21832,20 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         `;
       };
 
+      window.exportVipJson = function() {
+        if (!window.__lastCiaVips || window.__lastCiaVips.length === 0) {
+          showCiaToast("⚠️ No hay datos VIP cargados para exportar.", "error");
+          return;
+        }
+        const jsonStr = JSON.stringify(window.__lastCiaVips, null, 2);
+        navigator.clipboard.writeText(jsonStr).then(() => {
+          showCiaToast("✅ ¡Lista VIP JSON copiada al portapapeles! Lista para usar en tu Agente de Ubuntu.");
+        }).catch(err => {
+          console.error(err);
+          showCiaToast("❌ Error al copiar. Revisa los permisos de tu navegador.", "error");
+        });
+      };
+
       window.ciaRenderGlobalIcebreakers = function() {
         const allIbs = [];
         
@@ -21901,6 +21918,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         // 1. Filter and sort VIPs / Low performing campaigns
         const vips = allIbs.filter(x => x.revenue >= 10).sort((a,b) => b.revenue - a.revenue);
         const low = allIbs.filter(x => x.revenue < 10).sort((a,b) => a.revenue - b.revenue);
+        window.__lastCiaVips = vips;
 
         const topEl = document.getElementById('cia-ib-top');
         const botEl = document.getElementById('cia-ib-bot');
@@ -21918,7 +21936,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               let tagColor = '#34d399';
               let tagBg = 'rgba(52,211,153,0.06)';
               let border = 'rgba(52,211,153,0.15)';
-                  </div>
+              return `<div style="background:${tagBg};border:1px solid ${border};border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;">${ibName} <span style="color:#94a3b8;font-size:.5rem;font-weight:400;">(ID: ${ibId})</span></div>
+                  <div style="font-size:.55rem;color:#94a3b8;margin-top:2px;">Enviados: <span style="color:#e2e8f0;">${sent}</span> | Respuestas: <span style="color:#e2e8f0;">${replies}</span> (${(rate*100).toFixed(1)}%)</div>
+                </div>
                 <div style="text-align:right;flex-shrink:0;">
                   <div style="font-size:.78rem;color:${tagColor};font-weight:900;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   <span style="font-size:0.5rem;font-weight:800;color:${tagColor};background:rgba(52,211,153,0.1);padding:1px 5px;border-radius:3px;">VIP CLIENT</span>
@@ -21943,7 +21965,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               let tagColor = '#f87171';
               let tagBg = 'rgba(248,113,113,0.06)';
               let border = 'rgba(248,113,113,0.15)';
-                  </div>
+              return `<div style="background:${tagBg};border:1px solid ${border};border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;">${ibName} <span style="color:#94a3b8;font-size:.5rem;font-weight:400;">(ID: ${ibId})</span></div>
+                  <div style="font-size:.55rem;color:#94a3b8;margin-top:2px;">Enviados: <span style="color:#e2e8f0;">${sent}</span> | Respuestas: <span style="color:#e2e8f0;">${replies}</span> (${(rate*100).toFixed(1)}%)</div>
+                </div>
                 <div style="text-align:right;flex-shrink:0;">
                   <div style="font-size:.75rem;color:${tagColor};font-weight:900;">$${item.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   <span style="font-size:0.5rem;font-weight:800;color:${tagColor};background:rgba(248,113,113,0.1);padding:1px 5px;border-radius:3px;">ROTAR</span>

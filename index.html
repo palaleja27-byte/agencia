@@ -13433,7 +13433,7 @@
       // Top operadores del mes via Supabase
       const opMap = {};
       rows.forEach(r => {
-        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id)===String(r.id_perfil))) : null;
+        const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o && o.profiles && o.profiles.some(p => String(p.id)===String(r.id_perfil))) : null;
         const key = op ? op.name.split(' ').slice(0,2).join(' ') : (r.agencia||String(r.id_perfil)).slice(0,18);
         opMap[key] = (opMap[key]||0) + (r.puntos_neto||0);
       });
@@ -21803,8 +21803,16 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           const sent = item.sent || 0;
           const replies = item.replies || 0;
           const rate = item.response_rate || 0.0;
-
+          return `
+            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);padding:12px;border-radius:8px;">
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <div style="font-size:0.75rem;color:#e2e8f0;font-weight:700;">${ibName} <span style="color:#64748b;font-size:0.6rem;font-weight:500;">(${ibId})</span></div>
+                <div style="display:flex;gap:12px;font-size:0.6rem;color:#94a3b8;">
+                  <span>Enviados: <strong style="color:#cbd5e1;">${sent}</strong></span>
+                  <span>Resp.: <strong style="color:#cbd5e1;">${replies}</strong></span>
+                  <span>Tasa: <strong style="color:#cbd5e1;">${rate.toFixed(1)}%</strong></span>
                 </div>
+              </div>
               <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
                 <span style="font-size:0.55rem;font-weight:800;color:${tagColor};background:${tagBg};padding:2px 8px;border-radius:4px;">${tagText}</span>
                 <span style="font-size:0.75rem;color:${rev > 0 ? '#34d399' : '#475569'};font-weight:900;min-width:80px;text-align:right;">
@@ -21853,7 +21861,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const allMappedIds = new Set();
         if (typeof operatorsData !== 'undefined') {
           operatorsData.forEach(op => {
-            const plist = op.profiles || op.perfiles || [];
+            const plist = op ? (op.profiles || op.perfiles || []) : [];
             plist.forEach(p => {
               const pid = String(typeof p === 'object' ? p.id : p).trim();
               allMappedIds.add(pid);
@@ -21861,7 +21869,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           });
         }
         
-        Object.entries(_dpTableauData).forEach(([perfilId, entry]) => {
+        Object.entries(_dpTableauData || {}).forEach(([perfilId, entry]) => {
           // Only show information and metrics belonging to the Romero Agency
           if (!allMappedIds.has(String(perfilId).trim())) {
             return;
@@ -21873,7 +21881,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           let modeloName = '';
           let opName = '';
           if (typeof operatorsData !== 'undefined') {
-            const op = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === perfilId));
+            const op = operatorsData.find(o => o && o.profiles && o.profiles.some(p => String(p.id) === perfilId));
             if (op) {
               opName = op.name;
               const p = op.profiles.find(x => String(x.id) === perfilId);
@@ -22024,7 +22032,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           let modeloName = '';
           let opName = '';
           if (typeof operatorsData !== 'undefined') {
-            const op = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === perfilId));
+            const op = operatorsData.find(o => o && o.profiles && o.profiles.some(p => String(p.id) === perfilId));
             if (op) {
               opName = op.name;
               const p = op.profiles.find(x => String(x.id) === perfilId);
@@ -22322,7 +22330,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             let modeloName = '';
             let opName = '';
             if (typeof operatorsData !== 'undefined') {
-              const op = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === id));
+              const op = operatorsData.find(o => o && o.profiles && o.profiles.some(p => String(p.id) === id));
               if (op) {
                 opName = op.name;
                 const p = op.profiles.find(x => String(x.id) === id);
@@ -23929,7 +23937,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               if (pts < 0.1) return;
               // FIXED: buscar operador SOLO por perfil, sin filtrar por turno asignado
               // (el turno del operador puede diferir del turno del corte si hay cambio de turno)
-              const op = operatorsData.find(o => (o.profiles||[]).some(p => String(p.id) === pId));
+              const op = operatorsData.find(o => o && (o.profiles||[]).some(p => String(p.id) === pId));
               if (op) statsCortes[f][op.name] = (statsCortes[f][op.name] || 0) + pts;
             });
           });
@@ -24028,7 +24036,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             Object.entries(netos).forEach(([turno, pts]) => {
               if (pts < 0.1) return;
               
-              const op = operatorsData.find(o => (o.profiles||[]).some(p => String(p.id) === pId));
+              const op = operatorsData.find(o => o && (o.profiles||[]).some(p => String(p.id) === pId));
               if (op) {
                 encontroDuenio = true;
                 if (!statsCortes[f][op.name]) statsCortes[f][op.name] = { total: 0, desgloses: [] };

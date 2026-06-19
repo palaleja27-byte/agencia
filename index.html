@@ -5451,7 +5451,7 @@
     <button class="tab-btn" onclick="switchTab(3)">✅ Asistencia</button>
     <button class="tab-btn" id="tab-btn-handovers" onclick="switchTab(4)" style="display:none;">📋 Empalmes</button>
     <button class="tab-btn" id="tab-btn-tableau" onclick="switchTab(5)" style="display:none;">📈 Tableau Analytics</button>
-    <button class="tab-btn" id="tab-btn-golcaracol" onclick="switchTab(6)">⚽ Gol Caracol</button>
+
   </div>
 
   <!-- TAB 0: RANKING PRINCIPAL -->
@@ -5543,7 +5543,7 @@
         <div style="display: flex; align-items: center; gap: 10px;">
           <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')" style="display:none">📅 Mes</button>
           <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy (Operadores Conectados)</button>
-          <span style="font-size: 0.65rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Control de Presencia Real-Time</span>
+          <span style="font-size: 0.65rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Control de Presencia Real-Time <button onclick="showSmartInfo('ranking')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.75rem;margin-left:4px;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></span>
         </div>
         <button id="rk-fullscreen-btn" onclick="toggleRkFullscreen()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(45,212,191,0.1)'; this.style.borderColor='#2dd4bf'; this.style.color='#2dd4bf';" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='#94a3b8';">
           <span id="rk-fs-icon">🖵</span> <span id="rk-fs-text">Pantalla Completa</span>
@@ -6281,7 +6281,7 @@
           <div id="dp-corte-turno-wrap" style="background:rgba(15,23,42,0.6); border-top:1px solid rgba(45,212,191,0.1); padding:14px 18px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
               <div>
-                <h4 style="margin:0; font-size:.85rem; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px;">📋 Resumen para Corte de Turno</h4>
+                <h4 style="margin:0; font-size:.85rem; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:6px;">📋 Resumen para Corte de Turno <button onclick="showSmartInfo('corte')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h4>
                 <p style="margin:4px 0 0; font-size:.65rem; color:#64748b; line-height:1.4;">
                   Estas cifras corresponden a la <strong>Suma Global Neta</strong> de todos los paneles. Suman la producción real de cada perfil desde el inicio del turno actual.
                 </p>
@@ -7531,6 +7531,8 @@
 
     // ==================== LOCALSTORAGE ====================
     const STORAGE_KEY = 'primeOperatorsData2026';
+    const ASI_KEY = 'rr_prime_asistencia';
+    const ASI_HORAS_KEY = 'rr_asi_horas_dia'; // { opName: { fecha, horas, cambioTurno } }
 
     // Source data frozen at load time for merging
     const OPERATORS_SOURCE = operatorsData.map(o => ({ ...o }));
@@ -7729,21 +7731,6 @@
     }
 
     function switchTab(tabIndex) {
-      // Mute/Unload Gol Caracol player if switching away to save resources and silence audio
-      const golPlayer = document.getElementById('gol-caracol-player');
-      if (golPlayer) {
-        if (tabIndex === 6) {
-          if (!golPlayer.src || golPlayer.src === 'about:blank') {
-            const savedSrc = golPlayer.getAttribute('data-src') || 'https://www.youtube.com/embed/live_stream?channel=UC7kL16W4V4d3p6hHj1Q479g&autoplay=1&mute=0';
-            golPlayer.src = savedSrc;
-          }
-        } else {
-          if (golPlayer.src && golPlayer.src !== 'about:blank') {
-            golPlayer.setAttribute('data-src', golPlayer.src);
-            golPlayer.src = 'about:blank';
-          }
-        }
-      }
 
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -7780,11 +7767,7 @@
           renderTableauAnalyticsDashboard();
         } catch(e) { console.error("Err Tab 5:", e); }
       }
-      if (tabIndex === 6) {
-        try {
-          if (typeof initGolCaracol === 'function') initGolCaracol();
-        } catch(e) { console.error("Err Tab 6:", e); }
-      }
+
     }
 
     // ==================== RANKING COMPLETO ====================
@@ -11312,8 +11295,9 @@
             .like('key', `rr_prime_asistencia_draft_${todayStr}%`);
           if (!draftErr && todayDrafts) {
             todayDrafts.forEach(row => {
-              _origSetItem(row.key, row.value);
-              _sbMemCache[row.key] = row.value;
+              const strVal = typeof row.value === 'object' ? JSON.stringify(row.value) : row.value;
+              _origSetItem(row.key, strVal);
+              _sbMemCache[row.key] = strVal;
             });
           }
         } catch (de) {
@@ -13441,55 +13425,11 @@
       panel.innerHTML = `
 <div style="padding:18px;color:#f1f5f9;font-family:inherit">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <div><div style="color:#2dd4bf;font-weight:900;font-size:.88rem">📊 ¿CÓMO VAMOS ESTE MES?</div>
+    <div><div style="color:#2dd4bf;font-weight:900;font-size:.88rem;display:flex;align-items:center;gap:6px;">📊 ¿CÓMO VAMOS ESTE MES? <button onclick="showSmartInfo('crecimiento')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.8rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
     <div style="font-size:.55rem;color:#334155;margin-top:2px"><span class="cmv-rt-dot"></span>RT · ${ts} · auto-refresh 60s</div></div>
     <button onclick="window.toggleCrecTooltip(event)" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#94a3b8;cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:1rem">&times;</button>
   </div>
   <div style="text-align:center;padding:14px;background:rgba(255,255,255,.02);border-radius:14px;border:1px solid rgba(255,255,255,.05);margin-bottom:14px;position:relative">
-    <!-- Botón Info -->
-    <button id="cmv-info-btn" onclick="document.getElementById('cmv-info-tooltip').style.display=document.getElementById('cmv-info-tooltip').style.display==='block'?'none':'block'"
-      style="position:absolute;top:8px;right:8px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);color:#38bdf8;width:22px;height:22px;border-radius:50%;font-size:.65rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center">i</button>
-    <!-- Tooltip explicación -->
-    <div id="cmv-info-tooltip" style="display:none;position:absolute;top:36px;right:8px;width:270px;background:#0b0f19;border:1px solid rgba(56,189,248,.35);border-radius:12px;padding:12px;font-size:.62rem;line-height:1.6;color:#94a3b8;text-align:left;z-index:10;box-shadow:0 8px 30px rgba(0,0,0,.85)">
-      <div style="color:#38bdf8;font-weight:900;margin-bottom:8px;font-size:.7rem;display:flex;align-items:center;gap:4px">🚗 EL RITMO DE TU NEGOCIO</div>
-      
-      <div style="background:rgba(255,255,255,.02);border-radius:8px;padding:8px;margin-bottom:8px;border:1px solid rgba(255,255,255,.04)">
-        <b style="color:#f1f5f9;display:block;margin-bottom:4px">🚗 Analogía del Carro:</b>
-        Imaginen que la agencia es un carro en la autopista:<br>
-        • <b>Velocidad en ${h.m1Name}:</b> Iban a <b style="color:#a78bfa">${m1PromDia.toFixed(0)} km/h</b> (puntos/día).<br>
-        • <b>Velocidad en ${h.m2Name}:</b> Ahora van a <b style="color:#34d399">${m2PromDia.toFixed(0)} km/h</b> (puntos/día).<br>
-        <span style="display:block;margin-top:4px">Tu ritmo de viaje hoy es un <b>${crec>=0?'más rápido':'más lento'} (${crecSign}${crec.toFixed(1)}%)</b> que el mes anterior.</span>
-      </div>
-
-      <div style="background:rgba(56,189,248,.05);border-radius:8px;padding:8px;margin-bottom:8px;border:1px solid rgba(56,189,248,.15);color:#38bdf8">
-        <b style="color:#fff;display:block;margin-bottom:2px">💰 ¿Cómo nos hace más rentables?</b>
-        Más velocidad diaria = más dinero producido cada día (<b style="color:#fff">$${Math.round(promDia*1400).toLocaleString('es-CO')} COP/día</b>). Esto cubre tus costos fijos en menos días y el resto del mes se convierte en <b>ganancia neta pura</b>.
-      </div>
-
-      <div style="font-size:.56rem;color:#475569;margin-bottom:4px">📊 <b>Cálculos Reales Usados:</b></div>
-      <table style="width:100%;font-size:.56rem;border-collapse:collapse;color:#64748b">
-        <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
-          <td style="padding:2px 0">Indicador</td>
-          <td style="text-align:right;color:#a78bfa;padding:2px 0">${h.m1Name}</td>
-          <td style="text-align:right;color:#34d399;padding:2px 0">${h.m2Name}</td>
-        </tr>
-        <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
-          <td style="padding:3px 0;color:#94a3b8">Promedio diario:</td>
-          <td style="text-align:right;padding:3px 0">${m1PromDia.toFixed(1)} pts</td>
-          <td style="text-align:right;padding:3px 0">${m2PromDia.toFixed(1)} pts</td>
-        </tr>
-        <tr style="border-bottom:1px solid rgba(255,255,255,.05)">
-          <td style="padding:3px 0;color:#94a3b8">Días activos:</td>
-          <td style="text-align:right;padding:3px 0">${diasM1ConDatos} días</td>
-          <td style="text-align:right;padding:3px 0">${diasM2ConDatos} días</td>
-        </tr>
-        <tr>
-          <td style="padding:3px 0;color:#94a3b8">Total Puntos:</td>
-          <td style="text-align:right;padding:3px 0">${h.m1Total.toLocaleString()} pts</td>
-          <td style="text-align:right;padding:3px 0">${h.m2Total.toLocaleString()} pts</td>
-        </tr>
-      </table>
-    </div>
     <!-- % principal -->
     <div style="font-size:2.8rem;font-weight:900;color:${crec>=0?'#10b981':'#f87171'};line-height:1">${crec>0?'+':''}${crec.toFixed(1)}%</div>
     <div style="color:#475569;font-size:.72rem;margin-top:4px;font-weight:700">ritmo diario vs ${h.m1Name}</div>
@@ -13962,6 +13902,9 @@
         }).join('');
 
         content = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+             <h4 style="margin:0; font-size:.9rem; color:#f87171; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:6px;">🚨 Alertas Inteligentes <button onclick="showSmartInfo('alertas')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h4>
+          </div>
           ${statsPanelHtml}
           ${filterBarHtml}
           <div id="op-cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; margin-bottom:12px;">
@@ -21131,117 +21074,178 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       <!-- ── KPI BAR GLOBAL ── -->
       <div id="cia-kpi-bar" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:rgba(99,102,241,0.08);border-left:1px solid rgba(99,102,241,0.2);border-right:1px solid rgba(99,102,241,0.2);">
         <div class="cia-kpi" style="background:#0f172a;padding:14px 16px;text-align:center;">
-          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;">📊 Pts Hoy</div>
+          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:4px;">📊 Pts Hoy <button onclick="showSmartInfo('cia-pts')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.65rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
           <div id="cia-k-pts" style="font-size:1.6rem;color:#2dd4bf;font-weight:900;line-height:1.1;margin-top:3px;">—</div>
           <div style="font-size:.48rem;color:#334155;">Agencia Romero</div>
         </div>
         <div class="cia-kpi" style="background:#0f172a;padding:14px 16px;text-align:center;">
-          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;">⚡ Pts/Hora</div>
+          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:4px;">⚡ Pts/Hora <button onclick="showSmartInfo('cia-pph')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.65rem;padding:0;" onmouseover="this.style.color='#818cf8'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
           <div id="cia-k-pph" style="font-size:1.6rem;color:#818cf8;font-weight:900;line-height:1.1;margin-top:3px;">—</div>
           <div style="font-size:.48rem;color:#334155;">Promedio agencia</div>
         </div>
         <div class="cia-kpi" style="background:#0f172a;padding:14px 16px;text-align:center;">
-          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;">👥 Operadores</div>
+          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:4px;">👥 Operadores <button onclick="showSmartInfo('cia-ops')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.65rem;padding:0;" onmouseover="this.style.color='#fbbf24'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
           <div id="cia-k-ops" style="font-size:1.6rem;color:#fbbf24;font-weight:900;line-height:1.1;margin-top:3px;">—</div>
           <div style="font-size:.48rem;color:#334155;">Activos hoy</div>
         </div>
         <div class="cia-kpi" style="background:#0f172a;padding:14px 16px;text-align:center;">
-          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;">🏅 Top Perfil</div>
+          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:4px;">🏅 Top Perfil <button onclick="showSmartInfo('cia-top')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.65rem;padding:0;" onmouseover="this.style.color='#34d399'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
           <div id="cia-k-top" style="font-size:.95rem;color:#34d399;font-weight:900;line-height:1.2;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
           <div id="cia-k-top-pts" style="font-size:.55rem;color:#334155;">—</div>
         </div>
         <div class="cia-kpi" style="background:#0f172a;padding:14px 16px;text-align:center;">
-          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;">📅 Mes Total</div>
+          <div style="font-size:.5rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:4px;">📅 Mes Total <button onclick="showSmartInfo('cia-mes')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.65rem;padding:0;" onmouseover="this.style.color='#c084fc'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
           <div id="cia-k-mes" style="font-size:1.6rem;color:#c084fc;font-weight:900;line-height:1.1;margin-top:3px;">—</div>
           <div id="cia-sync-time" style="font-size:.48rem;color:#334155;">Esperando sync...</div>
         </div>
       </div>
 
       <!-- ── TABS INTERNOS ── -->
-      <div style="background:#0f172a;border-left:1px solid rgba(99,102,241,0.2);border-right:1px solid rgba(99,102,241,0.2);display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.05);">
-        <button class="cia-tab-btn active" id="cia-tab-0" onclick="ciaSwitchTab(0)"
-          style="padding:10px 18px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:rgba(99,102,241,0.12);color:#818cf8;cursor:pointer;border-bottom:2px solid #6366f1;transition:.2s;">
-          🧊 Ice Breakers
-        </button>
-        <button class="cia-tab-btn" id="cia-tab-1" onclick="ciaSwitchTab(1)"
-          style="padding:10px 18px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:transparent;color:#475569;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;">
-          ⏱️ Tiempos de Respuesta
-        </button>
-        <button class="cia-tab-btn" id="cia-tab-2" onclick="ciaSwitchTab(2)"
-          style="padding:10px 18px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:transparent;color:#475569;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;">
-          📋 Corte del Día
-        </button>
-        <button class="cia-tab-btn" id="cia-tab-3" onclick="ciaSwitchTab(3)"
-          style="padding:10px 18px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:transparent;color:#475569;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;">
-          📊 Perfiles Tableau
-        </button>
+      <div style="background:#0f172a;border-left:1px solid rgba(99,102,241,0.2);border-right:1px solid rgba(99,102,241,0.2);display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.05);align-items:stretch;">
+        <!-- Tab 0 + info -->
+        <div style="display:inline-flex;align-items:stretch;">
+          <button class="cia-tab-btn active" id="cia-tab-0" onclick="ciaSwitchTab(0)"
+            style="padding:10px 14px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:rgba(99,102,241,0.12);color:#818cf8;cursor:pointer;border-bottom:2px solid #6366f1;transition:.2s;">
+            🧊 Ice Breakers
+          </button>
+          <button onclick="showCiaInfo(0)" title="¿Qué mide este módulo?"
+            style="padding:8px 8px;font-size:.75rem;border:none;background:rgba(99,102,241,0.06);color:#4b5563;cursor:pointer;border-bottom:2px solid #6366f1;transition:.2s;border-left:1px solid rgba(255,255,255,0.04);"
+            onmouseover="this.style.color='#818cf8';this.style.background='rgba(99,102,241,0.18)'" onmouseout="this.style.color='#4b5563';this.style.background='rgba(99,102,241,0.06)'">ⓘ</button>
+        </div>
+        <!-- Tab 1 + info -->
+        <div style="display:inline-flex;align-items:stretch;">
+          <button class="cia-tab-btn" id="cia-tab-1" onclick="ciaSwitchTab(1)"
+            style="padding:10px 14px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:transparent;color:#475569;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;">
+            ⏱️ Tiempos de Respuesta
+          </button>
+          <button onclick="showCiaInfo(1)" title="¿Qué mide este módulo?"
+            style="padding:8px 8px;font-size:.75rem;border:none;background:transparent;color:#374151;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;border-left:1px solid rgba(255,255,255,0.04);"
+            onmouseover="this.style.color='#475569'" onmouseout="this.style.color='#374151'">ⓘ</button>
+        </div>
+        <!-- Tab 2 + info -->
+        <div style="display:inline-flex;align-items:stretch;">
+          <button class="cia-tab-btn" id="cia-tab-2" onclick="ciaSwitchTab(2)"
+            style="padding:10px 14px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:transparent;color:#475569;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;">
+            📋 Corte del Día
+          </button>
+          <button onclick="showCiaInfo(2)" title="¿Qué mide este módulo?"
+            style="padding:8px 8px;font-size:.75rem;border:none;background:transparent;color:#374151;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;border-left:1px solid rgba(255,255,255,0.04);"
+            onmouseover="this.style.color='#475569'" onmouseout="this.style.color='#374151'">ⓘ</button>
+        </div>
+        <!-- Tab 3 + info -->
+        <div style="display:inline-flex;align-items:stretch;">
+          <button class="cia-tab-btn" id="cia-tab-3" onclick="ciaSwitchTab(3)"
+            style="padding:10px 14px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;border:none;background:transparent;color:#475569;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;">
+            📊 Perfiles Tableau
+          </button>
+          <button onclick="showCiaInfo(3)" title="¿Qué mide este módulo?"
+            style="padding:8px 8px;font-size:.75rem;border:none;background:transparent;color:#374151;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;border-left:1px solid rgba(255,255,255,0.04);"
+            onmouseover="this.style.color='#475569'" onmouseout="this.style.color='#374151'">ⓘ</button>
+        </div>
       </div>
 
       <!-- ── CONTENIDO DE TABS ── -->
       <div style="background:#0f172a;border:1px solid rgba(99,102,241,0.2);border-top:none;border-radius:0 0 16px 16px;min-height:400px;">
 
-        <!-- TAB 0: ICE BREAKERS -->
+        <!-- TAB 0: ICE BREAKERS - REDESIGNED -->
         <div id="cia-panel-0" style="padding:20px;">
-          <!-- Explicación del concepto -->
-          <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;">
-            <span style="font-size:1.3rem;">🧊</span>
-            <div>
-              <div style="font-size:.7rem;color:#818cf8;font-weight:800;margin-bottom:3px;">¿Qué es un Ice Breaker?</div>
-              <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Es el perfil que rompe el hielo primero — el que más rápido genera puntos en el día. Un Ice Breaker fuerte indica un cliente activo y un operador efectivo. <strong style="color:#94a3b8;">Los mejores IceBreakers = perfiles VIP que el cliente ya ama.</strong> Los peores indican perfiles que necesitan estrategia diferente o cliente frío.</div>
+
+          <!-- ── KPI METRIC BAR ── -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">
+            <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:12px;padding:13px 16px;text-align:center;position:relative;overflow:hidden;">
+              <div style="position:absolute;top:-10px;right:-10px;font-size:2.5rem;opacity:.05;pointer-events:none;">📤</div>
+              <div style="font-size:.46rem;color:#64748b;text-transform:uppercase;font-weight:800;letter-spacing:1.2px;margin-bottom:5px;">📤 TOTAL ENVIADOS</div>
+              <div id="cia-ib-total-sent" style="font-size:1.4rem;color:#818cf8;font-weight:900;line-height:1;">—</div>
+              <div style="font-size:.44rem;color:#374151;margin-top:3px;">mensajes de apertura</div>
+            </div>
+            <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.2);border-radius:12px;padding:13px 16px;text-align:center;position:relative;overflow:hidden;">
+              <div style="position:absolute;top:-10px;right:-10px;font-size:2.5rem;opacity:.05;pointer-events:none;">💬</div>
+              <div style="font-size:.46rem;color:#64748b;text-transform:uppercase;font-weight:800;letter-spacing:1.2px;margin-bottom:5px;">💬 RESPUESTAS</div>
+              <div id="cia-ib-total-replies" style="font-size:1.4rem;color:#2dd4bf;font-weight:900;line-height:1;">—</div>
+              <div style="font-size:.44rem;color:#374151;margin-top:3px;">clientes que contestaron</div>
+            </div>
+            <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:12px;padding:13px 16px;text-align:center;position:relative;overflow:hidden;">
+              <div style="position:absolute;top:-10px;right:-10px;font-size:2.5rem;opacity:.05;pointer-events:none;">📊</div>
+              <div style="font-size:.46rem;color:#64748b;text-transform:uppercase;font-weight:800;letter-spacing:1.2px;margin-bottom:5px;">📊 TASA RESPUESTA</div>
+              <div id="cia-ib-avg-rate" style="font-size:1.4rem;color:#34d399;font-weight:900;line-height:1;">—%</div>
+              <div style="font-size:.44rem;color:#374151;margin-top:3px;">efectividad promedio</div>
             </div>
           </div>
 
-          <!-- Selector Interactivo de Icebreakers (Source IDs) de Tableau -->
+          <!-- ── DESCRIPTION + INFO BUTTON ── -->
+          <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+            <div style="display:flex;align-items:flex-start;gap:10px;flex:1;">
+              <span style="font-size:1.3rem;flex-shrink:0;">🧊</span>
+              <div>
+                <div style="font-size:.7rem;color:#818cf8;font-weight:800;margin-bottom:3px;">¿Qué es un Ice Breaker?</div>
+                <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Es el <strong style="color:#94a3b8;">primer mensaje</strong> que rompe el silencio con un cliente. Tableau UK mide cuántos de estos mensajes generaron respuesta. <strong style="color:#34d399;">Alta tasa = cliente receptivo + operador efectivo.</strong> Baja tasa = perfil frío o mensaje sin impacto.</div>
+              </div>
+            </div>
+            <button onclick="showCiaInfo(0)" style="flex-shrink:0;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:8px;padding:6px 12px;font-size:.6rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.2s;"
+              onmouseover="this.style.background='rgba(99,102,241,0.25)'" onmouseout="this.style.background='rgba(99,102,241,0.12)'">ⓘ Ver guía</button>
+          </div>
+
+          <!-- ── SELECTOR DE PERFIL + DETALLE ── -->
           <div style="background:rgba(129,140,248,0.04);border:1px solid rgba(129,140,248,0.15);border-radius:12px;padding:16px;margin-bottom:18px;">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
               <div style="display:flex;align-items:center;gap:8px;">
                 <span style="font-size:1.1rem;">💬</span>
-                <span style="font-size:0.75rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:0.8px;">Auditoría de Icebreakers por Perfil (Tableau UK)</span>
+                <div>
+                  <div style="font-size:0.72rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:0.8px;">Icebreakers por Perfil · Tableau UK</div>
+                  <div style="font-size:.5rem;color:#475569;margin-top:2px;">Selecciona un perfil para ver campañas activas y tasa de efectividad</div>
+                </div>
               </div>
               <select id="cia-ib-selector" onchange="ciaRenderProfileIcebreakers(this.value)" style="background:#0f172a;border:1px solid rgba(129,140,248,0.3);border-radius:8px;padding:6px 12px;color:#e2e8f0;font-size:0.7rem;cursor:pointer;outline:none;min-width:220px;">
                 <option value="">— Seleccionar Perfil —</option>
               </select>
             </div>
-            
-            <!-- Contenedor del desglose de Icebreakers del perfil -->
+            <!-- Detalle icebreakers del perfil -->
             <div id="cia-ib-details" style="display:none;background:rgba(0,0,0,0.15);border-radius:8px;padding:14px;border:1px solid rgba(255,255,255,0.03);">
               <!-- Rendered via JS -->
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div>
-              <div style="font-size:.58rem;color:#34d399;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">💎 CLIENTES VIP & MEJORES CAMPAÑAS (Ingresos ≥ $10)</div>
+
+          <!-- ── RANKINGS VIP / BAJO ── -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;">
+            <div style="min-width:0;">
+              <div style="font-size:.58rem;color:#34d399;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
+                <span>💎 VIP · Ingresos ≥ $10 <button onclick="showSmartInfo('vip')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;margin-left:4px;" onmouseover="this.style.color='#34d399'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></span>
+                <span style="font-size:.5rem;color:#374151;font-weight:600;text-transform:none;">por pts/día promedio</span>
+              </div>
               <div id="cia-ib-top" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
                 <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando VIPs...</div>
               </div>
             </div>
-            <div>
-              <div style="font-size:.58rem;color:#f87171;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">⚙️ CAMPAÑAS DE BAJO RENDIMIENTO A ROTAR (Ingresos < $10)</div>
+            <div style="min-width:0;">
+              <div style="font-size:.58rem;color:#f87171;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
+                <span>⚙️ A Rotar · Ingresos &lt; $10 <button onclick="showSmartInfo('arotar')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;margin-left:4px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></span>
+                <span style="font-size:.5rem;color:#374151;font-weight:600;text-transform:none;">prioridad de revisión</span>
+              </div>
               <div id="cia-ib-bot" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
                 <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando...</div>
               </div>
             </div>
           </div>
-          
-          <!-- Clientes VIP y Efectividad de Campañas (Usuarios Traídos) -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;border-top:1px solid rgba(255,255,255,0.05);padding-top:16px;">
-            <div>
-              <div style="font-size:.58rem;color:#c084fc;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">👥 CLIENTES ACTIVOS Y GASTO REALTIME (CREDIT TRAJECTORY)</div>
+
+          <!-- ── CLIENTES + CAMPAÑAS ── -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;margin-top:20px;border-top:1px solid rgba(255,255,255,0.05);padding-top:16px;">
+            <div style="min-width:0;">
+              <div style="font-size:.58rem;color:#c084fc;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">👥 Clientes Activos · Credit Trajectory <button onclick="showSmartInfo('clientes')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;" onmouseover="this.style.color='#c084fc'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
               <div id="cia-clients-spent" style="display:flex;flex-direction:column;gap:6px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
                 <div style="color:#475569;font-size:.65rem;text-align:center;padding:20px;">Cargando clientes...</div>
               </div>
             </div>
-            <div>
-              <div style="font-size:.58rem;color:#fbbf24;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">📊 EFECTIVIDAD DE CAMPANAS (USUARIOS TRAÍDOS)</div>
+            <div style="min-width:0;">
+              <div style="font-size:.58rem;color:#fbbf24;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">📊 Efectividad de Campañas · Usuarios Traídos <button onclick="showSmartInfo('campanas')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;" onmouseover="this.style.color='#fbbf24'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></div>
               <div id="cia-campaigns-stats" style="display:flex;flex-direction:column;gap:12px;max-height:450px;overflow-y:auto;" class="custom-scrollbar">
                 <div>
-                  <div style="font-size:0.5rem;color:#34d399;font-weight:800;margin-bottom:6px;text-transform:uppercase;">🔝 MÁS EFECTIVOS (Más Usuarios Traídos)</div>
+                  <div style="font-size:0.5rem;color:#34d399;font-weight:800;margin-bottom:6px;text-transform:uppercase;">🔝 Más Efectivos</div>
                   <div id="cia-camp-top" style="display:flex;flex-direction:column;gap:5px;">
                     <div style="color:#475569;font-size:.65rem;padding:10px;">Cargando...</div>
                   </div>
                 </div>
                 <div style="margin-top:10px;">
-                  <div style="font-size:0.5rem;color:#f87171;font-weight:800;margin-bottom:6px;text-transform:uppercase;">🚨 MENOS EFECTIVOS (Menos Usuarios Traídos o Sin Resultados)</div>
+                  <div style="font-size:0.5rem;color:#f87171;font-weight:800;margin-bottom:6px;text-transform:uppercase;">🚨 Menos Efectivos</div>
                   <div id="cia-camp-bot" style="display:flex;flex-direction:column;gap:5px;">
                     <div style="color:#475569;font-size:.65rem;padding:10px;">Cargando...</div>
                   </div>
@@ -21249,8 +21253,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               </div>
             </div>
           </div>
-          
-          <!-- Tendencia 7 días -->
+
+          <!-- ── TENDENCIA 7 DÍAS ── -->
           <div style="margin-top:20px;border-top:1px solid rgba(255,255,255,0.05);padding-top:16px;">
             <div style="font-size:.58rem;color:#94a3b8;font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">📈 Tendencia de Producción — Últimos 7 Días (Top 5 Perfiles)</div>
             <div id="cia-trend-chart" style="overflow-x:auto;"></div>
@@ -21259,12 +21263,16 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         <!-- TAB 1: TIEMPOS DE RESPUESTA -->
         <div id="cia-panel-1" style="padding:20px;display:none;">
-          <div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:flex-start;gap:10px;">
-            <span style="font-size:1.3rem;">⏱️</span>
-            <div>
-              <div style="font-size:.7rem;color:#2dd4bf;font-weight:800;margin-bottom:3px;">Velocidad de Producción por Perfil</div>
-              <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Mide los <strong style="color:#94a3b8;">puntos por hora</strong> de cada perfil en su turno. Verde ≥15 pts/hr, Amarillo 8-15 pts/hr, Rojo &lt;8 pts/hr. Esta métrica permite evaluar si el operador está siendo eficiente con cada perfil que maneja.</div>
+          <div style="background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+            <div style="display:flex;align-items:flex-start;gap:10px;flex:1;">
+              <span style="font-size:1.3rem;flex-shrink:0;">⏱️</span>
+              <div>
+                <div style="font-size:.7rem;color:#2dd4bf;font-weight:800;margin-bottom:3px;">Velocidad de Producción por Perfil</div>
+                <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Mide los <strong style="color:#94a3b8;">puntos por hora</strong> que genera cada perfil en su turno. 🟢 ≥15 pts/hr Óptimo · 🟡 8-15 Aceptable · 🔴 &lt;8 Bajo. Identifica operadores que necesitan apoyo o los que sobresalen.</div>
+              </div>
             </div>
+            <button onclick="showCiaInfo(1)" style="flex-shrink:0;background:rgba(45,212,191,0.1);border:1px solid rgba(45,212,191,0.25);color:#2dd4bf;border-radius:8px;padding:6px 12px;font-size:.6rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.2s;"
+              onmouseover="this.style.background='rgba(45,212,191,0.2)'" onmouseout="this.style.background='rgba(45,212,191,0.1)'">ⓘ Ver guía</button>
           </div>
           <!-- Búsqueda de operador -->
           <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -21286,11 +21294,16 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         <!-- TAB 2: CORTE DEL DÍA -->
         <div id="cia-panel-2" style="padding:20px;display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <div style="background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
             <div>
               <div style="font-size:.7rem;color:#fbbf24;font-weight:800;margin-bottom:2px;">📋 Corte del Día — Producción Neta por Perfil</div>
-              <div style="font-size:.55rem;color:#475569;">Datos en tiempo real desde Supabase · jornada actual</div>
+              <div style="font-size:.55rem;color:#475569;">Datos en tiempo real · Algoritmo DELTA-SHIFT™ · jornada actual</div>
             </div>
+            <button onclick="showCiaInfo(2)" style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#fbbf24;border-radius:8px;padding:5px 11px;font-size:.6rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.2s;"
+              onmouseover="this.style.background='rgba(251,191,36,0.2)'" onmouseout="this.style.background='rgba(251,191,36,0.1)'">ⓘ Ver guía</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:.55rem;color:#475569;">Busca por perfil o nombre del modelo</div>
             <div style="display:flex;gap:8px;align-items:center;">
               <input id="cia-corte-search" type="text" placeholder="Buscar perfil..."
                 style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px;color:#e2e8f0;font-size:.62rem;outline:none;width:160px;"
@@ -21307,9 +21320,13 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         <!-- TAB 3: PERFILES TABLEAU UK -->
         <div id="cia-panel-3" style="padding:20px;display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-            <div style="font-size:.7rem;color:#818cf8;font-weight:800;">📊 Perfiles Tableau UK — Producción Oficial</div>
-            <div id="cia-tableau-sync-time" style="font-size:.55rem;color:#475569;font-style:italic;">Sin datos</div>
+          <div style="background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:.7rem;color:#818cf8;font-weight:800;margin-bottom:1px;">📊 Perfiles Tableau UK — Producción Oficial</div>
+              <div style="font-size:.52rem;color:#475569;">Datos oficiales sincronizados desde Tableau UK · <span id="cia-tableau-sync-time" style="font-style:italic;">Sin datos</span></div>
+            </div>
+            <button onclick="showCiaInfo(3)" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:8px;padding:5px 11px;font-size:.6rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.2s;"
+              onmouseover="this.style.background='rgba(99,102,241,0.22)'" onmouseout="this.style.background='rgba(99,102,241,0.12)'">ⓘ Ver guía</button>
           </div>
           <!-- Consola -->
           <div style="margin-bottom:14px;">
@@ -21328,6 +21345,17 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
       </div><!-- /contenido tabs -->
     </div><!-- /tableau-panel-wrap -->
+
+    <!-- ── INFO MODAL CIA ── -->
+    <div id="cia-info-modal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);" onclick="if(event.target===this)closeCiaInfo()">
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#0f172a 0%,#1a2436 100%);border:1px solid rgba(99,102,241,0.3);border-radius:18px;width:min(560px,92vw);max-height:82vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.6),0 0 0 1px rgba(99,102,241,0.08);">
+        <div style="padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:linear-gradient(135deg,#0f172a,#1a2436);z-index:1;border-radius:18px 18px 0 0;">
+          <div id="cia-info-title" style="font-size:.88rem;color:#e2e8f0;font-weight:900;"></div>
+          <button onclick="closeCiaInfo()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;border-radius:7px;padding:4px 12px;font-size:.68rem;cursor:pointer;transition:.2s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">✕ Cerrar</button>
+        </div>
+        <div id="cia-info-body" style="padding:20px;font-size:.7rem;color:#94a3b8;line-height:1.7;"></div>
+      </div>
+    </div>
 
     <script>
       // ══════════════════════════════════════════════════════════════
@@ -21800,8 +21828,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                    onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
                 <div style="font-size:1.1rem;color:${tagColor};font-weight:900;min-width:24px;text-align:center;">🔥</div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${ibName}">${ibName}</div>
-                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:normal;word-break:break-word;line-height:1.4;" title="${ibName}">${ibName}</div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:normal;word-break:break-word;line-height:1.4;margin-top:2px;">
                     Código: <span style="font-family:monospace;color:#818cf8;">${ibId}</span> | Modelo: <span style="color:#94a3b8;">${item.modelo}</span> ${item.operador ? '· ' + item.operador : ''}
                   </div>
                   <div style="font-size:.55rem;color:#818cf8;font-weight:700;margin-top:2px;">
@@ -21838,8 +21866,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                    onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
                 <div style="font-size:0.75rem;color:${tagColor};font-weight:900;min-width:24px;text-align:center;">#${idx+1}</div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${ibName}">${ibName}</div>
-                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:normal;word-break:break-word;line-height:1.4;" title="${ibName}">${ibName}</div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:normal;word-break:break-word;line-height:1.4;margin-top:2px;">
                     Código: <span style="font-family:monospace;color:#64748b;">${ibId}</span> | Modelo: <span style="color:#94a3b8;">${item.modelo}</span>
                   </div>
                   <div style="font-size:.55rem;color:#64748b;margin-top:2px;">
@@ -21867,6 +21895,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             clientsMap[displayName] = {
               name: displayName,
               totalSpent: 0,
+              totalSent: 0,
+              totalReplies: 0,
               profiles: new Set(),
               operators: new Set(),
               codes: new Set(),
@@ -21876,6 +21906,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             };
           }
           clientsMap[displayName].totalSpent += item.revenue;
+          clientsMap[displayName].totalSent += (item.sent || 0);
+          clientsMap[displayName].totalReplies += (item.replies || 0);
           clientsMap[displayName].profiles.add(item.modelo);
           if (item.operador) clientsMap[displayName].operators.add(item.operador);
           clientsMap[displayName].codes.add(fmt.id);
@@ -21967,18 +21999,30 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 border = 'rgba(52,211,153,0.2)';
               }
               
+              let sent = 0, replies = 0, rateStr = '—';
+              if (client.source_id) {
+                const ibMatch = allIbs.find(x => x.source_id === client.source_id);
+                if (ibMatch) {
+                  sent = ibMatch.sent || 0;
+                  replies = ibMatch.replies || 0;
+                  if (sent > 0) rateStr = ((replies / sent) * 100).toFixed(1) + '%';
+                }
+              }
+              const ibMetrics = sent > 0 ? `<div style="font-size:.55rem;color:#818cf8;font-weight:700;margin-top:4px;">✉️ Env: <b style="color:#e2e8f0;">${sent}</b> | 💬 Resp: <b style="color:#e2e8f0;">${replies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rateStr}</b></div>` : '';
+
               return `
               <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:6px;transition:.2s;"
                    onmouseover="this.style.borderColor='${tagColor}'" onmouseout="this.style.borderColor='${border}'">
                 <div style="font-size:1.1rem;color:${tagColor};font-weight:900;">👑</div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:normal;word-break:break-word;line-height:1.4;">
                     ${client.name} <span style="font-size:0.55rem;color:#64748b;font-weight:700;">(ID: ${client.client_id})</span>
                   </div>
-                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:normal;word-break:break-word;line-height:1.4;margin-top:2px;">
                     Modelo: <span style="color:#94a3b8;">${client.modelo}</span> ${client.operador ? '| Operador: <span style="color:#38bdf8;">' + client.operador + '</span>' : ''} ${client.source_id ? '| Campaña: <span style="color:#fbbf24;">' + client.source_id + '</span>' : ''}
                   </div>
                   ${client.reason ? `<div style="font-size:.5rem;color:#64748b;font-style:italic;margin-top:1px;">Motivo: ${client.reason}</div>` : ''}
+                  ${ibMetrics}
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
                   <div style="font-size:.75rem;color:${tagColor};font-weight:900;">${client.resets} Resets</div>
@@ -22023,14 +22067,18 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               const modelList = [...client.profiles].join(', ');
               const opList = [...client.operators].join(', ') || 'N/A';
               
+              const rate = client.totalSent > 0 ? ((client.totalReplies / client.totalSent) * 100).toFixed(1) : '—';
+              const ibMetrics = client.totalSent > 0 ? `<div style="font-size:.55rem;color:#818cf8;font-weight:700;margin-top:4px;">✉️ Env: <b style="color:#e2e8f0;">${client.totalSent}</b> | 💬 Resp: <b style="color:#e2e8f0;">${client.totalReplies}</b> | 📊 Tasa: <b style="color:#2dd4bf;">${rate}%</b></div>` : '';
+              
               return `
               <div style="background:${tagBg};border:1px solid ${border};border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:6px;transition:.2s;">
                 <div style="font-size:0.9rem;color:${tagColor};font-weight:900;min-width:20px;text-align:center;">👤</div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${client.name}">${client.name}</div>
-                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:normal;word-break:break-word;line-height:1.4;" title="${client.name}">${client.name}</div>
+                  <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:normal;word-break:break-word;line-height:1.4;margin-top:2px;">
                     Código: <span style="font-family:monospace;color:#94a3b8;">${codeList}</span> | Modelos: <span style="color:#64748b;">${modelList}</span> ${client.operators.size > 0 ? '| Operador: <span style="color:#38bdf8;">' + opList + '</span>' : ''}
                   </div>
+                  ${ibMetrics}
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
                   <div style="font-size:.75rem;color:${tagColor};font-weight:900;">$${client.totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -22235,6 +22283,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         // Tendencia 7 días — gráfico de barras SVG
         ciaRenderTrend7();
+
+        // Actualizar KPI bar con totales de Tableau
+        ciaUpdateIbKpis();
       }
 
       function ciaRenderTrend7() {
@@ -22455,6 +22506,233 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
 
       // ─────────────────────────────────────────────────────────────
+      // INFO MODAL CIA — showCiaInfo / closeCiaInfo
+      // ─────────────────────────────────────────────────────────────
+      const _CIA_INFO_DATA = {
+        0: {
+          title: '🧊 Ice Breakers — Guía Completa',
+          body: `<div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿Qué es un Ice Breaker?</div>
+              <p style="margin:0;color:#94a3b8;">En plataformas de dating como Tableau UK, un <strong style="color:#e2e8f0;">Ice Breaker</strong> es el primer mensaje que un operador envía a un cliente para iniciar una conversación. Es literalmente "romper el hielo" — el primer contacto activo. Tableau UK registra automáticamente cuántos de estos mensajes generaron respuesta del cliente.</p>
+            </div>
+            <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:8px;font-size:.75rem;">📊 ¿Cómo se mide la efectividad?</div>
+              <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:#94a3b8;">
+                <li><strong style="color:#e2e8f0;">Enviados:</strong> Total de mensajes de apertura lanzados por el perfil.</li>
+                <li><strong style="color:#e2e8f0;">Respuestas:</strong> Cuántos clientes contestaron al mensaje.</li>
+                <li style="color:#34d399;font-weight:700;">Tasa de Respuesta = Respuestas ÷ Enviados × 100</li>
+              </ul>
+            </div>
+            <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#34d399;margin-bottom:8px;font-size:.75rem;">🎯 ¿Qué es una buena tasa?</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+                <div style="background:rgba(52,211,153,0.12);border-radius:8px;padding:10px;">
+                  <div style="font-size:1rem;font-weight:900;color:#34d399;">&gt;30%</div>
+                  <div style="font-size:.58rem;color:#64748b;margin-top:2px;">🔥 Excelente</div>
+                </div>
+                <div style="background:rgba(251,191,36,0.12);border-radius:8px;padding:10px;">
+                  <div style="font-size:1rem;font-weight:900;color:#fbbf24;">15-30%</div>
+                  <div style="font-size:.58rem;color:#64748b;margin-top:2px;">🟡 Normal</div>
+                </div>
+                <div style="background:rgba(248,113,113,0.12);border-radius:8px;padding:10px;">
+                  <div style="font-size:1rem;font-weight:900;color:#f87171;">&lt;15%</div>
+                  <div style="font-size:.58rem;color:#64748b;margin-top:2px;">🔴 Bajo</div>
+                </div>
+              </div>
+            </div>
+            <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">💡 ¿Cómo usar esta información?</div>
+              <p style="margin:0;color:#94a3b8;">Los perfiles con <strong style="color:#e2e8f0;">alta tasa de respuesta</strong> tienen clientes activos y receptivos — son perfiles VIP que deben priorizarse. Los de <strong style="color:#f87171;">baja tasa</strong> indican clientes fríos o mensajes sin impacto. Considera rotar el tipo de Ice Breaker, cambiar la categoría del mensaje (Real love, Friendship, Hot talks) o explorar un horario diferente de envío.</p>
+            </div>
+            <div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px;font-size:.65rem;color:#475569;">
+              💡 <strong style="color:#64748b;">Tip:</strong> Selecciona un perfil en el selector de arriba para ver el desglose exacto de sus campañas de Ice Breaker con revenue, enviados y tasa de respuesta individuales.
+            </div>
+          </div>`
+        },
+        1: {
+          title: '⏱️ Tiempos de Respuesta — Velocidad de Producción',
+          body: `<div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">¿Qué mide este módulo?</div>
+              <p style="margin:0;color:#94a3b8;">Mide la <strong style="color:#e2e8f0;">velocidad de producción</strong> de cada operador en <strong style="color:#2dd4bf;">puntos por hora (pts/hr)</strong>. Es un indicador en tiempo real de qué tan activo y eficiente está siendo cada operador durante su turno.</p>
+            </div>
+            <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#34d399;margin-bottom:10px;font-size:.75rem;">🚦 Semáforo de Velocidad</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(52,211,153,0.08);border-radius:8px;">
+                  <span style="color:#34d399;font-weight:900;min-width:70px;font-size:.75rem;">≥ 15 pts/hr</span>
+                  <span style="background:rgba(52,211,153,0.12);color:#34d399;padding:3px 10px;border-radius:4px;font-size:.62rem;font-weight:700;">🟢 ÓPTIMO — Ritmo excelente, mantener</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(251,191,36,0.08);border-radius:8px;">
+                  <span style="color:#fbbf24;font-weight:900;min-width:70px;font-size:.75rem;">8-15 pts/hr</span>
+                  <span style="background:rgba(251,191,36,0.12);color:#fbbf24;padding:3px 10px;border-radius:4px;font-size:.62rem;font-weight:700;">🟡 NORMAL — Ritmo aceptable</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(248,113,113,0.08);border-radius:8px;">
+                  <span style="color:#f87171;font-weight:900;min-width:70px;font-size:.75rem;">&lt; 8 pts/hr</span>
+                  <span style="background:rgba(248,113,113,0.12);color:#f87171;padding:3px 10px;border-radius:4px;font-size:.62rem;font-weight:700;">🔴 BAJO — Requiere atención inmediata</span>
+                </div>
+              </div>
+            </div>
+            <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">💡 ¿Cómo usarlo?</div>
+              <p style="margin:0;color:#94a3b8;">Filtra por turno (Mañana/Tarde/Noche) para ver quién está siendo más productivo en este momento. Usa el buscador para localizar un operador o perfil específico. Esta métrica ayuda a identificar operadores que necesitan apoyo o que merecen reconocimiento.</p>
+            </div>
+          </div>`
+        },
+        2: {
+          title: '📋 Corte del Día — Producción Neta',
+          body: `<div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">¿Qué es el Corte del Día?</div>
+              <p style="margin:0;color:#94a3b8;">Es un <strong style="color:#e2e8f0;">resumen en tiempo real</strong> de cuántos puntos ha producido cada perfil en la jornada actual. Se calcula con el algoritmo DELTA-SHIFT™.</p>
+            </div>
+            <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:8px;font-size:.75rem;">📐 Algoritmo DELTA-SHIFT™</div>
+              <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;font-family:monospace;font-size:.62rem;color:#2dd4bf;margin-bottom:8px;">
+                puntos_neto = puntos_total_actual − puntos_baseline_inicio_turno
+              </div>
+              <p style="margin:0;color:#94a3b8;">Cada perfil comienza el turno con <strong style="color:#34d399;">0 puntos netos</strong>. El sistema registra el total acumulado al inicio y va midiendo el crecimiento. Permite comparar Mañana vs Tarde vs Noche de forma justa.</p>
+            </div>
+            <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">💡 Uso práctico</div>
+              <p style="margin:0;color:#94a3b8;">Revisa el corte antes de finalizar un turno para verificar que cada perfil tenga producción registrada. Si un perfil aparece en 0, puede indicar que el operador no estuvo activo o hay un problema de sincronización con el watcher.</p>
+            </div>
+          </div>`
+        },
+        3: {
+          title: '📊 Perfiles Tableau UK — Datos Oficiales',
+          body: `<div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿Qué es Tableau UK?</div>
+              <p style="margin:0;color:#94a3b8;">Tableau UK es el <strong style="color:#e2e8f0;">sistema oficial de reportes</strong> de la plataforma de dating. Muestra datos verificados por perfil: ingresos en dólares (revenue), campañas de Ice Breakers activas, métricas de alcance y source IDs.</p>
+            </div>
+            <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">📡 ¿Cómo se sincroniza?</div>
+              <p style="margin:0;color:#94a3b8;">El botón <strong style="color:#818cf8;">🚀 Sync GitHub</strong> del header lanza un proceso automatizado que extrae los datos de Tableau y los guarda en la base de datos. El sync corre automáticamente cada 6 horas vía GitHub Actions.</p>
+            </div>
+            <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">🔍 Consola de Auditoría</div>
+              <p style="margin:0;color:#94a3b8;">La consola muestra el estado de la conexión con Tableau en tiempo real. Si ves errores, puede indicar que las credenciales expiraron o que la sesión fue interrumpida. Usa <strong style="color:#e2e8f0;">Actualizar</strong> para reintentar.</p>
+            </div>
+          </div>`
+        }
+      };
+
+      function showCiaInfo(tabIdx) {
+        const info = _CIA_INFO_DATA[tabIdx];
+        if (!info) return;
+        const modal = document.getElementById('cia-info-modal');
+        const title = document.getElementById('cia-info-title');
+        const body  = document.getElementById('cia-info-body');
+        if (!modal || !title || !body) return;
+        title.innerHTML = info.title;
+        body.innerHTML  = info.body;
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeCiaInfo() {
+        const modal = document.getElementById('cia-info-modal');
+        if (modal) modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+
+      function showSmartInfo(moduleId) {
+        const infoMap = {
+          'ranking': {
+            title: '🏆 Control de Presencia Real-Time',
+            html: '<b style="color:#38bdf8;">¿Qué es?</b><br>Es el Ranking Global que monitorea la conexión y productividad en tiempo real de todos los operadores del turno.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Utiliza la sincronización <i>Zero-Wait</i> con Supabase para listar a los operadores activos. Los puntos se calculan leyendo los cortes ingresados (Puntos netos = actuales - anteriores) y se comparan contra las metas.'
+          },
+          'corte': {
+            title: '⏱️ Corte en Vivo (Resumen)',
+            html: '<b style="color:#2dd4bf;">¿Qué es?</b><br>Muestra el acumulado de puntos generados globalmente en la agencia durante el turno activo.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Recopila los puntos netos proyectados por cada operador y perfil logueado en tiempo real y calcula su equivalencia en ingresos (COP).'
+          },
+          'alertas': {
+            title: '🚨 Alertas Inteligentes',
+            html: '<b style="color:#f87171;">¿Qué es?</b><br>Un sistema de diagnóstico temprano que detecta a operadores con baja productividad o desconexiones prolongadas.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Mide el pulso de puntos en intervalos de 5 y 10 minutos. Si un operador pasa mucho tiempo sin generar puntos o cae por debajo del 30% de eficiencia, se emite una alerta crítica.'
+          },
+          'clientes': {
+            title: '👥 Clientes Activos',
+            html: '<b style="color:#c084fc;">¿Qué es?</b><br>Rastrea los clientes que más están interactuando y enviando créditos.<br><br><b style="color:#c084fc;">¿Cómo funciona?</b><br>Identifica el patrón de gasto y trayectoria de los clientes más activos, permitiendo segmentar el engagement.'
+          },
+          'campanas': {
+            title: '📊 Efectividad de Campañas',
+            html: '<b style="color:#fbbf24;">¿Qué es?</b><br>Muestra el rendimiento de las campañas o tags para atraer usuarios.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Clasifica cuáles tags trajeron usuarios VIP y cuáles no están convirtiendo.'
+          },
+          'vip': {
+            title: '💎 Perfiles VIP',
+            html: '<b style="color:#34d399;">¿Qué es?</b><br>Identifica los perfiles operativos que tienen mejor rendimiento.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Muestra los perfiles que promedian más de $10 USD diarios, siendo los más valiosos de la agencia y los que no deberían apagarse o descuidarse.'
+          },
+          'arotar': {
+            title: '⚙️ Perfiles a Rotar',
+            html: '<b style="color:#f87171;">¿Qué es?</b><br>Lista los perfiles con bajo rendimiento que requieren atención inmediata.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Resalta los perfiles que promedian menos de $10 USD diarios. Indica que sus estrategias (Ice Breakers, tags, horario) deben ser modificadas o el perfil rotado.'
+          },
+          'crecimiento': {
+            title: '📈 Análisis de Crecimiento',
+            html: '<b style="color:#2dd4bf;">¿Qué es?</b><br>Mide el ritmo de crecimiento de la agencia comparando la velocidad de producción actual contra meses anteriores.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Utiliza la métrica de <i>Puntos por Día (Ritmo)</i>. En lugar de comparar totales brutos (que engañan al inicio del mes), compara la velocidad de producción diaria. Esto permite proyectar si la agencia ganará más o menos que el mes pasado al finalizar el ciclo.<br><br><b style="color:#f1f5f9;">🚗 Analogía del Carro:</b><br>Imaginen que la agencia es un carro en la autopista:<br>• <b>Velocidad pasada:</b> Puntos que hacían por día el mes pasado.<br>• <b>Velocidad actual:</b> Puntos que hacen por día este mes.<br>Más velocidad diaria = cubre costos fijos antes y maximiza la ganancia neta.'
+          },
+          'cia-pts': {
+            title: '📊 Puntos Hoy (Central)',
+            html: '<b style="color:#2dd4bf;">¿De dónde sale?</b><br>Suma total de los puntos generados por <b>todos los operadores activos</b> en el día actual.<br><br><b style="color:#2dd4bf;">¿Para qué sirve?</b><br>Es la métrica de tracción principal. Muestra exactamente cuánto valor está aportando la agencia hoy.<br><br><b style="color:#2dd4bf;">¿Cómo nos ayuda?</b><br>Si detectas que a mitad del día la cifra está baja comparada con tu promedio, puedes intervenir de inmediato, rotar perfiles o motivar al equipo para "salvar el día".'
+          },
+          'cia-pph': {
+            title: '⚡ Puntos por Hora (Velocidad)',
+            html: '<b style="color:#818cf8;">¿De dónde sale?</b><br>Divide los "Puntos Hoy" entre el número de horas transcurridas en el turno activo.<br><br><b style="color:#818cf8;">¿Para qué sirve?</b><br>Actúa como el velocímetro de la agencia. Te dice el ritmo al que entra el dinero.<br><br><b style="color:#818cf8;">¿Cómo nos ayuda?</b><br>Permite proyectar el cierre del día. Si tu meta diaria son 5,000 pts en 10 horas, sabes que necesitas mantener un Pts/Hora de 500. Si cae a 200, ¡hay que tomar acción!'
+          },
+          'cia-ops': {
+            title: '👥 Operadores Activos',
+            html: '<b style="color:#fbbf24;">¿De dónde sale?</b><br>Conteo en tiempo real de los perfiles de operadores que han registrado cortes o actividad hoy.<br><br><b style="color:#fbbf24;">¿Para qué sirve?</b><br>Control de asistencia y ocupación del turno.<br><br><b style="color:#fbbf24;">¿Cómo nos ayuda?</b><br>Garantiza que no haya puestos vacíos. Si esperas 5 operadores y solo hay 3, estás perdiendo potencial de facturación.'
+          },
+          'cia-top': {
+            title: '🏅 Top Perfil',
+            html: '<b style="color:#34d399;">¿De dónde sale?</b><br>Rastrea al perfil y operador que más puntos ha generado en el día actual.<br><br><b style="color:#34d399;">¿Para qué sirve?</b><br>Identificar el motor de la agencia hoy.<br><br><b style="color:#34d399;">¿Cómo nos ayuda?</b><br>Permite reconocer el buen desempeño (motivación) o analizar qué estrategia está usando ese perfil (tags, mensajes) para replicarla en los demás.'
+          },
+          'cia-mes': {
+            title: '📅 Mes Total (Acumulado)',
+            html: '<b style="color:#c084fc;">¿De dónde sale?</b><br>Sincronización directa con Tableau UK. Representa el acumulado real validado del mes.<br><br><b style="color:#c084fc;">¿Para qué sirve?</b><br>Es el "marcador final" oficial. Es el valor contra el cual se calcula tu rentabilidad mensual y comisiones.<br><br><b style="color:#c084fc;">¿Cómo nos ayuda?</b><br>Mantener este número a la vista ayuda a todo el equipo a no perder el enfoque en la Meta Mensual.'
+          }
+        };
+        const data = infoMap[moduleId];
+        if(data && typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: data.title,
+            html: `<div style="text-align:left; font-size:0.85rem; color:#e2e8f0; line-height:1.5;">${data.html}</div>`,
+            background: '#0f172a',
+            color: '#f8fafc',
+            confirmButtonColor: '#6366f1'
+          });
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // KPI BAR ICE BREAKERS — actualiza enviados/respuestas/tasa
+      // ─────────────────────────────────────────────────────────────
+      function ciaUpdateIbKpis() {
+        let totalSent = 0, totalReplies = 0;
+        Object.values(_dpTableauData || {}).forEach(entry => {
+          const dj  = entry.data_json || {};
+          const ibs = dj.icebreakers || [];
+          if (ibs.length > 0) {
+            ibs.forEach(ib => {
+              totalSent    += Number(ib.sent    || 0);
+              totalReplies += Number(ib.replies || 0);
+            });
+          } else {
+            totalSent    += Number(dj.sent    || dj.Sent    || 0);
+            totalReplies += Number(dj.replies || dj.Replies || 0);
+          }
+        });
+        const avgRate = totalSent > 0 ? ((totalReplies / totalSent) * 100).toFixed(1) : '—';
+        const sentEl    = document.getElementById('cia-ib-total-sent');
+        const replEl    = document.getElementById('cia-ib-total-replies');
+        const rateEl    = document.getElementById('cia-ib-avg-rate');
+        if (sentEl)  sentEl.textContent  = totalSent > 0 ? totalSent.toLocaleString('es-CO') : '—';
+        if (replEl)  replEl.textContent  = totalReplies > 0 ? totalReplies.toLocaleString('es-CO') : '—';
+        if (rateEl)  rateEl.textContent  = totalSent > 0 ? avgRate + '%' : '—%';
+      }
+
+      // ─────────────────────────────────────────────────────────────
       // RENDER TABLEAU PROFILES (pestaña 3 — compatibilidad total)
       // ─────────────────────────────────────────────────────────────
       function ciaRenderTableauProfiles() {
@@ -22670,538 +22948,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     </script>
   </div>
 
-  <!-- TAB 6: GOL CARACOL -->
-  <div id="tab-golcaracol" class="tab-content" style="display:none; padding-bottom: 40px; max-width:1200px; margin:20px auto; padding-top:20px;">
-    
-    <!-- HEADER -->
-    <div class="gol-header" style="background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(99,102,241,0.08)); border:1px solid rgba(16,185,129,0.3); border-radius:16px; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <div style="width:36px; height:36px; background:linear-gradient(135deg,#10b981,#3b82f6); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; box-shadow:0 4px 12px rgba(16,185,129,0.4);">⚽</div>
-        <div>
-          <div style="font-weight:900; font-size:1.1rem; color:#e2e8f0; letter-spacing:0.3px;">Gol Caracol & RCN Live</div>
-          <div style="font-size:0.58rem; color:#a7f3d0; font-weight:600; text-transform:uppercase; letter-spacing:1px;">Marcador y Transmisión en Vivo — Copa América & Eliminatorias</div>
-        </div>
-        <span class="live-badge" id="gol-global-live-badge" style="display:none;">
-          <span class="live-dot"></span> EN VIVO
-        </span>
-      </div>
-      <div style="display:flex; align-items:center; gap:10px;">
-        <button onclick="refreshGolCaracol()" class="btn-refresh-gol" style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#34d399; border-radius:8px; padding:6px 14px; font-size:.65rem; font-weight:700; cursor:pointer; transition:.2s; display:flex; align-items:center; gap:5px;">
-          <span>⟳</span> Actualizar Datos
-        </button>
-      </div>
-    </div>
-
-    <!-- MAIN GRID -->
-    <div style="display: grid; grid-template-columns: 7fr 5fr; gap: 20px; margin-bottom: 20px;" class="gol-layout-grid">
-      
-      <!-- LEFT COLUMN: PLAYER & CHANNEL SELECTOR -->
-      <div style="display:flex; flex-direction:column; gap:15px;">
-        <div style="background:rgba(15,23,42,0.65); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:15px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
-            <div style="font-size:0.75rem; color:#34d399; font-weight:800; display:flex; align-items:center; gap:6px;">
-              📺 Caracol TV - Señal en Vivo
-            </div>
-          </div>
-          <div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius:12px; background:#000; border:1px solid rgba(255,255,255,0.05);">
-            <iframe id="gol-caracol-player" data-src="https://www.youtube.com/embed/live_stream?channel=UC7kL16W4V4d3p6hHj1Q479g&autoplay=1&mute=0" src="about:blank" style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-          </div>
-          <div style="font-size:0.55rem; color:#64748b; margin-top:8px; text-align:center; font-style:italic;">
-            Señal vía YouTube oficial de Caracol TV — Si hay corte, verifica que haya transmisión activa en el canal.
-          </div>
-          <div style="display:flex; justify-content:center; gap:10px; margin-top:10px; flex-wrap:wrap; margin-bottom:5px;">
-            <a id="gol-btn-official-link" href="https://www.youtube.com/@caracoltv/streams" target="_blank" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.35); color:#f87171; border-radius:8px; padding:8px 16px; font-size:0.68rem; font-weight:700; text-decoration:none; display:flex; align-items:center; gap:6px; transition:0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">
-              ▶ Ver en YouTube (Caracol TV)
-            </a>
-            <a href="https://www.caracoltv.com/senal-vivo" target="_blank" style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.25); color:#6ee7b7; border-radius:8px; padding:8px 14px; font-size:0.65rem; font-weight:600; text-decoration:none; display:flex; align-items:center; gap:5px; transition:0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.2)'" onmouseout="this.style.background='rgba(16,185,129,0.12)'">
-              📺 Web Oficial Caracol
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <!-- RIGHT COLUMN: REALTIME SCOREBOARD -->
-      <div style="display:flex; flex-direction:column; gap:15px;">
-        
-        <!-- SEARCH & FILTERS -->
-        <div style="background:rgba(15,23,42,0.65); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:15px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);">
-          <input type="text" id="gol-search-input" oninput="filterGolMatches()" placeholder="🔍 Buscar selección (ej: Colombia)..." style="width:100%; background:#0f172a; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 12px; font-size:0.7rem; color:#e2e8f0; margin-bottom:12px; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='rgba(16,185,129,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.08)'">
-          
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button onclick="setGolFilter('todos')" class="gol-filter-btn active" id="gol-filt-todos" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:#94a3b8; border-radius:6px; padding:4px 10px; font-size:0.6rem; font-weight:700; cursor:pointer;">Todos</button>
-            <button onclick="setGolFilter('en_vivo')" class="gol-filter-btn" id="gol-filt-en_vivo" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:#94a3b8; border-radius:6px; padding:4px 10px; font-size:0.6rem; font-weight:700; cursor:pointer;">🔴 En Vivo</button>
-            <button onclick="setGolFilter('proximo')" class="gol-filter-btn" id="gol-filt-proximo" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:#94a3b8; border-radius:6px; padding:4px 10px; font-size:0.6rem; font-weight:700; cursor:pointer;">📅 Próximos</button>
-            <button onclick="setGolFilter('finalizado')" class="gol-filter-btn" id="gol-filt-finalizado" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:#94a3b8; border-radius:6px; padding:4px 10px; font-size:0.6rem; font-weight:700; cursor:pointer;">✅ Finalizados</button>
-          </div>
-        </div>
-
-        <!-- MATCHES CONTAINER -->
-        <div id="gol-matches-list" style="display:flex; flex-direction:column; gap:12px; max-height:480px; overflow-y:auto; padding-right:4px;">
-          <!-- Rendered dynamically -->
-        </div>
-
-      </div>
-    </div>
-
-    <!-- ADMIN PANEL / CONTROLS (Only visible for admin/monitor) -->
-    <div id="gol-admin-section" style="background:rgba(15,23,42,0.65); border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:18px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); margin-top:20px; display:none;">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:10px; margin-bottom:15px;">
-        <div style="font-size:0.78rem; color:#fbbf24; font-weight:900; display:flex; align-items:center; gap:8px;">
-          ⚙️ Panel de Administración Gol Caracol
-        </div>
-        <button onclick="addGolMatch()" style="background:#fbbf24; border:none; color:#1e1b4b; font-weight:800; font-size:0.62rem; padding:4px 10px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:4px;">
-          ➕ Añadir Partido
-        </button>
-      </div>
-
-      <div id="gol-match-editor-rows" style="display:flex; flex-direction:column; gap:12px; margin-bottom:15px;">
-        <!-- Rows rendered dynamically -->
-      </div>
-
-      <div style="display:flex; justify-content:flex-end;">
-        <button onclick="saveAllGolMatches()" style="background:linear-gradient(135deg,#10b981,#059669); border:none; color:#fff; font-weight:800; font-size:0.7rem; padding:8px 20px; border-radius:8px; cursor:pointer; box-shadow:0 4px 12px rgba(16,185,129,0.3); transition:transform 0.1s;" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform='scale(1)'">
-          💾 Guardar en Base de Datos (Realtime)
-        </button>
-      </div>
-    </div>
-
-  </div>
-
-  <style>
-    .btn-refresh-gol:hover {
-      background: rgba(16, 185, 129, 0.25) !important;
-    }
-    .gol-filter-btn.active {
-      background: rgba(16, 185, 129, 0.2) !important;
-      border-color: rgba(16, 185, 129, 0.4) !important;
-      color: #34d399 !important;
-    }
-    .gol-match-card {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 12px 16px;
-      transition: all 0.2s ease;
-      cursor: pointer;
-    }
-    .gol-match-card:hover {
-      border-color: rgba(16, 185, 129, 0.3);
-      background: rgba(15, 23, 42, 0.8);
-    }
-    .gol-match-card.gol-live-active {
-      background: linear-gradient(145deg, rgba(15,23,42,0.8), rgba(239,68,68,0.05));
-      border-color: rgba(239,68,68,0.25);
-    }
-    .gol-match-card.gol-live-active:hover {
-      border-color: rgba(239,68,68,0.4);
-    }
-    .gol-team-flag {
-      font-size: 1.3rem;
-    }
-    .gol-team-name {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: #e2e8f0;
-    }
-    .gol-score-val {
-      font-size: 1rem;
-      font-weight: 900;
-      background: rgba(255, 255, 255, 0.04);
-      padding: 3px 10px;
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: #34d399;
-      min-width: 25px;
-      text-align: center;
-    }
-    .gol-match-card.gol-live-active .gol-score-val {
-      background: rgba(239, 68, 68, 0.1);
-      color: #f87171;
-      border-color: rgba(239, 68, 68, 0.2);
-    }
-    .gol-evt-badge {
-      font-size: 0.55rem;
-      color: #64748b;
-    }
-  </style>
-
-  <script>
-    // Global state for Gol Caracol tab
-    let golActiveFilter = 'todos';
-    let golMatches = [];
-    let golIntervalId = null;
-
-    const golDefaultMatches = [
-      {
-        id: 1,
-        teamA: 'Colombia',
-        flagA: '🇨🇴',
-        teamB: 'Ecuador',
-        flagB: '🇪🇨',
-        scoreA: 0,
-        scoreB: 0,
-        status: 'proximo',
-        time: '19:30',
-        date: 'Hoy 19:30',
-        channel: 'Caracol TV / RCN',
-        events: []
-      },
-      {
-        id: 2,
-        teamA: 'Colombia',
-        flagA: '🇨🇴',
-        teamB: 'Uruguay',
-        flagB: '🇺🇾',
-        scoreA: 1,
-        scoreB: 0,
-        status: 'en_vivo',
-        time: '74\'',
-        date: 'En vivo ahora',
-        channel: 'Caracol TV',
-        events: [
-          { type: 'goal', player: '⚽ Jefferson Lerma 39\'' },
-          { type: 'red', player: '🟥 Daniel Muñoz 45+1\'' }
-        ]
-      },
-      {
-        id: 3,
-        teamA: 'Colombia',
-        flagA: '🇨🇴',
-        teamB: 'Brasil',
-        flagB: '🇧🇷',
-        scoreA: 2,
-        scoreB: 1,
-        status: 'finalizado',
-        time: 'Final',
-        date: '17 Nov 2026',
-        channel: 'Caracol TV / RCN',
-        events: [
-          { type: 'goal', player: '⚽ Martinelli 4\'' },
-          { type: 'goal', player: '⚽ Luis Díaz 75\'' },
-          { type: 'goal', player: '⚽ Luis Díaz 79\'' }
-        ]
-      },
-      {
-        id: 4,
-        teamA: 'Argentina',
-        flagA: '🇦🇷',
-        teamB: 'Canadá',
-        flagB: '🇨🇦',
-        scoreA: 2,
-        scoreB: 0,
-        status: 'finalizado',
-        time: 'Final',
-        date: '20 Jun 2026',
-        channel: 'Caracol TV / RCN',
-        events: [
-          { type: 'goal', player: '⚽ Julián Álvarez 49\'' },
-          { type: 'goal', player: '⚽ Lautaro Martínez 88\'' }
-        ]
-      }
-    ];
-
-    async function initGolCaracol() {
-      // Show admin section if roles match
-      const adminSec = document.getElementById('gol-admin-section');
-      if (adminSec) {
-        if (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor')) {
-          adminSec.style.display = 'block';
-        } else {
-          adminSec.style.display = 'none';
-        }
-      }
-
-      await refreshGolCaracol();
-
-      // Start auto-refresh interval
-      if (golIntervalId) clearInterval(golIntervalId);
-      golIntervalId = setInterval(async () => {
-        // Only fetch if tab is active
-        const tab = document.getElementById('tab-golcaracol');
-        if (tab && tab.style.display !== 'none') {
-          await refreshGolCaracol(true);
-        }
-      }, 10000);
-    }
-
-    async function refreshGolCaracol(isSilent = false) {
-      if (typeof _sb === 'undefined') return;
-
-      try {
-        const { data, error } = await _sb.from('kv_store').select('value').eq('key', 'rr_gol_caracol_matches').maybeSingle();
-        if (!error && data && data.value) {
-          golMatches = JSON.parse(data.value);
-        } else {
-          if (golMatches.length === 0) {
-            golMatches = JSON.parse(JSON.stringify(golDefaultMatches));
-            await saveAllGolMatches(true);
-          }
-        }
-      } catch (e) {
-        console.error("Error fetching Gol matches:", e);
-        if (golMatches.length === 0) {
-          golMatches = JSON.parse(JSON.stringify(golDefaultMatches));
-        }
-      }
-
-      renderGolMatches();
-      renderGolAdminEditor();
-    }
-
-    function changeGolChannel(url) {
-      const player = document.getElementById('gol-caracol-player');
-      if (player) {
-        player.src = url;
-        player.setAttribute('data-src', url);
-      }
-      const offBtn = document.getElementById('gol-btn-official-link');
-      if (offBtn) {
-        if (url.includes('youtube')) {
-          offBtn.href = 'https://www.youtube.com/@caracoltv/streams';
-          offBtn.textContent = '▶ Ver en YouTube (Caracol TV)';
-          offBtn.style.display = 'flex';
-        } else if (url.includes('caracol')) {
-          offBtn.href = 'https://www.caracoltv.com/senal-vivo';
-          offBtn.textContent = '📺 Web Oficial Caracol';
-          offBtn.style.display = 'flex';
-        } else if (url.includes('rcn')) {
-          offBtn.href = 'https://www.canalrcn.com/senal-en-vivo/';
-          offBtn.textContent = '📺 Web Oficial RCN';
-          offBtn.style.display = 'flex';
-        } else {
-          offBtn.style.display = 'none';
-        }
-      }
-    }
-
-    function setGolFilter(filter) {
-      golActiveFilter = filter;
-      document.querySelectorAll('.gol-filter-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
-      const actBtn = document.getElementById('gol-filt-' + filter);
-      if (actBtn) actBtn.classList.add('active');
-      renderGolMatches();
-    }
-
-    function filterGolMatches() {
-      renderGolMatches();
-    }
-
-    function renderGolMatches() {
-      const listContainer = document.getElementById('gol-matches-list');
-      if (!listContainer) return;
-
-      const searchVal = (document.getElementById('gol-search-input')?.value || '').toLowerCase();
-      let filtered = golMatches;
-
-      // Filter by Status
-      if (golActiveFilter !== 'todos') {
-        filtered = filtered.filter(m => m.status === golActiveFilter);
-      }
-
-      // Filter by Search
-      if (searchVal) {
-        filtered = filtered.filter(m => 
-          m.teamA.toLowerCase().includes(searchVal) || 
-          m.teamB.toLowerCase().includes(searchVal)
-        );
-      }
-
-      // Check if any matches are Live
-      const hasLive = golMatches.some(m => m.status === 'en_vivo');
-      const globalBadge = document.getElementById('gol-global-live-badge');
-      if (globalBadge) {
-        globalBadge.style.display = hasLive ? 'inline-flex' : 'none';
-      }
-
-      if (filtered.length === 0) {
-        listContainer.innerHTML = `
-          <div style="color:#64748b; font-size:.65rem; text-align:center; padding:30px;">
-            No se encontraron partidos.
-          </div>
-        `;
-        return;
-      }
-
-      // Sort: live first, then upcoming, then finished
-      const statusWeight = { 'en_vivo': 1, 'proximo': 2, 'finalizado': 3 };
-      filtered.sort((a, b) => (statusWeight[a.status] || 9) - (statusWeight[b.status] || 9));
-
-      listContainer.innerHTML = filtered.map(m => {
-        const isLive = m.status === 'en_vivo';
-        const isFinished = m.status === 'finalizado';
-        
-        let statusHtml = '';
-        if (isLive) {
-          statusHtml = `
-            <span class="live-badge">
-              <span class="live-dot"></span> EN VIVO · ${m.time}
-            </span>
-          `;
-        } else if (isFinished) {
-          statusHtml = `<span style="font-size:0.55rem; background:rgba(255,255,255,0.05); color:#94a3b8; padding:2px 6px; border-radius:4px; font-weight:700;">FINALIZADO</span>`;
-        } else {
-          statusHtml = `<span style="font-size:0.55rem; background:rgba(251,191,36,0.15); color:#fbbf24; padding:2px 6px; border-radius:4px; font-weight:700;">📅 ${m.time}</span>`;
-        }
-
-        const eventsHtml = (m.events || []).map(e => `
-          <div class="gol-evt-badge" style="display:flex; align-items:center; gap:4px; margin-top:2px;">
-            ${e.player}
-          </div>
-        `).join('');
-
-        return `
-          <div class="gol-match-card ${isLive ? 'gol-live-active' : ''}">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              ${statusHtml}
-              <span class="channel-pill">${m.channel || 'Caracol TV'}</span>
-            </div>
-            
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-              <div style="display:flex; align-items:center; gap:8px; width:40%;">
-                <span class="gol-team-flag">${m.flagA}</span>
-                <span class="gol-team-name">${m.teamA}</span>
-              </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span class="gol-score-val">${m.scoreA}</span>
-                <span style="font-size:.65rem; color:#475569; font-weight:800;">VS</span>
-                <span class="gol-score-val">${m.scoreB}</span>
-              </div>
-              <div style="display:flex; align-items:center; gap:8px; width:40%; justify-content:flex-end;">
-                <span class="gol-team-name" style="text-align:right;">${m.teamB}</span>
-                <span class="gol-team-flag">${m.flagB}</span>
-              </div>
-            </div>
-
-            ${eventsHtml ? `<div style="border-top:1px solid rgba(255,255,255,0.04); padding-top:6px; margin-top:6px;">${eventsHtml}</div>` : ''}
-          </div>
-        `;
-      }).join('');
-    }
-
-    function renderGolAdminEditor() {
-      const container = document.getElementById('gol-match-editor-rows');
-      if (!container) return;
-
-      container.innerHTML = golMatches.map((m, index) => {
-        const evtsStr = (m.events || []).map(e => e.player).join(', ');
-        return `
-          <div style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px; display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)) 40px; gap:8px; align-items:center;" data-index="${index}">
-            <div style="display:flex; gap:4px;">
-              <input type="text" placeholder="Bandera A" value="${m.flagA}" onchange="updateGolLocalMatchField(${index}, 'flagA', this.value)" style="width:30px; text-align:center; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; font-size:.65rem;">
-              <input type="text" placeholder="Selección A" value="${m.teamA}" onchange="updateGolLocalMatchField(${index}, 'teamA', this.value)" style="flex:1; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:3px 6px; font-size:.65rem;">
-            </div>
-            
-            <div style="display:flex; gap:4px; justify-content:center;">
-              <input type="number" placeholder="0" value="${m.scoreA}" onchange="updateGolLocalMatchField(${index}, 'scoreA', Number(this.value))" style="width:35px; text-align:center; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; font-size:.65rem;">
-              <span style="align-self:center; font-size:.6rem; color:#475569;">-</span>
-              <input type="number" placeholder="0" value="${m.scoreB}" onchange="updateGolLocalMatchField(${index}, 'scoreB', Number(this.value))" style="width:35px; text-align:center; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; font-size:.65rem;">
-            </div>
-
-            <div style="display:flex; gap:4px;">
-              <input type="text" placeholder="Selección B" value="${m.teamB}" onchange="updateGolLocalMatchField(${index}, 'teamB', this.value)" style="flex:1; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:3px 6px; font-size:.65rem;">
-              <input type="text" placeholder="Bandera B" value="${m.flagB}" onchange="updateGolLocalMatchField(${index}, 'flagB', this.value)" style="width:30px; text-align:center; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; font-size:.65rem;">
-            </div>
-
-            <div>
-              <select onchange="updateGolLocalMatchField(${index}, 'status', this.value)" style="width:100%; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:3px; font-size:.65rem;">
-                <option value="proximo" ${m.status === 'proximo' ? 'selected' : ''}>Próximo</option>
-                <option value="en_vivo" ${m.status === 'en_vivo' ? 'selected' : ''}>En Vivo</option>
-                <option value="finalizado" ${m.status === 'finalizado' ? 'selected' : ''}>Finalizado</option>
-              </select>
-            </div>
-
-            <div>
-              <input type="text" placeholder="Minuto / Fecha" value="${m.time}" onchange="updateGolLocalMatchField(${index}, 'time', this.value)" style="width:100%; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:3px 6px; font-size:.65rem;">
-            </div>
-
-            <div>
-              <input type="text" placeholder="Canal" value="${m.channel}" onchange="updateGolLocalMatchField(${index}, 'channel', this.value)" style="width:100%; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:3px 6px; font-size:.65rem;">
-            </div>
-
-            <div style="grid-column: 1 / -2;">
-              <input type="text" placeholder="Eventos (ej: ⚽ Luis Díaz 75', 🟥 Daniel Muñoz 45')" value="${evtsStr}" onchange="updateGolLocalMatchEvents(${index}, this.value)" style="width:100%; background:#1e293b; border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:4px; padding:3px 6px; font-size:.65rem;">
-            </div>
-
-            <div style="text-align:right;">
-              <button onclick="deleteGolMatch(${index})" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#ef4444; border-radius:4px; width:28px; height:24px; font-weight:800; cursor:pointer; font-size:.6rem;">❌</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function updateGolLocalMatchField(index, field, value) {
-      if (golMatches[index]) {
-        golMatches[index][field] = value;
-      }
-    }
-
-    function updateGolLocalMatchEvents(index, value) {
-      if (golMatches[index]) {
-        if (!value.trim()) {
-          golMatches[index].events = [];
-          return;
-        }
-        golMatches[index].events = value.split(',').map(item => {
-          return { type: item.includes('🟥') ? 'red' : 'goal', player: item.trim() };
-        });
-      }
-    }
-
-    function addGolMatch() {
-      golMatches.push({
-        id: Date.now(),
-        teamA: 'Nueva Selección',
-        flagA: '🏳️',
-        teamB: 'Oponente',
-        flagB: '🏳️',
-        scoreA: 0,
-        scoreB: 0,
-        status: 'proximo',
-        time: '19:30',
-        date: 'Hoy 19:30',
-        channel: 'Caracol TV / RCN',
-        events: []
-      });
-      renderGolMatches();
-      renderGolAdminEditor();
-    }
-
-    function deleteGolMatch(index) {
-      if (confirm('¿Seguro que deseas eliminar este partido?')) {
-        golMatches.splice(index, 1);
-        renderGolMatches();
-        renderGolAdminEditor();
-      }
-    }
-
-    async function saveAllGolMatches(isSilent = false) {
-      if (typeof _sb === 'undefined') return;
-
-      try {
-        const { error } = await _sb.from('kv_store').upsert({
-          key: 'rr_gol_caracol_matches',
-          value: JSON.stringify(golMatches)
-        }, { onConflict: 'key' });
-
-        if (error) {
-          alert('Error al guardar: ' + error.message);
-        } else if (!isSilent) {
-          alert('¡Marcadores de fútbol guardados exitosamente y transmitidos en tiempo real!');
-          refreshGolCaracol(true);
-        }
-      } catch (e) {
-        console.error(e);
-        alert('Error inesperado al guardar.');
-      }
-    }
-  </script>
 
   <script>
     // ════════ MÓDULO ASISTENCIA ════════
-    const ASI_KEY = 'rr_prime_asistencia';
     const ASI_MON_KEY = 'rr_prime_monitores';
     let asiShift = 'todos'; // por defecto ver todos los turnos
     let _asiTurnoFilter = 'Todos'; // filtro de turno para grid de operadores
@@ -23292,7 +23041,6 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     // ── Horas de turno desde asistencia ──────────────────────────
-    const ASI_HORAS_KEY = 'rr_asi_horas_dia'; // { opName: { fecha, horas, cambioTurno } }
 
     function asiGetHoras(name) {
       const all = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
@@ -26064,9 +25812,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           if (window._servicesInitDone) {
             if (diff > 0) {
               // Real-time point increase detected!
-              playBeep('coin');
-              lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de facturar +${diff.toFixed(2)} puntos en tiempo real. Tu acumulado es de ${_opRtPtosSesion.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
-              crearEfectoConfeti();
+              if (Math.floor(_opRtPtosSesion / 50) > Math.floor(window._prevSessionPoints / 50)) {
+                playBeep('coin');
+                lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de alcanzar un nuevo hito de 50 puntos en tiempo real. Tu acumulado es de ${_opRtPtosSesion.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
+                crearEfectoConfeti();
+              }
               
               if (typeof ghostVars !== 'undefined') {
                 ghostVars.lastPoints = Number(getPuntosHoy(opName)) || 0;
@@ -26074,11 +25824,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 ghostVars.lastInteraction = Date.now();
               }
             } else if (plays.length > 0) {
-              plays.forEach(svc => {
-                if (typeof playMoneySound === 'function') {
-                  playMoneySound(svc);
-                }
-              });
+              // Se removió el sonido de las monedas para no saturar al usuario
             }
 
             if (diff > 0 && typeof window.mostrarAnimacionPuntos === 'function') {
@@ -28037,10 +27783,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         if (delta > 0) {
           // 🎉 ¡INCREMENTO DE FACTURACIÓN DETECTADO! 🎉
-          playBeep('coin');
-          lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de facturar +${delta.toFixed(2)} puntos. Tu acumulado es de ${ptsActuales.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
-          
-          crearEfectoConfeti();
+          if (Math.floor(ptsActuales / 50) > Math.floor(ghostVars.lastPoints / 50)) {
+            playBeep('coin');
+            lanzarAlertaMonitor("MOTIVAR", `¡Excelente trabajo! 🎉 Acabas de alcanzar un nuevo hito de 50 puntos. Tu acumulado es de ${ptsActuales.toFixed(2)} pts. ¡Sigue con esa excelente energía! ⭐🚀`);
+            crearEfectoConfeti();
+          }
 
           ghostVars.flatlineMinutes = 0;
           ghostVars.lastInteraction = Date.now();

@@ -21854,6 +21854,11 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         });
       };
 
+      // Configuración de red para el Monolito / Extensión
+      const SERVER_IP = "10.21.41.168"; // Cambiar a "192.168.1.61" si estás en red local
+      const PORT = "18791";
+      const API_URL = `http://${SERVER_IP}:${PORT}/api/clientes/verificar_gasto`;
+
       window.ciaRenderGlobalIcebreakers = function() {
         const allIbs = [];
         
@@ -21946,7 +21951,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               let border = 'rgba(52,211,153,0.15)';
               return `<div style="background:${tagBg};border:1px solid ${border};border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                  <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;">${ibName} <span style="color:#94a3b8;font-size:.5rem;font-weight:400;">(ID: ${ibId})</span></div>
+                  <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;"><span class="vip-name-target" data-client-id="${ibId}">${ibName}</span> <span style="color:#94a3b8;font-size:.5rem;font-weight:400;">(ID: ${ibId})</span></div>
                   <div style="font-size:.55rem;color:#94a3b8;margin-top:2px;">Enviados: <span style="color:#e2e8f0;">${sent}</span> | Respuestas: <span style="color:#e2e8f0;">${replies}</span> (${(rate*100).toFixed(1)}%)</div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
@@ -21975,7 +21980,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               let border = 'rgba(248,113,113,0.15)';
               return `<div style="background:${tagBg};border:1px solid ${border};border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                  <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;">${ibName} <span style="color:#94a3b8;font-size:.5rem;font-weight:400;">(ID: ${ibId})</span></div>
+                  <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;"><span class="vip-name-target" data-client-id="${ibId}">${ibName}</span> <span style="color:#94a3b8;font-size:.5rem;font-weight:400;">(ID: ${ibId})</span></div>
                   <div style="font-size:.55rem;color:#94a3b8;margin-top:2px;">Enviados: <span style="color:#e2e8f0;">${sent}</span> | Respuestas: <span style="color:#e2e8f0;">${replies}</span> (${(rate*100).toFixed(1)}%)</div>
                 </div>
                 <div style="text-align:right;flex-shrink:0;">
@@ -22120,7 +22125,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 <div style="font-size:1.1rem;color:${tagColor};font-weight:900;">👑</div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:normal;word-break:break-word;line-height:1.4;">
-                    ${client.name} <span style="font-size:0.55rem;color:#64748b;font-weight:700;">(ID: ${client.client_id})</span>
+                    <span class="vip-name-target" data-client-id="${client.client_id}">${client.name}</span> <span style="font-size:0.55rem;color:#64748b;font-weight:700;">(ID: ${client.client_id})</span>
                   </div>
                   <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:normal;word-break:break-word;line-height:1.4;margin-top:2px;">
                     Modelo: <span style="color:#94a3b8;">${client.modelo}</span> ${client.operador ? '| Operador: <span style="color:#38bdf8;">' + client.operador + '</span>' : ''} ${client.source_id ? '| Campaña: <span style="color:#fbbf24;">' + client.source_id + '</span>' : ''}
@@ -22179,7 +22184,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
                 <div style="font-size:1.1rem;color:${tagColor};font-weight:900;min-width:20px;text-align:center;">🙎‍♂️</div>
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:normal;word-break:break-word;line-height:1.4;" title="Cliente">
-                    <span style="color:#94a3b8;font-size:0.55rem;text-transform:uppercase;">Cliente:</span> ${client.name} <span style="font-size:0.5rem;color:#64748b;">(ID: ${codeList})</span>
+                    <span style="color:#94a3b8;font-size:0.55rem;text-transform:uppercase;">Cliente:</span> <span class="vip-name-target" data-client-id="${client.id}">${client.name}</span> <span style="font-size:0.5rem;color:#64748b;">(ID: ${codeList})</span>
                   </div>
                   <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:normal;word-break:break-word;line-height:1.4;margin-top:2px;">
                     💃 Chateó con Modelo: <span style="color:#f472b6;">${modelList}</span>
@@ -22312,6 +22317,39 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           } else {
             campBotEl.innerHTML = '<div style="color:#475569;font-size:.6rem;padding:10px;text-align:center;">Sin datos</div>';
           }
+        }
+
+        // 3. Obtener nombres reales de los VIPs consultando al servidor local Ubuntu
+        const allTargetIds = [...new Set([
+          ...vips.map(x => formatCampaignName(x.source_id).id),
+          ...low.map(x => formatCampaignName(x.source_id).id),
+          ...officialPremiumClients.map(x => x.client_id),
+          ...sortedClients.map(x => x.id)
+        ])].filter(id => id && id !== '-1');
+
+        if (allTargetIds.length > 0) {
+          fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_ids: allTargetIds })
+          })
+          .then(res => res.json())
+          .then(res => {
+            if (res.success && res.data && Array.isArray(res.data)) {
+              res.data.forEach(client => {
+                // client_id y name vienen del JSON del servidor Ubuntu
+                const els = document.querySelectorAll(`.vip-name-target[data-client-id="${client.client_id}"]`);
+                els.forEach(el => {
+                  el.innerText = client.name;
+                  el.style.color = '#c084fc'; // Color cyberpunk para indicar identidad revelada
+                  el.style.textShadow = '0 0 5px rgba(192,132,252,0.5)';
+                });
+              });
+            }
+          })
+          .catch(err => {
+            console.warn("ℹ️ Servidor de Ubuntu local apagado o inaccesible. Mostrando IDs por defecto.");
+          });
         }
       };
 

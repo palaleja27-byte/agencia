@@ -7044,10 +7044,77 @@
 
             .ryr-matrix-ice-time { color: var(--text-muted); }
             .ryr-matrix-ice-word { background: var(--neon-red); color: #fff; padding: 0 3px; border-radius: 2px; font-weight: bold; }
+            
+            /* --- BOTON INFO Y MODAL --- */
+            .ryr-info-btn {
+                background: transparent;
+                border: 1px solid var(--neon-cyan);
+                color: var(--neon-cyan);
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+                cursor: pointer;
+                transition: all 0.2s;
+                margin-left: 10px;
+                font-family: inherit;
+                font-weight: bold;
+                vertical-align: middle;
+            }
+            .ryr-info-btn:hover {
+                background: var(--neon-cyan);
+                color: #000;
+                box-shadow: 0 0 10px var(--neon-cyan);
+            }
+            .ryr-modal-overlay {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8);
+                z-index: 9999;
+                justify-content: center;
+                align-items: center;
+                backdrop-filter: blur(4px);
+            }
+            .ryr-modal-box {
+                background: var(--bg-card);
+                border: 1px solid var(--neon-cyan);
+                box-shadow: 0 0 20px rgba(0,255,204,0.2);
+                border-radius: 8px;
+                width: 90%;
+                max-width: 750px;
+                max-height: 80vh;
+                overflow-y: auto;
+                padding: 25px;
+                position: relative;
+            }
+            .ryr-modal-close {
+                position: absolute;
+                top: 15px; right: 15px;
+                background: transparent;
+                border: none;
+                color: var(--neon-red);
+                font-size: 16px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+            .ryr-modal-box h2 {
+                color: var(--neon-cyan);
+                margin-top: 0;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 10px;
+                font-size: 16px;
+            }
+            .ryr-modal-box h3 { color: #fff; margin-top: 20px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+            .ryr-modal-box p, .ryr-modal-box li { color: #d1d1dd; font-size: 12px; line-height: 1.5; margin-bottom: 8px;}
+            .ryr-modal-box ul { padding-left: 20px; margin-top: 5px; }
+            .ryr-modal-box strong { color: var(--neon-magenta); }
         </style>
 
         <div class="ryr-matrix-header">
-            <h1>⚡ RYR MATRIX CONTROL V26.0</h1>
+            <h1>
+                ⚡ RYR MATRIX CONTROL V26.0
+                <button class="ryr-info-btn" onclick="ryrAbrirInfo()">[?] INFO / MANUAL</button>
+            </h1>
             <p>Módulo de Administración Táctica Unificado & Telemetría Inyectada</p>
             <div class="ryr-matrix-status" id="ryr-sys-status">
                 <span>SINCRO: VERIFICANDO CONEXIÓN INTERNA CON SERV-UBUNTU...</span>
@@ -7274,7 +7341,55 @@
 
             // Disparador de hidratación de datos automáticos tras el montaje en el DOM externo
             setTimeout(ryrRenderizarMapeo, 500);
+
+            // Funciones del Modal Info
+            function ryrAbrirInfo() {
+                document.getElementById('ryr-info-modal').style.display = 'flex';
+            }
+            function ryrCerrarInfo() {
+                document.getElementById('ryr-info-modal').style.display = 'none';
+            }
         </script>
+
+        <!-- Modal de Información -->
+        <div class="ryr-modal-overlay" id="ryr-info-modal" onclick="if(event.target===this)ryrCerrarInfo()">
+            <div class="ryr-modal-box">
+                <button class="ryr-modal-close" onclick="ryrCerrarInfo()">[X]</button>
+                <h2>📖 Manual del Operador: RYR Matrix Control V26.0</h2>
+                
+                <h3>1. Panel de Identidades (Estado de Clonación)</h3>
+                <p><strong>Qué hace:</strong> Muestra los perfiles o "avatares" virtuales activos que la agencia está operando simultáneamente.</p>
+                <ul>
+                    <li><strong>ID Avatar / Identidad:</strong> Identificador interno y nombre del perfil (ej: Chloe, Sophie).</li>
+                    <li><strong>Parámetro Clave:</strong> El tono de personalidad o script que el perfil tiene asignado (ej: Directo, Misterioso). Esto ayuda a los operadores a no perder la "voz" del personaje.</li>
+                    <li><strong>Interacciones / Profundidad:</strong> Cantidad de mensajes enviados y el promedio de mensajes por conversación. Una mayor profundidad indica que el operador está logrando retener al cliente en la conversación.</li>
+                </ul>
+                <p><strong>De dónde sale el dato:</strong> Actualmente estos son datos <em>simulados</em> inyectados en la variable local <code>ryrDataIdentidades</code>. En el futuro, provendrán del servidor Node.js/Python (Ubuntu) consultando la base de datos central de perfiles a través del puerto 18791 o similar.</p>
+
+                <h3>2. Panel de Extensiones (Operadores Conectados)</h3>
+                <p><strong>Qué hace:</strong> Monitorea en tiempo real a tu equipo de trabajo (las terminales/operadores).</p>
+                <ul>
+                    <li><strong>Perfiles Nuevos / Fidelizados:</strong> Cuántos clientes nuevos han captado hoy y cuántos han logrado convertir o fidelizar en el mismo turno.</li>
+                    <li><strong>Estado de Red:</strong> Verifica la latencia y la conexión VPN (ZeroTier) de cada operador para asegurar que la estación está conectada a la red privada segura de la agencia.</li>
+                </ul>
+                <p><strong>De dónde sale el dato:</strong> Variable simulada <code>ryrDataExtensiones</code>. Eventualmente se llenará consultando al servidor interno para verificar qué IPs/usuarios están enviando pings (señales de vida).</p>
+
+                <h3>3. Repositorio de Copys Tácticos (Playbook)</h3>
+                <p><strong>Qué hace:</strong> Una caja de herramientas rápida con mensajes prediseñados y probados para distintas situaciones psicológicas del chat. Al hacer clic sobre uno, se copia automáticamente al portapapeles.</p>
+                <ul>
+                    <li><strong>Atracción:</strong> Para abrir conversaciones de forma impactante o reactivar chats muertos con <em>slang</em> natural.</li>
+                    <li><strong>Extracción:</strong> Guiones subliminales para pedir regalos/propinas de manera sutil (ej: café virtual, energy boost).</li>
+                    <li><strong>Embudo a Cartas:</strong> Textos diseñados para llevar al cliente de un chat rápido a un mensaje de pago prolongado (Cartas/Mailbox).</li>
+                </ul>
+
+                <h3>4. Reportes Horarios y Ticker ICE</h3>
+                <p><strong>Qué hace:</strong> Sistemas automatizados de alerta y auditoría de calidad.</p>
+                <ul>
+                    <li><strong>Reportes Horarios:</strong> Análisis que el sistema arroja simulando detectar caídas de interacción en un operador, sugiriendo cambios tácticos de inmediato (ej: "Cambiar estrategia a Mailbox Funnel"). Datos provenientes de la variable <code>ryrDataReportesHorarios</code>.</li>
+                    <li><strong>Filtros ICE:</strong> (Interceptación de Contenido Extraño). Un registro en vivo de intentos fallidos de los operadores al intentar enviar palabras prohibidas (como "whatsapp", "teléfono", "instagram"). El sistema muestra qué estación intentó romper la regla. Actualmente, código HTML hardcodeado en el div <code>ryr-logs-ice</code>.</li>
+                </ul>
+            </div>
+        </div>
     </div>
   </div>
 

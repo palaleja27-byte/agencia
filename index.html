@@ -6737,133 +6737,545 @@
     <!-- ================================================================= -->
     <!-- CORE HUB HUD - MONITOR DE RENDIMIENTO DE AVATARES EN TIEMPO REAL -->
     <!-- ================================================================= -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        corePlugins: {
-          preflight: false,
-        }
-      }
-    </script>
-
-    <div class="p-6 bg-[#050508] text-white font-mono selection:bg-cyan-500 selection:text-black" style="margin-top: 20px; border-radius: 12px; border: 1px solid rgba(0,255,204,0.15); box-sizing: border-box;">
+    <div class="ryr-matrix-monolith">
         
-        <div class="border-b border-cyan-500/50 pb-4 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-[0_0_20px_rgba(0,255,204,0.05)]">
-            <div>
-                <h1 class="text-2xl font-bold text-cyan-400 tracking-wider drop-shadow-[0_0_8px_rgba(0,255,204,0.4)]">⚡ RYR MATRIX CONTROL V14.6</h1>
-                <p class="text-xs text-gray-400 mt-1">Monitoreo Reactivo de Identidades Múltiples</p>
-            </div>
-            <div class="text-left sm:text-right text-xs">
-                <span id="ryr-server-badge" class="inline-flex items-center px-2 py-1 rounded bg-yellow-950/80 text-yellow-400 border border-yellow-500/50 animate-pulse font-bold tracking-wide">
-                    ⚡ BUSCANDO NÚCLEO UBUNTU...
-                </span>
-                <p class="mt-2 text-gray-500">Última Sincronización: <span id="ryr-clock" class="text-gray-300">--:--:--</span></p>
-            </div>
-        </div>
+        <style>
+            .ryr-matrix-monolith {
+                --bg-main: #06060a;
+                --bg-card: #0d0d14;
+                --bg-nested: #09090f;
+                --neon-cyan: #00ffcc;
+                --neon-magenta: #ff00ff;
+                --neon-red: #ff003c;
+                --neon-green: #33ff33;
+                --neon-orange: #ffaa00;
+                --text-main: #ffffff;
+                --text-muted: #62627a;
+                --border-color: #161626;
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div class="bg-[#0a0a0f] border border-gray-800 p-5 rounded-md shadow-lg relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
-                <div class="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Clientes Ativos en la Matriz (Hoy)</div>
-                <div id="metric-clientes" class="text-4xl font-black text-cyan-400 mt-2">0</div>
-            </div>
-            <div class="bg-[#0a0a0f] border border-gray-800 p-5 rounded-md shadow-lg relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-                <div class="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Impactos Psicológicos Disparados</div>
-                <div id="metric-mensajes" class="text-4xl font-black text-amber-400 mt-2">0</div>
-            </div>
-        </div>
-
-        <div class="bg-[#0a0a0f] border border-cyan-500/20 rounded-md overflow-hidden shadow-2xl">
-            <div class="bg-[#101015] p-3 border-b border-cyan-500/20 font-bold text-cyan-500 text-xs tracking-widest uppercase flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                Estado de Clonación y Operación
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-800 bg-[#121218] text-gray-400 uppercase tracking-wider text-[10px]">
-                            <th class="p-4 font-semibold">ID Avatar</th>
-                            <th class="p-4 font-semibold">Identidad</th>
-                            <th class="p-4 font-semibold">Parámetro Clave</th>
-                            <th class="p-4 font-semibold">Ubicación Base</th>
-                            <th class="p-4 text-center font-semibold">Interacciones</th>
-                            <th class="p-4 text-center font-semibold">Profundidad Promedio</th>
-                            <th class="p-4 text-right font-semibold">Último Disparo</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ryr-avatares-body">
-                        <tr>
-                            <td colspan="7" class="p-10 text-center text-gray-600 uppercase tracking-widest text-[10px] animate-pulse">
-                                Esperando sincronización de base de datos...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        (function() {
-            // IP Directa de tu Servidor en ZeroTier
-            const BACKEND_URL = "http://10.21.41.168:18791"; 
-
-            async function consumirTelemetria() {
-                const badge = document.getElementById('ryr-server-badge');
-                const clock = document.getElementById('ryr-clock');
-                const tbody = document.getElementById('ryr-avatares-body');
-
-                if (!badge || !clock || !tbody) return;
-
-                try {
-                    const response = await fetch(`${BACKEND_URL}/api/admin/rendimiento_avatares`);
-                    if (!response.ok) throw new Error("Fallo de conexión");
-                    
-                    const data = await response.json();
-
-                    if (data.success) {
-                        clock.innerText = new Date(data.timestamp).toLocaleTimeString();
-                        badge.className = "inline-flex items-center px-2 py-1 rounded bg-green-950/80 text-green-400 border border-green-500/50 font-bold tracking-wide shadow-[0_0_10px_rgba(0,255,0,0.2)]";
-                        badge.innerText = "🟢 NÚCLEO UBUNTU - EN LÍNEA";
-                        
-                        const metricClientes = document.getElementById('metric-clientes');
-                        const metricMensajes = document.getElementById('metric-mensajes');
-                        if (metricClientes) metricClientes.innerText = data.metricas_globales.clientes_atendidos_hoy;
-                        if (metricMensajes) metricMensajes.innerText = data.metricas_globales.mensajes_totales_hoy;
-
-                        if (data.avatares && data.avatares.length > 0) {
-                            let htmlFilas = "";
-                            data.avatares.forEach(avatar => {
-                                const ultimaActividad = avatar.ultima_actividad ? new Date(avatar.ultima_actividad).toLocaleTimeString() : 'Sin registros';
-                                htmlFilas += `
-                                    <tr class="border-b border-gray-900/50 hover:bg-cyan-900/10 transition-colors duration-200">
-                                        <td class="p-4 text-gray-500 font-mono">#${avatar.avatar_id}</td>
-                                        <td class="p-4 text-cyan-100 font-bold tracking-wide">${avatar.avatar_nombre}</td>
-                                        <td class="p-4"><span class="px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest bg-amber-950/50 text-amber-400 border border-amber-800/50 shadow-sm">${avatar.estado_civil || 'Widowed'}</span></td>
-                                        <td class="p-4 text-gray-400">${avatar.ciudad || 'Texas City'}</td>
-                                        <td class="p-4 text-center text-cyan-400 font-bold text-sm">${avatar.total_mensajes_enviados}</td>
-                                        <td class="p-4 text-center text-gray-400">${avatar.longitud_promedio_respuesta || 0} carac.</td>
-                                        <td class="p-4 text-right text-gray-505 font-mono text-[10px]">${ultimaActividad}</td>
-                                    </tr>
-                                `;
-                            });
-                            tbody.innerHTML = htmlFilas;
-                        } else {
-                            tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-gray-600 uppercase tracking-widest text-[10px]">La matriz de identidades está vacía en este ciclo.</td></tr>`;
-                        }
-                    }
-                } catch (error) {
-                    console.error("Interferencia detectada:", error);
-                    badge.className = "inline-flex items-center px-2 py-1 rounded bg-red-950/80 text-red-400 border border-red-500/50 animate-pulse font-bold tracking-wide shadow-[0_0_10px_rgba(255,0,0,0.2)]";
-                    badge.innerText = "🛑 RUPTURA DE CONEXIÓN - REVISAR IP/CANDADO CHROME";
-                }
+                background-color: var(--bg-main);
+                color: var(--text-main);
+                font-family: 'Courier New', Courier, monospace;
+                padding: 20px;
+                box-sizing: border-box;
+                border-radius: 12px;
+                border: 1px solid var(--border-color);
+                margin: 15px 0;
+                width: 100%;
             }
+
+            .ryr-matrix-monolith *, .ryr-matrix-monolith *::before, .ryr-matrix-monolith *::after {
+                box-sizing: border-box;
+            }
+
+            /* --- HEADER ENCAPSULADO --- */
+            .ryr-matrix-header {
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+
+            .ryr-matrix-header h1 {
+                font-size: 20px;
+                margin: 0 0 5px 0;
+                letter-spacing: 2px;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .ryr-matrix-header p {
+                margin: 0;
+                color: var(--text-muted);
+                font-size: 12px;
+            }
+
+            .ryr-matrix-status {
+                margin-top: 15px;
+                padding: 10px 15px;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                background: rgba(255, 0, 60, 0.1);
+                border: 1px solid var(--neon-red);
+                color: var(--neon-red);
+            }
+
+            .ryr-matrix-status.connected {
+                background: rgba(0, 255, 204, 0.1);
+                border: 1px solid var(--neon-cyan);
+                color: var(--neon-cyan);
+            }
+
+            /* --- CUADRICULA DE KPIS --- */
+            .ryr-matrix-kpis {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+
+            .ryr-matrix-kpi-box {
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-left: 4px solid var(--neon-cyan);
+                padding: 15px 20px;
+                border-radius: 6px;
+            }
+
+            .ryr-matrix-kpi-box.orange { border-left-color: var(--neon-orange); }
+            .ryr-matrix-kpi-box.magenta { border-left-color: var(--neon-magenta); }
+            .ryr-matrix-kpi-box.red { border-left-color: var(--neon-red); }
+
+            .ryr-matrix-kpi-label {
+                font-size: 10px;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                margin-bottom: 8px;
+            }
+
+            .ryr-matrix-kpi-value {
+                font-size: 32px;
+                font-weight: bold;
+                color: #fff;
+            }
+
+            /* --- DISTRIBUCIÓN HORIZONTAL PANEL --- */
+            .ryr-matrix-layout {
+                display: grid;
+                grid-template-columns: 2.2fr 1fr;
+                gap: 20px;
+            }
+
+            .ryr-matrix-col-left, .ryr-matrix-col-right {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            /* Bloques de sección */
+            .ryr-matrix-panel {
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 20px;
+            }
+
+            .ryr-matrix-panel h2 {
+                font-size: 13px;
+                margin-top: 0;
+                margin-bottom: 15px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                color: var(--text-main);
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 10px;
+            }
+
+            /* --- COMPORTAMIENTO TABLAS --- */
+            .ryr-matrix-table-scroll {
+                overflow-x: auto;
+            }
+
+            .ryr-matrix-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 11px;
+                text-align: left;
+                margin: 0;
+            }
+
+            .ryr-matrix-table th {
+                color: var(--text-muted);
+                text-transform: uppercase;
+                font-size: 10px;
+                padding: 10px 8px;
+                border-bottom: 1px solid var(--border-color);
+                font-weight: normal;
+                background: transparent;
+            }
+
+            .ryr-matrix-table td {
+                padding: 12px 8px;
+                border-bottom: 1px solid #11111c;
+                vertical-align: middle;
+                color: var(--text-main);
+            }
+
+            .ryr-matrix-table tr:hover td {
+                background: rgba(255, 255, 255, 0.01);
+            }
+
+            .ryr-matrix-badge {
+                background: #111;
+                padding: 3px 6px;
+                border-radius: 3px;
+                font-size: 9px;
+                font-weight: bold;
+                border: 1px solid #222;
+                display: inline-block;
+            }
+
+            .ryr-matrix-badge.cyan { color: var(--neon-cyan); border-color: rgba(0,255,204,0.2); }
+            .ryr-matrix-badge.magenta { color: var(--neon-magenta); border-color: rgba(255,0,255,0.2); }
+            .ryr-matrix-badge.green { color: var(--neon-green); border-color: rgba(51,255,51,0.2); }
+
+            /* --- PLAYBOOK DE ESTRATEGIAS (MENSAJES) --- */
+            .ryr-matrix-playbook {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+            }
+
+            .ryr-matrix-playbook-col {
+                background: var(--bg-nested);
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                padding: 12px;
+            }
+
+            .ryr-matrix-playbook-head {
+                font-size: 11px;
+                font-weight: bold;
+                margin-bottom: 10px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .ryr-matrix-copy-card {
+                background: #0b0b12;
+                border: 1px solid #1a1a2e;
+                border-left: 3px solid var(--neon-magenta);
+                padding: 10px;
+                border-radius: 4px;
+                margin-bottom: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+
+            .ryr-matrix-copy-card:hover {
+                border-color: var(--neon-cyan);
+                background: #0f0f1a;
+            }
+
+            .ryr-matrix-copy-text {
+                font-size: 11px;
+                color: #e2e2ee;
+                line-height: 1.4;
+                font-style: italic;
+            }
+
+            .ryr-matrix-copy-meta {
+                font-size: 9px;
+                color: var(--text-muted);
+                margin-top: 6px;
+                display: flex;
+                justify-content: space-between;
+            }
+
+            /* --- REPORTE HORARIO STREAM --- */
+            .ryr-matrix-stream {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                max-height: 350px;
+                overflow-y: auto;
+            }
+
+            .ryr-matrix-report-item {
+                background: var(--bg-nested);
+                border-left: 3px solid var(--neon-red);
+                padding: 12px;
+                border-radius: 4px;
+                border-top: 1px solid var(--border-color);
+                border-right: 1px solid var(--border-color);
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .ryr-matrix-report-top {
+                display: flex;
+                justify-content: space-between;
+                font-size: 10px;
+                font-weight: bold;
+                color: var(--neon-cyan);
+                margin-bottom: 6px;
+            }
+
+            .ryr-matrix-report-text {
+                font-size: 11px;
+                line-height: 1.4;
+                color: #d1d1dd;
+            }
+
+            .ryr-matrix-report-fix {
+                margin-top: 6px;
+                font-size: 10px;
+                color: var(--neon-orange);
+                font-weight: bold;
+            }
+
+            /* --- TICKER DE CONTROL ICE --- */
+            .ryr-matrix-ice-box {
+                background: #000;
+                border: 1px solid #221111;
+                border-radius: 4px;
+                padding: 10px;
+                height: 100px;
+                overflow-y: auto;
+                font-size: 10.5px;
+            }
+
+            .ryr-matrix-ice-log {
+                color: #ff6666;
+                margin-bottom: 4px;
+                line-height: 1.3;
+            }
+
+            .ryr-matrix-ice-time { color: var(--text-muted); }
+            .ryr-matrix-ice-word { background: var(--neon-red); color: #fff; padding: 0 3px; border-radius: 2px; font-weight: bold; }
+        </style>
+
+        <div class="ryr-matrix-header">
+            <h1>⚡ RYR MATRIX CONTROL V26.0</h1>
+            <p>Módulo de Administración Táctica Unificado & Telemetría Inyectada</p>
+            <div class="ryr-matrix-status" id="ryr-sys-status">
+                <span>SINCRO: VERIFICANDO CONEXIÓN INTERNA CON SERV-UBUNTU...</span>
+            </div>
+        </div>
+
+        <div class="ryr-matrix-kpis">
+            <div class="ryr-matrix-kpi-box">
+                <div class="ryr-matrix-kpi-label">Avatares Clonados Activos</div>
+                <div class="ryr-matrix-kpi-value" id="ryr-count-activos">0</div>
+            </div>
+            <div class="ryr-matrix-kpi-box orange">
+                <div class="ryr-matrix-kpi-label">Impactos Conversacionales</div>
+                <div class="ryr-matrix-kpi-value" id="ryr-count-impactos">0</div>
+            </div>
+            <div class="ryr-matrix-kpi-box magenta">
+                <div class="ryr-matrix-kpi-label">Nuevos Fidelizados Hoy</div>
+                <div class="ryr-matrix-kpi-value" id="ryr-count-fidelizados">0</div>
+            </div>
+            <div class="ryr-matrix-kpi-box red">
+                <div class="ryr-matrix-kpi-label">Filtros ICE Disparados</div>
+                <div class="ryr-matrix-kpi-value" id="ryr-count-ice">0</div>
+            </div>
+        </div>
+
+        <div class="ryr-matrix-layout">
             
-            consumirTelemetria(); 
-            setInterval(consumirTelemetria, 4000);
-        })();
-    </script>
+            <div class="ryr-matrix-col-left">
+                
+                <div class="ryr-matrix-panel">
+                    <h2 style="color: var(--neon-cyan)">🧬 Estado de Clonación y Operación (Identidades)</h2>
+                    <div class="ryr-matrix-table-scroll">
+                        <table class="ryr-matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>ID Avatar</th>
+                                    <th>Identidad</th>
+                                    <th>Parámetro Clave</th>
+                                    <th>Ubicación Base</th>
+                                    <th>Interacciones</th>
+                                    <th>Profundidad Promedio</th>
+                                    <th>Último Disparo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ryr-tabla-clonacion">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">Sincronizando hilos de automatización de identidades...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="ryr-matrix-panel">
+                    <h2 style="color: var(--neon-green)">📋 Telemetría Activa de Extensiones (Operadores Conectados)</h2>
+                    <div class="ryr-matrix-table-scroll">
+                        <table class="ryr-matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>Estación / Operario</th>
+                                    <th>Shift / Turno</th>
+                                    <th>Perfiles Nuevos (Hoy)</th>
+                                    <th>Fidelizados Mismo Día</th>
+                                    <th>Tasa de Conversión</th>
+                                    <th>Último Ping</th>
+                                    <th>Estado de Red</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ryr-tabla-extensiones">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">Cargando flujos de red de terminales remotas...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="ryr-matrix-panel">
+                    <h2 style="color: var(--neon-magenta)">🔥 Repositorio de Copys Tácticos (Click para Copiar)</h2>
+                    <div class="ryr-matrix-playbook">
+                        
+                        <div class="ryr-matrix-playbook-col">
+                            <div class="ryr-matrix-playbook-head" style="color: var(--neon-cyan)">🎯 Atracción & Ganchos</div>
+                            <div class="ryr-matrix-copy-card" onclick="ryrCopiarTexto(this)">
+                                <div class="ryr-matrix-copy-text">"Catching flights not feelings? 👀 update: I might be failing at that last part tonight. What's good?"</div>
+                                <div class="ryr-matrix-copy-meta"><span>Eficiencia: 38%</span><span>Uso: Slang</span></div>
+                            </div>
+                            <div class="ryr-matrix-copy-card" onclick="ryrCopiarTexto(this)">
+                                <div class="ryr-matrix-copy-text">"You lowkey look like trouble, but the good kind. Let's see if the vibe matches the profile."</div>
+                                <div class="ryr-matrix-copy-meta"><span>Eficiencia: 34%</span><span>Uso: Directo</span></div>
+                            </div>
+                        </div>
+
+                        <div class="ryr-matrix-playbook-col">
+                            <div class="ryr-matrix-playbook-head" style="color: var(--neon-orange)">🎁 Extracción de Regalos</div>
+                            <div class="ryr-matrix-copy-card" style="border-left-color: var(--neon-orange)" onclick="ryrCopiarTexto(this)">
+                                <div class="ryr-matrix-copy-text">"Ngl, my day has been pretty chaotic, but seeing your name pop up fixes it. Send me a little energy boost so I know it's real? ☕✨"</div>
+                                <div class="ryr-matrix-copy-meta"><span>Target: Tier 1</span><span>Efecto: Alto</span></div>
+                            </div>
+                            <div class="ryr-matrix-copy-card" style="border-left-color: var(--neon-orange)" onclick="ryrCopiarTexto(this)">
+                                <div class="ryr-matrix-copy-text">"I was about to go offline, but you're making it hard to leave. Buy me a virtual coffee so I have an excuse to stay awake? 🥺"</div>
+                                <div class="ryr-matrix-copy-meta"><span>Target: General</span><span>Efecto: Fluido</span></div>
+                            </div>
+                        </div>
+
+                        <div class="ryr-matrix-playbook-col">
+                            <div class="ryr-matrix-playbook-head" style="color: var(--neon-cyan)">✉️ Embudo a Cartas (Mailbox)</div>
+                            <div class="ryr-matrix-copy-card" style="border-left-color: var(--neon-cyan)" onclick="ryrCopiarTexto(this)">
+                                <div class="ryr-matrix-copy-text">"Fast chats don't do you justice. I have this late-night thought about what you said earlier, but it deserves a proper long letter. Check your mailbox in a bit, ok?"</div>
+                                <div class="ryr-matrix-copy-meta"><span>Retención: +5m</span><span>Tipo: Premium</span></div>
+                            </div>
+                            <div class="ryr-matrix-copy-card" style="border-left-color: var(--neon-cyan)" onclick="ryrCopiarTexto(this)">
+                                <div class="ryr-matrix-copy-text">"This chat box is too small for everything I want to tell you tonight. Writing you something deep right now... make sure your mailbox is clear."</div>
+                                <div class="ryr-matrix-copy-meta"><span>Retención: +8m</span><span>Tipo: Nocturno</span></div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="ryr-matrix-col-right">
+                
+                <div class="ryr-matrix-panel" style="border-top: 3px solid var(--neon-red);">
+                    <h2 style="color: var(--neon-red)">📈 Reportes Horarios de Optimización</h2>
+                    <div class="ryr-matrix-stream" id="ryr-stream-reportes">
+                        <div style="color: var(--text-muted); font-size: 11px;">Compilando métricas operativas de turnos...</div>
+                    </div>
+                </div>
+
+                <div class="ryr-matrix-panel">
+                    <h2 style="color: var(--neon-orange)">🛡️ Historial de Filtraciones ICE Interceptadas</h2>
+                    <div class="ryr-matrix-ice-box" id="ryr-logs-ice">
+                        <div class="ryr-matrix-ice-log"><span class="ryr-matrix-ice-time">[17:12:04]</span> Estación_04 bloqueada: Intento de fuga del término <span class="ryr-matrix-ice-word">whatsapp</span></div>
+                        <div class="ryr-matrix-ice-log"><span class="ryr-matrix-ice-time">[16:44:31]</span> Estación_09 bloqueada: Intento de patrón regular <span class="ryr-matrix-ice-word">Número de Teléfono</span></div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <script>
+            // Fuentes de datos locales tipadas basadas en tu infraestructura backend / Supabase
+            const ryrDataIdentidades = [
+                { id: "AV-9011", nombre: "Chloe_Model_X", parametro: "Tono: Directo / Slang", ubicacion: "TalkyTimes Chat Node 3", interacciones: 142, profundidad: "4.8 msgs", ultimo: "Hace 12s" },
+                { id: "AV-4402", nombre: "Sophie_Vibe_UK", parametro: "Tono: Misterioso / Casual", ubicacion: "TalkyTimes Chat Node 1", interacciones: 98, profundidad: "6.2 msgs", ultimo: "Hace 45s" }
+            ];
+
+            const ryrDataExtensiones = [
+                { op: "Terminal_Estacion_01", shift: "Mañana (A)", nuevos: 22, fidelizados: 6, conv: "27.2%", ping: "Hace 4s", red: "ZeroTier 10.21.41.X" },
+                { op: "Alejandra Palma (Admin Node)", shift: "Tarde (B)", nuevos: 34, fidelizados: 11, conv: "32.3%", ping: "Activo", red: "ZeroTier 10.21.41.X" },
+                { op: "Terminal_Estacion_12", shift: "Noche (C)", nuevos: 12, fidelizados: 2, conv: "16.6%", ping: "Hace 1m", red: "LAN Local (Backup)" }
+            ];
+
+            const ryrDataReportesHorarios = [
+                { est: "ESTACIÓN 01", hr: "17:00", log: "Se detectó corte abrupto de interacciones al minuto 3. El operador no está ofreciendo valor. Forzar la aplicación del copy 'Embudo a Cartas' para canalizar la retención monetaria.", fix: "Cambiar estrategia del nodo a Mailbox Funnel de inmediato." },
+                { est: "ESTACIÓN 12", hr: "17:00", log: "La tasa de rebote en perfiles nuevos supera el 80%. El script de aproximación inicial está desactualizado.", fix: "Sustituir hook genérico por Icebreaker táctico con slang natural." }
+            ];
+
+            function ryrRenderizarMapeo() {
+                // Estabilizar estado de conexión del backend simulado
+                const statusBanner = document.getElementById('ryr-sys-status');
+                statusBanner.className = "ryr-matrix-status connected";
+                statusBanner.innerHTML = "<span>🟢 MATRIZ MONOLÍTICA ESTABLE: ONLINE (Nodos sincronizados via ZeroTier - Puerto 18791)</span>";
+
+                // Inyectar contadores globales en caliente
+                document.getElementById('ryr-count-activos').innerText = ryrDataIdentidades.length;
+                document.getElementById('ryr-count-impactos').innerText = ryrDataIdentidades.reduce((acc, el) => acc + el.interacciones, 0);
+                document.getElementById('ryr-count-fidelizados').innerText = ryrDataExtensiones.reduce((acc, el) => acc + el.fidelizados, 0);
+                document.getElementById('ryr-count-ice').innerText = "2";
+
+                // Inyectar Módulo de la Imagen (Clonación e Identidades)
+                const tbodyClon = document.getElementById('ryr-tabla-clonacion');
+                tbodyClon.innerHTML = ryrDataIdentidades.map(id => `
+                    <tr>
+                        <td><span class="ryr-matrix-badge magenta">${id.id}</span></td>
+                        <td><strong>${id.nombre}</strong></td>
+                        <td><span style="color: var(--neon-cyan)">${id.parametro}</span></td>
+                        <td><span style="color: #62627a">${id.ubicacion}</span></td>
+                        <td style="font-weight: bold; text-align: center;">${id.interacciones}</td>
+                        <td><span class="ryr-matrix-badge">${id.profundidad}</span></td>
+                        <td style="color: var(--neon-green)">${id.ultimo}</td>
+                    </tr>
+                `).join('');
+
+                // Inyectar Telemetría de Extensiones
+                const tbodyExt = document.getElementById('ryr-tabla-extensiones');
+                tbodyExt.innerHTML = ryrDataExtensiones.map(ex => `
+                    <tr>
+                        <td><strong>${ex.op}</strong></td>
+                        <td><span style="color: var(--neon-magenta)">${ex.shift}</span></td>
+                        <td style="font-weight: bold; font-size:12px;">${ex.nuevos}</td>
+                        <td style="color: var(--neon-green); font-weight: bold; font-size:12px;">${ex.fidelizados}</td>
+                        <td><span class="ryr-matrix-badge cyan">${ex.conv}</span></td>
+                        <td>${ex.ping}</td>
+                        <td><span class="ryr-matrix-badge green" style="${ex.red.includes('LAN') ? 'color: var(--neon-orange); border-color: rgba(255,170,0,0.2)' : ''}">● ${ex.red}</span></td>
+                    </tr>
+                `).join('');
+
+                // Inyectar flujo de auditoría horaria para corregir operadores
+                const stream = document.getElementById('ryr-stream-reportes');
+                stream.innerHTML = ryrDataReportesHorarios.map(rep => `
+                    <div class="ryr-matrix-report-item">
+                        <div class="ryr-matrix-report-top">
+                            <span>👤 ID_ESTACIÓN: ${rep.est}</span>
+                            <span>[CORTE ${rep.hr} HR]</span>
+                        </div>
+                        <div class="ryr-matrix-report-text">${rep.log}</div>
+                        <div class="ryr-matrix-report-fix">⚙️ Acción Requerida: ${rep.fix}</div>
+                    </div>
+                `).join('');
+            }
+
+            // Función nativa para copiado rápido al portapapeles sin desconfigurar la app principal
+            function ryrCopiarTexto(element) {
+                const textToCopy = element.querySelector('.ryr-matrix-copy-text').innerText;
+                navigator.clipboard.writeText(textToCopy);
+                const initialBackground = element.style.background;
+                element.style.background = "#112211";
+                setTimeout(() => { element.style.background = initialBackground; }, 250);
+            }
+
+            // Disparador de hidratación de datos automáticos tras el montaje en el DOM externo
+            setTimeout(ryrRenderizarMapeo, 500);
+        </script>
+    </div>
   </div>
 
   <!-- MODAL GRUPOS -->

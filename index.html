@@ -4986,6 +4986,10 @@
           <input type="password" class="pin-change-inp" id="pin-new-monitor" maxlength="4" placeholder="••••">
         </div>
         <div class="pin-change-row" style="margin-top:12px;">
+          <label>PIN Admin actual (requerido para cambiar)</label>
+          <input type="password" class="pin-change-inp" id="pin-old-admin" maxlength="4" placeholder="••••">
+        </div>
+        <div class="pin-change-row">
           <label>Nuevo PIN Admin</label>
           <input type="password" class="pin-change-inp" id="pin-new-admin" maxlength="4" placeholder="••••">
         </div>
@@ -18987,11 +18991,16 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const pins = loginGetPins();
       const oldMon = document.getElementById('pin-old-monitor').value.trim();
       const newMon = document.getElementById('pin-new-monitor').value.trim();
+      const oldAdm = document.getElementById('pin-old-admin').value.trim();
       const newAdm = document.getElementById('pin-new-admin').value.trim();
-      // Verificar PIN actual del monitor antes de cambiar
-      if (oldMon && !(await verifyPin(oldMon, pins.monitor))) return alert('❌ PIN actual del Monitor incorrecto.');
+      
+      // Verificar PINs actuales antes de cambiar
+      if (newMon && !(await verifyPin(oldMon, pins.monitor))) return alert('❌ PIN actual del Monitor incorrecto o vacío.');
+      if (newAdm && !(await verifyPin(oldAdm, pins.admin))) return alert('❌ PIN actual del Admin incorrecto o vacío.');
+      
       if (newMon && (newMon.length < 4 || isNaN(newMon))) return alert('PIN Monitor debe ser 4 dígitos.');
       if (newAdm && (newAdm.length < 4 || isNaN(newAdm))) return alert('PIN Admin debe ser 4 dígitos.');
+      
       if (newMon) pins.monitor = await safePinHash(newMon);
       if (newAdm) pins.admin = await safePinHash(newAdm);
       loginSavePinsToStorage(pins);

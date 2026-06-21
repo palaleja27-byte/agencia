@@ -5736,10 +5736,21 @@
                   originalSetItem.call(localStorage, key, value);
                   console.info(`[Storage] Guardado exitoso tras liberar espacio para clave: ${key} ✅`);
                 } catch (retryError) {
-                  // 3. Si aún falla, liberar logs viejos de entrada
+                  // 3. Si aún falla, liberar logs viejos de entrada y drafts anteriores
                   localStorage.removeItem('rr_logs_entrada');
                   localStorage.removeItem('rr_prime_logs_entrada');
                   localStorage.removeItem('rr_prime_logs_entrada_draft');
+                  
+                  // Limpiar TODOS los drafts de asistencia anteriores que ocupan mucho espacio
+                  const keysToRemove = [];
+                  for(let i=0; i<localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith('rr_prime_asistencia_draft_') && k !== key) {
+                      keysToRemove.push(k);
+                    }
+                  }
+                  keysToRemove.forEach(k => localStorage.removeItem(k));
+
                   try {
                     originalSetItem.call(localStorage, key, value);
                     console.info(`[Storage] Guardado exitoso (reintento 2) para clave: ${key} ✅`);

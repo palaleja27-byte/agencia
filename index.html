@@ -29005,7 +29005,16 @@ Ejemplo:
           })
         });
         const data = await response.json();
-        let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        
+        if (!response.ok) {
+          throw new Error(data.error?.message || 'Error en la respuesta de Gemini API (' + response.status + ')');
+        }
+
+        let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          throw new Error('Respuesta vacía o bloqueada por Gemini: ' + JSON.stringify(data));
+        }
+        
         console.log("Raw Gemini Response:", rawText);
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         const resJSON = JSON.parse(rawText);
@@ -29025,7 +29034,7 @@ Ejemplo:
         }
       } catch (e) {
         console.error("Error en generateIcebreaker:", e);
-        resultsEl.innerHTML = '<div style="color:#ef4444; padding:8px;">Error al generar icebreakers. Por favor intenta de nuevo.</div>';
+        resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">⚠️ ${e.message}</div>`;
       }
     };
   </script>

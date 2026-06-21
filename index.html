@@ -8869,35 +8869,45 @@
         const n = _presTurno ? _presTurno.size : 0;
         
         window._enableVoiceAlerts = !!window._enableVoiceAlerts;
-        const voiceBtnHtml = `
-          <button id="toggle-voice-alerts-btn" onclick="toggleVoiceAlerts()" style="
-            display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
-            font-size:.7rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${window._enableVoiceAlerts ? 'rgba(52,211,153,.25)' : 'rgba(239,68,68,.25)'};
-            background:${window._enableVoiceAlerts ? 'rgba(52,211,153,.12)' : 'rgba(239,68,68,.12)'};
-            color:${window._enableVoiceAlerts ? '#34d399' : '#ef4444'}; transition: all 0.3s ease;
-          ">
-            ${window._enableVoiceAlerts ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
-          </button>
-        `;
+        let wrapperDiv = document.getElementById('badge-active-ops-wrapper');
+        if (!wrapperDiv) {
+          _badgeEl.innerHTML = `<div id="badge-active-ops-wrapper" style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <div id="badge-active-ops-content" style="margin-top: 2px;"></div>
+            <div id="badge-voice-controls" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+              <button id="toggle-voice-alerts-btn" onclick="toggleVoiceAlerts()" style="
+                display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
+                font-size:.7rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${window._enableVoiceAlerts ? 'rgba(52,211,153,.25)' : 'rgba(239,68,68,.25)'};
+                background:${window._enableVoiceAlerts ? 'rgba(52,211,153,.12)' : 'rgba(239,68,68,.12)'};
+                color:${window._enableVoiceAlerts ? '#34d399' : '#ef4444'}; transition: all 0.3s ease;
+              ">
+                ${window._enableVoiceAlerts ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
+              </button>
+              <div style="display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); padding:4px 6px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
+                <input type="text" id="demo-voice-text" placeholder="🎙️ Escribe un anuncio..." style="
+                  background:transparent; border:none; outline:none; color:#e2e8f0; font-size:0.65rem; width:150px; padding:2px 4px; font-family:inherit; transition: color 0.3s;
+                " onkeydown="if(event.key==='Enter') window.playCustomVoiceDemo()" />
+                <button onclick="window.playCustomVoiceDemo()" style="
+                  background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; border-radius:10px; padding:2px 8px; font-size:0.65rem; cursor:pointer; font-weight:bold; transition:all 0.2s;
+                ">▶ Demo</button>
+              </div>
+            </div>
+          </div>`;
+        }
 
-        _badgeEl.innerHTML = `<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-          <div>
-            ${n > 0
-              ? `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;
-                   background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.25);
-                   color:#34d399;font-size:.7rem;font-weight:700;">
-                   🟢 ${n} operador${n !== 1 ? 'es' : ''} activo${n !== 1 ? 's' : ''} hoy ${turnoSel ? '· ' + turnoSel : ''}
-                 </span>`
-              : `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;
-                   background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);
-                   color:#fbbf24;font-size:.7rem;font-weight:700;">
-                   ⏳ Esperando que los operadores se logueen...
-                 </span>`}
-          </div>
-          <div>
-            ${voiceBtnHtml}
-          </div>
-        </div>`;
+        const contentDiv = document.getElementById('badge-active-ops-content');
+        if (contentDiv) {
+          contentDiv.innerHTML = n > 0
+            ? `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;
+                 background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.25);
+                 color:#34d399;font-size:.7rem;font-weight:700;">
+                 🟢 ${n} operador${n !== 1 ? 'es' : ''} activo${n !== 1 ? 's' : ''} hoy ${turnoSel ? '· ' + turnoSel : ''}
+               </span>`
+            : `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;
+                 background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);
+                 color:#fbbf24;font-size:.7rem;font-weight:700;">
+                 ⏳ Esperando que los operadores se logueen...
+               </span>`;
+        }
         _badgeEl.style.display = 'block';
       } else if (_badgeEl) {
         _badgeEl.style.display = 'none'; // Ocultar en vista Mes
@@ -28483,6 +28493,33 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
       if (window._enableVoiceAlerts) {
         speakText("Alertas de voz activadas");
+      }
+    };
+
+    window.playCustomVoiceDemo = function() {
+      if (!window.speechSynthesis) return;
+      const inputEl = document.getElementById('demo-voice-text');
+      if (!inputEl) return;
+      const text = inputEl.value.trim();
+      if (!text) {
+        inputEl.style.borderBottom = '1px solid #ef4444';
+        setTimeout(() => inputEl.style.borderBottom = 'none', 1000);
+        return;
+      }
+      
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-ES';
+        const voices = window.speechSynthesis.getVoices();
+        const esVoice = voices.find(v => v.lang.startsWith('es'));
+        if (esVoice) utterance.voice = esVoice;
+        window.speechSynthesis.speak(utterance);
+        
+        // Efecto visual de "hablando"
+        inputEl.style.color = '#38bdf8';
+        utterance.onend = () => { inputEl.style.color = '#e2e8f0'; inputEl.value = ''; };
+      } catch (e) {
+        console.warn("Falla en reproducción TTS Demo: ", e);
       }
     };
 

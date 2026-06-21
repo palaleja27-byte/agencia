@@ -9174,15 +9174,17 @@
       const copTotal = Math.round(totalPtsCurr * 1400).toLocaleString('es-CO');
 
       document.getElementById('rkStatsRow').innerHTML =
-    '<div class="rk-stat-card">' +
+    '<div class="rk-stat-card" style="position:relative;">' +
       '<div class="stat-val">' + rkDataFiltered.length + '</div>' +
       '<div class="stat-lbl">Ops</div>' +
       '<button onclick="showDailyHistory()" style="margin-top:4px;padding:2px 6px;font-size:0.5rem;background:rgba(147,197,253,0.08);border:1px solid rgba(147,197,253,0.2);color:#93c5fd;border-radius:4px;cursor:pointer;">🕰️ Hist</button>' +
+      '<button onclick="showSmartInfo(\'rk-ops\')" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#64748b;font-size:8px;font-weight:700;cursor:pointer;line-height:1;" title="Info del modulo">ℹ</button>' +
     '</div>' +
-    '<div class="rk-stat-card" style="border: 1px solid rgba(94, 234, 212, 0.25); background: rgba(94, 234, 212, 0.02);">' +
+    '<div class="rk-stat-card" style="position:relative; border: 1px solid rgba(94, 234, 212, 0.25); background: rgba(94, 234, 212, 0.02);">' +
       '<div class="stat-val" id="rk-val-total" style="font-size:18px; color: #5eead4;">' + dTotalDisp + '</div>' +
-      '<div class="stat-lbl" style="color:#5eead4; font-weight: 700; opacity: 0.8; font-size: 8px;">GLOBAL ' + currLabel.toUpperCase() + '</div>' +
+      '<div class="stat-lbl" style="color:#5eead4; font-weight: 700; opacity: 0.8; font-size: 8px;">AGENCIA ROMERO ' + currLabel.toUpperCase() + '</div>' +
       '<div id="rk-val-cop" style="font-size:.65rem;color:#34d399;margin-top:1px; font-weight: 600;">' + dCopDisp + '</div>' +
+      '<button onclick="showSmartInfo(\'rk-total\')" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(94,234,212,.3);color:#5eead4;font-size:8px;font-weight:700;cursor:pointer;line-height:1;" title="Info del modulo">ℹ</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px; position:relative;">' +
       '<div id="rk-header-live-feed" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">' +
@@ -9193,13 +9195,13 @@
          '<div id="rk-header-live-msg" style="font-size: 0.65rem; color: #e2e8f0; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Cargando...</div>' +
          '<div id="rk-header-live-time" style="font-size: 0.5rem; color: #475569; margin-top: 2px;">—</div>' +
       '</div>' +
-      '<button onclick="rrInfoLive()" style="position:absolute;top:4px;right:4px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:16px;height:16px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:900;" title="Info del modulo">ℹ</button>' +
+      '<button onclick="showSmartInfo(\'rk-live\')" style="position:absolute;top:5px;right:5px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:14px;height:14px;border-radius:50%;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;line-height:1;" title="Info del modulo">ℹ</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="position:relative;">' +
       '<div class="stat-val" id="rk-val-growth" style="color:' + dCrecColor + '; font-size: 16px;">' + dCrecIcon + ' ' + dCrecStr + '</div>' +
       '<div class="stat-lbl" style="font-size: 8px;">Crecimiento</div>' +
       '<div id="rk-val-range" style="font-size:.5rem;color:#475569;margin-top:1px;">' + dRangeDisp + '</div>' +
-      '<button id="btn-crec-info" onclick="toggleCrecTooltip(event)" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#64748b;font-size:8px;font-weight:700;cursor:pointer;line-height:1;">ℹ</button>' +
+      '<button onclick="showSmartInfo(\'rk-growth\')" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#64748b;font-size:8px;font-weight:700;cursor:pointer;line-height:1;" title="Info del modulo">ℹ</button>' +
     '</div>';
 
   // =================================================================
@@ -23352,6 +23354,22 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
       function showSmartInfo(moduleId) {
         const infoMap = {
+          'rk-ops': {
+            title: '👥 Operadores en Línea (OPS)',
+            html: '<b style="color:#60a5fa;">¿De dónde sale?</b><br>Es el conteo real de operadores conectados en la plataforma <b>en este preciso momento</b> en la Agencia Romero.<br><br><b style="color:#60a5fa;">¿Por qué es importante?</b><br>Muestra el "músculo" operativo activo. Sin operadores suficientes, la agencia pierde dinero. Te permite saber al instante si hay bajas de personal no reportadas.<br><br><b style="color:#60a5fa;">¿Para qué sirve?</b><br>Toma decisiones rápidas: si tienes 10 OPS en lugar de 15, inmediatamente debes contactar al equipo de ausencias para cubrir turnos y no dejar cuentas (perfiles) sin facturar.'
+          },
+          'rk-total': {
+            title: '💰 Puntos Agencia Romero',
+            html: '<b style="color:#5eead4;">¿De dónde sale?</b><br>Es la suma total de puntos reales y verificados generados por toda la Agencia Romero en el mes en curso.<br><br><b style="color:#5eead4;">¿Por qué es importante?</b><br>Muestra el dinero contante y sonante. Está filtrado <b>solo a los datos de la Agencia Romero</b> para que no se mezcle con información externa.<br><br><b style="color:#5eead4;">¿Para qué sirve?</b><br>Es tu brújula principal de facturación. Te permite ver el dinero proyectado en Pesos Colombianos (COP) para que tomes decisiones financieras y sepas si la agencia está cumpliendo sus metas monetarias.'
+          },
+          'rk-live': {
+            title: '📡 Actividad en Vivo',
+            html: '<b style="color:#818cf8;">¿De dónde sale?</b><br>Es un radar en tiempo real que capta cada punto ingresado por los operadores en el segundo exacto que lo hacen.<br><br><b style="color:#818cf8;">¿Por qué es importante?</b><br>Muestra que la operación está "viva" y facturando. Si este módulo deja de moverse por varios minutos, significa que la agencia está estancada o hay problemas técnicos graves.<br><br><b style="color:#818cf8;">¿Para qué sirve?</b><br>Supervisión instantánea. Te dice quién acaba de vender y qué perfil está "caliente" (produciendo dinero) justo ahora. Sirve para felicitar al equipo o detectar bajones de actividad al instante.'
+          },
+          'rk-growth': {
+            title: '📈 Crecimiento (Ritmo Diario)',
+            html: '<b style="color:#34d399;">¿De dónde sale?</b><br>Compara matemáticamente el ritmo de puntos generados por día este mes, contra el ritmo del mes pasado (ej. si este mes haces 200 pts diarios y el pasado 100, creces +100%).<br><br><b style="color:#34d399;">¿Por qué es importante?</b><br>Es el KPI más inteligente de todos. Los totales pueden engañar al inicio del mes, pero el "ritmo" te dice tu velocidad real.<br><br><b style="color:#34d399;">¿Para qué sirve?</b><br>Predicción del futuro. Si el ritmo es negativo (rojo), significa que a final de mes ganarás menos que el mes pasado a menos que aprietes tu estrategia YA. Si es verde, vas rumbo a superar tu récord.'
+          },
           'ranking': {
             title: '🏆 Control de Presencia Real-Time',
             html: '<b style="color:#38bdf8;">¿Qué es?</b><br>Es el Ranking Global que monitorea la conexión y productividad en tiempo real de todos los operadores del turno.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Utiliza la sincronización <i>Zero-Wait</i> con Supabase para listar a los operadores activos. Los puntos se calculan leyendo los cortes ingresados (Puntos netos = actuales - anteriores) y se comparan contra las metas.'

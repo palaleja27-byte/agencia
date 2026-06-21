@@ -27568,59 +27568,71 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     window.abrirInfoTarjeta = function(tipo, dataBase64) {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
-      const data = JSON.parse(atob(dataBase64));
-      const modal = document.getElementById('modal-info-ai');
-      const icon = document.getElementById('mi-icon');
-      const title = document.getElementById('mi-title');
-      const origen = document.getElementById('mi-origen');
-      const ecuacion = document.getElementById('mi-ecuacion');
-      const analisis = document.getElementById('mi-analisis');
-      const btnAudio = document.getElementById('btn-mi-audio');
+      let title = '';
+      let textHTML = '';
       
-      btnAudio.classList.remove('playing');
-      btnAudio.innerHTML = '<span>🔊 Reproducir Análisis</span>';
-      let textAI = '';
-
       if (tipo === 'hora') {
-        icon.innerText = '⚡';
-        title.innerText = 'Métrica: Ritmo por Hora (Pace)';
-        origen.innerText = 'Extracción en tiempo real de Datame, sumando todos los operadores. Excluye cortes atípicos (>1500).';
-        ecuacion.innerText = 'Pace = ( Σ Puntos Hoy / Hora Actual ) * 24';
-        const ritmo = data.ptsHoy / data.currentHour;
-        const proyectado = ritmo * 24;
-        textAI = `Director, al corte de la hora ${data.currentHour}, hemos asegurado ${data.ptsHoy.toFixed(0)} puntos. El ritmo operativo actual es de ${ritmo.toFixed(0)} puntos por hora. Manteniendo esta constante, la proyección matemática de cierre a la medianoche es de ${proyectado.toFixed(0)} puntos. ` + (ritmo > 1000 ? 'El rendimiento horario es excepcional, sugiero mantener las estrategias de retención actuales.' : 'El ritmo es moderado. Sugiero incentivar a los equipos de la jornada tarde y noche para acelerar el volumen de producción.');
+        title = '⚡ Ritmo por Hora (Pace)';
+        textHTML = `
+          <div style="text-align:left; font-size:0.9rem; line-height:1.5;">
+            <p><strong>¿De dónde sale este dato?</strong><br>
+            Se extrae directamente en tiempo real de la base de datos de Datame, sumando los puntos actuales de todos los operadores activos.</p>
+            <p><strong>¿Por qué se calcula así?</strong><br>
+            El 'Pace' divide los puntos obtenidos entre la hora actual del día y lo multiplica por 24 para estimar cómo terminaría el día si la velocidad se mantiene. (<em>Pace = (Puntos Hoy / Hora Actual) * 24</em>).</p>
+            <p><strong>¿Para qué nos sirve?</strong><br>
+            Es el indicador más importante para tomar decisiones urgentes. Si el ritmo está bajo, el administrador debe presionar a los operadores de los siguientes turnos o lanzar incentivos antes de que termine el día. Sirve para saber si vamos a cumplir la meta diaria antes de que sea demasiado tarde.</p>
+          </div>
+        `;
       } else if (tipo === 'dia') {
-        icon.innerText = '📅';
-        title.innerText = 'Métrica: Rendimiento Diario';
-        origen.innerText = 'Acumulado de cortes Datame de la semana en curso, aplicando offset de +2 días para corregir la zona horaria UK -> Colombia.';
-        ecuacion.innerText = 'Semana = Σ (Puntos_Neto) donde Week(Fecha) == Week(Hoy)';
-        const diasArr = data.ptsPorDiaSemana;
-        const maxPts = Math.max(...diasArr);
-        const bestDayIdx = diasArr.indexOf(maxPts);
-        const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-        textAI = `Análisis semanal en curso. Hemos consolidado ${data.ptsSemana.toFixed(0)} puntos esta semana. El día de mayor tracción operativa ha sido el ${days[bestDayIdx]} con ${maxPts.toFixed(0)} puntos. Estratégicamente, debemos replicar el modelo de tráfico del ${days[bestDayIdx]} hacia los días de menor rendimiento para equilibrar la curva semanal.`;
+        title = '📅 Rendimiento Semanal';
+        textHTML = `
+          <div style="text-align:left; font-size:0.9rem; line-height:1.5;">
+            <p><strong>¿De dónde sale este dato?</strong><br>
+            Es el acumulado de todos los cortes diarios de Datame de la semana en curso (Lunes a Domingo), aplicando un ajuste de zona horaria para emparejar el huso horario de la página matriz.</p>
+            <p><strong>¿Por qué se calcula así?</strong><br>
+            Compara la suma total de puntos desde el Lunes hasta hoy contra exactamente el mismo periodo de la semana pasada (WoW = Week over Week).</p>
+            <p><strong>¿Para qué nos sirve?</strong><br>
+            Nos permite identificar qué día específico de la semana tuvo más tracción (el "Mejor Día") para replicar esas estrategias, y nos muestra si el equipo está bajando su rendimiento semanalmente para prevenir una caída del ingreso en la quincena.</p>
+          </div>
+        `;
       } else if (tipo === 'semana') {
-        icon.innerText = '🏆';
-        title.innerText = 'Métrica: Rendimiento Semanal';
-        origen.innerText = 'Consolidado del mes actual agrupado en semanas estándar (7 días exactos desde el inicio del año).';
-        ecuacion.innerText = 'Semana_N = Σ (Puntos) donde Month == Mes_Actual agrupado por index % 7';
-        const sumSem = data.ptsPorSemanaMes.reduce((a,b)=>a+b,0);
-        textAI = `Reporte mensual ejecutivo. Hasta la fecha, el volumen acumulado del mes es de ${data.ptsMes.toFixed(0)} puntos. Si analizamos la distribución intersemanal, observamos que las primeras semanas definen la tendencia del mes. La prioridad gerencial debe ser sostener este volumen operativo para maximizar la conversión final en COP, la cual se estima en una base de mil cuatrocientos pesos por punto.`;
+        title = '🏆 Meta Mensual';
+        textHTML = `
+          <div style="text-align:left; font-size:0.9rem; line-height:1.5;">
+            <p><strong>¿De dónde sale este dato?</strong><br>
+            Es la suma absoluta de todos los puntos producidos en el mes actual.</p>
+            <p><strong>¿Por qué se calcula así?</strong><br>
+            Divide el mes en "semanas operativas" (agrupaciones de 7 días). Calcula la velocidad de ganancia y predice ("Proy cierre") cuántos puntos tendrá la agencia al último día del mes.</p>
+            <p><strong>¿Para qué nos sirve?</strong><br>
+            Es la métrica financiera principal. El número proyectado te dice si alcanzarás a pagar las comisiones y cubrir los costos fijos de la agencia. Si la proyección está en amarillo, significa que vas a cerrar con menos dinero que el mes anterior.</p>
+          </div>
+        `;
       } else if (tipo === 'mes') {
-        icon.innerText = '📊';
-        title.innerText = 'Métrica: Histórico Anual';
-        origen.innerText = 'Histórico consolidado del año 2026 directamente extraído de la base de datos maestra (Datame).';
-        ecuacion.innerText = 'Total_Anual = Σ (Puntos) agrupados por Mes (01, 02, 03...)';
-        const arrMeses = ['01','02','03','04','05'].map(m => data.ptsPorMes[m]);
-        const maxMes = Math.max(...arrMeses);
-        const mIdx = arrMeses.indexOf(maxMes);
-        const nombresMes = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo'];
-        textAI = `Panorama macroeconómico anual. El histórico nos muestra que nuestro mejor ciclo fiscal ha sido ${nombresMes[mIdx]}, alcanzando el pico histórico de ${maxMes.toFixed(0)} puntos. Este récord debe ser nuestro benchmark, nuestro estándar mínimo de calidad para los próximos meses. Las proyecciones sugieren un crecimiento escalonado si mantenemos la densidad de tráfico en las cuentas principales.`;
+        title = '📊 Histórico Anual';
+        textHTML = `
+          <div style="text-align:left; font-size:0.9rem; line-height:1.5;">
+            <p><strong>¿De dónde sale este dato?</strong><br>
+            Extrae el consolidado de todo el año agrupando cada mes completo en la base de datos.</p>
+            <p><strong>¿Por qué se calcula así?</strong><br>
+            Busca el valor máximo ("Mes Más Fuerte") para establecer un benchmark o récord que la agencia debe intentar superar constantemente.</p>
+            <p><strong>¿Para qué nos sirve?</strong><br>
+            Para tener perspectiva a largo plazo. Ayuda al Director a visualizar la tendencia macro (si la agencia está en declive, estancada o en crecimiento sostenido) y a planificar inversiones mayores.</p>
+          </div>
+        `;
       }
-      
-      analisis.innerText = textAI;
-      modal.classList.add('open');
+
+      Swal.fire({
+        title: title,
+        html: textHTML,
+        icon: 'info',
+        background: '#1e293b',
+        color: '#f8fafc',
+        confirmButtonColor: '#3b82f6',
+        customClass: {
+          popup: 'swal-rr-popup',
+          title: 'swal-rr-title'
+        }
+      });
     };
   </script>
   
@@ -28768,46 +28780,96 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
     });
 
-    window.validateIcebreaker = function() {
+    window.validateIcebreaker = async function() {
       const input = document.getElementById('ice-val-input');
-      if (!input) return;
-      const text = input.value.trim().toLowerCase();
-      if (!text) return;
-      
-      const rules = {
-        len: input.value.length > 0 && input.value.length <= 120,
-        money: !/(token|dinero|dolar|dólar|pagar|precio|costo|barato|gratis|coin|moneda|gift|regalo|paypal|cashapp)/i.test(text),
-        links: !/(http|www|\.com|\.net|link|whatsapp|snapchat|instagram|ig|snap|telegram|skype)/i.test(text),
-        open: text.includes('?'),
-        explicit: !/(sexo|desnuda|follar|puta|nude|sex|fuck|pussy|dick|cock|cum|horny|cachonda)/i.test(text)
-      };
-      
-      const updateRuleUI = (id, pass) => {
-        const el = document.getElementById(`val-rule-${id}`);
-        if (!el) return;
-        const icon = el.querySelector('.val-icon');
-        el.style.color = pass ? '#10b981' : '#ef4444';
-        if(icon) icon.textContent = pass ? '✅' : '❌';
-      };
-      
-      updateRuleUI('len', rules.len);
-      updateRuleUI('money', rules.money);
-      updateRuleUI('links', rules.links);
-      updateRuleUI('open', rules.open);
-      updateRuleUI('explicit', rules.explicit);
-      
       const verdictEl = document.getElementById('ice-val-verdict');
-      if (!verdictEl) return;
-      
-      const allPass = Object.values(rules).every(v => v);
-      if (allPass) {
-        verdictEl.innerHTML = '<span style="color:#10b981;">🌟 APROBADO: Icebreaker perfecto. Cumple todas las reglas de TalkyTimes.</span>';
-        input.style.borderColor = '#10b981';
-        input.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.3)';
-      } else {
-        verdictEl.innerHTML = '<span style="color:#ef4444;">⚠️ RECHAZADO: Corrige los errores marcados en rojo.</span>';
-        input.style.borderColor = '#ef4444';
-        input.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.3)';
+      const btn = document.querySelector('#icebreaker-ai-validator button');
+      if (!input || !input.value.trim()) return;
+
+      const gKey = localStorage.getItem('rr_g_key_manual') || '';
+      if (!gKey) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'IA No Configurada',
+          text: 'Para usar el Validador Pro necesitas configurar tu llave de Gemini en el modal de ajustes (⚙️).',
+          background: '#1e293b', color: '#f8fafc', confirmButtonColor: '#3b82f6'
+        });
+        return;
+      }
+
+      btn.innerHTML = '⏳ Analizando...';
+      btn.disabled = true;
+      verdictEl.innerHTML = '<span style="color:#fbbf24;">Analizando con Inteligencia Artificial...</span>';
+
+      const prompt = `Actúa como el Auditor de Cumplimiento más estricto de la plataforma TalkyTimes.
+Evalúa este Icebreaker (primer mensaje a un cliente): "${input.value.trim()}"
+
+Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto markdown, solo JSON válido):
+{
+  "len": booleano, true si el mensaje tiene 120 caracteres o menos.
+  "money": booleano, true si NO pide dinero, regalos, tokens, precio, de ninguna manera.
+  "links": booleano, true si NO contiene enlaces, redes sociales (ig, snap, whatsapp), ni números.
+  "open": booleano, true si incluye una pregunta abierta o gancho que genere respuesta (no de sí o no).
+  "explicit": booleano, true si el tono es sugerente pero SFW (Safe For Work, no pornografía agresiva directa en el primer mensaje).
+  "score": número del 1 al 100 calificando el poder de enganche (curiosity gap).
+  "rewrite": "string con una versión muy mejorada, persuasiva y que cumpla el 100% de las reglas",
+  "verdict": "string breve dando el veredicto o explicando el problema principal"
+}`;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${gKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const data = await response.json();
+        let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const resJSON = JSON.parse(rawText);
+
+        const updateRuleUI = (id, pass) => {
+          const el = document.getElementById(`val-rule-${id}`);
+          if (!el) return;
+          const icon = el.querySelector('.val-icon');
+          el.style.color = pass ? '#10b981' : '#ef4444';
+          if(icon) icon.textContent = pass ? '✅' : '❌';
+        };
+
+        updateRuleUI('len', resJSON.len);
+        updateRuleUI('money', resJSON.money);
+        updateRuleUI('links', resJSON.links);
+        updateRuleUI('open', resJSON.open);
+        updateRuleUI('explicit', resJSON.explicit);
+
+        const allPass = resJSON.len && resJSON.money && resJSON.links && resJSON.open && resJSON.explicit;
+        
+        input.style.borderColor = allPass ? '#10b981' : '#ef4444';
+        
+        let finalHTML = `
+          <div style="font-weight:900; font-size:1.1rem; color:${allPass ? '#10b981' : '#ef4444'}; margin-bottom:8px;">
+            ${allPass ? '🌟 APROBADO' : '⚠️ RECHAZADO'} (Score: ${resJSON.score}/100)
+          </div>
+          <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">${resJSON.verdict}</div>
+        `;
+
+        if (!allPass || resJSON.score < 90) {
+          finalHTML += `
+            <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:10px; border-radius:8px; text-align:left;">
+              <div style="font-size:0.7rem; color:#38bdf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🤖 Sugerencia IA:</div>
+              <div style="font-size:0.85rem; color:#fff; font-style:italic;" id="ice-ai-suggestion">${resJSON.rewrite}</div>
+              <button onclick="document.getElementById('ice-val-input').value = document.getElementById('ice-ai-suggestion').innerText; window.validateIcebreaker();" style="margin-top:8px; background:#38bdf8; color:#0f172a; border:none; padding:4px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:0.7rem;">Usar Sugerencia</button>
+            </div>
+          `;
+        }
+
+        verdictEl.innerHTML = finalHTML;
+
+      } catch (err) {
+        console.error(err);
+        verdictEl.innerHTML = '<span style="color:#ef4444;">⚠️ Error de conexión con la IA. Verifica tu llave o intenta nuevamente.</span>';
+      } finally {
+        btn.innerHTML = '🤖 Validar con IA';
+        btn.disabled = false;
       }
     };
   </script>

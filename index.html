@@ -6410,6 +6410,15 @@
       <!-- GENERATOR SECTION -->
       <div style="margin-top:24px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.1);">
         <h4 style="margin:0 0 12px; font-size:0.95rem; color:#f472b6; text-transform:uppercase;">✨ Generador Inteligente (Por Temática)</h4>
+        <div style="margin-bottom:12px;">
+          <input type="password" id="ice-gen-api-key" placeholder="🔑 Pega aquí tu API Key de Gemini..." style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); color:white; padding:10px; border-radius:8px; outline:none; font-size:0.85rem; box-sizing:border-box; transition:border 0.2s;" oninput="localStorage.setItem('rr_g_key_manual', this.value)" onfocus="this.style.borderColor='#f472b6'" onblur="this.style.borderColor='rgba(255,255,255,0.2)'">
+          <script>
+            setTimeout(() => {
+              const k = localStorage.getItem('rr_g_key_manual');
+              if(k) document.getElementById('ice-gen-api-key').value = k;
+            }, 100);
+          </script>
+        </div>
         <div style="display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
           <select id="ice-gen-theme" style="flex:1; min-width:250px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:10px; border-radius:8px; outline:none; font-size:0.85rem;">
             <option value="Hot talks">🌶️ Hot talks (Seducción, atrevido, coqueto)</option>
@@ -28981,11 +28990,12 @@ Ejemplo:
 `;
 
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${gKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${gKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
             safetySettings: [
               { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
               { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -28996,6 +29006,7 @@ Ejemplo:
         });
         const data = await response.json();
         let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        console.log("Raw Gemini Response:", rawText);
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
         const resJSON = JSON.parse(rawText);
 

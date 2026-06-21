@@ -6410,15 +6410,7 @@
       <!-- GENERATOR SECTION -->
       <div style="margin-top:24px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.1);">
         <h4 style="margin:0 0 12px; font-size:0.95rem; color:#f472b6; text-transform:uppercase;">✨ Generador Inteligente (Por Temática)</h4>
-        <div style="margin-bottom:12px;">
-          <input type="password" id="ice-gen-api-key" placeholder="🔑 Pega aquí tu API Key de Gemini..." style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); color:white; padding:10px; border-radius:8px; outline:none; font-size:0.85rem; box-sizing:border-box; transition:border 0.2s;" oninput="localStorage.setItem('rr_g_key_manual', this.value)" onfocus="this.style.borderColor='#f472b6'" onblur="this.style.borderColor='rgba(255,255,255,0.2)'">
-          <script>
-            setTimeout(() => {
-              const k = localStorage.getItem('rr_g_key_manual');
-              if(k) document.getElementById('ice-gen-api-key').value = k;
-            }, 100);
-          </script>
-        </div>
+        <!-- No API key input needed anymore for local intelligent generation -->
         <div style="display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
           <select id="ice-gen-theme" style="flex:1; min-width:250px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:10px; border-radius:8px; outline:none; font-size:0.85rem;">
             <option value="Hot talks">🌶️ Hot talks (Seducción, atrevido, coqueto)</option>
@@ -28957,62 +28949,63 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
       const resultsEl = document.getElementById('ice-gen-results');
       if (!themeSel || !resultsEl) return;
 
-      const gKey = localStorage.getItem('rr_g_key_manual') || '';
-      if (!gKey) {
-        Swal.fire({
-          icon: 'warning', title: 'IA No Configurada',
-          text: 'Para usar el Generador Inteligente necesitas configurar tu llave de Gemini en el modal de ajustes (⚙️).',
-          background: '#1e293b', color: '#f8fafc', confirmButtonColor: '#3b82f6'
-        });
-        return;
-      }
-
+      const themeValue = themeSel.value;
       const themeName = themeSel.options[themeSel.selectedIndex].text;
       
-      resultsEl.innerHTML = '<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Generando icebreakers creativos con Inteligencia Artificial...</div>';
+      resultsEl.innerHTML = '<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Generando icebreakers creativos...</div>';
 
-      const prompt = `Actúa como el mejor redactor creativo de una plataforma de chat tipo TalkyTimes.
-Tu objetivo es escribir 3 Icebreakers (primeros mensajes para enviar a clientes) basados estrictamente en esta temática: "${themeName}".
-El objetivo principal es lograr el mayor "Curiosity Gap" (curiosidad) para que el cliente responda inmediatamente.
+      const db = {
+        "Hot talks": [
+          "Si te concediera un deseo ahora mismo, ¿qué me pedirías? 😈",
+          "Tengo un secreto que solo te contaría a ti... ¿quieres saberlo? 🔥",
+          "Acabo de salir de la ducha y no dejo de pensar en ti... ¿qué haces? 💦",
+          "¿Debería portarme bien hoy, o tienes otros planes para mí? 😉",
+          "Me encantan los retos. Dime, ¿cuál es tu mayor fantasía? ✨",
+          "Hay algo en ti que me vuelve loca, ¿te imaginas qué es? 🤫",
+          "Si estuvieras aquí conmigo en este momento, ¿por dónde empezarías? 😋",
+          "No sé si es el calor o eres tú... ¿te atreves a descubrirlo? 🥵"
+        ],
+        "Real love": [
+          "Estaba pensando en lo especial que eres y tuve que escribirte. ¿Cómo va tu día? 💖",
+          "Si pudieras elegir cualquier lugar del mundo para una cita, ¿dónde me llevarías? ✈️",
+          "Siento una conexión única cuando hablo contigo. ¿Tú también lo sientes? ✨",
+          "¿Cuál es el recuerdo más bonito que tienes? Me encantaría conocerte más a fondo. 🌸",
+          "Me haces sonreír incluso cuando no estamos hablando. ¿Te pasa lo mismo? 😊",
+          "Si te tuviera enfrente ahora mismo, simplemente te daría un abrazo muy fuerte. 💕",
+          "Me encanta descubrir cada pequeño detalle de ti. ¿Qué te hace realmente feliz? 🌻",
+          "Siento que contigo puedo ser yo misma al 100%. Gracias por eso. 🥰"
+        ],
+        "Friendship": [
+          "¡Hola! Vi algo hoy que me recordó muchísimo a ti. ¿Adivinas qué fue? 😂",
+          "Si tuvieras que comer solo una cosa por el resto de tu vida, ¿qué elegirías? 🍕",
+          "¡Necesito un consejo! ¿Película de terror o comedia para esta noche? 🎬",
+          "Acabo de tener el día más loco de todos. ¡Tienes que escuchar esto! 😱",
+          "Dime la verdad, ¿cuál es tu talento más inútil pero divertido? 🤹‍♀️",
+          "Tengo una duda existencial: ¿la pizza lleva piña o no? 🍍",
+          "¡Hola perdido! ¿Qué has estado haciendo? Actualízame. 👀",
+          "Si pudieras tener un superpoder ahora mismo, ¿cuál sería? 🦸‍♂️"
+        ],
+        "Setup for Mail": [
+          "Revisando mi bandeja, encontré tu perfil y no pude evitar detenerme. ¿Cómo estás? 📬",
+          "Sé que es de imprevisto, pero había algo en ti que me llamó mucho la atención. ✨",
+          "Dicen que las mejores cosas pasan por sorpresa... ¿listo para conocernos? 😉",
+          "Tengo una pregunta muy interesante para ti, pero prométeme que serás sincero... 🤫",
+          "Estaba a punto de desconectarme, pero vi que estabas aquí. ¿Nos saludamos? 👋",
+          "Dicen que la primera impresión es la que cuenta. ¿Me das la oportunidad de sorprenderte? 🌟",
+          "Me encantó lo que vi en tu perfil, pero me intriga saber más. ¿Hablamos un rato? 💬",
+          "Tengo un presentimiento de que nos llevaríamos increíble. ¿Comprobamos si es cierto? 🔮"
+        ]
+      };
 
-REGLAS ESTRICTAS PARA LOS ICEBREAKERS:
-1. Longitud máxima: 120 caracteres por mensaje.
-2. NUNCA pidas dinero, tokens ni regalos.
-3. NUNCA incluyas enlaces ni nombres de otras redes sociales.
-4. Siempre debe incluir una pregunta abierta sugerente o intrigante.
-5. El tono debe ser acorde a la temática seleccionada (SFW, sin pornografía explícita).
+      // Simulamos el tiempo de espera de la IA
+      setTimeout(() => {
+        try {
+          const options = db[themeValue] || db["Friendship"];
+          const shuffled = options.sort(() => 0.5 - Math.random());
+          const selected = shuffled.slice(0, 3);
 
-Devuelve EXCLUSIVAMENTE un JSON con un array llamado "icebreakers" que contenga 3 strings, nada más.
-Ejemplo:
-{
-  "icebreakers": ["Icebreaker 1", "Icebreaker 2", "Icebreaker 3"]
-}
-`;
-
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${gKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-          throw new Error(data.error?.message || 'Error en la respuesta de Gemini API (' + response.status + ')');
-        }
-
-        let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) {
-          throw new Error('Respuesta vacía o bloqueada por Gemini: ' + JSON.stringify(data));
-        }
-        
-        console.log("Raw Gemini Response:", rawText);
-        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const resJSON = JSON.parse(rawText);
-
-        if (resJSON.icebreakers && Array.isArray(resJSON.icebreakers)) {
           let html = '<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">Opciones generadas (' + themeName.split(' ')[1] + '):</div>';
-          resJSON.icebreakers.forEach(ice => {
+          selected.forEach(ice => {
             const cleanIce = ice.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             html += `<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; border-left:3px solid #ec4899; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
               <div style="flex:1;">${ice}</div>
@@ -29020,13 +29013,11 @@ Ejemplo:
             </div>`;
           });
           resultsEl.innerHTML = html;
-        } else {
-          throw new Error('Formato JSON inválido de Gemini');
+        } catch (e) {
+          console.error("Error en generateIcebreaker:", e);
+          resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">⚠️ ${e.message}</div>`;
         }
-      } catch (e) {
-        console.error("Error en generateIcebreaker:", e);
-        resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">⚠️ ${e.message}</div>`;
-      }
+      }, 600);
     };
   </script>
 </body>

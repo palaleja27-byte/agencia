@@ -12059,6 +12059,15 @@
                 }
               }
 
+              // --- ADMIN FORCE LOGOUT ---
+              if (row.key === 'rr_admin_logout_signal') {
+                if (currentRole === 'admin' && row.value !== window._lastAdminPinChangeTs) {
+                  alert('🔒 La contraseña de Administrador ha sido cambiada. Tu sesión ha sido cerrada por seguridad.');
+                  if (typeof loginLogout === 'function') loginLogout();
+                }
+              }
+
+
               if (critical.includes(row.key) && typeof loadData === 'function') {
                 loadData();
                 if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
@@ -19002,7 +19011,15 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (newAdm && (newAdm.length < 4 || isNaN(newAdm))) return alert('PIN Admin debe ser 4 dígitos.');
       
       if (newMon) pins.monitor = await safePinHash(newMon);
-      if (newAdm) pins.admin = await safePinHash(newAdm);
+      if (newAdm) {
+        pins.admin = await safePinHash(newAdm);
+        if (typeof _sb !== 'undefined' && _sb) {
+           const tsVal = String(Date.now());
+           window._lastAdminPinChangeTs = tsVal;
+           _sb.from('kv_store').upsert({ key: 'rr_admin_logout_signal', value: tsVal }, { onConflict: 'key' }).then(()=>{});
+        }
+      }
+      
       loginSavePinsToStorage(pins);
       alert('✅ PINs actualizados con cifrado SHA-256.');
     }

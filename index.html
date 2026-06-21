@@ -8734,7 +8734,23 @@
           _elGrowth.style.color = _gc;
           _elGrowth.textContent = _gi + ' ' + _gs + paceCrec.toFixed(1) + '% ritmo/día';
         }
-        if (_elRange) _elRange.textContent = m1Name + ' → ' + m2Name;
+        if (_elRange) {
+          const todayStr = localDateStr(0);
+          const yesterdayStr = localDateStr(1);
+          const ptsHoyActual = opsM2.filter(r => r.fecha_dia === todayStr).reduce((a,b)=>a+(b.puntos_neto||0), 0);
+          const ptsAyerActual = opsM2.filter(r => r.fecha_dia === yesterdayStr).reduce((a,b)=>a+(b.puntos_neto||0), 0);
+          const diffDaily = ptsAyerActual > 0 ? ((ptsHoyActual - ptsAyerActual) / ptsAyerActual * 100) : 0;
+          const diffSign = diffDaily > 0 ? '+' : '';
+          const diffColor = diffDaily >= 0 ? '#34d399' : '#f87171';
+          _elRange.innerHTML = `
+            <div style="margin-bottom: 2px;">${m1Name} → ${m2Name}</div>
+            <div style="font-size: 0.55rem; color: #94a3b8; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 3px; margin-top: 3px; display: flex; justify-content: space-between; align-items: center; gap: 4px;">
+              <span>Ayer: <strong style="color:#cbd5e1">${ptsAyerActual.toFixed(0)}</strong></span>
+              <span>Hoy: <strong style="color:#cbd5e1">${ptsHoyActual.toFixed(0)}</strong></span>
+              <span style="color:${diffColor}; font-weight: bold; font-size: 0.5rem; background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 4px;">${diffSign}${diffDaily.toFixed(1)}%</span>
+            </div>
+          `;
+        }
         if (_elTotal) _elTotal.textContent = m2Total.toLocaleString('es-CO', {minimumFractionDigits: 1});
         if (_elCop) _elCop.textContent = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
 

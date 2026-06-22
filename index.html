@@ -8424,26 +8424,9 @@
           const horaInfo = foundHorasKey ? allHoras[foundHorasKey] : null;
           if (horaInfo?.salidaTS && Date.now() > horaInfo.salidaTS) return; // turno terminado
 
-          const _es12h = horaInfo && horaInfo.horas === 12 && horaInfo.fecha === fecha;
-
-          // 2. Verificar por hora Colombia según turno del operador
-          const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name.toUpperCase() === opNameUpper) : null;
-          const opTurno = op?.turno || '';
-          // Horas de fin de turno estándar (8h) por turno
-          const turnoFin = { 'Mañana': 14, 'Tarde': 22, 'Noche': 6 };
-          if (opTurno && (turnoFin[opTurno] !== undefined || opTurno === 'Completo')) {
-            // Si el operador tiene turno de 12 horas registrado hoy, su turno termina más tarde:
-            // Mañana (12h) -> 18h, Tarde (12h) -> 2h del día siguiente, Noche (12h) -> 10h del día siguiente
-            const finH = _es12h
-              ? (opTurno === 'Mañana' ? 18 : opTurno === 'Tarde' ? 2 : 10)
-              : (turnoFin[opTurno] || 14);
-
-            if (opTurno === 'Noche' || (opTurno === 'Tarde' && _es12h)) {
-              if (_horaColNow >= finH && _horaColNow < 14) return; // turno terminado por hora
-            } else {
-              if (_horaColNow >= finH) return; // turno terminado por hora
-            }
-          }
+          // No excluimos estrictamente por hora actual vs fin del turno esperado
+          // ya que el operador puede hacer horas extra o loguearse tarde.
+          // Se excluye arriba si salidaTS ya se marcó (se deslogueó explícitamente).
 
           presentes.add(opNameUpper);
         });
@@ -18161,6 +18144,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     function loginSuccess(role, opName = null) {
       currentRole = role;
       currentOpName = opName;
+      
+      // Habilitar alertas de voz por defecto para todas las vistas en el login (interacción humana)
+      window._enableVoiceAlerts = true;
+
       // Aplicar permisos de UI según rol (admin/monitor/operador)
       applyRolePermissions(role);
       // ── CRÍTICO: Se guarda en localStorage y sessionStorage para mantener al operador logueado automáticamente ──
@@ -24460,6 +24447,28 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       if (idx >= 0) all[idx] = record; else all.unshift(record);
       if (all.length > 100) all.splice(100);
       localStorage.setItem(ASI_KEY, JSON.stringify(all));
+
+      // Sincronizar el draft (Operadores Conectados en tiempo real) con esta asistencia manual
+      try {
+        const hoyStr = date || localDateStr();
+        const shKeyAct = asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKeyAct;
+        const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        
+        ops.forEach(o => {
+          const k = o.name + '||operador';
+          const est = asiEstados[asiKey(o.name, 'operador')]?.estado || '';
+          if (est === 'P' || est === 'T') {
+             if (!draft[k]) draft[k] = {};
+             draft[k].estado = est;
+             if (asiEstados[asiKey(o.name, 'operador')]?.horaIngreso) draft[k].horaIngreso = asiEstados[asiKey(o.name, 'operador')].horaIngreso;
+          } else if (draft[k]) {
+             delete draft[k]; // Quitar del draft si le quitaron la asistencia o la marcaron diferente
+          }
+        });
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+        if (typeof renderConnectedOps === 'function') renderConnectedOps();
+      } catch(e) { console.warn('Error sincronizando draft:', e); }
 
       saveData();
       

@@ -5725,38 +5725,27 @@
             } catch (e) {
               if (e.name === 'QuotaExceededError' || e.code === 22 || e.message.includes('quota') || e.message.includes('Quota')) {
                 console.warn('[Storage] QuotaExceededError detectado. Liberando espacio de caché no crítica...');
-                // 1. Eliminar datos históricos no críticos que saturan el almacenamiento (ej: heatmaps)
-                localStorage.removeItem('rr_heatmap_5m_history_v1');
-                localStorage.removeItem('rr_heatmap_10m_history_v1');
-                localStorage.removeItem('rr_heatmap_5m_history');
-                localStorage.removeItem('rr_heatmap_10m_history');
                 
-                // 2. Intentar re-guardar
+                const keysToRemove = [];
+                for(let i=0; i<localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (!k) continue;
+                  // Limpiar TODOS los drafts anteriores, historiales de mapas de calor y logs viejos
+                  if ((k.includes('_draft_') && k !== key) || 
+                      k.includes('_history') || 
+                      k.includes('rr_logs_entrada') ||
+                      k.includes('rr_prime_logs_entrada')) {
+                    keysToRemove.push(k);
+                  }
+                }
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+                
+                // Intentar re-guardar
                 try {
                   originalSetItem.call(localStorage, key, value);
-                  console.info(`[Storage] Guardado exitoso tras liberar espacio para clave: ${key} ✅`);
-                } catch (retryError) {
-                  // 3. Si aún falla, liberar logs viejos de entrada y drafts anteriores
-                  localStorage.removeItem('rr_logs_entrada');
-                  localStorage.removeItem('rr_prime_logs_entrada');
-                  localStorage.removeItem('rr_prime_logs_entrada_draft');
-                  
-                  // Limpiar TODOS los drafts de asistencia anteriores que ocupan mucho espacio
-                  const keysToRemove = [];
-                  for(let i=0; i<localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    if (k && k.startsWith('rr_prime_asistencia_draft_') && k !== key) {
-                      keysToRemove.push(k);
-                    }
-                  }
-                  keysToRemove.forEach(k => localStorage.removeItem(k));
-
-                  try {
-                    originalSetItem.call(localStorage, key, value);
-                    console.info(`[Storage] Guardado exitoso (reintento 2) para clave: ${key} ✅`);
-                  } catch (finalError) {
-                    console.error('[Storage] Capacidad máxima alcanzada persistentemente:', finalError.message);
-                  }
+                  console.info(`[Storage] Guardado exitoso tras liberar espacio agresivamente para clave: ${key} ✅`);
+                } catch (finalError) {
+                  console.error('[Storage] Capacidad máxima alcanzada persistentemente:', finalError.message);
                 }
               } else {
                 throw e; // lanzar otros errores normalmente
@@ -12195,8 +12184,8 @@
         });
 
       // 2. Canal OPERACIONES (Detección instantánea de puntos Datame)
-      // FIX CUOTA: Solo admin/monitor escuchan esto masivamente. Operadores usan su propio canal.
-      if (currentRole === 'admin' || currentRole === 'monitor') {
+      // Modificado: Ahora todos los roles escuchan este canal para que las alertas de voz suenen en todas las vistas
+      if (currentRole === 'admin' || currentRole === 'monitor' || currentRole === 'operador') {
         _sb.channel('operaciones_changes')
           .on('postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'operaciones' },
@@ -12223,9 +12212,8 @@
         if (e.name === 'QuotaExceededError' || e.message.includes('Quota')) {
           console.warn('[LocalStorage] QuotaExceededError detectado. Forzando limpieza de espacio...');
           Object.keys(localStorage).forEach(k => {
-            if (k.startsWith('rr_heatmap_10m_history') || k.startsWith('rr_asi_draft_')) {
-              // Limpiar datos pesados y temporales si llegamos a la cuota
-              _origRemoveItem(k);
+            if (k.includes('_history') || k.includes('_draft_')) {
+              if (k !== key) _origRemoveItem(k);
             }
           });
           try {
@@ -18156,6 +18144,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         : btoa(role + ':' + Date.now());
       sessionStorage.setItem(SESSION_KEY, sessionData);
       localStorage.setItem(SESSION_KEY, sessionData);
+
+      if (role === 'operador' && opName && typeof registrarAutoAsistencia === 'function') {
+        registrarAutoAsistencia(opName);
+      }
       document.getElementById('login-screen').classList.add('hidden');
       _autoFixActivePair(); // asegurar mes correcto en cada login
       document.getElementById('app-header-bar').style.display = 'block';
@@ -24445,7 +24437,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       const all = JSON.parse(localStorage.getItem(ASI_KEY) || '[]');
       const idx = all.findIndex(r => r.fecha === date && r.turno === asiShift);
       if (idx >= 0) all[idx] = record; else all.unshift(record);
-      if (all.length > 100) all.splice(100);
+      if (all.length > 15) all.splice(15); // Reducido a 15 turnos para evitar llenar localStorage (QuotaExceededError)
       localStorage.setItem(ASI_KEY, JSON.stringify(all));
 
       // Sincronizar el draft (Operadores Conectados en tiempo real) con esta asistencia manual
@@ -24477,9 +24469,15 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       if(grid) grid.classList.add('asi-saved');
 
       if (typeof _sb !== 'undefined' && _sb) {
+        const hoyStr = date || localDateStr();
+        const shKeyAct = asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKeyAct;
+        const draftStr = localStorage.getItem(draftKey) || '{}';
+
         Promise.all([
           _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: draftKey, value: draftStr }, { onConflict: 'key' })
         ]).then(() => {
           console.info('[Asistencia] Guardado en Supabase ✅');
           

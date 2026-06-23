@@ -12194,6 +12194,19 @@
               _debouncedLaserSync(); 
             }
           )
+          .on('broadcast', { event: 'voice_alert' }, (payload) => {
+            console.log("🔊 Alerta de voz global recibida:", payload);
+            if (payload.payload && payload.payload.text) {
+              if (window._enableVoiceAlerts === false && typeof toggleVoiceAlerts === 'function') {
+                toggleVoiceAlerts(); // Fuerza la activación
+              } else {
+                window._enableVoiceAlerts = true; // Porcentaje de seguridad
+              }
+              if (typeof speakText === 'function') {
+                speakText(payload.payload.text);
+              }
+            }
+          })
           .subscribe();
       }
     }
@@ -28533,6 +28546,15 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
       
       try {
+        // Enviar la alerta globalmente a todos los clientes (invasiva)
+        if (typeof _sb !== 'undefined') {
+          _sb.channel('operaciones_changes').send({
+            type: 'broadcast',
+            event: 'voice_alert',
+            payload: { text: text }
+          }).catch(e => console.warn('Broadcast no enviado:', e));
+        }
+
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-ES';
         const voices = window.speechSynthesis.getVoices();

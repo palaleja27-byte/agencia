@@ -4971,7 +4971,7 @@
   <!-- MODAL CAMBIAR PINs (solo admin) -->
   <div class="modal-pin-ov" id="modal-pin-change">
     <div class="modal-pin-box" style="max-height:88vh;overflow-y:auto;">
-      <h3>🔑 Gestión de PINs</h3>
+      <h3 style="display:flex; align-items:center; gap:6px;">🔑 Gestión de PINs <button onclick="showSmartInfo('gestion-pins')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
 
       <!-- Monitor & Admin PINs -->
       <div style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08)">
@@ -5674,7 +5674,7 @@
               <span style="font-weight:700;font-size:.9rem;color:#818cf8;cursor:pointer;">Panel Tableau Global</span>
             </a>
             <span style="background:rgba(99,102,241,0.15);color:#818cf8;padding:2px 10px;border-radius:8px;font-size:.65rem;font-weight:700;">OFICIAL UK</span>
-            <span onclick="event.stopPropagation(); mostrarInfoTableau();" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;" onmouseover="this.style.background='rgba(129, 140, 248, 0.3)'" onmouseout="this.style.background='rgba(129, 140, 248, 0.15)'" title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
+            <span onclick="event.stopPropagation(); showSmartInfo('tableau');" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;" onmouseover="this.style.background='rgba(129, 140, 248, 0.3)'" onmouseout="this.style.background='rgba(129, 140, 248, 0.15)'" title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
             <button onclick="event.stopPropagation(); loadTableauData().then(renderTableauPanel); tableauLog('🔄 Recargando datos desde Supabase...', 'info');" 
@@ -5775,7 +5775,17 @@
       window.rrSvcInfo = function(key) {
         var data = window._rrSvcInfoData || {};
         var text = data[key] || 'Dato del servidor UK. Cada numero aqui es dinero real generado por este perfil.';
-        alert('\u2139 ' + key.toUpperCase() + '\n\n' + text);
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: `ℹ️ Info de ${key.toUpperCase()}`,
+            html: `<div style="text-align:left; font-size:0.85rem; color:#e2e8f0; line-height:1.5;">${text}</div>`,
+            background: '#0f172a',
+            color: '#f8fafc',
+            confirmButtonColor: '#6366f1'
+          });
+        } else {
+          alert('\u2139 ' + key.toUpperCase() + '\n\n' + text);
+        }
       };
 
       // ── Funcion global para el boton info de Actividad en Vivo ──
@@ -6067,18 +6077,18 @@
               
               // Textos coloquiales por servicio
               const svcInfoMap = {
-                'MAILS': 'MAILS - Los correos que le mandamos al cliente.\n\nCada vez que el operador responde un correo dentro del chat del perfil, la plataforma UK registra ese correo y le asigna puntos. Esos puntos llegan a nuestra base de datos cada ciclo del robot.\n\nPOR QUE NOS PAGAN: Porque el cliente pago para recibir ese correo. A mas correos respondidos = mas plata. Es el servicio de mayor volumen en la agencia.',
-                'STICKERS': 'STICKERS - Los stickers que mandamos en el chat.\n\nSon los emojis animados o figuras que se envian en conversacion. Cada sticker que el cliente compra genera una fraccion de punto. Vale poquito individualmente pero muestra que el cliente esta activo y metido en la conversacion.\n\nPOR QUE IMPORTA: Un cliente que manda stickers es un cliente caliente. Los clientes activos son los que terminan comprando regalos o fotos. Es un indicador de engagement.',
-                'CHAT AUDIO': 'CHAT AUDIO - Los audios que mandamos en el chat privado.\n\nCuando el operador graba y envia un audio en el chat, la plataforma lo cobra al cliente. Es uno de los servicios que mas vale por unidad porque el cliente siente mayor conexion emocional.\n\nPOR QUE NOS PAGAN MAS: El audio crea intimidad. Un cliente que escucha la voz del perfil esta mucho mas enganchado y tiene mas probabilidad de seguir gastando.',
-                'CHAT POSTS': 'CHAT POSTS - Las publicaciones privadas que ponemos en el muro del cliente.\n\nSon como posts exclusivos que solo ese cliente puede ver porque pago por ellos. Cada post genera puntos al perfil.\n\nPOR QUE IMPORTA: El cliente que paga por contenido exclusivo es el cliente mas leal. Suele gastar mas con el tiempo y cancela menos.',
-                'MAIL READS': 'MAIL READS - Los correos que el cliente abre y lee.\n\nCada vez que un cliente abre un correo que le mandamos, la plataforma registra esa lectura y genera unos puntitos pequenos.\n\nPOR QUE IMPORTA: Si el cliente abre el correo, esta activo y le interesa el perfil. Es una senal de que podemos convertirlo en una venta mayor como un regalo o una foto privada.',
-                'GIFTS': 'GIFTS - Los regalos que el cliente le manda al perfil.\n\nCuando un cliente decide enviar un regalo virtual al perfil, eso genera bastantes puntos de una sola vez. Es el servicio de mayor valor por transaccion individual.\n\nPOR QUE NOS PAGAN MAS: Un regalo puede valer entre $3 y $15 dolares de una. Los clientes que regalan son los VIP de la agencia. Hay que identificarlos y cuidarlos.',
-                'VIRTUAL GIFTS': 'VIRTUAL GIFTS - Los regalos virtuales premium del catalogo.\n\nSon regalos especiales de mayor precio dentro de la plataforma. Igual que los GIFTS pero del catalogo premium.\n\nPOR QUE IMPORTA: Igual que GIFTS pero el cliente gasto aun mas. Son los clientes de mayor ticket promedio.',
-                'PHOTOS': 'PHOTOS - Las fotos privadas que el cliente compra.\n\nCuando el operador le manda una foto privada al cliente y este la compra para verla, eso genera puntos al perfil.\n\nPOR QUE NOS PAGAN: Porque el cliente pago para ver esa foto. Es contenido exclusivo. A mas fotos vendidas = mas ingresos directos.',
-                'VOICE': 'VOICE - Los mensajes de voz del perfil.\n\nSon audios que se mandan desde el perfil como contenido. El cliente paga para escucharlos.\n\nPOR QUE IMPORTA: Similar al CHAT AUDIO pero va al buzzon del cliente. Crea conexion y fideliza.',
-                'VIDEO': 'VIDEO - Los videos privados que el cliente compra.\n\nCuando el operador envia un video privado y el cliente lo compra, eso genera puntos. Es el contenido de mayor valor por pieza.\n\nPOR QUE NOS PAGAN MAS: Un video es lo que mas cuesta en la plataforma por unidad. Un cliente que compra videos es oro puro.',
-                'PRIME': 'PRIME - Las suscripciones mensuales del cliente al perfil.\n\nEl cliente paga una cuota mensual para tener acceso especial al perfil. Eso genera ingresos recurrentes automaticamente.\n\nPOR QUE ES LO MAS VALIOSO: Es plata que entra sola cada mes sin que el operador tenga que vender nada extra. Un cliente PRIME es el mas rentable de todos.',
-                'DEFAULT': 'DATO DEL SERVIDOR UK.\n\nEste numero viene directamente del servidor oficial de la plataforma. El robot lo lee automaticamente y lo trae a nuestra pantalla.\n\nPOR QUE IMPORTA: Cada numero que ves aqui es dinero real que genero ese perfil. La suma de todos estos servicios es lo que se le paga al operador al final del turno.'
+                'MAILS': '<b style="color:#60a5fa;">¿Qué es y por qué existe?</b><br>Son los correos que respondemos al cliente. Existe porque es el servicio de mayor volumen de interacción en la plataforma.<br><br><b style="color:#60a5fa;">¿Cómo funciona?</b><br>Cada vez que el operador responde un correo dentro del chat del perfil, la plataforma UK lo registra.<br><br><b style="color:#60a5fa;">¿Cómo se calcula?</b><br>Se suma un punto o fracción por cada correo válido respondido.<br><br><b style="color:#60a5fa;">¿De dónde se sacaron los datos?</b><br>Directamente del servidor oficial de Tableau UK.<br><br><b style="color:#60a5fa;">¿Por qué es importante y cómo nos ayuda?</b><br>Porque el cliente pagó para recibir ese correo. A más correos respondidos, más ingresos. Es la base de nuestra facturación.',
+                'STICKERS': '<b style="color:#34d399;">¿Qué es y por qué existe?</b><br>Son los emojis animados o figuras enviadas en conversación. Existen para mostrar que el cliente está activo.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Cada sticker que el cliente compra o envía en el chat genera una fracción de punto.<br><br><b style="color:#34d399;">¿Cómo se calcula?</b><br>Se acumula por cantidad de stickers enviados por el cliente.<br><br><b style="color:#34d399;">¿De dónde se sacaron los datos?</b><br>Del registro de interacciones del servidor de Tableau UK.<br><br><b style="color:#34d399;">¿Por qué es importante y cómo nos ayuda?</b><br>Un cliente que manda stickers está caliente y receptivo, aumentando la probabilidad de venderle regalos o fotos.',
+                'CHAT AUDIO': '<b style="color:#f87171;">¿Qué es y por qué existe?</b><br>Son los mensajes de voz enviados en el chat privado. Existen para crear una conexión emocional fuerte con el cliente.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>El operador graba un audio, y la plataforma lo cobra al cliente cuando este lo reproduce.<br><br><b style="color:#f87171;">¿Cómo se calcula?</b><br>Genera una alta cantidad de puntos fijos por cada audio escuchado.<br><br><b style="color:#f87171;">¿De dónde se sacaron los datos?</b><br>De la auditoría en tiempo real de Tableau UK.<br><br><b style="color:#f87171;">¿Por qué es importante y cómo nos ayuda?</b><br>Es uno de los servicios más rentables. La voz crea intimidad, lo que hace que el cliente gaste más a largo plazo.',
+                'CHAT POSTS': '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Son publicaciones privadas en el muro del cliente. Existen para ofrecer contenido exclusivo por suscripción o pago directo.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Se sube contenido que solo el cliente objetivo puede ver después de pagar por él.<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Puntos asignados por cada publicación desbloqueada.<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>De la base de datos central sincronizada con Tableau UK.<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Fideliza a los clientes. Quien paga por contenido exclusivo suele ser muy leal y tiene un ticket promedio alto.',
+                'MAIL READS': '<b style="color:#c084fc;">¿Qué es y por qué existe?</b><br>Son las confirmaciones de lectura de los correos. Existen para medir el interés del cliente.<br><br><b style="color:#c084fc;">¿Cómo funciona?</b><br>Cada vez que un cliente abre un correo enviado por nosotros, la plataforma lo detecta.<br><br><b style="color:#c084fc;">¿Cómo se calcula?</b><br>Suma una fracción de punto por cada correo abierto.<br><br><b style="color:#c084fc;">¿De dónde se sacaron los datos?</b><br>Del tracking de aperturas en Tableau UK.<br><br><b style="color:#c084fc;">¿Por qué es importante y cómo nos ayuda?</b><br>Si abre el correo, le interesa el perfil. Es nuestra señal de alerta para intentar una venta mayor, como una foto o video.',
+                'GIFTS': '<b style="color:#e879f9;">¿Qué es y por qué existe?</b><br>Son los regalos virtuales enviados al perfil. Existen como demostración de alto interés y capacidad de gasto.<br><br><b style="color:#e879f9;">¿Cómo funciona?</b><br>El cliente selecciona y compra un regalo para el perfil durante el chat.<br><br><b style="color:#e879f9;">¿Cómo se calcula?</b><br>Suma una gran cantidad de puntos de golpe, proporcional al valor del regalo en la tienda.<br><br><b style="color:#e879f9;">¿De dónde se sacaron los datos?</b><br>Del reporte de ingresos de Tableau UK.<br><br><b style="color:#e879f9;">¿Por qué es importante y cómo nos ayuda?</b><br>Es la transacción de mayor valor individual. Los clientes que envían regalos son los VIPs y deben ser la prioridad absoluta.',
+                'VIRTUAL GIFTS': '<b style="color:#818cf8;">¿Qué es y por qué existe?</b><br>Son regalos premium del catálogo especial. Existen para exprimir el máximo valor de clientes VIP.<br><br><b style="color:#818cf8;">¿Cómo funciona?</b><br>Similar a los Gifts normales, pero de un catálogo de precios mayores.<br><br><b style="color:#818cf8;">¿Cómo se calcula?</b><br>Suma el valor más alto posible por transacción según la tabla de precios.<br><br><b style="color:#818cf8;">¿De dónde se sacaron los datos?</b><br>De la sincronización de regalos de Tableau UK.<br><br><b style="color:#818cf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Son la principal fuente de ingresos rápidos. Identificar quién los envía nos permite enfocar nuestra atención donde más dinero hay.',
+                'PHOTOS': '<b style="color:#f472b6;">¿Qué es y por qué existe?</b><br>Son las fotos privadas vendidas al cliente. Existen para monetizar el contenido visual exclusivo.<br><br><b style="color:#f472b6;">¿Cómo funciona?</b><br>El operador envía una foto bloqueada, y el cliente paga créditos para poder verla.<br><br><b style="color:#f472b6;">¿Cómo se calcula?</b><br>Puntos asignados por cada foto comprada/desbloqueada con éxito.<br><br><b style="color:#f472b6;">¿De dónde se sacaron los datos?</b><br>De las transacciones verificadas por Tableau UK.<br><br><b style="color:#f472b6;">¿Por qué es importante y cómo nos ayuda?</b><br>Aumenta drásticamente los ingresos. A más fotos vendidas, mayor facturación sin incrementar las horas de chat.',
+                'VOICE': '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Son mensajes de voz premium. Existen para vender contenido de audio asincrónico.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Se envían al buzón del cliente, quien paga para escucharlos.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Suma puntos cada vez que el cliente reproduce el mensaje.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>De Tableau UK.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Fideliza al cliente y genera altos ingresos por unidad. Complementa al chat escrito perfectamente.',
+                'VIDEO': '<b style="color:#ef4444;">¿Qué es y por qué existe?</b><br>Son videos privados enviados al cliente. Existen porque son el contenido más costoso y deseado.<br><br><b style="color:#ef4444;">¿Cómo funciona?</b><br>El operador envía un video, y el cliente gasta una gran cantidad de créditos para abrirlo.<br><br><b style="color:#ef4444;">¿Cómo se calcula?</b><br>Produce la mayor cantidad de puntos por unidad de todo el sistema.<br><br><b style="color:#ef4444;">¿De dónde se sacaron los datos?</b><br>Del panel de ventas de Tableau UK.<br><br><b style="color:#ef4444;">¿Por qué es importante y cómo nos ayuda?</b><br>Es oro puro. Vender videos dispara los números del día de forma instantánea. Un cliente comprador de videos es un cliente top.',
+                'PRIME': '<b style="color:#f59e0b;">¿Qué es y por qué existe?</b><br>Son las suscripciones mensuales del cliente al perfil. Existen para asegurar ingresos recurrentes.<br><br><b style="color:#f59e0b;">¿Cómo funciona?</b><br>El cliente paga una cuota mensual por beneficios y acceso especial al perfil.<br><br><b style="color:#f59e0b;">¿Cómo se calcula?</b><br>Suma el valor de la suscripción completa en el momento de la facturación mensual.<br><br><b style="color:#f59e0b;">¿De dónde se sacaron los datos?</b><br>De los reportes de suscripciones de Tableau UK.<br><br><b style="color:#f59e0b;">¿Por qué es importante y cómo nos ayuda?</b><br>Es lo más valioso: dinero automático que entra cada mes sin esfuerzo adicional. Los clientes PRIME son la base financiera sólida de la agencia.',
+                'DEFAULT': '<b style="color:#94a3b8;">¿Qué es y por qué existe?</b><br>Es una métrica general del servidor UK.<br><br><b style="color:#94a3b8;">¿Cómo funciona?</b><br>Registra ingresos variados de la plataforma.<br><br><b style="color:#94a3b8;">¿Cómo se calcula?</b><br>Suma el valor de las transacciones menores.<br><br><b style="color:#94a3b8;">¿De dónde se sacaron los datos?</b><br>Directamente de Tableau UK.<br><br><b style="color:#94a3b8;">¿Por qué es importante y cómo nos ayuda?</b><br>Todo suma. Cada número aquí es dinero real generado, aportando al total del turno.'
               };
               const kUp2 = k.toUpperCase().replace(/_/g,' ');
               const infoText = svcInfoMap[kUp2] || svcInfoMap['DEFAULT'];
@@ -6115,7 +6125,7 @@
                 <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Operador asignado en web">${opAsignado}</div>
                 ${officialOp && officialOp.toLowerCase() !== opAsignado.toLowerCase() ? `<div style="font-size:0.52rem;color:#cbd5e1;opacity:0.8;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Operador registrado en Tableau (Source ID)">(${officialOp})</div>` : ''}
               </div>
-              <button onclick="alert('📋 AUDITORÍA INTEGRAL: PERFIL ${id}\\n\\n1. ¿QUÉ ES?\\nEs un sistema de validación cruzada que extrae la data oficial del servidor UK para auditar la producción real de cada operador.\\n\\n2. ¿CÓMO FUNCIONA?\\nUn Scraper inteligente (Python) lee los endpoints oficiales, desglosa los puntos por servicio (Chat, Mails, Regalos) y los sincroniza con nuestra base de datos cada 1-2 horas.\\n\\n3. ¿CÓMO NOS AYUDA?\\nElimina errores de reporte, asegura pagos exactos basados en la fuente oficial y permite ver el comportamiento detallado de cada perfil y sus clientes.')" 
+              <button onclick="showSmartInfo('auditoria-perfil')" 
                 style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;flex-shrink:0;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
             </div>
             
@@ -6536,7 +6546,7 @@
       <div class="modal-ai-header">
         <div style="display:flex; align-items:center; gap:12px;">
            <span class="ai-icon">🤖</span>
-           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px;">REPORTE INTELIGENTE <small style="font-size:0.6rem; opacity:0.5;">v8.6</small></h3>
+           <h3 style="margin:0; font-size:1.1rem; letter-spacing:1px; display:flex; align-items:center; gap:6px;">REPORTE INTELIGENTE <small style="font-size:0.6rem; opacity:0.5;">v8.6</small> <button onclick="showSmartInfo('reporte-inteligente')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
            <button onclick="abrirConfigAI()" style="background:none; border:none; color:#64748b; font-size:1.1rem; cursor:pointer;" title="Configurar Llaves API">⚙️</button>
@@ -6552,7 +6562,7 @@
   <!-- MODAL CONFIGURACIÓN LLAVES AI (v8.6) -->
   <div class="modal-ai-ov" id="modal-ai-config" style="z-index:20000;">
     <div class="modal-ai-box" style="max-width:400px; padding:25px;">
-       <h3 style="margin:0 0 15px; font-size:1rem; color:var(--accent);">⚙️ CONFIGURACIÓN DE LLAVES AI</h3>
+       <h3 style="margin:0 0 15px; font-size:1rem; color:var(--accent); display:flex; align-items:center; gap:6px;">⚙️ CONFIGURACIÓN DE LLAVES AI <button onclick="showSmartInfo('llaves-ai')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#5eead4'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
        <p style="font-size:0.7rem; color:#64748b; margin-bottom:15px;">Las llaves se guardarán de forma permanente en este dispositivo.</p>
        
        <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:5px;">GOOGLE GEMINI KEY (Principal)</label>
@@ -6595,7 +6605,7 @@
   <!-- MODAL CONSEJOS -->
   <div class="modal-ov" id="modal-consejos">
     <div class="modal-cbox">
-      <h3>💡 Consejos del Monitor</h3>
+      <h3 style="display:flex; align-items:center; gap:6px;">💡 Consejos del Monitor <button onclick="showSmartInfo('consejos-monitor')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#fbbf24'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <p class="modal-sub">Visibles para todo el equipo · Solo el monitor puede editar</p>
       <div id="consejos-list"></div>
       <div class="modal-cbox-footer">
@@ -6658,7 +6668,7 @@
   <!-- MODAL AGREGAR OPERADOR -->
   <div class="modal-pin-ov" id="modal-add-op">
     <div class="modal-pin-box">
-      <h3>➕ Agregar Operador</h3>
+      <h3 style="display:flex; align-items:center; gap:6px;">➕ Agregar Operador <button onclick="showSmartInfo('agregar-operador')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <div class="pin-change-row">
         <label>Nombre completo *</label>
         <input type="text" class="pin-change-inp" id="addop-name" placeholder="NOMBRE APELLIDO"
@@ -7451,7 +7461,7 @@
   <!-- MODAL GRUPOS -->
   <div id="modal-grupos">
     <div class="grupos-box">
-      <h3>⚙️ Gestión de Grupos</h3>
+      <h3 style="display:flex; align-items:center; gap:6px;">⚙️ Gestión de Grupos <button onclick="showSmartInfo('gestion-grupos')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <div id="grupos-list"></div>
       <div class="grupo-add-row">
         <input class="grupo-add-inp" id="grupo-new-inp" placeholder="Nombre del nuevo grupo (ej: G5, 12)"
@@ -7468,7 +7478,7 @@
   <!-- MODAL NOVEDADES -->
   <div id="modal-novedades">
     <div class="novedades-box">
-      <h3>📋 Novedades del Día</h3>
+      <h3 style="display:flex; align-items:center; gap:6px;">📋 Novedades del Día <button onclick="showSmartInfo('novedades-dia')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <div class="novedades-sub">Sube el Excel con los perfiles que está manejando cada operador hoy. Se actualizará
         cada tarjeta al instante.</div>
       <div class="novedades-dropzone" id="nov-dropzone"
@@ -9501,7 +9511,7 @@
               <div class="rk-card-info">
                 <div class="rk-card-name" style="display:flex;align-items:center;gap:6px;">
                   ${op.name}
-                  <button onclick="alert('👤 PERFIL OPERATIVO: ${safeName}\\n\\n¿PARA QUÉ SIRVE?\\nEste panel centraliza el rendimiento histórico y actual de cada operador, permitiendo un seguimiento del crecimiento real (Cortes + Metas).\\n\\n¿CÓMO FUNCIONA?\\nCruza datos de tres fuentes: 1. Matriz de operadores estática, 2. Cortes diarios guardados en Supabase, y 3. Perfiles activos asignados en el turno actual (DELTA-SHIFT™).\\n\\n¿CÓMO AYUDA?\\nPermite detectar caídas de ritmo en tiempo real y recompensar a los operadores con mayor crecimiento mensual.')" 
+                  <button onclick="showSmartInfo('perfil-operativo')" 
                     style="background:rgba(148,163,184,0.1); border:none; color:#64748b; width:16px; height:16px; border-radius:50%; font-size:0.55rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900;">ℹ️</button>
                 </div>
                 <div class="rk-card-sub">
@@ -13241,7 +13251,7 @@
       
       // 🛰️ Sincronizar a Supabase para que el operador lo vea en su dashboard
       if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }).then(() => {
+        _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }, { onConflict: 'key' }).then(() => {
           console.info('[PSA] Asignación sincronizada:', opName, idPerfil);
           if (typeof renderRanking === 'function') renderRanking();
         });
@@ -13492,13 +13502,14 @@
       const sinDatosHoy = puntos === 0;
 
       el.innerHTML = `
-    <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:10px;margin-bottom:0;">
+    <div style="background:rgba(255,255,255,.03);border-radius:10px;padding:10px;margin-bottom:0;position:relative;">
+      <button onclick="showSmartInfo('op-corte-diario')" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;z-index:10;" onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='#94a3b8'" title="¿Qué es esto?">ⓘ</button>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <div>
           <div style="font-size:1.4rem;font-weight:900;color:${barColor};">${puntos.toFixed(1)} <span style="font-size:.65rem;color:#64748b;">/ ${meta} pts</span></div>
           <div style="font-size:.62rem;color:#64748b;">💰 $${cop} COP</div>
         </div>
-        <div style="text-align:right;">
+        <div style="text-align:right; margin-right: 18px;">
           <div style="font-size:1.2rem;font-weight:900;color:${barColor};">${pct}%</div>
           <div style="font-size:.58rem;color:#475569;text-transform:uppercase;letter-spacing:1px;">Meta Hoy</div>
         </div>
@@ -14089,28 +14100,28 @@
   </div>
   <div class="cmv-kpi-grid">
     <div class="cmv-kpi-card" style="border-color:rgba(45,212,191,.18)">
-      <button onclick="alert('📅 HOY — PUNTOS EN VIVO\\n\\n¿QUÉ SIGNIFICA?\\nMide los puntos netos acumulados por tus operadores en los turnos del día de hoy en tiempo real.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nEs tu indicador de tracción instantánea. Si detectas a mitad de jornada que la producción está baja, puedes intervenir de inmediato para motivar al equipo o ajustar perfiles. ¡Salvar un solo día malo a tiempo protege tu rentabilidad mensual!')" style="position:absolute;top:6px;right:6px;background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.25);color:#2dd4bf;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
+      <button onclick="showSmartInfo('stats-hoy')" style="position:absolute;top:6px;right:6px;background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.25);color:#2dd4bf;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">📅 HOY — Puntos</div>
       <div class="cmv-kpi-value" style="color:#2dd4bf">${ptsHoy.toFixed(1)}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${copHoy.toLocaleString('es-CO')} COP</div>
       <span class="cmv-kpi-badge" style="background:${metaC}22;color:${metaC}">${metaDiaPct.toFixed(0)}% de meta</span>
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(167,139,250,.18)">
-      <button onclick="alert('📆 MES — TOTAL ACUMULADO\\n\\n¿QUÉ SIGNIFICA?\\nEs la suma total de puntos netos generados por todos tus perfiles y operadores en lo que va del mes.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nEsta es la caja registradora de la agencia. Al cruzarla en tiempo real con tus costos fijos (servicios, nóminas, plataformas), sabrás exactamente qué día alcanzas el punto de equilibrio. A partir de ahí, cada punto extra es casi un 100% de utilidad neta para tu bolsillo.')" style="position:absolute;top:6px;right:6px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.25);color:#a78bfa;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
+      <button onclick="showSmartInfo('stats-mes')" style="position:absolute;top:6px;right:6px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.25);color:#a78bfa;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">📆 MES — Total</div>
       <div class="cmv-kpi-value" style="color:#a78bfa">${h.m2Total.toLocaleString('es-CO',{minimumFractionDigits:1})}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${copMes.toLocaleString('es-CO')} COP</div>
       <span class="cmv-kpi-badge" style="background:rgba(167,139,250,.1);color:#a78bfa">${h.m2Name}</span>
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(251,191,36,.18)">
-      <button onclick="alert('✨ PROMEDIO / DÍA\\n\\n¿QUÉ SIGNIFICA?\\nEs la cantidad media de puntos que tu agencia produce en cada día de operación activa durante el mes.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nEs el motor de tu eficiencia. Incrementar tu promedio en solo 100 puntos diarios (por ejemplo, mejorando la puntualidad de asistencia) añade 3,000 puntos extra al final del mes. ¡Eso representa más de $4,200,000 COP en ingresos netos adicionales con exactamente los mismos costos fijos!')" style="position:absolute;top:6px;right:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);color:#fbbf24;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
+      <button onclick="showSmartInfo('stats-promedio')" style="position:absolute;top:6px;right:6px;background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);color:#fbbf24;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">✨ PROMEDIO / DÍA</div>
       <div class="cmv-kpi-value" style="color:#fbbf24">${Math.round(promDia).toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${Math.round(promDia*1400).toLocaleString('es-CO')} COP/día</div>
       <span class="cmv-kpi-badge" style="background:rgba(251,191,36,.1);color:#fbbf24">Día ${diaHoy}/${diasMes}</span>
     </div>
     <div class="cmv-kpi-card" style="border-color:rgba(16,185,129,.18)">
-      <button onclick="alert('🚀 PROYECCIÓN FIN DE MES\\n\\n¿QUÉ SIGNIFICA?\\nPredice cuántos puntos y facturación alcanzará la agencia al final del mes si continúas operando al mismo ritmo promedio actual.\\n\\n¿CÓMO NOS HACE MÁS RENTABLES?\\nFunciona como tu radar preventivo. Si la proyección muestra un cierre por debajo de tus metas, te da días de anticipación para implementar incentivos, intensificar horas de producción o ajustar estrategias, corrigiendo el rumbo antes de que termine el mes.')" style="position:absolute;top:6px;right:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#10b981;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
+      <button onclick="showSmartInfo('stats-proyeccion')" style="position:absolute;top:6px;right:6px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);color:#10b981;width:15px;height:15px;border-radius:50%;font-size:.55rem;cursor:pointer;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:2">i</button>
       <div class="cmv-kpi-label">🚀 PROYECCIÓN FIN MES</div>
       <div class="cmv-kpi-value" style="color:#10b981">${Math.round(projectedM2).toLocaleString()}<small style="font-size:.5rem;opacity:.6"> pts</small></div>
       <div class="cmv-kpi-sub">$${copProy.toLocaleString('es-CO')} COP · ${m2PromDia.toFixed(0)} pts/día</div>
@@ -14722,13 +14733,13 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px;margin-bottom:16px;">
              <div style="display:flex;flex-direction:column;gap:10px;">
                 <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};position:relative;">
-                   <button onclick="alert('📊 VELOCIDAD PROMEDIO (Vp)\n\n¿CÓMO ENTENDERLO?\nEs el pulso de dinero diario de la agencia. Si este número baja de 4000, la meta mensual peligra.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <button onclick="showSmartInfo('vp')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
                    <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
                    <div style="font-size:1.4rem;font-weight:900;color:#f1f5f9;margin-top:4px;display:flex;align-items:baseline;gap:6px;">${vel.toFixed(1)} <small style="font-size:0.6rem;color:#34d399;font-weight:700;">↑ 4.2%</small></div>
                    <div style="font-size:0.55rem;color:#64748b;margin-top:6px;background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:6px;display:inline-block;">Proyección: <b style="color:${cS}">${proy.toLocaleString()}</b> <span style="margin-left:8px;color:#475569;">META: 150K</span></div>
                 </div>
                 <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;position:relative;">
-                   <button onclick="alert('⚖️ IMPACTO RECALIBRACIÓN\n\n¿CÓMO ENTENDERLO?\nEs el costo de entrada. Los operadores deben generar estos puntos cada día SOLO PARA CUBRIR EL GASTO antes de ganar un solo dólar neto.')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <button onclick="showSmartInfo('impacto')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
                    <div style="font-size:0.5rem;color:#fca5a5;font-weight:700;">IMPACTO RECALIBRACIÓN</div>
                    <div style="font-size:1.4rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.55rem;color:#64748b;font-weight:400;">pts base/día</small></div>
                    <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:6px;">Eficiencia: <b style="color:#fca5a5">${(100 - (totalPtsPrev/30 / (vel||1) * 100)).toFixed(1)}%</b> <div style="flex:1;height:3px;background:rgba(248,113,113,0.1);border-radius:2px;"><div style="width:${100 - (totalPtsPrev/30 / (vel||1) * 100)}%;height:100%;background:#f87171;border-radius:2px;"></div></div></div>
@@ -14736,7 +14747,7 @@
              </div>
              <div style="display:flex;flex-direction:column;gap:10px;">
                 <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;position:relative;">
-                   <button onclick="alert('👥 CAPACIDAD ACTIVA\n\n¿CÓMO ENTENDERLO?\nMuestra cuántos perfiles está cubriendo cada operador en promedio (Densidad).')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <button onclick="showSmartInfo('capacidad')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
                    <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
                    <div style="font-size:1.3rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} <small style="font-size:0.6rem;color:#64748b;">ops</small> / ${rows.length} <small style="font-size:0.6rem;color:#64748b;">perfiles</small></div>
                    <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:8px;">Carga: <b style="color:#38bdf8">${(rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1)}x</b> <div style="flex:1;height:3px;background:rgba(56,189,248,0.1);border-radius:2px;"><div style="width:${Math.min(100, (rows.length/(new Set(rows.map(r=>r.op)).size||1))/4 * 100)}%;height:100%;background:#38bdf8;border-radius:2px;"></div></div></div>
@@ -17928,7 +17939,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(6px);';
       overlay.innerHTML = `
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;max-width:380px;width:90%;text-align:center;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px 28px;max-width:380px;width:90%;text-align:center;position:relative;">
+          <button onclick="showSmartInfo('op-meta-diaria')" style="position:absolute;top:15px;right:15px;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.9rem;padding:0;" onmouseover="this.style.color='#5eead4'" onmouseout="this.style.color='#94a3b8'" title="¿Qué es esto?">ⓘ</button>
           <div style="font-size:2rem;margin-bottom:8px;">🎯</div>
           <div style="font-size:1.1rem;font-weight:800;color:var(--text);margin-bottom:4px;">Meta del Día</div>
           <div style="font-size:.78rem;color:#64748b;margin-bottom:18px;">¿Cuántos puntos te propones lograr hoy?</div>
@@ -17973,7 +17985,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       });
     }
 
-    function registrarAutoAsistencia(opName, chosenProfiles = []) {
+    async function registrarAutoAsistencia(opName, chosenProfiles = []) {
       // Solo registra si ASI está disponible y el operador no está ya marcado
       if (typeof ASI_KEY === 'undefined') return;
       const fecha = localDateStr();
@@ -17983,39 +17995,69 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const shiftKey = turnoDetectado === 'Mañana' ? 'manana' : turnoDetectado === 'Tarde' ? 'tarde' : 'noche';
       const draftKey = ASI_KEY + '_draft_' + fecha + '_' + shiftKey;
 
-      const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
-      const k = opName + '||operador';
+      let draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
 
-      // Evitar sobrescribir la selección explícita si ya existe registro
-      if (draft[k] && chosenProfiles.length === 0) {
-        return;
+      // 🔥 FIX: Obtener el draft más reciente de Supabase para no sobreescribir la asistencia de otros operadores
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const { data, error } = await _sb.from('kv_store').select('value').eq('key', draftKey).single();
+          if (!error && data && data.value) {
+            const remoteDraft = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            draft = { ...draft, ...remoteDraft };
+          }
+        } catch (err) {
+          console.warn('[AutoAsi] Error fetching remote draft before sync', err);
+        }
       }
 
-      // 🛡️ Registrar con perfiles si se proporcionaron
+      const k = opName + '||operador';
+
       const op = operatorsData.find(o => _n(o.name) === _n(opName));
       const baseProfiles = op?.profiles || [];
       const finalProfiles = chosenProfiles.length > 0 
         ? baseProfiles.filter(p => chosenProfiles.includes(String(p.id))) 
         : baseProfiles;
 
-      // Forzar estado 'P' y asignar perfiles
-      draft[k] = { 
-        estado: 'P', 
-        nota: chosenProfiles.length ? 'Perfiles auto-seleccionados' : '', 
-        horaIngreso: hora, 
-        autoMarcado: true,
-        perfiles: finalProfiles,
-        salidaManual: false
-      };
+      if (draft[k]) {
+        // Ya existe el registro: lo ponemos en estado Presente asegurándonos de que salga online
+        draft[k].estado = 'P';
+        draft[k].salidaManual = false;
+        if (!draft[k].horaIngreso) draft[k].horaIngreso = hora;
+        // Solo sobrescribir perfiles y nota si el operador seleccionó explícitamente en el login
+        if (chosenProfiles.length > 0) {
+          draft[k].perfiles = finalProfiles;
+          draft[k].nota = 'Perfiles auto-seleccionados';
+        }
+      } else {
+        // Nuevo registro de asistencia
+        draft[k] = { 
+          estado: 'P', 
+          nota: chosenProfiles.length ? 'Perfiles auto-seleccionados' : '', 
+          horaIngreso: hora, 
+          autoMarcado: true,
+          perfiles: finalProfiles,
+          salidaManual: false
+        };
+      }
 
       // 1. Guardar localmente
       localStorage.setItem(draftKey, JSON.stringify(draft));
       
+      // 🔥 FIX: Limpiar salidaTS si existía, para que no queden ocultos si se loguean después de su turno
+      if (typeof ASI_HORAS_KEY !== 'undefined') {
+        const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
+        const normName = Object.keys(allHoras).find(k => k.toUpperCase().trim() === opName.toUpperCase().trim());
+        if (normName && allHoras[normName].salidaTS) {
+          delete allHoras[normName].salidaTS;
+          localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+        }
+      }
+
       // 2. Sincronizar a Supabase
       if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }).then(() => {
-          console.info('[AutoAsi] Perfiles sincronizados:', opName, finalProfiles.length);
-        });
+        _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }, { onConflict: 'key' }).then(() => {
+          console.info('[AutoAsi] Presencia/Perfiles sincronizados:', opName, draft[k].estado);
+        }).catch(err => console.warn('[AutoAsi] Error sincronizando', err));
       }
     }
 
@@ -18062,8 +18104,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const myName = currentOpName?.toUpperCase();
 
       el.innerHTML = `
-        <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">
-          Clasificación ${turnoLabel[turnoActivo]} (En vivo)
+        <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
+          Clasificación ${turnoLabel[turnoActivo]} (En vivo) <button onclick="showSmartInfo('clasificacion-vivo')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'">ⓘ</button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
         ${rankedData.map((op, i) => {
@@ -18173,7 +18215,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       localStorage.setItem(SESSION_KEY, sessionData);
 
       if (role === 'operador' && opName && typeof registrarAutoAsistencia === 'function') {
-        registrarAutoAsistencia(opName);
+        // La auto-asistencia ahora se registra exclusivamente en finalizarLoginOperador para evitar condiciones de carrera.
       }
       document.getElementById('login-screen').classList.add('hidden');
       _autoFixActivePair(); // asegurar mes correcto en cada login
@@ -18733,7 +18775,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           </div>
 
           <!-- CENTER: Puntos Hoy — destacado -->
-          <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px 20px; border-left:1px solid rgba(255,255,255,0.06); border-right:1px solid rgba(255,255,255,0.06); background:rgba(94,234,212,0.04); flex:1; min-width:140px;">
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px 20px; border-left:1px solid rgba(255,255,255,0.06); border-right:1px solid rgba(255,255,255,0.06); background:rgba(94,234,212,0.04); flex:1; min-width:140px;">
+            <button onclick="showSmartInfo('op-hero-pts')" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.7rem;padding:0;z-index:10;" onmouseover="this.style.color='#5eead4'" onmouseout="this.style.color='#94a3b8'" title="¿Qué es esto?">ⓘ</button>
             <div id="op-dash-hero-pts" style="font-size:3rem; font-weight:900; color:#5eead4; line-height:1; font-family:'Bebas Neue',sans-serif; text-shadow:0 0 20px rgba(94,234,212,0.4);">0.0</div>
             <div style="font-size:0.65rem; font-weight:800; color:#5eead4; letter-spacing:2px; text-transform:uppercase; margin:4px 0;">⚡ Puntos Hoy</div>
             <div style="width:100%; height:4px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; margin-top:6px;">
@@ -21570,7 +21613,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
   <!-- MODAL HISTORIAL -->
   <div class="modal-hist-ov" id="modal-historial">
     <div class="modal-hist-box">
-      <h3>📋 Historial de Asistencia</h3>
+      <h3 style="display:flex; align-items:center; gap:6px;">📋 Historial de Asistencia <button onclick="showSmartInfo('historial-asistencia')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#34d399'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <p class="modal-hist-sub">Registros guardados · Ordenados por fecha</p>
       <div class="hist-filters">
         <select class="hist-filter-sel" id="hist-shift-filter" onchange="asiRenderHistorial()">
@@ -21593,7 +21636,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
     <div
       style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px;max-width:400px;width:90%;">
-      <h3 style="color:var(--text);margin:0 0 6px;font-size:1rem;">📤 Exportar Asistencia</h3>
+      <h3 style="color:var(--text);margin:0 0 6px;font-size:1rem;display:flex; align-items:center; gap:6px;">📤 Exportar Asistencia <button onclick="showSmartInfo('exportar-asistencia')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#fb7185'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <p style="color:#64748b;font-size:.78rem;margin:0 0 18px;">Selecciona el rango de fechas para exportar a Excel.
       </p>
       <div style="display:flex;gap:12px;margin-bottom:18px;">
@@ -23314,70 +23357,53 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           title: '🧊 Ice Breakers — Guía Completa',
           body: `<div style="display:flex;flex-direction:column;gap:14px;">
             <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿Qué es un Ice Breaker?</div>
-              <p style="margin:0;color:#94a3b8;">En plataformas de dating como Tableau UK, un <strong style="color:#e2e8f0;">Ice Breaker</strong> es el primer mensaje que un operador envía a un cliente para iniciar una conversación. Es literalmente "romper el hielo" — el primer contacto activo. Tableau UK registra automáticamente cuántos de estos mensajes generaron respuesta del cliente.</p>
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿Qué es y por qué existe?</div>
+              <p style="margin:0;color:#94a3b8;">En plataformas de dating, un <strong style="color:#e2e8f0;">Ice Breaker</strong> es el primer mensaje enviado al cliente. Existe para "romper el hielo" y crear el primer contacto activo para engancharlo.</p>
             </div>
             <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#2dd4bf;margin-bottom:8px;font-size:.75rem;">📊 ¿Cómo se mide la efectividad?</div>
-              <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:#94a3b8;">
-                <li><strong style="color:#e2e8f0;">Enviados:</strong> Total de mensajes de apertura lanzados por el perfil.</li>
-                <li><strong style="color:#e2e8f0;">Respuestas:</strong> Cuántos clientes contestaron al mensaje.</li>
-                <li style="color:#34d399;font-weight:700;">Tasa de Respuesta = Respuestas ÷ Enviados × 100</li>
-              </ul>
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">¿Cómo funciona?</div>
+              <p style="margin:0;color:#94a3b8;">Se lanza masivamente a clientes potenciales. El sistema registra cuántos de esos clientes abren y responden el mensaje inicial.</p>
             </div>
             <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#34d399;margin-bottom:8px;font-size:.75rem;">🎯 ¿Qué es una buena tasa?</div>
-              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
-                <div style="background:rgba(52,211,153,0.12);border-radius:8px;padding:10px;">
-                  <div style="font-size:1rem;font-weight:900;color:#34d399;">&gt;30%</div>
-                  <div style="font-size:.58rem;color:#64748b;margin-top:2px;">🔥 Excelente</div>
-                </div>
-                <div style="background:rgba(251,191,36,0.12);border-radius:8px;padding:10px;">
-                  <div style="font-size:1rem;font-weight:900;color:#fbbf24;">15-30%</div>
-                  <div style="font-size:.58rem;color:#64748b;margin-top:2px;">🟡 Normal</div>
-                </div>
-                <div style="background:rgba(248,113,113,0.12);border-radius:8px;padding:10px;">
-                  <div style="font-size:1rem;font-weight:900;color:#f87171;">&lt;15%</div>
-                  <div style="font-size:.58rem;color:#64748b;margin-top:2px;">🔴 Bajo</div>
-                </div>
-              </div>
+              <div style="font-weight:900;color:#34d399;margin-bottom:8px;font-size:.75rem;">¿Cómo se calcula?</div>
+              <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:#94a3b8;">
+                <li><strong style="color:#e2e8f0;">Enviados:</strong> Total lanzados.</li>
+                <li><strong style="color:#e2e8f0;">Respuestas:</strong> Cuántos contestaron.</li>
+                <li style="color:#34d399;font-weight:700;">Tasa (%) = Respuestas ÷ Enviados × 100</li>
+              </ul>
             </div>
             <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">💡 ¿Cómo usar esta información?</div>
-              <p style="margin:0;color:#94a3b8;">Los perfiles con <strong style="color:#e2e8f0;">alta tasa de respuesta</strong> tienen clientes activos y receptivos — son perfiles VIP que deben priorizarse. Los de <strong style="color:#f87171;">baja tasa</strong> indican clientes fríos o mensajes sin impacto. Considera rotar el tipo de Ice Breaker, cambiar la categoría del mensaje (Real love, Friendship, Hot talks) o explorar un horario diferente de envío.</p>
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">¿De dónde se sacaron los datos?</div>
+              <p style="margin:0;color:#94a3b8;">Directamente de los servidores oficiales de Tableau UK, sincronizados en tiempo real por el sistema.</p>
             </div>
-            <div style="background:rgba(99,102,241,0.06);border-radius:10px;padding:12px;font-size:.65rem;color:#475569;">
-              💡 <strong style="color:#64748b;">Tip:</strong> Selecciona un perfil en el selector de arriba para ver el desglose exacto de sus campañas de Ice Breaker con revenue, enviados y tasa de respuesta individuales.
+            <div style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#f87171;margin-bottom:6px;font-size:.75rem;">¿Por qué es importante y cómo nos ayuda?</div>
+              <p style="margin:0;color:#94a3b8;">Mide nuestra capacidad de pescar clientes. Perfiles con <strong style="color:#e2e8f0;">alta tasa</strong> tienen clientes receptivos (VIPs). Una <strong style="color:#f87171;">baja tasa</strong> indica que el mensaje o las fotos no sirven, permitiéndonos cambiar de estrategia a tiempo antes de perder el día.</p>
             </div>
           </div>`
         },
         1: {
-          title: '⏱️ Tiempos de Respuesta — Velocidad de Producción',
+          title: '⏱️ Tiempos de Respuesta — Velocidad',
           body: `<div style="display:flex;flex-direction:column;gap:14px;">
             <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">¿Qué mide este módulo?</div>
-              <p style="margin:0;color:#94a3b8;">Mide la <strong style="color:#e2e8f0;">velocidad de producción</strong> de cada operador en <strong style="color:#2dd4bf;">puntos por hora (pts/hr)</strong>. Es un indicador en tiempo real de qué tan activo y eficiente está siendo cada operador durante su turno.</p>
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">¿Qué es y por qué existe?</div>
+              <p style="margin:0;color:#94a3b8;">Es el indicador de <strong style="color:#e2e8f0;">velocidad de producción (pts/hr)</strong>. Existe para saber qué tan activo, rápido y eficiente está siendo un operador durante su turno.</p>
             </div>
             <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#34d399;margin-bottom:10px;font-size:.75rem;">🚦 Semáforo de Velocidad</div>
-              <div style="display:flex;flex-direction:column;gap:8px;">
-                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(52,211,153,0.08);border-radius:8px;">
-                  <span style="color:#34d399;font-weight:900;min-width:70px;font-size:.75rem;">≥ 15 pts/hr</span>
-                  <span style="background:rgba(52,211,153,0.12);color:#34d399;padding:3px 10px;border-radius:4px;font-size:.62rem;font-weight:700;">🟢 ÓPTIMO — Ritmo excelente, mantener</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(251,191,36,0.08);border-radius:8px;">
-                  <span style="color:#fbbf24;font-weight:900;min-width:70px;font-size:.75rem;">8-15 pts/hr</span>
-                  <span style="background:rgba(251,191,36,0.12);color:#fbbf24;padding:3px 10px;border-radius:4px;font-size:.62rem;font-weight:700;">🟡 NORMAL — Ritmo aceptable</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px;padding:8px;background:rgba(248,113,113,0.08);border-radius:8px;">
-                  <span style="color:#f87171;font-weight:900;min-width:70px;font-size:.75rem;">&lt; 8 pts/hr</span>
-                  <span style="background:rgba(248,113,113,0.12);color:#f87171;padding:3px 10px;border-radius:4px;font-size:.62rem;font-weight:700;">🔴 BAJO — Requiere atención inmediata</span>
-                </div>
-              </div>
+              <div style="font-weight:900;color:#34d399;margin-bottom:6px;font-size:.75rem;">¿Cómo funciona?</div>
+              <p style="margin:0;color:#94a3b8;">Evalúa constantemente la producción reportada y la clasifica en un semáforo: 🟢 Óptimo (≥15), 🟡 Normal (8-15) y 🔴 Bajo (<8).</p>
+            </div>
+            <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">¿Cómo se calcula?</div>
+              <p style="margin:0;color:#94a3b8;">Divide el total de puntos producidos en el turno actual entre las horas transcurridas desde el inicio del turno.</p>
             </div>
             <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">💡 ¿Cómo usarlo?</div>
-              <p style="margin:0;color:#94a3b8;">Filtra por turno (Mañana/Tarde/Noche) para ver quién está siendo más productivo en este momento. Usa el buscador para localizar un operador o perfil específico. Esta métrica ayuda a identificar operadores que necesitan apoyo o que merecen reconocimiento.</p>
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿De dónde se sacaron los datos?</div>
+              <p style="margin:0;color:#94a3b8;">Del algoritmo de cortes temporales y la base de datos en vivo de Supabase.</p>
+            </div>
+            <div style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#f87171;margin-bottom:6px;font-size:.75rem;">¿Por qué es importante y cómo nos ayuda?</div>
+              <p style="margin:0;color:#94a3b8;">Muestra en tiempo real quién rinde y quién necesita apoyo. Si un operador cae en rojo, podemos intervenir de inmediato para ayudarlo a subir sus números antes de que cierre el turno con pérdidas.</p>
             </div>
           </div>`
         },
@@ -23385,36 +23411,49 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           title: '📋 Corte del Día — Producción Neta',
           body: `<div style="display:flex;flex-direction:column;gap:14px;">
             <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">¿Qué es el Corte del Día?</div>
-              <p style="margin:0;color:#94a3b8;">Es un <strong style="color:#e2e8f0;">resumen en tiempo real</strong> de cuántos puntos ha producido cada perfil en la jornada actual. Se calcula con el algoritmo DELTA-SHIFT™.</p>
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">¿Qué es y por qué existe?</div>
+              <p style="margin:0;color:#94a3b8;">Es el resumen de puntos netos generados hoy. Existe para asegurar que cada operador se lleve el crédito exacto por su esfuerzo sin mezclarlo con el de turnos anteriores.</p>
             </div>
             <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#2dd4bf;margin-bottom:8px;font-size:.75rem;">📐 Algoritmo DELTA-SHIFT™</div>
-              <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;font-family:monospace;font-size:.62rem;color:#2dd4bf;margin-bottom:8px;">
-                puntos_neto = puntos_total_actual − puntos_baseline_inicio_turno
-              </div>
-              <p style="margin:0;color:#94a3b8;">Cada perfil comienza el turno con <strong style="color:#34d399;">0 puntos netos</strong>. El sistema registra el total acumulado al inicio y va midiendo el crecimiento. Permite comparar Mañana vs Tarde vs Noche de forma justa.</p>
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">¿Cómo funciona?</div>
+              <p style="margin:0;color:#94a3b8;">Aísla la producción para que al iniciar un turno comiences desde cero (0), contabilizando solo lo que haces tú en tus horas de trabajo.</p>
+            </div>
+            <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#34d399;margin-bottom:6px;font-size:.75rem;">¿Cómo se calcula?</div>
+              <p style="margin:0;color:#94a3b8;">Mediante el algoritmo DELTA-SHIFT™: <strong style="color:#2dd4bf;">Puntos Netos = Actuales - Baseline (Puntos al iniciar el turno)</strong>.</p>
             </div>
             <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">💡 Uso práctico</div>
-              <p style="margin:0;color:#94a3b8;">Revisa el corte antes de finalizar un turno para verificar que cada perfil tenga producción registrada. Si un perfil aparece en 0, puede indicar que el operador no estuvo activo o hay un problema de sincronización con el watcher.</p>
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿De dónde se sacaron los datos?</div>
+              <p style="margin:0;color:#94a3b8;">De las actas de inicio de turno en Supabase cruzadas con la producción actual del perfil.</p>
+            </div>
+            <div style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#f87171;margin-bottom:6px;font-size:.75rem;">¿Por qué es importante y cómo nos ayuda?</div>
+              <p style="margin:0;color:#94a3b8;">Garantiza pagos justos. Si la plataforma muestra que el perfil tiene 1000 puntos pero tú solo hiciste 200 en tu turno, este sistema se asegura de que se te paguen esos 200 correctamente y sin errores humanos.</p>
             </div>
           </div>`
         },
         3: {
-          title: '📊 Perfiles Tableau UK — Datos Oficiales',
+          title: '📊 Perfiles Tableau UK',
           body: `<div style="display:flex;flex-direction:column;gap:14px;">
             <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿Qué es Tableau UK?</div>
-              <p style="margin:0;color:#94a3b8;">Tableau UK es el <strong style="color:#e2e8f0;">sistema oficial de reportes</strong> de la plataforma de dating. Muestra datos verificados por perfil: ingresos en dólares (revenue), campañas de Ice Breakers activas, métricas de alcance y source IDs.</p>
+              <div style="font-weight:900;color:#818cf8;margin-bottom:6px;font-size:.75rem;">¿Qué es y por qué existe?</div>
+              <p style="margin:0;color:#94a3b8;">Es el panel de datos verificados de la plataforma oficial. Existe para tener una fuente de la verdad absoluta que no puede ser alterada ni manipulada.</p>
             </div>
             <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">📡 ¿Cómo se sincroniza?</div>
-              <p style="margin:0;color:#94a3b8;">El botón <strong style="color:#818cf8;">🚀 Sync GitHub</strong> del header lanza un proceso automatizado que extrae los datos de Tableau y los guarda en la base de datos. El sync corre automáticamente cada 6 horas vía GitHub Actions.</p>
+              <div style="font-weight:900;color:#fbbf24;margin-bottom:6px;font-size:.75rem;">¿Cómo funciona?</div>
+              <p style="margin:0;color:#94a3b8;">Un proceso automatizado (Scraper) ingresa al servidor de Tableau, descarga los registros de cada perfil y los muestra aquí en tiempo real de forma segura y encriptada.</p>
             </div>
             <div style="background:rgba(45,212,191,0.08);border:1px solid rgba(45,212,191,0.15);border-radius:10px;padding:14px;">
-              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">🔍 Consola de Auditoría</div>
-              <p style="margin:0;color:#94a3b8;">La consola muestra el estado de la conexión con Tableau en tiempo real. Si ves errores, puede indicar que las credenciales expiraron o que la sesión fue interrumpida. Usa <strong style="color:#e2e8f0;">Actualizar</strong> para reintentar.</p>
+              <div style="font-weight:900;color:#2dd4bf;margin-bottom:6px;font-size:.75rem;">¿Cómo se calcula?</div>
+              <p style="margin:0;color:#94a3b8;">No requiere cálculos internos; muestra los valores exactos, ingresos, y envíos procesados y aprobados por la plataforma extranjera.</p>
+            </div>
+            <div style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#34d399;margin-bottom:6px;font-size:.75rem;">¿De dónde se sacaron los datos?</div>
+              <p style="margin:0;color:#94a3b8;">Del servidor corporativo oficial de Tableau en el Reino Unido (UK) vía nuestra base de datos (Supabase).</p>
+            </div>
+            <div style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);border-radius:10px;padding:14px;">
+              <div style="font-weight:900;color:#f87171;margin-bottom:6px;font-size:.75rem;">¿Por qué es importante y cómo nos ayuda?</div>
+              <p style="margin:0;color:#94a3b8;">Es nuestro auditor. Elimina la necesidad de confiar en reportes manuales que pueden tener errores. Así garantizamos que lo que se muestra aquí es exactamente el dinero real por el cual la empresa nos pagará las nóminas.</p>
             </div>
           </div>`
         }
@@ -23459,31 +23498,31 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           },
           'ranking': {
             title: '🏆 Control de Presencia Real-Time',
-            html: '<b style="color:#38bdf8;">¿Qué es?</b><br>Es el Ranking Global que monitorea la conexión y productividad en tiempo real de todos los operadores del turno.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Utiliza la sincronización <i>Zero-Wait</i> con Supabase para listar a los operadores activos. Los puntos se calculan leyendo los cortes ingresados (Puntos netos = actuales - anteriores) y se comparan contra las metas.'
+            html: '<b style="color:#38bdf8;">¿Qué es y por qué existe?</b><br>Es el Ranking Global que monitorea la conexión en tiempo real de todos los operadores del turno.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Utiliza sincronización Zero-Wait con la base de datos para listar a los operadores activos.<br><br><b style="color:#38bdf8;">¿Cómo se calcula?</b><br>Los puntos se calculan leyendo los cortes ingresados (Puntos netos = actuales - anteriores) y se comparan contra las metas.<br><br><b style="color:#38bdf8;">¿De dónde se sacaron los datos?</b><br>De la tabla de asistencia en vivo en Supabase (KV Store) y los cortes temporales de Datame.<br><br><b style="color:#38bdf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Garantiza que la gerencia vea exactamente quién está conectado, evitando vacíos operativos o ausencias no reportadas.'
           },
           'corte': {
             title: '⏱️ Corte en Vivo (Resumen)',
-            html: '<b style="color:#2dd4bf;">¿Qué es?</b><br>Muestra el acumulado de puntos generados globalmente en la agencia durante el turno activo.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Recopila los puntos netos proyectados por cada operador y perfil logueado en tiempo real y calcula su equivalencia en ingresos (COP).'
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Muestra el acumulado de puntos generados globalmente en la agencia durante el turno activo.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Recopila los puntos netos proyectados por cada operador logueado en tiempo real y calcula su equivalencia.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Suma los puntos de cada perfil y aplica el factor de conversión a la moneda local (COP).<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>De la suma dinámica de los reportes locales de todos los operadores activos sincronizados por WebSockets.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Brinda un estimado de lo que lleva el turno actual para saber si se logrará la meta del día.'
           },
           'alertas': {
             title: '🚨 Alertas Inteligentes',
-            html: '<b style="color:#f87171;">¿Qué es?</b><br>Un sistema de diagnóstico temprano que detecta a operadores con baja productividad o desconexiones prolongadas.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Mide el pulso de puntos en intervalos de 5 y 10 minutos. Si un operador pasa mucho tiempo sin generar puntos o cae por debajo del 30% de eficiencia, se emite una alerta crítica.'
+            html: '<b style="color:#f87171;">¿Qué es y por qué existe?</b><br>Un sistema de diagnóstico temprano que detecta a operadores con baja productividad o desconexiones prolongadas.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Mide el pulso de puntos en intervalos de 5 y 10 minutos para identificar caídas en el ritmo.<br><br><b style="color:#f87171;">¿Cómo se calcula?</b><br>Si un operador pasa mucho tiempo sin generar puntos o cae por debajo del 30% de eficiencia, se emite una alerta crítica.<br><br><b style="color:#f87171;">¿De dónde se sacaron los datos?</b><br>Del cruce entre la hora actual, el registro de último punto y la meta asignada al perfil.<br><br><b style="color:#f87171;">¿Por qué es importante y cómo nos ayuda?</b><br>Permite intervenir a tiempo antes de perder horas valiosas de trabajo.'
           },
           'clientes': {
             title: '👥 Clientes Activos',
-            html: '<b style="color:#c084fc;">¿Qué es?</b><br>Rastrea los clientes que más están interactuando y enviando créditos.<br><br><b style="color:#c084fc;">¿Cómo funciona?</b><br>Identifica el patrón de gasto y trayectoria de los clientes más activos, permitiendo segmentar el engagement.'
+            html: '<b style="color:#c084fc;">¿Qué es y por qué existe?</b><br>Rastrea los clientes que más están interactuando y enviando créditos.<br><br><b style="color:#c084fc;">¿Cómo funciona?</b><br>Identifica el patrón de gasto y la trayectoria de los clientes más activos, permitiendo segmentar el engagement.<br><br><b style="color:#c084fc;">¿Cómo se calcula?</b><br>Suma la cantidad de créditos enviados por nombre de cliente a lo largo del turno.<br><br><b style="color:#c084fc;">¿De dónde se sacaron los datos?</b><br>Directamente del registro de interacciones reportado por los operadores en Datame.<br><br><b style="color:#c084fc;">¿Por qué es importante y cómo nos ayuda?</b><br>Ayuda a saber qué clientes están calientes para enfocar la energía del turno en ellos.'
           },
           'campanas': {
             title: '📊 Efectividad de Campañas',
-            html: '<b style="color:#fbbf24;">¿Qué es?</b><br>Muestra el rendimiento de las campañas o tags para atraer usuarios.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Clasifica cuáles tags trajeron usuarios VIP y cuáles no están convirtiendo.'
+            html: '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Muestra el rendimiento de las campañas o tags para atraer usuarios.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Clasifica cuáles tags trajeron usuarios VIP y cuáles no están convirtiendo.<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Agrupa las conversiones de puntos bajo etiquetas específicas o rompehielos (Ice Breakers).<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>Del campo de notas/tags asociado a los reportes en el panel del operador.<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Identifica qué estrategias de marketing (frases, fotos, tags) funcionan para replicarlas en toda la agencia.'
           },
           'vip': {
             title: '💎 Perfiles VIP',
-            html: '<b style="color:#34d399;">¿Qué es?</b><br>Identifica los perfiles operativos que tienen mejor rendimiento.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Muestra los perfiles que promedian más de $10 USD diarios, siendo los más valiosos de la agencia y los que no deberían apagarse o descuidarse.'
+            html: '<b style="color:#34d399;">¿Qué es y por qué existe?</b><br>Identifica los perfiles operativos que tienen mejor rendimiento.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Resalta a los perfiles más valiosos de la agencia para que no se apaguen o descuiden.<br><br><b style="color:#34d399;">¿Cómo se calcula?</b><br>Filtra aquellos perfiles que en promedio facturan más de $10 USD diarios.<br><br><b style="color:#34d399;">¿De dónde se sacaron los datos?</b><br>Del análisis histórico y el acumulado en Supabase de los últimos días.<br><br><b style="color:#34d399;">¿Por qué es importante y cómo nos ayuda?</b><br>Protege la principal fuente de ingresos asegurando que estos perfiles estén siempre ocupados.'
           },
           'arotar': {
             title: '⚙️ Perfiles a Rotar',
-            html: '<b style="color:#f87171;">¿Qué es?</b><br>Lista los perfiles con bajo rendimiento que requieren atención inmediata.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Resalta los perfiles que promedian menos de $10 USD diarios. Indica que sus estrategias (Ice Breakers, tags, horario) deben ser modificadas o el perfil rotado.'
+            html: '<b style="color:#f87171;">¿Qué es y por qué existe?</b><br>Lista los perfiles con bajo rendimiento que requieren atención inmediata.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Indica que las estrategias (Ice Breakers, tags, horario) de estos perfiles deben ser modificadas o rotadas.<br><br><b style="color:#f87171;">¿Cómo se calcula?</b><br>Marca en rojo los perfiles que están promediando menos de $10 USD diarios.<br><br><b style="color:#f87171;">¿De dónde se sacaron los datos?</b><br>Del acumulado mensual comparado con los días trabajados en Datame/Supabase.<br><br><b style="color:#f87171;">¿Por qué es importante y cómo nos ayuda?</b><br>Evita perder tiempo operativo en perfiles muertos.'
           },
           'crecimiento': {
             title: '📈 Crecimiento (Ritmo Diario)',
@@ -23491,24 +23530,117 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           },
           'cia-pts': {
             title: '📊 Puntos Hoy (Central)',
-            html: '<b style="color:#2dd4bf;">¿De dónde sale?</b><br>Suma total de los puntos generados por <b>todos los operadores activos</b> en el día actual.<br><br><b style="color:#2dd4bf;">¿Para qué sirve?</b><br>Es la métrica de tracción principal. Muestra exactamente cuánto valor está aportando la agencia hoy.<br><br><b style="color:#2dd4bf;">¿Cómo nos ayuda?</b><br>Si detectas que a mitad del día la cifra está baja comparada con tu promedio, puedes intervenir de inmediato, rotar perfiles o motivar al equipo para "salvar el día".'
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Es la métrica de tracción principal. Muestra exactamente cuánto valor está aportando la agencia hoy.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Agrupa el esfuerzo total diario de la compañía.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Suma total de los puntos generados por <b>todos los operadores activos</b> en el día actual.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>Sincronización en vivo con Supabase o tabla local de cortes.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Si detectas que a mitad del día la cifra está baja comparada con tu promedio, puedes intervenir de inmediato, rotar perfiles o motivar al equipo para "salvar el día".'
           },
           'cia-pph': {
             title: '⚡ Puntos por Hora (Velocidad)',
-            html: '<b style="color:#818cf8;">¿De dónde sale?</b><br>Divide los "Puntos Hoy" entre el número de horas transcurridas en el turno activo.<br><br><b style="color:#818cf8;">¿Para qué sirve?</b><br>Actúa como el velocímetro de la agencia. Te dice el ritmo al que entra el dinero.<br><br><b style="color:#818cf8;">¿Cómo nos ayuda?</b><br>Permite proyectar el cierre del día. Si tu meta diaria son 5,000 pts en 10 horas, sabes que necesitas mantener un Pts/Hora de 500. Si cae a 200, ¡hay que tomar acción!'
+            html: '<b style="color:#818cf8;">¿Qué es y por qué existe?</b><br>Actúa como el velocímetro de la agencia. Te dice el ritmo al que entra el dinero.<br><br><b style="color:#818cf8;">¿Cómo funciona?</b><br>Evalúa la velocidad promedio de conversión de todo el equipo en conjunto.<br><br><b style="color:#818cf8;">¿Cómo se calcula?</b><br>Divide los "Puntos Hoy" entre el número de horas transcurridas en el turno activo.<br><br><b style="color:#818cf8;">¿De dónde se sacaron los datos?</b><br>Del cálculo matemático sobre la variable "Puntos Hoy".<br><br><b style="color:#818cf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Permite proyectar el cierre del día. Si tu meta diaria son 5,000 pts en 10 horas, sabes que necesitas mantener un Pts/Hora de 500. Si cae a 200, ¡hay que tomar acción!'
           },
           'cia-ops': {
             title: '👥 Operadores Activos',
-            html: '<b style="color:#fbbf24;">¿De dónde sale?</b><br>Conteo en tiempo real de los perfiles de operadores que han registrado cortes o actividad hoy.<br><br><b style="color:#fbbf24;">¿Para qué sirve?</b><br>Control de asistencia y ocupación del turno.<br><br><b style="color:#fbbf24;">¿Cómo nos ayuda?</b><br>Garantiza que no haya puestos vacíos. Si esperas 5 operadores y solo hay 3, estás perdiendo potencial de facturación.'
+            html: '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Control de asistencia y ocupación global del turno.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Permite ver el tamaño de tu fuerza laboral actual comparada con la nómina total.<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Conteo en tiempo real de los perfiles de operadores que han registrado cortes o actividad hoy.<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>De los estados de presencia emitidos en el canal "operador_status".<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Garantiza que no haya puestos vacíos. Si esperas 5 operadores y solo hay 3, estás perdiendo potencial de facturación.'
           },
           'cia-top': {
             title: '🏅 Top Perfil',
-            html: '<b style="color:#34d399;">¿De dónde sale?</b><br>Rastrea al perfil y operador que más puntos ha generado en el día actual.<br><br><b style="color:#34d399;">¿Para qué sirve?</b><br>Identificar el motor de la agencia hoy.<br><br><b style="color:#34d399;">¿Cómo nos ayuda?</b><br>Permite reconocer el buen desempeño (motivación) o analizar qué estrategia está usando ese perfil (tags, mensajes) para replicarla en los demás.'
+            html: '<b style="color:#34d399;">¿Qué es y por qué existe?</b><br>Es el podio diario para identificar el motor de la agencia hoy.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Encuentra de manera dinámica quién está rompiendo el récord el día de hoy.<br><br><b style="color:#34d399;">¿Cómo se calcula?</b><br>Rastrea al perfil y operador con la suma de puntos diarios más alta.<br><br><b style="color:#34d399;">¿De dónde se sacaron los datos?</b><br>Del arreglo local ordenado de producciones.<br><br><b style="color:#34d399;">¿Por qué es importante y cómo nos ayuda?</b><br>Permite reconocer el buen desempeño (motivación) o analizar qué estrategia está usando ese perfil (tags, mensajes) para replicarla en los demás.'
           },
           'cia-mes': {
             title: '📅 Mes Total (Acumulado)',
-            html: '<b style="color:#c084fc;">¿De dónde sale?</b><br>Sincronización directa con Tableau UK. Representa el acumulado real validado del mes.<br><br><b style="color:#c084fc;">¿Para qué sirve?</b><br>Es el "marcador final" oficial. Es el valor contra el cual se calcula tu rentabilidad mensual y comisiones.<br><br><b style="color:#c084fc;">¿Cómo nos ayuda?</b><br>Mantener este número a la vista ayuda a todo el equipo a no perder el enfoque en la Meta Mensual.'
-          }
+            html: '<b style="color:#c084fc;">¿Qué es y por qué existe?</b><br>Es el "marcador final" oficial. Muestra cuánto lleva la agencia recaudado en lo que va del mes.<br><br><b style="color:#c084fc;">¿Cómo funciona?</b><br>Consolida todo el progreso acumulativo día por día hasta el presente.<br><br><b style="color:#c084fc;">¿Cómo se calcula?</b><br>Se suman todos los cortes diarios finales de todos los operadores de la agencia.<br><br><b style="color:#c084fc;">¿De dónde se sacaron los datos?</b><br>Sincronización directa con Tableau UK o Datame. Representa el acumulado real validado del mes.<br><br><b style="color:#c084fc;">¿Por qué es importante y cómo nos ayuda?</b><br>Es el valor contra el cual se calcula tu rentabilidad mensual y comisiones. Mantener este número a la vista ayuda a todo el equipo a no perder el enfoque en la Meta Mensual.'
+          },
+          'vp': {
+            title: '📊 Velocidad Promedio (Vp)',
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Es el pulso de dinero diario de la agencia.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Mide la velocidad actual a la que los perfiles están reportando.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Promedio de puntos por hora de todos los activos.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>Suma de puntos dividida en horas trabajadas (Supabase).<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Si este número baja de su meta, la meta mensual del equipo peligra.'
+          },
+          'impacto': {
+            title: '⚖️ Impacto Recalibración',
+            html: '<b style="color:#f87171;">¿Qué es y por qué existe?</b><br>Es el costo base de entrada para el turno actual.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Muestra el piso mínimo de puntos requeridos para ser rentables.<br><br><b style="color:#f87171;">¿Cómo se calcula?</b><br>Basado en el costo operativo de mantener la infraestructura divido en 30 días.<br><br><b style="color:#f87171;">¿De dónde se sacaron los datos?</b><br>Del histórico financiero mensual de la agencia.<br><br><b style="color:#f87171;">¿Por qué es importante y cómo nos ayuda?</b><br>Los operadores deben generar estos puntos cada día SOLO PARA CUBRIR EL GASTO antes de ganar un solo dólar neto.'
+          },
+          'capacidad': {
+            title: '👥 Capacidad Activa',
+            html: '<b style="color:#38bdf8;">¿Qué es y por qué existe?</b><br>Mide el nivel de atención (densidad) que tiene un operador.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Compara los perfiles trabajando contra el número de operadores humanos.<br><br><b style="color:#38bdf8;">¿Cómo se calcula?</b><br>Total de perfiles activos ÷ Operadores logueados.<br><br><b style="color:#38bdf8;">¿De dónde se sacaron los datos?</b><br>Base de datos de logueos vs perfiles con puntos hoy.<br><br><b style="color:#38bdf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Muestra cuántos perfiles está cubriendo cada operador en promedio, para detectar sobrecarga.'
+          },
+          'tableau': {
+            title: '📊 Panel Tableau Global',
+            html: '<b style="color:#818cf8;">¿Qué es y por qué existe?</b><br>Este panel es nuestro auditor premium y validador de datos en tiempo real.<br><br><b style="color:#818cf8;">¿Cómo funciona?</b><br>Conecta de manera directa y encriptada con los servidores principales.<br><br><b style="color:#818cf8;">¿Cómo se calcula?</b><br>Descarga los cruces analíticos desde el Data Warehouse.<br><br><b style="color:#818cf8;">¿De dónde se sacaron los datos?</b><br>Servidor Oficial Tableau UK & Supabase.<br><br><b style="color:#818cf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Muestra la verdad absoluta sobre los ingresos validados de los perfiles para no depender únicamente de reportes manuales.'
+          },
+          'auditoria-perfil': {
+            title: '📋 Auditoría Integral: Perfil',
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Es un sistema de validación cruzada que extrae la data oficial del servidor para auditar la producción real de cada perfil.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Un Scraper inteligente lee los endpoints oficiales, desglosa los puntos por servicio (Chat, Mails, Regalos) y los sincroniza con nuestra base de datos.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Realiza una sumatoria del total de puntos procesados internamente por la plataforma oficial.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>Del panel y servidor de Tableau UK.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Elimina errores de reporte, asegura pagos exactos basados en la fuente oficial y permite ver el comportamiento detallado de cada perfil y sus clientes.'
+          },
+          'perfil-operativo': {
+            title: '👤 Perfil Operativo',
+            html: '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Este panel centraliza el rendimiento histórico y actual de cada operador, permitiendo un seguimiento del crecimiento real (Cortes + Metas).<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Cruza datos de tres fuentes: 1. Matriz de operadores estática, 2. Cortes diarios guardados en Supabase, y 3. Perfiles activos asignados en el turno actual (DELTA-SHIFT™).<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Suma los cortes y metas de todos los perfiles asociados al operador de forma dinámica.<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>De la base de datos de cortes temporales y la asignación global de asistencia.<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Permite detectar caídas de ritmo en tiempo real y recompensar a los operadores con mayor crecimiento mensual.'
+          },
+          'stats-hoy': {
+            title: '📅 Hoy — Puntos en Vivo',
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Mide los puntos netos acumulados por tus operadores en los turnos del día de hoy en tiempo real.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Acumula los reportes parciales que ingresan todos los operadores conectados.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Suma global de los puntos netos ingresados en el día.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>De los reportes en vivo de Datame y la base de cortes temporales.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Es tu indicador de tracción instantánea. Si detectas a mitad de jornada que la producción está baja, puedes intervenir de inmediato. ¡Salvar un solo día malo a tiempo protege tu rentabilidad mensual!'
+          },
+          'stats-mes': {
+            title: '📅 Mes Total (Acumulado Operador)',
+            html: '<b style="color:#a78bfa;">¿Qué es y por qué existe?</b><br>Es el acumulado personal de los operadores a cargo durante el mes.<br><br><b style="color:#a78bfa;">¿Cómo funciona?</b><br>Resume el esfuerzo y crecimiento continuo de la operación diaria.<br><br><b style="color:#a78bfa;">¿Cómo se calcula?</b><br>Suma los puntos de todos los turnos finalizados en el mes actual.<br><br><b style="color:#a78bfa;">¿De dónde se sacaron los datos?</b><br>Base de datos de producciones históricas en Supabase.<br><br><b style="color:#a78bfa;">¿Por qué es importante y cómo nos ayuda?</b><br>Brinda visibilidad sobre si el operador o grupo está logrando la cuota del mes.'
+          },
+          'stats-promedio': {
+            title: '⚖️ Promedio Diario',
+            html: '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Es el ritmo de ingreso constante a lo largo de los días de trabajo.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Ayuda a saber si el rendimiento es constante o muy variable (días muy buenos seguidos de días muy malos).<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Divide el total de puntos del mes entre la cantidad de días trabajados.<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>Del histórico de días logueados y la producción.<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Muestra la constancia. Un promedio estable es más fácil de predecir que ingresos esporádicos.'
+          },
+          'stats-proyeccion': {
+            title: '🚀 Proyección a Fin de Mes',
+            html: '<b style="color:#10b981;">¿Qué es y por qué existe?</b><br>Es un pronóstico de cómo cerrará el mes si se mantiene la velocidad actual.<br><br><b style="color:#10b981;">¿Cómo funciona?</b><br>Asume que el operador trabajará los días restantes al mismo nivel promedio.<br><br><b style="color:#10b981;">¿Cómo se calcula?</b><br>Puntos Acumulados + (Promedio Diario × Días que faltan en el mes).<br><br><b style="color:#10b981;">¿De dónde se sacaron los datos?</b><br>Cálculo matemático sobre las variables actuales del mes.<br><br><b style="color:#10b981;">¿Por qué es importante y cómo nos ayuda?</b><br>Previene fracasos; si la proyección no llega a la meta, sabes a tiempo que debes apretar el acelerador hoy, no el último día del mes.'
+          },
+          'op-hero-pts': {
+            title: '⚡ Puntos Hoy (Destacado)',
+            html: '<b style="color:#5eead4;">¿Qué es y por qué existe?</b><br>Es tu indicador principal de éxito del día. Existe para que tengas a la vista y en grande tu producción actual.<br><br><b style="color:#5eead4;">¿Cómo funciona?</b><br>Se actualiza automáticamente cada vez que la plataforma registra una conversión en cualquiera de tus perfiles asignados.<br><br><b style="color:#5eead4;">¿Cómo se calcula?</b><br>Suma los puntos validados de Datame/Supabase generados bajo tu nombre en el turno de hoy.<br><br><b style="color:#5eead4;">¿De dónde se sacaron los datos?</b><br>Del cruce en tiempo real entre tu sesión activa y los reportes de la base de datos oficial.<br><br><b style="color:#5eead4;">¿Por qué es importante y cómo nos ayuda?</b><br>Te mantiene enfocado. Ver este número crecer es tu mayor motivación para alcanzar tu meta diaria y asegurar tu rentabilidad.'
+          },
+          'op-corte-diario': {
+            title: '⏱️ Corte Diario y Progreso',
+            html: '<b style="color:#60a5fa;">¿Qué es y por qué existe?</b><br>Es el desglose detallado de tu avance hacia la meta del día. Existe para mostrarte exactamente qué porcentaje de tu objetivo has cumplido.<br><br><b style="color:#60a5fa;">¿Cómo funciona?</b><br>Muestra una barra de progreso que se llena a medida que sumas puntos, y mantiene un historial de tus cortes recientes.<br><br><b style="color:#60a5fa;">¿Cómo se calcula?</b><br>(Puntos Hoy ÷ Meta del Día) × 100.<br><br><b style="color:#60a5fa;">¿De dónde se sacaron los datos?</b><br>De la meta que confirmaste al iniciar sesión y los puntos sincronizados por el sistema.<br><br><b style="color:#60a5fa;">¿Por qué es importante y cómo nos ayuda?</b><br>Te permite administrar tu tiempo y esfuerzo. Sabes visualmente si necesitas acelerar el ritmo o si ya cumpliste y puedes buscar bonificaciones.'
+          },
+          'op-meta-diaria': {
+            title: '🎯 Meta del Día',
+            html: '<b style="color:#a78bfa;">¿Qué es y por qué existe?</b><br>Es el compromiso personal de producción para tu turno. Existe para asegurar que la agencia y tú estén alineados en los objetivos financieros diarios.<br><br><b style="color:#a78bfa;">¿Cómo funciona?</b><br>Al iniciar sesión, el sistema te sugiere una meta basada en las horas de tu turno. Tú confirmas o ajustas este objetivo.<br><br><b style="color:#a78bfa;">¿Cómo se calcula?</b><br>Sugerencia = (Horas de turno) × (50 puntos base). El valor en COP es una proyección estimativa.<br><br><b style="color:#a78bfa;">¿De dónde se sacaron los datos?</b><br>De la configuración de tu perfil (horas de turno) y factores de conversión estándar de la agencia.<br><br><b style="color:#a78bfa;">¿Por qué es importante y cómo nos ayuda?</b><br>Activa tu auto-asistencia y te da un propósito claro. Una operación sin metas diarias es una operación a ciegas; definir este objetivo es el primer paso para ganar.'
+          },
+          'gestion-pins': {
+            title: '🔑 Gestión de PINs',
+            html: '<b style="color:#f87171;">¿Qué es y por qué existe?</b><br>Es el administrador de seguridad y control de acceso. Existe para proteger las configuraciones sensibles de la plataforma.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>Permite establecer contraseñas (PINs) para la gerencia, soporte y monitores.<br><br><b style="color:#f87171;">¿Cómo se calcula?</b><br>Asigna permisos jerárquicos basados en la validez criptográfica del PIN ingresado.<br><br><b style="color:#f87171;">¿De dónde se sacaron los datos?</b><br>Del almacenamiento local protegido (Local Storage).<br><br><b style="color:#f87171;">¿Por qué es importante y cómo nos ayuda?</b><br>Evita que operadores no autorizados borren turnos, cambien metas o vean información financiera confidencial.'
+          },
+          'reporte-inteligente': {
+            title: '📊 Reporte Inteligente',
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Es el generador automático de reportes de cierre. Existe para ahorrar horas de trabajo manual sumando puntos de los operadores.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Captura todos los cortes y eventos del turno, los consolida y los formatea en un texto listo para enviar a WhatsApp.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Suma los Puntos Hoy, Meta Diaria y Promedio por Hora de cada operador conectado.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>De la memoria temporal de cortes y la base de datos de Supabase en vivo.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Estandariza la comunicación de la agencia, evitando errores humanos de suma al final del día.'
+          },
+          'llaves-ai': {
+            title: '⚙️ Configuración de Llaves AI',
+            html: '<b style="color:#5eead4;">¿Qué es y por qué existe?</b><br>Es el panel de integración con Inteligencia Artificial. Existe para configurar el cerebro del sistema y las respuestas inteligentes.<br><br><b style="color:#5eead4;">¿Cómo funciona?</b><br>Guarda las API Keys de OpenAI y otros servicios necesarios para automatizar el análisis de chats.<br><br><b style="color:#5eead4;">¿Cómo se calcula?</b><br>Valida el formato de la llave y gestiona los tokens de uso en cada petición.<br><br><b style="color:#5eead4;">¿De dónde se sacaron los datos?</b><br>De las credenciales proporcionadas por la administración en OpenAI.<br><br><b style="color:#5eead4;">¿Por qué es importante y cómo nos ayuda?</b><br>Sin estas llaves, los Ice Breakers Inteligentes y el análisis de comportamiento no pueden funcionar, quitando la ventaja tecnológica.'
+          },
+          'consejos-monitor': {
+            title: '💡 Consejos del Monitor',
+            html: '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Es el asesor virtual para el Monitor de Turno. Existe para guiar al supervisor sobre qué acciones tomar si hay bajo rendimiento.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Ofrece sugerencias predefinidas basadas en las mejores prácticas operativas.<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Muestra instrucciones condicionales dependiendo de si hay caídas masivas o picos de tráfico.<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>Del manual de procedimientos operativos estándar (SOP) de Agencia Romero.<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Reduce el tiempo de reacción ante crisis y entrena a los nuevos monitores con el conocimiento de los más experimentados.'
+          },
+          'agregar-operador': {
+            title: '➕ Agregar Operador',
+            html: '<b style="color:#a78bfa;">¿Qué es y por qué existe?</b><br>Es la herramienta de creación de usuarios. Existe para poder enrolar a nuevo personal al sistema de la agencia.<br><br><b style="color:#a78bfa;">¿Cómo funciona?</b><br>Registra el nombre, grupo, perfil y turno del nuevo integrante, generándole una ficha de trabajo.<br><br><b style="color:#a78bfa;">¿Cómo se calcula?</b><br>Verifica que no existan duplicados y asigna el perfil a la matriz global.<br><br><b style="color:#a78bfa;">¿De dónde se sacaron los datos?</b><br>Ingreso manual de la administración que luego se sincroniza con la base de datos.<br><br><b style="color:#a78bfa;">¿Por qué es importante y cómo nos ayuda?</b><br>Mantiene organizada la nómina de la empresa y permite escalar la cantidad de trabajadores fácilmente.'
+          },
+          'gestion-grupos': {
+            title: '⚙️ Gestión de Grupos',
+            html: '<b style="color:#38bdf8;">¿Qué es y por qué existe?</b><br>Administrador de las agrupaciones de personal. Existe para poder segmentar operadores según plataforma, horario o nivel de experiencia.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Crea y edita las etiquetas de "Grupo" a las cuales pertenecen los distintos operadores.<br><br><b style="color:#38bdf8;">¿Cómo se calcula?</b><br>Agrupa perfiles asociados a un mismo Tag para ver subtotales de producción.<br><br><b style="color:#38bdf8;">¿De dónde se sacaron los datos?</b><br>De la configuración organizacional estática del sistema.<br><br><b style="color:#38bdf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Permite organizar agencias de más de 50 operadores en equipos pequeños manejables por diferentes monitores.'
+          },
+          'novedades-dia': {
+            title: '📋 Novedades del Día',
+            html: '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Es la bitácora de eventos relevantes. Existe para dejar constancia de fallas de internet, ausencias o suspensiones de plataformas.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Permite al monitor escribir notas breves que afectaron el desempeño y se adjuntan al reporte final.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Almacena temporalmente el texto asociado a la hora del suceso.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>Reportes en vivo realizados por el personal o la gerencia.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Si la meta no se cumplió porque se cayó la luz 2 horas, esto justifica la caída de producción ante auditorías de gerencia.'
+          },
+          'clasificacion-vivo': {
+            title: '🏆 Clasificación En Vivo',
+            html: '<b style="color:#38bdf8;">¿Qué es y por qué existe?</b><br>Es el tablero dinámico que posiciona a los operadores del turno actual. Existe para fomentar competitividad sana.<br><br><b style="color:#38bdf8;">¿Cómo funciona?</b><br>Ordena a los operadores conectados de mayor a menor según los puntos obtenidos en este momento.<br><br><b style="color:#38bdf8;">¿Cómo se calcula?</b><br>Comparación descendente de la métrica (Puntos Actuales) sincronizada en vivo.<br><br><b style="color:#38bdf8;">¿De dónde se sacaron los datos?</b><br>Del canal de tiempo real (WebSockets) de Supabase cruzado con los cortes del turno.<br><br><b style="color:#38bdf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Convierte el trabajo en un "juego" (gamificación) motivando a los operadores a pelear por el primer puesto.'
+          },
+          'historial-asistencia': {
+            title: '📋 Historial de Asistencia',
+            html: '<b style="color:#34d399;">¿Qué es y por qué existe?</b><br>Es el registro temporal de logs. Existe para saber exactamente a qué hora entró y salió un operador en días pasados.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Almacena un registro inmutable cada vez que el sistema marca a alguien como (P)resente o (F)alla.<br><br><b style="color:#34d399;">¿Cómo se calcula?</b><br>Acumula los pings del canal de presencia y cierra el registro a la medianoche o fin de turno.<br><br><b style="color:#34d399;">¿De dónde se sacaron los datos?</b><br>De la base de datos de Asistencia (KV Store) en Supabase.<br><br><b style="color:#34d399;">¿Por qué es importante y cómo nos ayuda?</b><br>Sirve para el control de nómina y descuentos. Evita discusiones de "yo sí me conecté" cuando el registro muestra lo contrario.'
+          },
+          'exportar-asistencia': {
+            title: '📤 Exportar Asistencia',
+            html: '<b style="color:#fb7185;">¿Qué es y por qué existe?</b><br>Es la función de volcado de datos. Existe para sacar la información del sistema y enviarla a contabilidad o RRHH.<br><br><b style="color:#fb7185;">¿Cómo funciona?</b><br>Convierte todo el registro visible de asistencia en un formato que Excel pueda entender (CSV) y lo descarga al computador.<br><br><b style="color:#fb7185;">¿Cómo se calcula?</b><br>Parsea las tablas HTML o los objetos JSON de asistencia y los delimita por comas.<br><br><b style="color:#fb7185;">¿De dónde se sacaron los datos?</b><br>Del historial renderizado en pantalla obtenido desde Supabase.<br><br><b style="color:#fb7185;">¿Por qué es importante y cómo nos ayuda?</b><br>Permite que otras áreas de la empresa puedan procesar pagos quincenales sin depender de tener acceso a este panel de administración.'
+          },
+
         };
         const data = infoMap[moduleId];
         if(data && typeof Swal !== 'undefined') {
@@ -23726,7 +23858,18 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
       window.rrSvcInfo = function(key) {
         const data = window._rrSvcInfoData || {};
-        alert('ℹ ' + key.toUpperCase() + '\n\n' + (data[key] || 'Dato oficial del servidor UK.'));
+        var text = data[key] || 'Dato oficial del servidor UK. Cada número aquí es dinero real generado por este perfil.';
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: `ℹ️ Info de ${key.toUpperCase()}`,
+            html: `<div style="text-align:left; font-size:0.85rem; color:#e2e8f0; line-height:1.5;">${text}</div>`,
+            background: '#0f172a',
+            color: '#f8fafc',
+            confirmButtonColor: '#6366f1'
+          });
+        } else {
+          alert('ℹ ' + key.toUpperCase() + '\n\n' + text);
+        }
       };
       window.mostrarInfoTableau = function() {
         alert('📊 Central de Inteligencia Agencia Romero\n\nConecta en tiempo real con Supabase y Tableau UK para mostrar:\n• Ice Breakers: perfiles más rentables del mes\n• Velocidad: puntos/hora por perfil y operador\n• Corte del día: producción exacta vs baseline\n• Audit UK: datos oficiales de Tableau');
@@ -23818,7 +23961,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     function asiLoadDraft() {
-      const date = document.getElementById('asi-date')?.value || '';
+      let date = document.getElementById('asi-date')?.value || '';
+      if (!date && typeof localDateStr === 'function') date = localDateStr();
       if (asiShift === 'todos') {
         // Fusionar los 3 turnos en asiEstados — así el monitor ve TODOS
         const m = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_manana') || '{}');
@@ -23834,7 +23978,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
 
     function asiSaveDraft() {
-      const date = document.getElementById('asi-date')?.value || '';
+      let date = document.getElementById('asi-date')?.value || '';
+      if (!date && typeof localDateStr === 'function') date = localDateStr();
       if (asiShift === 'todos') {
         // En modo todos: separar estados por turno y guardar en cada clave
         const byShift = { manana: {}, tarde: {}, noche: {} };
@@ -23979,7 +24124,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       if (typeof _localSaveTs !== 'undefined') _localSaveTs[STORAGE_KEY] = Date.now();
       if (typeof _sb !== 'undefined' && _sb) {
         try {
-          await _sb.from('kv_store').upsert({ key: STORAGE_KEY, value: JSON.stringify(operatorsData) });
+          await _sb.from('kv_store').upsert({ key: STORAGE_KEY, value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
           console.info('[Plat] Sincronización exitosa:', op.name, nueva);
         } catch(e) { console.warn('[Plat] Error Supabase:', e.message); }
       }
@@ -24693,7 +24838,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
         if (changed) {
           localStorage.setItem('rr_prime_cortes', JSON.stringify(cortesObj));
-          try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }); } catch(e){}
+          try { await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(cortesObj) }, { onConflict: 'key' }); } catch(e){}
           if (typeof loadData === 'function') loadData();
           if (typeof renderRanking === 'function') renderRanking();
           if (typeof renderOperators === 'function') renderOperators();

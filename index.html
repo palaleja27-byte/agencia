@@ -12190,7 +12190,7 @@
 
       // 2. Canal OPERACIONES (Detección instantánea de puntos Datame)
       // Modificado: Se elimina la restricción de rol para que se suscriba incluso en la pantalla de login (esencial para TV/móvil)
-      window._voiceBroadcastChannel = _sb.channel('operaciones_changes', { config: { broadcast: { ack: true } } })
+      _sb.channel('operaciones_changes')
         .on('postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'operaciones' },
           () => { 
@@ -12198,11 +12198,15 @@
             _debouncedLaserSync(); 
           }
         )
+        .subscribe();
+
+      // 3. Canal GLOBAL ALERTS (Alertas de voz invasivas para todos los dispositivos)
+      window._voiceBroadcastChannel = _sb.channel('global_alerts', { config: { broadcast: { ack: true, self: true } } })
         .on('broadcast', { event: 'voice_alert' }, (payload) => {
           console.log("🔊 Alerta de voz global recibida:", payload);
           if (payload.payload && payload.payload.text) {
             if (typeof _toastSync === 'function') {
-              _toastSync("🔔 Alerta de voz recibida", false);
+              _toastSync("🔔 Alerta de voz: " + payload.payload.text, false);
             }
             if (window._enableVoiceAlerts === false && typeof window.toggleVoiceAlerts === 'function') {
               window.toggleVoiceAlerts(); // Fuerza la activación
@@ -12216,7 +12220,9 @@
             }
           }
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log("[Broadcast] Estado de suscripción:", status);
+        });
     }
 
     // ── Override localStorage.setItem → también escribe en Supabase ─
@@ -28562,20 +28568,18 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             payload: { text: text }
           }).then(status => console.log('Broadcast status:', status))
             .catch(e => console.warn('Broadcast no enviado:', e));
+        } else {
+           console.warn("No hay canal de broadcast disponible");
         }
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'es-ES';
-        const voices = window.speechSynthesis.getVoices();
-        const esVoice = voices.find(v => v.lang.startsWith('es'));
-        if (esVoice) utterance.voice = esVoice;
-        window.speechSynthesis.speak(utterance);
 
         // Efecto visual de "hablando"
         inputEl.style.color = '#38bdf8';
-        utterance.onend = () => { inputEl.style.color = '#e2e8f0'; inputEl.value = ''; };
+        setTimeout(() => {
+          inputEl.style.color = '#e2e8f0'; 
+          inputEl.value = '';
+        }, 3000); // Simulamos el onend visualmente para la PC que envía
       } catch (e) {
-        console.warn("Falla en reproducción TTS Demo: ", e);
+        console.warn("Falla al enviar TTS Demo: ", e);
       }
     };
 

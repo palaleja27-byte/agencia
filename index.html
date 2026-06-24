@@ -11776,6 +11776,11 @@
       boot.style.opacity = '0';
       setTimeout(() => { boot.style.display = 'none'; }, 500);
 
+      // Iniciar suscripciones en tiempo real
+      if (typeof _sbRealtime === 'function') {
+        _sbRealtime();
+      }
+
       // Disparar la malla cibernética y el refresco dinámico de datos reales en la entrada
       try {
         initCyberneticBg();
@@ -12196,6 +12201,9 @@
         .on('broadcast', { event: 'voice_alert' }, (payload) => {
           console.log("🔊 Alerta de voz global recibida:", payload);
           if (payload.payload && payload.payload.text) {
+            if (typeof _toastSync === 'function') {
+              _toastSync("🔔 Alerta de voz recibida", false);
+            }
             if (window._enableVoiceAlerts === false && typeof window.toggleVoiceAlerts === 'function') {
               window.toggleVoiceAlerts(); // Fuerza la activación
             } else {
@@ -12203,6 +12211,8 @@
             }
             if (typeof window.speakText === 'function') {
               window.speakText(payload.payload.text);
+            } else {
+              console.warn("window.speakText no esta disponible.");
             }
           }
         })
@@ -28657,6 +28667,31 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         });
       }, 15000);
     };
+
+    // Desbloquear audio engine al primer tap (Móviles / TV autoplay policy)
+    function unlockAudioEngine() {
+      if (window.speechSynthesis) {
+        // iOS y TVs a veces ignoran volume=0 o strings vacíos. Usamos un espacio con volumen ínfimo.
+        const silentUtterance = new SpeechSynthesisUtterance('.');
+        silentUtterance.volume = 0.01;
+        silentUtterance.rate = 10; // muy rápido
+        window.speechSynthesis.speak(silentUtterance);
+        
+        // Mantener activo el engine
+        setInterval(() => {
+           if (!window.speechSynthesis.speaking) {
+               const keepAlive = new SpeechSynthesisUtterance(' ');
+               keepAlive.volume = 0.01;
+               window.speechSynthesis.speak(keepAlive);
+           }
+        }, 10000); // 10 segundos
+        console.log("Audio engine desbloqueado y keep-alive iniciado");
+      }
+      document.removeEventListener('click', unlockAudioEngine);
+      document.removeEventListener('touchstart', unlockAudioEngine);
+    }
+    document.addEventListener('click', unlockAudioEngine);
+    document.addEventListener('touchstart', unlockAudioEngine);
 
     function iniciarMonitoreoGhost() {
       // Registrar click global para Web Audio API

@@ -12184,31 +12184,29 @@
         });
 
       // 2. Canal OPERACIONES (Detección instantánea de puntos Datame)
-      // Modificado: Ahora todos los roles escuchan este canal para que las alertas de voz suenen en todas las vistas
-      if (currentRole === 'admin' || currentRole === 'monitor' || currentRole === 'operador') {
-        _sb.channel('operaciones_changes')
-          .on('postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'operaciones' },
-            () => { 
-              console.log("[Bridge] ⚡ Cambio detectado en Datame Supabase -> Disparando Laser Sync...");
-              _debouncedLaserSync(); 
+      // Modificado: Se elimina la restricción de rol para que se suscriba incluso en la pantalla de login (esencial para TV/móvil)
+      window._voiceBroadcastChannel = _sb.channel('operaciones_changes', { config: { broadcast: { ack: true } } })
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'operaciones' },
+          () => { 
+            console.log("[Bridge] ⚡ Cambio detectado en Datame Supabase -> Disparando Laser Sync...");
+            _debouncedLaserSync(); 
+          }
+        )
+        .on('broadcast', { event: 'voice_alert' }, (payload) => {
+          console.log("🔊 Alerta de voz global recibida:", payload);
+          if (payload.payload && payload.payload.text) {
+            if (window._enableVoiceAlerts === false && typeof toggleVoiceAlerts === 'function') {
+              toggleVoiceAlerts(); // Fuerza la activación
+            } else {
+              window._enableVoiceAlerts = true; // Porcentaje de seguridad
             }
-          )
-          .on('broadcast', { event: 'voice_alert' }, (payload) => {
-            console.log("🔊 Alerta de voz global recibida:", payload);
-            if (payload.payload && payload.payload.text) {
-              if (window._enableVoiceAlerts === false && typeof toggleVoiceAlerts === 'function') {
-                toggleVoiceAlerts(); // Fuerza la activación
-              } else {
-                window._enableVoiceAlerts = true; // Porcentaje de seguridad
-              }
-              if (typeof speakText === 'function') {
-                speakText(payload.payload.text);
-              }
+            if (typeof speakText === 'function') {
+              speakText(payload.payload.text);
             }
-          })
-          .subscribe();
-      }
+          }
+        })
+        .subscribe();
     }
 
     // ── Override localStorage.setItem → también escribe en Supabase ─
@@ -28547,12 +28545,13 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       
       try {
         // Enviar la alerta globalmente a todos los clientes (invasiva)
-        if (typeof _sb !== 'undefined') {
-          _sb.channel('operaciones_changes').send({
+        if (window._voiceBroadcastChannel) {
+          window._voiceBroadcastChannel.send({
             type: 'broadcast',
             event: 'voice_alert',
             payload: { text: text }
-          }).catch(e => console.warn('Broadcast no enviado:', e));
+          }).then(status => console.log('Broadcast status:', status))
+            .catch(e => console.warn('Broadcast no enviado:', e));
         }
 
         const utterance = new SpeechSynthesisUtterance(text);
@@ -28561,7 +28560,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const esVoice = voices.find(v => v.lang.startsWith('es'));
         if (esVoice) utterance.voice = esVoice;
         window.speechSynthesis.speak(utterance);
-        
+
         // Efecto visual de "hablando"
         inputEl.style.color = '#38bdf8';
         utterance.onend = () => { inputEl.style.color = '#e2e8f0'; inputEl.value = ''; };
@@ -29048,6 +29047,23 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
         }
       }, 600);
     };
+
+    // --- DESBLOQUEO DE AUDIO PARA DISPOSITIVOS MÓVILES Y TV ---
+    // Los navegadores bloquean speechSynthesis si no hay interacción previa del usuario.
+    function unlockAudioEngine() {
+      if (window.speechSynthesis && !window._audioUnlocked) {
+        const silentUtterance = new SpeechSynthesisUtterance('');
+        silentUtterance.volume = 0;
+        silentUtterance.rate = 10;
+        window.speechSynthesis.speak(silentUtterance);
+        window._audioUnlocked = true;
+        console.log("🔊 Motor de voz desbloqueado por interacción del usuario.");
+        document.removeEventListener('click', unlockAudioEngine);
+        document.removeEventListener('touchstart', unlockAudioEngine);
+      }
+    }
+    document.addEventListener('click', unlockAudioEngine);
+    document.addEventListener('touchstart', unlockAudioEngine);
   </script>
 </body>
 </html>

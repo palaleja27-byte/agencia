@@ -18,6 +18,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     :root {
       --bg: #0a0c14;
@@ -5674,7 +5675,7 @@
               <span style="font-weight:700;font-size:.9rem;color:#818cf8;cursor:pointer;">Panel Tableau Global</span>
             </a>
             <span style="background:rgba(99,102,241,0.15);color:#818cf8;padding:2px 10px;border-radius:8px;font-size:.65rem;font-weight:700;">OFICIAL UK</span>
-            <span onclick="event.stopPropagation(); showSmartInfo('tableau');" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;" onmouseover="this.style.background='rgba(129, 140, 248, 0.3)'" onmouseout="this.style.background='rgba(129, 140, 248, 0.15)'" title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
+            <span onclick="event.stopPropagation(); mostrarInfoTableau();" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;" onmouseover="this.style.background='rgba(129, 140, 248, 0.3)'" onmouseout="this.style.background='rgba(129, 140, 248, 0.15)'" title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
             <button onclick="event.stopPropagation(); loadTableauData().then(renderTableauPanel); tableauLog('🔄 Recargando datos desde Supabase...', 'info');" 
@@ -23651,6 +23652,16 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             color: '#f8fafc',
             confirmButtonColor: '#6366f1'
           });
+        } else if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: 'ℹ️ Información',
+            html: '<div style="text-align:left; font-size:0.85rem; color:#e2e8f0; line-height:1.5;">Esta descripción se encuentra en desarrollo. Estamos agregando más detalles para este módulo.</div>',
+            icon: 'info',
+            background: '#0f172a',
+            color: '#f8fafc',
+            confirmButtonColor: '#6366f1',
+            confirmButtonText: 'Cerrar'
+          });
         }
       }
 
@@ -23721,7 +23732,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // RENDERIZAR PANEL TABLEAU (reutiliza lógica existente)
       // Compatible con el código legado de renderTableauPanel()
       // ─────────────────────────────────────────────────────────────
-      function renderTableauPanel() {
+      function renderTableauPanelLegacy() {
         const container = document.getElementById('tableau-data-container');
         if (!container) return;
         const entries = Object.entries(_dpTableauData || {});
@@ -29165,73 +29176,72 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
       const themeValue = themeSel.value;
       const themeName = themeSel.options[themeSel.selectedIndex].text;
       
-      resultsEl.innerHTML = '<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Generando icebreakers creativos...</div>';
-
-      const db = {
-        "Hot talks": [
-          "Si te concediera un deseo ahora mismo, ¿qué me pedirías? 😈",
-          "Tengo un secreto que solo te contaría a ti... ¿quieres saberlo? 🔥",
-          "Acabo de salir de la ducha y no dejo de pensar en ti... ¿qué haces? 💦",
-          "¿Debería portarme bien hoy, o tienes otros planes para mí? 😉",
-          "Me encantan los retos. Dime, ¿cuál es tu mayor fantasía? ✨",
-          "Hay algo en ti que me vuelve loca, ¿te imaginas qué es? 🤫",
-          "Si estuvieras aquí conmigo en este momento, ¿por dónde empezarías? 😋",
-          "No sé si es el calor o eres tú... ¿te atreves a descubrirlo? 🥵"
-        ],
-        "Real love": [
-          "Estaba pensando en lo especial que eres y tuve que escribirte. ¿Cómo va tu día? 💖",
-          "Si pudieras elegir cualquier lugar del mundo para una cita, ¿dónde me llevarías? ✈️",
-          "Siento una conexión única cuando hablo contigo. ¿Tú también lo sientes? ✨",
-          "¿Cuál es el recuerdo más bonito que tienes? Me encantaría conocerte más a fondo. 🌸",
-          "Me haces sonreír incluso cuando no estamos hablando. ¿Te pasa lo mismo? 😊",
-          "Si te tuviera enfrente ahora mismo, simplemente te daría un abrazo muy fuerte. 💕",
-          "Me encanta descubrir cada pequeño detalle de ti. ¿Qué te hace realmente feliz? 🌻",
-          "Siento que contigo puedo ser yo misma al 100%. Gracias por eso. 🥰"
-        ],
-        "Friendship": [
-          "¡Hola! Vi algo hoy que me recordó muchísimo a ti. ¿Adivinas qué fue? 😂",
-          "Si tuvieras que comer solo una cosa por el resto de tu vida, ¿qué elegirías? 🍕",
-          "¡Necesito un consejo! ¿Película de terror o comedia para esta noche? 🎬",
-          "Acabo de tener el día más loco de todos. ¡Tienes que escuchar esto! 😱",
-          "Dime la verdad, ¿cuál es tu talento más inútil pero divertido? 🤹‍♀️",
-          "Tengo una duda existencial: ¿la pizza lleva piña o no? 🍍",
-          "¡Hola perdido! ¿Qué has estado haciendo? Actualízame. 👀",
-          "Si pudieras tener un superpoder ahora mismo, ¿cuál sería? 🦸‍♂️"
-        ],
-        "Setup for Mail": [
-          "Revisando mi bandeja, encontré tu perfil y no pude evitar detenerme. ¿Cómo estás? 📬",
-          "Sé que es de imprevisto, pero había algo en ti que me llamó mucho la atención. ✨",
-          "Dicen que las mejores cosas pasan por sorpresa... ¿listo para conocernos? 😉",
-          "Tengo una pregunta muy interesante para ti, pero prométeme que serás sincero... 🤫",
-          "Estaba a punto de desconectarme, pero vi que estabas aquí. ¿Nos saludamos? 👋",
-          "Dicen que la primera impresión es la que cuenta. ¿Me das la oportunidad de sorprenderte? 🌟",
-          "Me encantó lo que vi en tu perfil, pero me intriga saber más. ¿Hablamos un rato? 💬",
-          "Tengo un presentimiento de que nos llevaríamos increíble. ¿Comprobamos si es cierto? 🔮"
-        ]
-      };
-
-      // Simulamos el tiempo de espera de la IA
-      setTimeout(() => {
-        try {
-          const options = db[themeValue] || db["Friendship"];
-          const shuffled = options.sort(() => 0.5 - Math.random());
-          const selected = shuffled.slice(0, 3);
-
-          let html = '<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">Opciones generadas (' + themeName.split(' ')[1] + '):</div>';
-          selected.forEach(ice => {
-            const cleanIce = ice.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            html += `<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; border-left:3px solid #ec4899; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div style="flex:1;">${ice}</div>
-              <button onclick="navigator.clipboard.writeText('${cleanIce}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'Copiado', showConfirmButton:false, timer:1500, background:'#1e293b', color:'#fff'});" style="background:#475569; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.7rem; cursor:pointer; flex-shrink:0; transition:background 0.2s;" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#475569'">Copiar</button>
-            </div>`;
-          });
-          resultsEl.innerHTML = html;
-        } catch (e) {
-          console.error("Error en generateIcebreaker:", e);
-          resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">⚠️ ${e.message}</div>`;
+      let ollamaUrl = localStorage.getItem('ollama_url');
+      if (!ollamaUrl) {
+        ollamaUrl = prompt("Por favor, ingresa la URL de tu servidor Ubuntu con Ollama (Ej: http://192.168.1.100:11434):", "http://localhost:11434");
+        if (!ollamaUrl) {
+          resultsEl.innerHTML = '<div style="color:#ef4444; padding:8px;">⚠️ Se requiere la URL de Ollama para generar frases.</div>';
+          return;
         }
-      }, 600);
+        localStorage.setItem('ollama_url', ollamaUrl);
+      }
+
+      resultsEl.innerHTML = '<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Razonando con Qwen IA Local (Generando icebreakers creativos)...</div>';
+
+      try {
+        const promptText = `Actúa como un experto en psicología persuasiva, dating y seducción. Genera 3 frases rompehielos (icebreakers) en español para iniciar una conversación en una app de citas. 
+Temática requerida: ${themeName} (${themeValue}).
+Reglas estrictas:
+- Deben ser extremadamente creativos, con alta tensión conversacional.
+- NUNCA repetir frases cliché como "hola cómo estás".
+- Máximo 120 caracteres por frase.
+- Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS. No enumeres, no pongas introducciones ni conclusiones.`;
+
+        const response = await fetch(`${ollamaUrl}/api/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "model": "qwen",
+            "prompt": promptText,
+            "stream": false,
+            "options": {
+              "temperature": 0.9,
+              "num_predict": 150
+            }
+          })
+        });
+
+        if (!response.ok) {
+           throw new Error("Error en la respuesta de la IA (Verifica la IP de tu servidor Ubuntu y que Ollama esté corriendo con el modelo qwen)");
+        }
+
+        const data = await response.json();
+        const outputText = data.response;
+        const selected = outputText.split('|').map(s => s.trim()).filter(s => s.length > 5).slice(0,3);
+
+        if (selected.length === 0) throw new Error("La IA no generó el formato esperado con separadores (|).");
+
+        let html = '<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">Opciones generadas por Qwen IA Local (' + themeName.split(' ')[1] + '):</div>';
+        selected.forEach(ice => {
+          const cleanIce = ice.replace(/'/g, "\\\'").replace(/"/g, '&quot;');
+          html += `<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; border-left:3px solid #ec4899; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div style="flex:1;">${ice}</div>
+            <button onclick="navigator.clipboard.writeText('${cleanIce}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'Copiado', showConfirmButton:false, timer:1500, background:'#1e293b', color:'#fff'});" style="background:#475569; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.7rem; cursor:pointer; flex-shrink:0; transition:background 0.2s;" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#475569'">Copiar</button>
+          </div>`;
+        });
+        resultsEl.innerHTML = html;
+      } catch (e) {
+        console.error("Error en generateIcebreaker:", e);
+        if (e.message.includes("Failed to fetch") || e.message.includes("NetworkError")) {
+          resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">❌ Error de conexión al servidor Ubuntu. Asegúrate de que Ollama está activo en la IP configurada (<a href="javascript:void(0)" onclick="localStorage.removeItem('ollama_url'); window.generateIcebreaker();" style="color:#fbbf24;">Cambiar IP</a>).</div>`;
+        } else {
+          resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">❌ ${e.message}</div>`;
+        }
+      }
     };
+
 
     // --- DESBLOQUEO DE AUDIO PARA DISPOSITIVOS MÓVILES Y TV ---
     // Los navegadores bloquean speechSynthesis si no hay interacción previa del usuario.

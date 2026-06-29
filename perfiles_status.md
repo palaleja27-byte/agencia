@@ -1,6 +1,6 @@
 # Production Database Profiles (`datame_perfiles`)
 
-Last updated: 2026-06-17T19:15:23.303Z
+Last updated: 2026-06-29T08:49:45.240Z
 
 Total profiles: 48
 

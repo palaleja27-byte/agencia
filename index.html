@@ -12605,9 +12605,13 @@
 
     function _sbRealtime() {
       if (!_sb) return;
+      if (window._sbKvChannel) {
+        console.log('[LIVE-RT] Ya existe la suscripción de kv_store_changes, saltando...');
+        return;
+      }
 
       // 1. Canal KV_STORE (Configuraciones y datos corregidos)
-      _sb.channel('kv_store_changes')
+      window._sbKvChannel = _sb.channel('kv_store_changes')
         .on('postgres_changes',
           { event: '*', schema: 'public', table: 'kv_store' },
           ({ eventType, new: row, old: oldRow }) => {

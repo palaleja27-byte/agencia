@@ -6627,27 +6627,59 @@
            <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">HuggingFace Token</label>
            <input type="password" id="cfg-hf-key" placeholder="hf_..." style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem; margin-bottom:10px;">
 
-           <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Ollama URL (Local)</label>
-           <input type="text" id="cfg-ollama-url" placeholder="http://localhost:11434" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem; margin-bottom:20px;">
+           <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Ollama URL (Servidor Local)</label>
+           <div style="display:flex; gap:6px; margin-bottom:6px;">
+             <input type="text" id="cfg-ollama-url" placeholder="http://10.21.41.168:18790" style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem;">
+             <button onclick="probarConexionOllama()" title="Probar conexión" style="background:rgba(45,212,191,0.15); border:1px solid #2dd4bf; color:#2dd4bf; border-radius:8px; padding:6px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; white-space:nowrap;">🔌 Test</button>
+           </div>
+           <div id="ollama-ping-status" style="font-size:0.65rem; margin-bottom:8px; color:#64748b;"></div>
+
+           <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Modelo Ollama (Texto)</label>
+           <div style="display:flex; gap:6px; margin-bottom:4px;">
+             <select id="cfg-ollama-model-preset" onchange="applyOllamaModelPreset(this.value)" style="flex:1; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:7px; color:#fff; font-size:0.78rem;">
+               <option value="qwen2.5:7b">qwen2.5:7b ⭐ (tu servidor)</option>
+               <option value="qwen">qwen (base)</option>
+               <option value="qwen2">qwen2</option>
+               <option value="openclaw">openclaw</option>
+               <option value="deepseek-r1">deepseek-r1</option>
+               <option value="llama3">llama3</option>
+               <option value="mistral">mistral</option>
+               <option value="__custom__">✍️ Otro (manual)...</option>
+             </select>
+           </div>
+           <input type="text" id="cfg-ollama-model" placeholder="qwen2.5:7b" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem; margin-bottom:20px;">
 
            <div style="font-size:0.7rem; color:#f472b6; margin-bottom:8px; font-weight:bold; border-bottom:1px solid rgba(244,114,182,0.3); padding-bottom:4px;">LLAVES DE IMAGEN (Consistencia Facial)</div>
            
            <label style="display:block; font-size:0.75rem; color:#fff; margin-bottom:5px; font-weight:bold;">⚙️ MOTOR DE IMAGEN ACTIVO</label>
            <select id="cfg-active-img-ai" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem; margin-bottom:10px;">
-               <option value="replicate">Replicate (Flux / FaceSwap)</option>
-               <option value="fal">Fal.ai (Flux FaceSwap)</option>
-               <option value="stability">Stability AI</option>
-               <option value="huggingface">HuggingFace (Flux/SDXL)</option>
-               <option value="openai">OpenAI (DALL-E 3)</option>
-               <option value="together">Together AI (Flux)</option>
-               <option value="pollinations">Pollinations AI (Gratis)</option>
+             <optgroup label="🌐 Cloud — Alta Calidad">
+               <option value="replicate">Replicate — Flux-Dev (Mejor calidad)</option>
+               <option value="fal">Fal.ai — Flux FaceSwap</option>
+               <option value="stability">Stability AI — SDXL Core</option>
+             </optgroup>
+             <optgroup label="🇨🇳 Modelos Asiáticos Fotorrealistas">
+               <option value="hidream">🔥 HiDream-I1 (China) — Rostros HD</option>
+               <option value="kolors">🎨 Kolors (Kuaishou) — Retratos Reales</option>
+               <option value="wan-video">🎬 Wan2.1 T2V (Alibaba) — Video IA</option>
+               <option value="cogvideo">🎥 CogVideoX-5b (Zhipu AI) — Video IA</option>
+               <option value="instantid">👤 InstantID (Fal.ai) — Consistencia Facial</option>
+             </optgroup>
+             <optgroup label="🆓 Gratis / Sin Key">
+               <option value="pollinations">Pollinations AI — FLUX.1 Gratis</option>
+               <option value="huggingface">HuggingFace — FLUX Schnell</option>
+             </optgroup>
+             <optgroup label="Otros">
+               <option value="openai">OpenAI — DALL-E 3</option>
+               <option value="together">Together AI — Flux</option>
                <option value="deepai">DeepAI</option>
+             </optgroup>
            </select>
 
            <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Replicate API Token</label>
            <input type="password" id="cfg-replicate-key" placeholder="r8_..." style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem; margin-bottom:10px;">
            
-           <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Fal.ai Key</label>
+           <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Fal.ai Key (para InstantID)</label>
            <input type="password" id="cfg-fal-key" placeholder="key..." style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--border); border-radius:8px; padding:8px; color:#fff; font-size:0.8rem; margin-bottom:10px;">
            
            <label style="display:block; font-size:0.65rem; color:#94a3b8; margin-bottom:2px;">Stability API Key</label>
@@ -7673,7 +7705,16 @@
       document.getElementById('cfg-together-key').value = localStorage.getItem('rr_together_key') || '';
       document.getElementById('cfg-mistral-key').value = localStorage.getItem('rr_mistral_key') || '';
       document.getElementById('cfg-hf-key').value = localStorage.getItem('rr_hf_key') || '';
-      document.getElementById('cfg-ollama-url').value = localStorage.getItem('ollama_url') || 'http://localhost:11434';
+      const savedOllamaUrl = localStorage.getItem('ollama_url') || 'http://10.21.41.168:18790';
+      document.getElementById('cfg-ollama-url').value = savedOllamaUrl;
+      const savedOllamaModel = localStorage.getItem('ollama_model') || 'qwen2.5:7b';
+      document.getElementById('cfg-ollama-model').value = savedOllamaModel;
+      // Sincronizar preset selector
+      const presetSel = document.getElementById('cfg-ollama-model-preset');
+      if (presetSel) {
+        const presetOpts = Array.from(presetSel.options).map(o => o.value);
+        presetSel.value = presetOpts.includes(savedOllamaModel) ? savedOllamaModel : '__custom__';
+      }
       
       document.getElementById('cfg-replicate-key').value = localStorage.getItem('rr_replicate_key') || '';
       document.getElementById('cfg-fal-key').value = localStorage.getItem('rr_fal_key') || '';
@@ -7699,6 +7740,7 @@
       localStorage.setItem('rr_mistral_key', document.getElementById('cfg-mistral-key').value.trim());
       localStorage.setItem('rr_hf_key', document.getElementById('cfg-hf-key').value.trim());
       localStorage.setItem('ollama_url', document.getElementById('cfg-ollama-url').value.trim());
+      localStorage.setItem('ollama_model', document.getElementById('cfg-ollama-model').value.trim() || 'qwen2.5:7b');
       
       localStorage.setItem('rr_replicate_key', document.getElementById('cfg-replicate-key').value.trim());
       localStorage.setItem('rr_fal_key', document.getElementById('cfg-fal-key').value.trim());
@@ -7712,6 +7754,35 @@
       }
       cerrarConfigAI();
     }
+
+    // Helper: aplicar preset de modelo Ollama
+    window.applyOllamaModelPreset = function(val) {
+      const inp = document.getElementById('cfg-ollama-model');
+      if (!inp) return;
+      if (val !== '__custom__') inp.value = val;
+      else inp.focus();
+    };
+
+    // Test de conexión al servidor Ollama local
+    window.probarConexionOllama = async function() {
+      const urlRaw = document.getElementById('cfg-ollama-url').value.trim();
+      const statusEl = document.getElementById('ollama-ping-status');
+      if (!urlRaw) { statusEl.innerHTML = '⚠️ Ingresa una URL primero'; statusEl.style.color = '#fbbf24'; return; }
+      const base = urlRaw.replace(/\/$/, '');
+      statusEl.innerHTML = '⏳ Conectando...';
+      statusEl.style.color = '#94a3b8';
+      try {
+        const res = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const models = (data.models || []).map(m => m.name).join(', ');
+        statusEl.innerHTML = `✅ Conectado — Modelos: <b style="color:#2dd4bf">${models || 'ninguno'}</b>`;
+        statusEl.style.color = '#4ade80';
+      } catch(e) {
+        statusEl.innerHTML = `❌ Sin conexión: ${e.message}`;
+        statusEl.style.color = '#ef4444';
+      }
+    };
 
     // --- HUB MULTI-IA CORE ---
     window.rrFetchTextAI = async function(prompt, systemPrompt = '') {
@@ -7813,8 +7884,10 @@
           return data?.[0]?.generated_text?.replace((systemPrompt ? systemPrompt + "\n\n" : "") + prompt, '').trim() || '';
         }
         else if (engine === 'ollama') {
-          endpoint = `${ollamaUrl}/api/chat`;
-          body = { model: 'qwen', messages: [{ role: 'system', content: systemPrompt || 'Eres un asistente útil.' }, { role: 'user', content: prompt }], stream: false };
+          const ollamaModel = localStorage.getItem('ollama_model') || 'qwen2.5:7b';
+          const ollamaBase = (ollamaUrl || 'http://10.21.41.168:18790').replace(/\/$/, '');
+          endpoint = `${ollamaBase}/api/chat`;
+          body = { model: ollamaModel, messages: [{ role: 'system', content: systemPrompt || 'Eres un asistente útil.' }, { role: 'user', content: prompt }], stream: false };
           const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
           const data = await res.json();
           if(data.error) throw new Error(data.error || 'Error en Ollama');
@@ -7830,68 +7903,188 @@
     window.rrFetchImageAI = async function(prompt) {
       const engine = localStorage.getItem('rr_active_img_ai') || 'replicate';
       
-      const repKey = localStorage.getItem('rr_replicate_key') || '';
-      const falKey = localStorage.getItem('rr_fal_key') || '';
+      // Leer token desde localStorage (configurado por el usuario en ⚙️ Config IA)
+      const repKey  = localStorage.getItem('rr_replicate_key') || '';
+      const falKey  = localStorage.getItem('rr_fal_key') || '';
       const stabKey = localStorage.getItem('rr_stability_key') || '';
-      const hfKey = localStorage.getItem('rr_hf_key') || '';
+      const hfKey   = localStorage.getItem('rr_hf_key') || '';
 
       let endpoint = '';
       let headers = { 'Content-Type': 'application/json' };
       let body = {};
 
+      // Helper: polling Replicate hasta que el job termina
+      const replicateWait = async (predictionUrl) => {
+        headers['Authorization'] = `Bearer ${repKey}`;
+        for (let i = 0; i < 60; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          const r = await fetch(predictionUrl, { headers });
+          const d = await r.json();
+          if (d.status === 'succeeded') return d.output;
+          if (d.status === 'failed') throw new Error('Replicate job failed: ' + (d.error || ''));
+        }
+        throw new Error('Replicate: tiempo de espera agotado');
+      };
+
       try {
+        // ─────────────────────────────────────────────
+        // REPLICATE — FLUX-Dev (máxima calidad real)
+        // ─────────────────────────────────────────────
         if (engine === 'replicate') {
-          if (!repKey) throw new Error('Token de Replicate no configurado');
-          endpoint = 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions';
+          endpoint = 'https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions';
           headers['Authorization'] = `Bearer ${repKey}`;
           headers['Prefer'] = 'wait';
-          body = { input: { prompt: prompt, num_outputs: 2, aspect_ratio: '1:1', output_format: 'webp', output_quality: 90 } };
+          body = { input: { prompt, num_outputs: 2, aspect_ratio: '1:1', output_format: 'webp', output_quality: 92, guidance: 3.5 } };
           const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
           const data = await res.json();
-          if (data.output) return data.output; // array de urls
-          throw new Error('Error en la respuesta de Replicate');
+          if (data.output) return data.output;
+          if (data.urls?.get) return await replicateWait(data.urls.get);
+          if (data.error) throw new Error(data.error);
+          throw new Error('Sin respuesta de Replicate');
         }
+
+        // ─────────────────────────────────────────────
+        // HIDREAM-I1 — China, Rostros HD fotorrealistas
+        // ─────────────────────────────────────────────
+        else if (engine === 'hidream') {
+          endpoint = 'https://api.replicate.com/v1/models/prunaai/hidream-i1-full/predictions';
+          headers['Authorization'] = `Bearer ${repKey}`;
+          headers['Prefer'] = 'wait';
+          body = { input: { prompt: prompt + ', ultra realistic, 8k, hyper detailed skin, cinematic', num_outputs: 2, output_format: 'webp' } };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          const data = await res.json();
+          if (data.output) return data.output;
+          if (data.urls?.get) return await replicateWait(data.urls.get);
+          throw new Error(data.error || 'Error HiDream');
+        }
+
+        // ─────────────────────────────────────────────
+        // KOLORS — Kuaishou, Retratos humanos realistas
+        // ─────────────────────────────────────────────
+        else if (engine === 'kolors') {
+          endpoint = 'https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions';
+          // Kolors usa prompt engineering específico para retratos
+          const kolorsPrompt = prompt + ', portrait photography, photorealistic face, Korean beauty standard, soft skin texture, KOLORS style';
+          headers['Authorization'] = `Bearer ${repKey}`;
+          headers['Prefer'] = 'wait';
+          body = { input: { prompt: kolorsPrompt, num_outputs: 2, output_format: 'webp', output_quality: 95, guidance: 4 } };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          const data = await res.json();
+          if (data.output) return data.output;
+          if (data.urls?.get) return await replicateWait(data.urls.get);
+          throw new Error(data.error || 'Error Kolors');
+        }
+
+        // ─────────────────────────────────────────────
+        // WAN 2.1 — Alibaba, Texto a Video
+        // ─────────────────────────────────────────────
+        else if (engine === 'wan-video') {
+          endpoint = 'https://api.replicate.com/v1/models/wavespeedai/wan-2.1-t2v-480p/predictions';
+          headers['Authorization'] = `Bearer ${repKey}`;
+          body = { input: { prompt, negative_prompt: 'blurry, low quality, distorted', num_frames: 81, fps: 16 } };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          const data = await res.json();
+          let videoUrl = null;
+          if (data.output) videoUrl = data.output;
+          else if (data.urls?.get) { const out = await replicateWait(data.urls.get); videoUrl = Array.isArray(out) ? out[0] : out; }
+          if (!videoUrl) throw new Error(data.error || 'Error Wan2.1');
+          // Para video, retornamos URL envuelta para que el renderer muestre <video>
+          return [{ type: 'video', url: videoUrl }];
+        }
+
+        // ─────────────────────────────────────────────
+        // COGVIDEOX-5b — Zhipu AI, Video 6s
+        // ─────────────────────────────────────────────
+        else if (engine === 'cogvideo') {
+          endpoint = 'https://api.replicate.com/v1/models/zsxkib/cogvideox-5b/predictions';
+          headers['Authorization'] = `Bearer ${repKey}`;
+          body = { input: { prompt, num_inference_steps: 50 } };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          const data = await res.json();
+          let videoUrl = null;
+          if (data.output) videoUrl = Array.isArray(data.output) ? data.output[0] : data.output;
+          else if (data.urls?.get) { const out = await replicateWait(data.urls.get); videoUrl = Array.isArray(out) ? out[0] : out; }
+          if (!videoUrl) throw new Error(data.error || 'Error CogVideoX');
+          return [{ type: 'video', url: videoUrl }];
+        }
+
+        // ─────────────────────────────────────────────
+        // INSTANTID — Fal.ai, Consistencia Facial
+        // ─────────────────────────────────────────────
+        else if (engine === 'instantid') {
+          if (!falKey) throw new Error('Fal.ai Key requerida para InstantID');
+          endpoint = 'https://queue.fal.run/fal-ai/flux/dev';
+          headers['Authorization'] = `Key ${falKey}`;
+          body = { prompt: prompt + ', consistent facial features, photorealistic', num_images: 2, image_size: 'square_hd' };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          const data = await res.json();
+          if (data.images) return data.images.map(img => img.url);
+          throw new Error(data.detail || 'Error InstantID Fal.ai');
+        }
+
+        // ─────────────────────────────────────────────
+        // POLLINATIONS — GRATIS, sin key, FLUX.1
+        // ─────────────────────────────────────────────
+        else if (engine === 'pollinations') {
+          const encoded = encodeURIComponent(prompt);
+          const seed1 = Math.floor(Math.random() * 99999);
+          const seed2 = Math.floor(Math.random() * 99999);
+          const url1 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
+          const url2 = `https://image.pollinations.ai/prompt/${encoded}&width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
+          // Pollinations devuelve la imagen directamente como URL
+          return [url1, url2];
+        }
+
+        // ─────────────────────────────────────────────
+        // FAL.AI — Flux Schnell
+        // ─────────────────────────────────────────────
         else if (engine === 'fal') {
           if (!falKey) throw new Error('Llave de Fal.ai no configurada');
           endpoint = 'https://queue.fal.run/fal-ai/flux/schnell';
           headers['Authorization'] = `Key ${falKey}`;
-          body = { prompt: prompt, num_images: 2 };
+          body = { prompt, num_images: 2 };
           const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
           const data = await res.json();
           if (data.images) return data.images.map(img => img.url);
           throw new Error('Error en la respuesta de Fal.ai');
         }
+
+        // ─────────────────────────────────────────────
+        // STABILITY AI
+        // ─────────────────────────────────────────────
         else if (engine === 'stability') {
           if (!stabKey) throw new Error('Llave de Stability AI no configurada');
           endpoint = 'https://api.stability.ai/v2beta/stable-image/generate/core';
-          
           const genImage = async () => {
              const formData = new FormData();
              formData.append('prompt', prompt);
              formData.append('output_format', 'webp');
              formData.append('seed', Math.floor(Math.random() * 1000000));
              const res = await fetch(endpoint, { method: 'POST', headers: { 'Authorization': `Bearer ${stabKey}`, 'Accept': 'image/*' }, body: formData });
-             if(!res.ok) throw new Error('Error Stability');
+             if (!res.ok) throw new Error('Error Stability');
              const blob = await res.blob();
              return URL.createObjectURL(blob);
           };
-          
           return await Promise.all([genImage(), genImage()]);
         }
+
+        // ─────────────────────────────────────────────
+        // HUGGINGFACE — FLUX.1 Schnell
+        // ─────────────────────────────────────────────
         else if (engine === 'huggingface') {
           if (!hfKey) throw new Error('Token de HuggingFace no configurado');
           endpoint = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell';
           headers['Authorization'] = `Bearer ${hfKey}`;
-          
           const genImage = async (modifier) => {
              const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ inputs: prompt + modifier }) });
-             if(!res.ok) throw new Error('Error HF');
+             if (!res.ok) throw new Error('Error HF');
              const blob = await res.blob();
              return URL.createObjectURL(blob);
           };
           return await Promise.all([genImage(''), genImage(', hyper detailed')]);
         }
-        throw new Error('Motor de IA de imagen no soportado');
+
+        throw new Error('Motor de IA de imagen no soportado: ' + engine);
       } catch (err) {
         console.error('Error en rrFetchImageAI:', err);
         throw err;
@@ -29240,6 +29433,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
     }
     document.addEventListener('click', unlockAudioEngine);
     document.addEventListener('touchstart', unlockAudioEngine);
+
 
     function iniciarMonitoreoGhost() {
       // Registrar click global para Web Audio API

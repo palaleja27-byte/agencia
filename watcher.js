@@ -286,11 +286,17 @@ async function watchPanel(panel, perfiles) {
           if (!id || id.length < 7) continue;
 
           const perfil = perfiles.find(p => p.id_datame === id);
-          if (!perfil) continue;
+          if (!perfil) {
+            // Log de diagnóstico para ver perfiles interceptados que no coinciden en Supabase
+            console.log(`  🔍 Interceptado perfil ID:${id} con ${pts} pts, pero no existe en lista local del panel ${nombre}`);
+            continue;
+          }
 
           await upsertTurno(id, pts, perfil.modelo, nombre);
         }
-      } catch (_) {}
+      } catch (err) {
+        // Ignorar errores silenciosos de JSON parsing pero reportar si hay algo inusual
+      }
     });
 
     // LOGIN

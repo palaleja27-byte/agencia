@@ -304,7 +304,23 @@ async function watchPanel(panel, perfiles) {
                 console.error(`  ❌ Error al auto-calibrar perfil ${id}:`, updateErr.message);
               }
             } else {
-              console.log(`  🔍 Interceptado perfil ID:${id} con ${pts} pts, pero no existe en ninguna lista de Supabase`);
+              // 🧠 AUTO-REGISTRAR NUEVO PERFIL
+              console.log(`  ➕ [AUTO-REGISTRAR] Perfil ID:${id} no existe en Supabase. Creándolo para el PANEL-${panel.id}...`);
+              const nuevoModeloNombre = `NUEVO_${id}`;
+              const { data: newProfile, error: insertErr } = await supabase.from('datame_perfiles').insert({
+                id_datame: id,
+                modelo: nuevoModeloNombre,
+                panel_id: panel.id,
+                activo: true
+              }).select('*').maybeSingle();
+
+              if (!insertErr && newProfile) {
+                console.log(`  ✅ Perfil ${nuevoModeloNombre} creado con éxito.`);
+                perfiles.push(newProfile);
+                await upsertTurno(id, pts, nuevoModeloNombre, nombre);
+              } else {
+                console.error(`  ❌ Error al registrar automáticamente el perfil ${id}:`, insertErr ? insertErr.message : 'Respuesta vacía');
+              }
             }
             continue;
           }

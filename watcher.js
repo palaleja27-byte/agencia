@@ -416,13 +416,18 @@ async function watchPanel(panel, perfiles) {
     const cycleStart = Date.now();
     
     let { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
-    const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
+    
+    // 🧠 DELTA-SHIFT™: Cargar perfiles activos, incluyendo aquellos sin panel_id asignado (panel_id is null)
+    const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles')
+      .select('*')
+      .eq('activo', true)
+      .order('id');
 
     if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
     if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
 
     if (panels?.length) {
-      // 🛠️ Mapear y sobreescribir con las variables de entorno de GitHub Actions (si existen)
+      // Mapear y sobreescribir con las variables de entorno de GitHub Actions (si existen)
       panels = panels.map(p => {
         const envUser = process.env[`PANEL${p.id}_USER`];
         const envPass = process.env[`PANEL${p.id}_PASS`];
@@ -431,7 +436,6 @@ async function watchPanel(panel, perfiles) {
         }
         return p;
       }).filter(p => {
-        // Ignorar paneles que no tienen credenciales definidas en variables de entorno o están inactivos
         const hasCreds = p.email && p.password && !p.email.includes('Ameliapenaloza');
         if (!hasCreds) {
           log(`[SKIP] ${p.nombre} — Sin credenciales activas configuradas`);
@@ -440,11 +444,38 @@ async function watchPanel(panel, perfiles) {
       });
 
       log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
+
+      // Coleccionar perfiles pendientes de ubicar (panel_id === null)
+      const pendientes = (allPerfiles || []).filter(p => p.panel_id === null);
+      if (pendientes.length) {
+        log(`🔍 Se encontraron ${pendientes.length} perfiles nuevos pendientes de ubicar en Datame.`);
+      }
+
       await Promise.all(panels.map(panel => {
-        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id);
+        // Unir perfiles asignados a este panel + los pendientes de ubicar para ver si están aquí
+        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id || p.panel_id === null);
         if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles asociados`); return Promise.resolve(); }
         return watchPanel(panel, perfiles);
       }));
+
+      // 🧠 POST-CICLO: Verificar si algún perfil pendiente de ubicar NO fue encontrado en ningún panel
+      // Si sigue con panel_id === null después de que terminó el ciclo de los 3 paneles, lo marcamos como inexistente.
+      try {
+        const { data: checkPendientes } = await supabase.from('datame_perfiles').select('*').eq('activo', true).is('panel_id', null);
+        if (checkPendientes?.length) {
+          for (const p of checkPendientes) {
+            log(`⚠️ El perfil ${p.modelo} (ID: ${p.id_datame}) no fue encontrado en ningún panel activo de Datame.`);
+            await supabase.from('datame_perfiles')
+              .update({ 
+                modelo: `⚠️ INEXISTENTE (${p.id_datame})`
+              })
+              .eq('id_datame', p.id_datame);
+          }
+        }
+      } catch (checkErr) {
+        log(`❌ Error al validar perfiles inexistentes: ${checkErr.message}`);
+      }
+
     } else {
       log('❌ Sin paneles activos en Supabase (o tabla vacía/inactiva)');
     }

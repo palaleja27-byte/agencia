@@ -6952,7 +6952,7 @@
   <!-- TAB 1: REPORTE OPERACIÓN -->
   <div id="tab-report" class="tab-content">
     <div id="globalOperationReport"></div>
-    <div class="controls" style="margin-top: 15px;">
+    <div class="controls" style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
       <select class="filter-select" id="groupFilter" onchange="renderOperators()">
         <option value="">Todos los grupos</option>
       </select>
@@ -6963,6 +6963,7 @@
         <option value="Noche">🌙 Noche</option>
         <option value="Completo">🔄 Completo</option>
       </select>
+      <button onclick="abrirModalRegistrarModelo()" style="background: linear-gradient(135deg, #2dd4bf, #0ea5e9); color: #000; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 0.75rem; box-shadow: 0 4px 10px rgba(45,212,191,0.2); transition: transform 0.2s;">➕ Registrar Modelo</button>
     </div>
 
     <!-- ================================================================= -->
@@ -16444,6 +16445,63 @@ function exportarDatos() {
       const container = document.getElementById('globalOperationReport');
       if (!container) return;
 
+      // 🧠 BUSCAR PERFILES CON ESTATUS INEXISTENTE EN SUPABASE
+      let alertasInexistentesHtml = '';
+      try {
+        if (typeof _sb !== 'undefined') {
+          const { data: inexistentes } = await _sb.from('datame_perfiles')
+            .select('id_datame, modelo')
+            .like('modelo', '%INEXISTENTE%');
+
+          if (inexistentes && inexistentes.length > 0) {
+            alertasInexistentesHtml = `
+              <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px; font-family: system-ui, sans-serif; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);">
+                <div style="display: flex; align-items: center; gap: 10px; color: #f87171;">
+                  <span style="font-size: 1.4rem;">🚨</span>
+                  <div style="text-align: left;">
+                    <div style="font-size: 0.8rem; font-weight: 800; text-transform: uppercase;">Modelos inexistentes en Datame</div>
+                    <div style="font-size: 0.72rem; color: #fca5a5;">Se registraron los siguientes IDs pero el Scraper los buscó en todos los paneles y no existen: <b>${inexistentes.map(p => p.id_datame).join(', ')}</b>.</div>
+                  </div>
+                </div>
+                <button onclick="eliminarModelosInexistentes()" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; padding: 6px 12px; border-radius: 8px; font-size: 0.68rem; font-weight: bold; cursor: pointer; transition: all 0.2s;">Limpiar Alertas</button>
+              </div>
+            `;
+          }
+        }
+      } catch (err) {
+        console.error('[ALERT-DB] Error consultando perfiles inexistentes:', err);
+      }
+
+      // Función para limpiar/eliminar perfiles inexistentes del sistema
+      if (!window.eliminarModelosInexistentes) {
+        window.eliminarModelosInexistentes = async function() {
+          Swal.fire({
+            title: '¿Limpiar alertas?',
+            text: "Se eliminarán los registros de perfiles inexistentes de la base de datos para corregir el desfase.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            background: '#1e293b',
+            color: '#fff'
+          }).then(async (result) => {
+            if (result.isConfirmed) {
+              if (typeof _sb !== 'undefined') {
+                const { error } = await _sb.from('datame_perfiles').delete().like('modelo', '%INEXISTENTE%');
+                if (!error) {
+                  Swal.fire({ icon: 'success', title: 'Limpieza Completada', text: 'Alertas eliminadas con éxito.', background: '#1e293b', color: '#fff' });
+                  renderOperators();
+                } else {
+                  Swal.fire({ icon: 'error', title: 'Error', text: error.message, background: '#1e293b', color: '#fff' });
+                }
+              }
+            }
+          });
+        };
+      }
+
       const hoy = localDateStr();
       const mesActual = hoy.slice(0, 7);
 
@@ -16877,6 +16935,7 @@ function exportarDatos() {
 
       container.innerHTML = `
         <div style="padding:10px;">
+          ${alertasInexistentesHtml}
 
           <!-- ENCABEZADO -->
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:12px;">
@@ -29967,6 +30026,8 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
 
     // --- DESBLOQUEO DE AUDIO PARA DISPOSITIVOS MÓVILES Y TV ---
     // Los navegadores bloquean speechSynthesis si no hay interacción previa del usuario.
+    // --- DESBLOQUEO DE AUDIO PARA DISPOSITIVOS MÓVILES Y TV ---
+    // Los navegadores bloquean speechSynthesis si no hay interacción previa del usuario.
     function unlockAudioEngine() {
       if (window.speechSynthesis && !window._audioUnlocked) {
         const silentUtterance = new SpeechSynthesisUtterance('');
@@ -29981,6 +30042,106 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
     }
     document.addEventListener('click', unlockAudioEngine);
     document.addEventListener('touchstart', unlockAudioEngine);
+
+    // --- MÓDULO REGISTRO DE MODELOS NUEVAS (AUTO-ALINEACIÓN) ---
+    window.abrirModalRegistrarModelo = function() {
+      const modalHtml = `
+        <div id="modal-registrar-modelo" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 99999; font-family: system-ui, sans-serif;">
+          <div style="background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 25px; width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 15px; color: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px;">
+              <h3 style="margin: 0; font-size: 1.1rem; color: #2dd4bf; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">➕ Registrar Nueva Modelo</h3>
+              <button onclick="window.cerrarModalRegistrarModelo()" style="background: none; border: none; color: #64748b; font-size: 1.2rem; cursor: pointer;">✕</button>
+            </div>
+            
+            <div>
+              <label style="display: block; font-size: 0.7rem; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">ID de Datame (Obligatorio)</label>
+              <input type="text" id="reg-id-datame" placeholder="Ej: 95385250" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: white; font-size: 0.85rem; outline: none;">
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 0.7rem; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">Nombre de la Modelo</label>
+              <input type="text" id="reg-nombre-modelo" placeholder="Ej: VALERIA" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: white; font-size: 0.85rem; outline: none;">
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 0.7rem; color: #94a3b8; font-weight: 800; text-transform: uppercase; margin-bottom: 4px;">Asignar a Operador</label>
+              <select id="reg-operador" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; color: white; font-size: 0.85rem; outline: none; cursor: pointer;">
+                <option value="">-- Seleccionar Operador --</option>
+                ${(typeof operatorsData !== 'undefined' ? operatorsData : []).map(op => `<option value="${op.name}">${op.name}</option>`).join('')}
+              </select>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+              <button onclick="window.guardarNuevaModelo()" style="flex: 1; background: linear-gradient(135deg, #2dd4bf, #0ea5e9); color: #000; border: none; padding: 12px; border-radius: 10px; font-weight: 700; cursor: pointer;">Registrar</button>
+              <button onclick="window.cerrarModalRegistrarModelo()" style="flex: 1; background: rgba(255, 255, 255, 0.05); color: #fff; border: none; padding: 12px; border-radius: 10px; cursor: pointer;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      `;
+      const div = document.createElement('div');
+      div.id = 'reg-modal-container';
+      div.innerHTML = modalHtml;
+      document.body.appendChild(div);
+    };
+
+    window.cerrarModalRegistrarModelo = function() {
+      const modal = document.getElementById('reg-modal-container');
+      if (modal) modal.remove();
+    };
+
+    window.guardarNuevaModelo = async function() {
+      const idDatame = document.getElementById('reg-id-datame').value.trim();
+      const nombre = document.getElementById('reg-nombre-modelo').value.trim().toUpperCase();
+      const operador = document.getElementById('reg-operador').value;
+
+      if (!idDatame || !nombre || !operador) {
+        Swal.fire({ icon: 'warning', title: 'Campos vacíos', text: 'Por favor completa todos los campos del formulario.', background: '#1e293b', color: '#fff' });
+        return;
+      }
+
+      try {
+        if (!_sb) return;
+        
+        // 1. Insertar perfil en Supabase con panel_id = null (el watcher lo auto-localizará)
+        const { error } = await _sb.from('datame_perfiles').insert({
+          id_datame: idDatame,
+          modelo: nombre,
+          panel_id: null, // Pendiente de auto-ubicar por el watcher
+          activo: true
+        });
+
+        if (error) {
+          if (error.message.includes('unique')) {
+             Swal.fire({ icon: 'error', title: 'Modelo ya existe', text: 'El ID de Datame ingresado ya está registrado.', background: '#1e293b', color: '#fff' });
+          } else {
+             throw error;
+          }
+          return;
+        }
+
+        // 2. Asociar el perfil a la lista del operador en localStorage/Supabase (dentro de primeOperatorsData2026)
+        const ops = (typeof operatorsData !== 'undefined' ? operatorsData : []);
+        const targetOp = ops.find(o => o.name === operador);
+        if (targetOp) {
+          if (!targetOp.profiles) targetOp.profiles = [];
+          if (!targetOp.profiles.some(p => String(p.id) === String(idDatame))) {
+            targetOp.profiles.push({ id: idDatame, name: nombre, model: nombre });
+            // Guardar localmente
+            localStorage.setItem('primeOperatorsData2026', JSON.stringify(ops));
+            // Sincronizar en la DB
+            await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(ops), updated_at: new Date().toISOString() });
+          }
+        }
+
+        window.cerrarModalRegistrarModelo();
+        Swal.fire({ icon: 'success', title: 'Modelo Registrada', text: `¡Modelo ${nombre} registrada! Queda pendiente de que el Scraper ubique a qué panel corresponde en el próximo ciclo.`, background: '#1e293b', color: '#fff' });
+        if (typeof renderOperators === 'function') renderOperators();
+      } catch (err) {
+        console.error(err);
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message || 'No se pudo guardar la modelo.', background: '#1e293b', color: '#fff' });
+      }
+    };
   </script>
 </body>
 </html>
+

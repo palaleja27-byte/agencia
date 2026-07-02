@@ -27078,6 +27078,23 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         }
       } catch (e) {}
 
+      // 🧠 AUTO-ASIGNACIÓN TEMPORAL DE PERFILES AUTO-CREADOS:
+      // Si hay perfiles nuevos (NUEVO_xxxx) creados en el panel de este operador, los inyectamos dinámicamente
+      // para que el operador logueado reclame sus puntos temporalmente hasta que el admin los asocie formalmente.
+      if (typeof _dpPuntosData !== 'undefined') {
+        const panelIdsDelOp = new Set(combinedProfiles.map(p => Number(p.panel) || 2));
+        Object.keys(_dpPuntosData).forEach(id => {
+          if (id.startsWith('NUEVO_') || id.includes('NUEVO')) {
+            const perfilEncontrado = _dpTableauData && _dpTableauData[id];
+            const pIdPanel = perfilEncontrado ? (Number(perfilEncontrado.panel_id) || 2) : 2;
+            if (panelIdsDelOp.has(pIdPanel) && !combinedProfiles.some(p => String(p.id) === String(id))) {
+              console.log(`[Auto-Asignación] Vinculando perfil nuevo ${id} temporalmente al operador ${realName}`);
+              combinedProfiles.push({ id: id, name: id, model: id, panel: pIdPanel });
+            }
+          }
+        });
+      }
+
       return combinedProfiles.map(p => String(p.id)).filter(Boolean);
     }
 

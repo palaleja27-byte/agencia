@@ -8938,7 +8938,10 @@
     function _getOpsEnTurnoHoy(turnoFiltro) {
       if (typeof ASI_KEY === 'undefined') return null;
       const fecha = localDateStr();
-      const shiftMap = { 'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche' };
+      const shiftMap = { 
+        'Mañana': 'manana', 'Tarde': 'tarde', 'Noche': 'noche',
+        'manana': 'manana', 'tarde': 'tarde', 'noche': 'noche'
+      };
 
       // Hora actual en Colombia
       const _horaColNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours();
@@ -18628,8 +18631,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const fecha = localDateStr();
       const horaObj = new Date();
       const hora = horaObj.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-      const turnoDetectado = typeof detectarTurno === 'function' ? detectarTurno() : 'Mañana';
-      const shiftKey = turnoDetectado === 'Mañana' ? 'manana' : turnoDetectado === 'Tarde' ? 'tarde' : 'noche';
+      const shiftKey = typeof detectarTurno === 'function' ? detectarTurno().toLowerCase() : 'manana';
       const draftKey = ASI_KEY + '_draft_' + fecha + '_' + shiftKey;
 
       let draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
@@ -27104,9 +27106,9 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       const h = parseInt(new Date().toLocaleString('en-US', {
         timeZone: 'America/Bogota', hour12: false, hour: 'numeric'
       }));
-      if (h >= 6  && h < 14) return 'Mañana';
-      if (h >= 14 && h < 22) return 'Tarde';
-      return 'Noche';
+      if (h >= 6  && h < 14) return 'manana';
+      if (h >= 14 && h < 22) return 'tarde';
+      return 'noche';
     }
 
     function _opRtGetIds(opName) {
@@ -27121,8 +27123,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       
       // 🧠 DELTA-SHIFT™: Añadir perfiles dinámicos del turno actual
       const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      const jornadaActual = _opRtJornada();
-      const shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
+      const jornadaActual = _opRtJornada().toLowerCase();
+      const shKey = jornadaActual;
       const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
       
       try {

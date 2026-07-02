@@ -382,21 +382,38 @@ async function watchPanel(panel, perfiles) {
   while (Date.now() - startTime < MAX_RUNTIME_MS) {
     const cycleStart = Date.now();
     
-    const { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
+    let { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
     const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles').select('*').eq('activo', true).order('id');
 
     if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
     if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
 
     if (panels?.length) {
-      log(`📡 ${panels.length} paneles | ${allPerfiles?.length || 0} perfiles`);
+      // 🛠️ Mapear y sobreescribir con las variables de entorno de GitHub Actions (si existen)
+      panels = panels.map(p => {
+        const envUser = process.env[`PANEL${p.id}_USER`];
+        const envPass = process.env[`PANEL${p.id}_PASS`];
+        if (envUser && envPass) {
+          return { ...p, email: envUser.trim(), password: envPass.trim() };
+        }
+        return p;
+      }).filter(p => {
+        // Ignorar paneles que no tienen credenciales definidas en variables de entorno o están inactivos
+        const hasCreds = p.email && p.password && !p.email.includes('Ameliapenaloza');
+        if (!hasCreds) {
+          log(`[SKIP] ${p.nombre} — Sin credenciales activas configuradas`);
+        }
+        return hasCreds;
+      });
+
+      log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
       await Promise.all(panels.map(panel => {
         const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id);
-        if (!perfiles.length) { log(`[SKIP] ${panel.nombre}`); return Promise.resolve(); }
+        if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles asociados`); return Promise.resolve(); }
         return watchPanel(panel, perfiles);
       }));
     } else {
-      log('❌ Sin paneles en Supabase (o tabla vacía/inactiva)');
+      log('❌ Sin paneles activos en Supabase (o tabla vacía/inactiva)');
     }
 
     const elapsed = Date.now() - cycleStart;

@@ -4969,6 +4969,42 @@
     </div>
   </div>
 
+  <!-- SECCIÓN CENTRAL Y VISUAL: PANEL DE CONTROL MULTI-IA -->
+  <div id="ai-central-hub-wrapper" style="max-width:1200px; margin: 15px auto 0; padding: 0 16px; display: none;">
+    <div style="background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(236,72,153,0.06)); border: 1.5px solid rgba(99,102,241,0.3); border-radius: 16px; padding: 16px 20px; box-shadow: 0 8px 32px rgba(99,102,241,0.1); display: flex; flex-direction: column; gap: 12px; transition: all 0.3s ease;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.6rem;">🧠</span>
+          <div>
+            <h3 style="margin: 0; font-size: 0.95rem; color: #fff; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+              Centro de Activación de Inteligencia Artificial
+            </h3>
+            <p id="ai-hub-status-text" style="margin: 3px 0 0; font-size: 0.72rem; color: #94a3b8;">
+              Cargando estado de los servicios de IA...
+            </p>
+          </div>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button onclick="abrirConfigAI()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+            ⚙️ Ajustes Avanzados
+          </button>
+        </div>
+      </div>
+
+      <!-- Formulario rápido central de activación -->
+      <div id="ai-hub-quick-form" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.04);">
+        <div style="flex: 1; min-width: 250px; position: relative;">
+          <input type="password" id="ai-hub-quick-key" placeholder="Pega tu Google Gemini Key (AIzaSy...) para encender el sistema" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 0.8rem; outline: none; transition: border-color 0.2s; padding-right: 140px;">
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="position: absolute; right: 12px; top: 11px; font-size: 0.65rem; color: #38bdf8; text-decoration: none; font-weight: bold;">🔗 Key Gratis →</a>
+        </div>
+        <button onclick="activarIACentralRapido()" style="background: linear-gradient(135deg, #6366f1, #ec4899); border: none; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 4px 15px rgba(99,102,241,0.3); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+          ⚡ Activar IA en el Turno
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL CAMBIAR PINs (solo admin) -->
   <div class="modal-pin-ov" id="modal-pin-change">
     <div class="modal-pin-box" style="max-height:88vh;overflow-y:auto;">
@@ -7795,8 +7831,87 @@
       } else {
          alert('✅ Llaves guardadas correctamente.');
       }
-      cerrarConfigAI();
+      actualizarEstadoHubIA();
     }
+
+    // --- CENTRO DE IA CONTROL CENTRAL ---
+    window.actualizarEstadoHubIA = function() {
+      const wrapper = document.getElementById('ai-central-hub-wrapper');
+      if (!wrapper) return;
+      
+      const gKey = localStorage.getItem('rr_g_key_manual') || '';
+      const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'gemini';
+      const statusText = document.getElementById('ai-hub-status-text');
+      const quickKeyInput = document.getElementById('ai-hub-quick-key');
+      const quickForm = document.getElementById('ai-hub-quick-form');
+
+      if (gKey) {
+        // La IA está activa
+        statusText.innerHTML = `🟢 <b style="color:#2dd4bf">IA ACTIVA</b> • Motor: <span style="text-transform:uppercase;color:#818cf8;font-weight:700">${activeTextAi}</span> en producción alimentando todos los módulos.`;
+        if (quickKeyInput) {
+          quickKeyInput.value = gKey;
+          quickKeyInput.placeholder = "IA lista — Llave guardada localmente";
+        }
+      } else {
+        // La IA está inactiva
+        statusText.innerHTML = `🔴 <b style="color:#f43f5e">IA INACTIVA</b> • Todo el sistema requiere una llave Google Gemini activa para funcionar.`;
+        if (quickKeyInput) {
+          quickKeyInput.value = "";
+          quickKeyInput.placeholder = "Pega tu Google Gemini Key (AIzaSy...) para encender el sistema";
+        }
+      }
+    };
+
+    window.activarIACentralRapido = function() {
+      const keyInput = document.getElementById('ai-hub-quick-key');
+      if (!keyInput) return;
+      const keyVal = keyInput.value.trim();
+
+      if (!keyVal) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Llave vacía',
+          text: 'Por favor ingresa una llave válida de Gemini (debe comenzar con AIza...).',
+          background: '#1e293b',
+          color: '#fff'
+        });
+        return;
+      }
+
+      // Guardar en todas las ubicaciones locales requeridas
+      localStorage.setItem('rr_g_key_manual', keyVal);
+      localStorage.setItem('rr_ai_api_key', keyVal); // Unificar para el Coach de IA y módulos antiguos del operador
+      
+      // Auto-activar gemini como motor de texto principal
+      localStorage.setItem('rr_active_text_ai', 'gemini');
+
+      // Actualizar vista del Hub de IA
+      actualizarEstadoHubIA();
+
+      // Lanzar notificacion
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: '¡IA Activada en todo el sistema!',
+        showConfirmButton: false,
+        timer: 3000,
+        background: '#1e293b',
+        color: '#fff'
+      });
+
+      // Si el operador está logueado, forzar recarga del dashboard de IA oCoach IA
+      if (typeof currentOpName !== 'undefined' && currentOpName) {
+        // Recargar el Coach IA del operador si está visible
+        const pts = parseFloat(document.getElementById('op-dash-pts-val')?.innerText || '0');
+        const meta = parseInt(document.getElementById('op-dash-meta-val')?.innerText || '0');
+        const turno = document.getElementById('op-dash-turno-val')?.innerText || '';
+        const op = operatorsData.find(o => _n(o.name) === _n(currentOpName));
+        if (op) {
+          robotFetchAI(currentOpName, pts, meta, turno, op.group);
+        }
+      }
+    };
 
     // Helper: aplicar preset de modelo Ollama
     window.applyOllamaModelPreset = function(val) {
@@ -18994,6 +19109,15 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Mostrar chat de monitoreo en vista de admin, monitor y operador
       const chatEl = document.getElementById('rr-urgent-chat');
       if (chatEl) chatEl.style.display = 'flex';
+
+      // Mostrar e inicializar el Centro de IA Central y Visual
+      const aiHubWrapper = document.getElementById('ai-central-hub-wrapper');
+      if (aiHubWrapper) {
+        aiHubWrapper.style.display = 'block';
+        if (typeof actualizarEstadoHubIA === 'function') {
+          actualizarEstadoHubIA();
+        }
+      }
     }
 
     // ── Barra competitiva de turno para operadores ──────────────────

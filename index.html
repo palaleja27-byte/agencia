@@ -4994,13 +4994,34 @@
 
       <!-- Formulario rápido central de activación -->
       <div id="ai-hub-quick-form" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.04);">
-        <div style="flex: 1; min-width: 250px; position: relative;">
-          <input type="password" id="ai-hub-quick-key" placeholder="Pega tu Google Gemini Key (AIzaSy...) para encender el sistema" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 0.8rem; outline: none; transition: border-color 0.2s; padding-right: 140px;">
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="position: absolute; right: 12px; top: 11px; font-size: 0.65rem; color: #38bdf8; text-decoration: none; font-weight: bold;">🔗 Key Gratis →</a>
+        <!-- Selector rápido de Motor Activo -->
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <label style="font-size: 0.55rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Motor Activo</label>
+          <select id="ai-hub-quick-engine" onchange="window.cambiarMotorIACentral(this.value)" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 9px 12px; color: #fff; font-size: 0.8rem; outline: none; cursor: pointer; font-weight: 700;">
+            <option value="gemini">Google Gemini 2.0</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="groq">Groq (Llama 3)</option>
+            <option value="deepseek">DeepSeek API</option>
+            <option value="openrouter">OpenRouter (Modelos Libres)</option>
+            <option value="openai">OpenAI (ChatGPT)</option>
+            <option value="ollama">Servidor Ollama Local (Qwen)</option>
+            <option value="pollinations">Pollinations (Gratuito)</option>
+          </select>
         </div>
-        <button onclick="activarIACentralRapido()" style="background: linear-gradient(135deg, #6366f1, #ec4899); border: none; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 4px 15px rgba(99,102,241,0.3); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-          ⚡ Activar IA en el Turno
-        </button>
+
+        <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 2px;">
+          <label id="ai-hub-quick-input-label" style="font-size: 0.55rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Llave o Dirección IP</label>
+          <div style="position: relative; width: 100%;">
+            <input type="password" id="ai-hub-quick-key" placeholder="Pega tu Google Gemini Key (AIzaSy...) para encender el sistema" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 0.8rem; outline: none; transition: border-color 0.2s; padding-right: 150px;" oninput="this.style.borderColor = this.value.trim() ? '#818cf8' : 'rgba(99,102,241,0.4)'">
+            <a id="ai-hub-quick-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="position: absolute; right: 12px; top: 11px; font-size: 0.65rem; color: #38bdf8; text-decoration: none; font-weight: bold;">🔗 Key Gratis →</a>
+          </div>
+        </div>
+        
+        <div style="display: flex; align-items: flex-end; align-self: stretch; padding-top: 13px;">
+          <button onclick="activarIACentralRapido()" style="background: linear-gradient(135deg, #6366f1, #ec4899); border: none; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 4px 15px rgba(99,102,241,0.3); transition: transform 0.2s; height: 38px;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+            ⚡ Activar IA en el Turno
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -7836,6 +7857,96 @@
     }
 
     // --- CENTRO DE IA CONTROL CENTRAL ---
+    window.cambiarMotorIACentral = function(val) {
+      localStorage.setItem('rr_active_text_ai', val);
+      
+      const inputLabel = document.getElementById('ai-hub-quick-input-label');
+      const quickKeyInput = document.getElementById('ai-hub-quick-key');
+      const quickLink = document.getElementById('ai-hub-quick-link');
+      
+      if (!quickKeyInput) return;
+
+      // Resetear tipo de input
+      quickKeyInput.type = (val === 'ollama' || val === 'pollinations') ? 'text' : 'password';
+
+      // Configurar inputs específicos
+      if (val === 'gemini') {
+        if (inputLabel) inputLabel.innerText = "Google Gemini API Key (Gemini 2.0)";
+        quickKeyInput.placeholder = "Pega tu Google Gemini Key (AIzaSy...)";
+        if (quickLink) {
+          quickLink.href = "https://aistudio.google.com/apikey";
+          quickLink.innerText = "🔗 Key Gratis →";
+          quickLink.onclick = null;
+        }
+      } else if (val === 'anthropic') {
+        if (inputLabel) inputLabel.innerText = "Anthropic Claude API Key";
+        quickKeyInput.placeholder = "Pega tu Claude API Key (sk-ant-...)";
+        if (quickLink) {
+          quickLink.href = "https://console.anthropic.com/";
+          quickLink.innerText = "🔗 Obtener Key →";
+          quickLink.onclick = null;
+        }
+      } else if (val === 'groq') {
+        if (inputLabel) inputLabel.innerText = "Groq Llama 3 API Key";
+        quickKeyInput.placeholder = "Pega tu Groq API Key (gsk_...)";
+        if (quickLink) {
+          quickLink.href = "https://console.groq.com/keys";
+          quickLink.innerText = "🔗 Key Gratis →";
+          quickLink.onclick = null;
+        }
+      } else if (val === 'deepseek') {
+        if (inputLabel) inputLabel.innerText = "DeepSeek API Key";
+        quickKeyInput.placeholder = "Pega tu DeepSeek API Key (sk-...)";
+        if (quickLink) {
+          quickLink.href = "https://platform.deepseek.com/api_keys";
+          quickLink.innerText = "🔗 Obtener Key ($5 Gratis) →";
+          quickLink.onclick = null;
+        }
+      } else if (val === 'openrouter') {
+        if (inputLabel) inputLabel.innerText = "OpenRouter API Key";
+        quickKeyInput.placeholder = "Pega tu OpenRouter API Key (sk-or-...)";
+        if (quickLink) {
+          quickLink.href = "https://openrouter.ai/keys";
+          quickLink.innerText = "🔗 Key Gratis →";
+          quickLink.onclick = null;
+        }
+      } else if (val === 'openai') {
+        if (inputLabel) inputLabel.innerText = "OpenAI ChatGPT API Key";
+        quickKeyInput.placeholder = "Pega tu OpenAI API Key (sk-proj-...)";
+        if (quickLink) {
+          quickLink.href = "https://platform.openai.com/api-keys";
+          quickLink.innerText = "🔗 Obtener Key →";
+          quickLink.onclick = null;
+        }
+      } else if (val === 'ollama') {
+        if (inputLabel) inputLabel.innerText = "Dirección IP / Puerto de Ollama Local";
+        quickKeyInput.placeholder = "Ej: http://10.21.41.168:18790";
+        if (quickLink) {
+          quickLink.href = "#";
+          quickLink.innerText = "⚡ Probar Conexión Local";
+          quickLink.onclick = function(e) {
+            e.preventDefault();
+            // Inyectar URL actual al input del modal de prueba y probar
+            const currentVal = quickKeyInput.value.trim() || 'http://10.21.41.168:18790';
+            abrirConfigAI();
+            const modalOllamaInp = document.getElementById('cfg-ollama-url');
+            if (modalOllamaInp) modalOllamaInp.value = currentVal;
+            probarConexionOllama();
+          };
+        }
+      } else if (val === 'pollinations') {
+        if (inputLabel) inputLabel.innerText = "Motor Gratuito Pollinations";
+        quickKeyInput.placeholder = "No requiere llave - Listo para usar gratis";
+        if (quickLink) {
+          quickLink.href = "https://pollinations.ai/";
+          quickLink.innerText = "🔗 Conoce Pollinations →";
+          quickLink.onclick = null;
+        }
+      }
+
+      actualizarEstadoHubIA();
+    };
+
     window.actualizarEstadoHubIA = function() {
       const wrapper = document.getElementById('ai-central-hub-wrapper');
       if (!wrapper) return;
@@ -7843,6 +7954,12 @@
       const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'gemini';
       const statusText = document.getElementById('ai-hub-status-text');
       const quickKeyInput = document.getElementById('ai-hub-quick-key');
+      const selector = document.getElementById('ai-hub-quick-engine');
+
+      // Sincronizar selector si difiere
+      if (selector && selector.value !== activeTextAi) {
+        selector.value = activeTextAi;
+      }
 
       // Validar si el motor seleccionado tiene llave configurada
       let hasKey = false;
@@ -7878,46 +7995,62 @@
       } else if (activeTextAi === 'pollinations') {
         hasKey = true; // Gratis, no requiere key
       } else if (activeTextAi === 'ollama') {
-        hasKey = true; // Local, no requiere key externa
+        keyVal = localStorage.getItem('ollama_url') || 'http://10.21.41.168:18790';
+        hasKey = !!keyVal;
       }
 
       if (hasKey) {
         statusText.innerHTML = `🟢 <b style="color:#2dd4bf">IA ACTIVA</b> • Motor: <span style="text-transform:uppercase;color:#818cf8;font-weight:700">${activeTextAi}</span> listo en producción.`;
         if (quickKeyInput) {
           quickKeyInput.value = keyVal;
-          quickKeyInput.placeholder = `Motor ${activeTextAi.toUpperCase()} listo y configurado.`;
         }
       } else {
         statusText.innerHTML = `🔴 <b style="color:#f43f5e">IA INACTIVA</b> • El motor seleccionado (<span style="text-transform:uppercase;color:#f472b6;font-weight:700">${activeTextAi}</span>) no tiene su llave API configurada.`;
         if (quickKeyInput) {
           quickKeyInput.value = "";
-          quickKeyInput.placeholder = `Ingresa la llave para ${activeTextAi.toUpperCase()} o presiona Ajustes Avanzados`;
+          quickKeyInput.placeholder = `Ingresa la llave/IP para ${activeTextAi.toUpperCase()}`;
         }
       }
     };
 
     window.activarIACentralRapido = function() {
+      const selector = document.getElementById('ai-hub-quick-engine');
+      const activeTextAi = selector ? selector.value : (localStorage.getItem('rr_active_text_ai') || 'gemini');
       const keyInput = document.getElementById('ai-hub-quick-key');
       if (!keyInput) return;
       const keyVal = keyInput.value.trim();
 
-      if (!keyVal) {
+      if (!keyVal && activeTextAi !== 'pollinations') {
         Swal.fire({
           icon: 'warning',
-          title: 'Llave vacía',
-          text: 'Por favor ingresa una llave válida de Gemini (debe comenzar con AIza...).',
+          title: 'Entrada vacía',
+          text: `Por favor ingresa un valor válido para activar el motor ${activeTextAi.toUpperCase()}.`,
           background: '#1e293b',
           color: '#fff'
         });
         return;
       }
 
-      // Guardar en todas las ubicaciones locales requeridas
-      localStorage.setItem('rr_g_key_manual', keyVal);
-      localStorage.setItem('rr_ai_api_key', keyVal); // Unificar para el Coach de IA y módulos antiguos del operador
-      
-      // Auto-activar gemini como motor de texto principal
-      localStorage.setItem('rr_active_text_ai', 'gemini');
+      // Guardar el motor de texto activo
+      localStorage.setItem('rr_active_text_ai', activeTextAi);
+
+      // Guardar la configuración en la variable correspondiente
+      if (activeTextAi === 'gemini') {
+        localStorage.setItem('rr_g_key_manual', keyVal);
+        localStorage.setItem('rr_ai_api_key', keyVal); // Sincronización heredada
+      } else if (activeTextAi === 'anthropic') {
+        localStorage.setItem('rr_ai_stk_manual', keyVal);
+      } else if (activeTextAi === 'groq') {
+        localStorage.setItem('rr_groq_key', keyVal);
+      } else if (activeTextAi === 'deepseek') {
+        localStorage.setItem('rr_deepseek_key', keyVal);
+      } else if (activeTextAi === 'openrouter') {
+        localStorage.setItem('rr_or_key', keyVal);
+      } else if (activeTextAi === 'openai') {
+        localStorage.setItem('rr_openai_key', keyVal);
+      } else if (activeTextAi === 'ollama') {
+        localStorage.setItem('ollama_url', keyVal);
+      }
 
       // Actualizar vista del Hub de IA
       actualizarEstadoHubIA();
@@ -7927,16 +8060,15 @@
         toast: true,
         position: 'top-end',
         icon: 'success',
-        title: '¡IA Activada en todo el sistema!',
+        title: `¡Motor ${activeTextAi.toUpperCase()} activado con éxito!`,
         showConfirmButton: false,
         timer: 3000,
         background: '#1e293b',
         color: '#fff'
       });
 
-      // Si el operador está logueado, forzar recarga del dashboard de IA oCoach IA
+      // Forzar recarga del coach si corresponde
       if (typeof currentOpName !== 'undefined' && currentOpName) {
-        // Recargar el Coach IA del operador si está visible
         const pts = parseFloat(document.getElementById('op-dash-pts-val')?.innerText || '0');
         const meta = parseInt(document.getElementById('op-dash-meta-val')?.innerText || '0');
         const turno = document.getElementById('op-dash-turno-val')?.innerText || '';
@@ -19148,7 +19280,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const aiHubWrapper = document.getElementById('ai-central-hub-wrapper');
       if (aiHubWrapper) {
         aiHubWrapper.style.display = 'block';
-        if (typeof actualizarEstadoHubIA === 'function') {
+        const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'gemini';
+        if (typeof cambiarMotorIACentral === 'function') {
+          cambiarMotorIACentral(activeTextAi);
+        } else if (typeof actualizarEstadoHubIA === 'function') {
           actualizarEstadoHubIA();
         }
       }

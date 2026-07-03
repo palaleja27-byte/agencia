@@ -5198,6 +5198,64 @@
       </div>
       <div id="op-dash-last-update" style="position:absolute;bottom:4px;right:10px;font-size:.5rem;color:#334155;"></div>
     </div>
+
+    <!-- SECCIÓN CENTRAL Y VISUAL PARA OPERADOR: PANEL DE CONTROL MULTI-IA -->
+    <div id="ai-central-hub-wrapper-op" style="grid-column: 1 / -1; margin-bottom: 15px;">
+      <div style="background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(236,72,153,0.06)); border: 1.5px solid rgba(99,102,241,0.3); border-radius: 16px; padding: 16px 20px; box-shadow: 0 8px 32px rgba(99,102,241,0.1); display: flex; flex-direction: column; gap: 12px; transition: all 0.3s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.6rem;">🧠</span>
+            <div>
+              <h3 style="margin: 0; font-size: 0.95rem; color: #fff; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                Panel de IA de Operador (Icebreakers y Coach)
+              </h3>
+              <p id="ai-hub-status-text-op" style="margin: 3px 0 0; font-size: 0.72rem; color: #94a3b8;">
+                Cargando estado de la IA del operador...
+              </p>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button onclick="abrirConfigAI()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+              ⚙️ Ajustes Avanzados
+            </button>
+          </div>
+        </div>
+
+        <!-- Formulario rápido operador de activación -->
+        <div id="ai-hub-quick-form-op" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.04);">
+          <!-- Selector rápido de Motor Activo -->
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <label style="font-size: 0.55rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Motor Activo</label>
+            <select id="ai-hub-quick-engine-op" onchange="window.cambiarMotorIACentral(this.value)" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 9px 12px; color: #fff; font-size: 0.8rem; outline: none; cursor: pointer; font-weight: 700;">
+              <option value="gemini">Google Gemini 2.0</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="groq">Groq (Llama 3)</option>
+              <option value="deepseek">DeepSeek API</option>
+              <option value="openrouter">OpenRouter (Modelos Libres)</option>
+              <option value="openai">OpenAI (ChatGPT)</option>
+              <option value="ollama">Servidor Ollama Local (Qwen)</option>
+              <option value="pollinations">Pollinations (Gratuito)</option>
+            </select>
+          </div>
+
+          <div style="flex: 1; min-width: 250px; display: flex; flex-direction: column; gap: 2px;">
+            <label id="ai-hub-quick-input-label-op" style="font-size: 0.55rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Llave o Dirección IP</label>
+            <div style="position: relative; width: 100%;">
+              <input type="password" id="ai-hub-quick-key-op" placeholder="Pega tu Google Gemini Key para encender el sistema" style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.4); border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 0.8rem; outline: none; transition: border-color 0.2s; padding-right: 150px;" oninput="this.style.borderColor = this.value.trim() ? '#818cf8' : 'rgba(99,102,241,0.4)'">
+              <a id="ai-hub-quick-link-op" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="position: absolute; right: 12px; top: 11px; font-size: 0.65rem; color: #38bdf8; text-decoration: none; font-weight: bold;">🔗 Key Gratis →</a>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: flex-end; align-self: stretch; padding-top: 13px;">
+            <button onclick="activarIACentralRapido(true)" style="background: linear-gradient(135deg, #6366f1, #ec4899); border: none; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 5px; box-shadow: 0 4px 15px rgba(99,102,241,0.3); transition: transform 0.2s; height: 38px;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+              ⚡ Activar IA en el Turno
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="op-dash-metrics" class="op-dash-metrics" style="display:none;"></div>
 
     <!-- PLAN DE TRABAJO (MIS TAREAS) -->
@@ -5340,14 +5398,49 @@
             </select>
             <input type="text" id="img-model-custom" placeholder="Describe los rasgos de la modelo (ej: Chica rubia de ojos verdes, pecas)..." style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 12px; color:white; font-size:0.8rem; outline:none; margin-top:8px; display:none;">
           </div>
+
+          <div>
+            <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:2px;">2. Rostros Base (Consistencia 100%)</label>
+            <div style="font-size:0.55rem; color:#f472b6; margin-bottom:6px; font-style:italic;">Sube 2 fotos para fijar las facciones de la modelo</div>
+            <div style="display: flex; gap: 10px;">
+              <!-- Rostro 1 -->
+              <div id="face-dropzone-1" onclick="document.getElementById('face-file-1').click()" style="flex: 1; border: 1px dashed rgba(236,72,153,0.4); border-radius: 12px; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); position: relative; overflow: hidden; transition: 0.2s;" onmouseover="this.style.borderColor='#f43f5e'" onmouseout="this.style.borderColor='rgba(236,72,153,0.4)'">
+                <span style="font-size: 1.1rem;">📸</span>
+                <span style="font-size: 0.55rem; color: #e2e8f0; font-weight: 700;">FOTO 1</span>
+                <input type="file" id="face-file-1" accept="image/*" style="display: none;" onchange="window.handleFaceUpload(event, 1, '')">
+                <div id="face-preview-1" style="position: absolute; inset: 0; background: #0f172a; display: none; align-items: center; justify-content: center;">
+                  <img id="face-img-1" src="" style="width: 100%; height: 100%; object-fit: cover;">
+                  <button onclick="event.stopPropagation(); window.removeFace(1, '')" style="position: absolute; top: 2px; right: 2px; background: rgba(239, 68, 68, 0.85); color: white; border: none; width: 16px; height: 16px; border-radius: 50%; font-size: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 900;">✕</button>
+                </div>
+              </div>
+              <!-- Rostro 2 -->
+              <div id="face-dropzone-2" onclick="document.getElementById('face-file-2').click()" style="flex: 1; border: 1px dashed rgba(236,72,153,0.4); border-radius: 12px; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); position: relative; overflow: hidden; transition: 0.2s;" onmouseover="this.style.borderColor='#f43f5e'" onmouseout="this.style.borderColor='rgba(236,72,153,0.4)'">
+                <span style="font-size: 1.1rem;">📸</span>
+                <span style="font-size: 0.55rem; color: #e2e8f0; font-weight: 700;">FOTO 2</span>
+                <input type="file" id="face-file-2" accept="image/*" style="display: none;" onchange="window.handleFaceUpload(event, 2, '')">
+                <div id="face-preview-2" style="position: absolute; inset: 0; background: #0f172a; display: none; align-items: center; justify-content: center;">
+                  <img id="face-img-2" src="" style="width: 100%; height: 100%; object-fit: cover;">
+                  <button onclick="event.stopPropagation(); window.removeFace(2, '')" style="position: absolute; top: 2px; right: 2px; background: rgba(239, 68, 68, 0.85); color: white; border: none; width: 16px; height: 16px; border-radius: 50%; font-size: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 900;">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:0.65rem; color:#f472b6; font-weight:800; text-transform:uppercase; margin-bottom:6px;">3. Escenarios Rápidos (Estilo Móvil / Diario)</label>
+            <div style="display:flex; flex-wrap:wrap; gap:5px;" id="quick-scenarios-container">
+              <!-- Se autogeneran vía JS -->
+            </div>
+          </div>
           
           <div>
-            <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">2. Situación / Escenario</label>
-            <textarea id="img-situation" placeholder="Ej: tomando un café en una terraza en París de noche, sonriendo levemente a la cámara, iluminación cálida..." style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.8rem; padding:10px; resize:none; outline:none;"></textarea>
+            <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">4. Situación / Escenario Personalizado</label>
+            <textarea id="img-situation" placeholder="Ej: selfie casual en el auto sonriendo a la cámara, foto informal en la cama con pijama..." style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.8rem; padding:10px; resize:none; outline:none;"></textarea>
           </div>
           
           <button id="btn-img-generate" onclick="window.generateAIPhotos(false)" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar 2 Versiones</button>
         </div>
+
         
         <!-- Panel Derecho: Resultados -->
         <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; background:rgba(0,0,0,0.2); border:1px dashed rgba(255,255,255,0.1); border-radius:12px; padding:15px; min-height:200px; position:relative; box-sizing:border-box;">
@@ -6818,10 +6911,44 @@
               </select>
               <input type="text" id="img-model-custom-admin" placeholder="Describe los rasgos de la modelo (ej: Chica rubia de ojos verdes, pecas)..." style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 12px; color:white; font-size:0.8rem; outline:none; margin-top:8px; display:none;">
             </div>
+
+            <div>
+              <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:2px;">2. Rostros Base (Consistencia 100%)</label>
+              <div style="font-size:0.55rem; color:#f472b6; margin-bottom:6px; font-style:italic;">Sube 2 fotos para fijar las facciones de la modelo</div>
+              <div style="display: flex; gap: 10px;">
+                <!-- Rostro 1 -->
+                <div id="face-dropzone-1-admin" onclick="document.getElementById('face-file-1-admin').click()" style="flex: 1; border: 1px dashed rgba(236,72,153,0.4); border-radius: 12px; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); position: relative; overflow: hidden; transition: 0.2s;" onmouseover="this.style.borderColor='#f43f5e'" onmouseout="this.style.borderColor='rgba(236,72,153,0.4)'">
+                  <span style="font-size: 1.1rem;">📸</span>
+                  <span style="font-size: 0.55rem; color: #e2e8f0; font-weight: 700;">FOTO 1</span>
+                  <input type="file" id="face-file-1-admin" accept="image/*" style="display: none;" onchange="window.handleFaceUpload(event, 1, '-admin')">
+                  <div id="face-preview-1-admin" style="position: absolute; inset: 0; background: #0f172a; display: none; align-items: center; justify-content: center;">
+                    <img id="face-img-1-admin" src="" style="width: 100%; height: 100%; object-fit: cover;">
+                    <button onclick="event.stopPropagation(); window.removeFace(1, '-admin')" style="position: absolute; top: 2px; right: 2px; background: rgba(239, 68, 68, 0.85); color: white; border: none; width: 16px; height: 16px; border-radius: 50%; font-size: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 900;">✕</button>
+                  </div>
+                </div>
+                <!-- Rostro 2 -->
+                <div id="face-dropzone-2-admin" onclick="document.getElementById('face-file-2-admin').click()" style="flex: 1; border: 1px dashed rgba(236,72,153,0.4); border-radius: 12px; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); position: relative; overflow: hidden; transition: 0.2s;" onmouseover="this.style.borderColor='#f43f5e'" onmouseout="this.style.borderColor='rgba(236,72,153,0.4)'">
+                  <span style="font-size: 1.1rem;">📸</span>
+                  <span style="font-size: 0.55rem; color: #e2e8f0; font-weight: 700;">FOTO 2</span>
+                  <input type="file" id="face-file-2-admin" accept="image/*" style="display: none;" onchange="window.handleFaceUpload(event, 2, '-admin')">
+                  <div id="face-preview-2-admin" style="position: absolute; inset: 0; background: #0f172a; display: none; align-items: center; justify-content: center;">
+                    <img id="face-img-2-admin" src="" style="width: 100%; height: 100%; object-fit: cover;">
+                    <button onclick="event.stopPropagation(); window.removeFace(2, '-admin')" style="position: absolute; top: 2px; right: 2px; background: rgba(239, 68, 68, 0.85); color: white; border: none; width: 16px; height: 16px; border-radius: 50%; font-size: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 900;">✕</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label style="display:block; font-size:0.65rem; color:#f472b6; font-weight:800; text-transform:uppercase; margin-bottom:6px;">3. Escenarios Rápidos (Estilo Móvil / Diario)</label>
+              <div style="display:flex; flex-wrap:wrap; gap:5px;" id="quick-scenarios-container-admin">
+                <!-- Se autogeneran vía JS -->
+              </div>
+            </div>
             
             <div>
-              <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">2. Situación / Escenario</label>
-              <textarea id="img-situation-admin" placeholder="Ej: tomando un café en una terraza en París de noche, sonriendo levemente a la cámara, iluminación cálida..." style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.8rem; padding:10px; resize:none; outline:none;"></textarea>
+              <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">4. Situación / Escenario Personalizado</label>
+              <textarea id="img-situation-admin" placeholder="Ej: selfie casual en el auto sonriendo a la cámara, foto informal en la cama con pijama..." style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.8rem; padding:10px; resize:none; outline:none;"></textarea>
             </div>
             
             <button id="btn-img-generate-admin" onclick="window.generateAIPhotos(true)" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar 2 Versiones</button>
@@ -7790,7 +7917,7 @@
     function abrirConfigAI() {
       const m = document.getElementById('modal-ai-config');
       if (!m) return;
-      document.getElementById('cfg-active-text-ai').value = localStorage.getItem('rr_active_text_ai') || 'gemini';
+      document.getElementById('cfg-active-text-ai').value = localStorage.getItem('rr_active_text_ai') || 'ollama';
       document.getElementById('cfg-active-img-ai').value = localStorage.getItem('rr_active_img_ai') || 'replicate';
       
       document.getElementById('cfg-g-key').value = localStorage.getItem('rr_g_key_manual') || '';
@@ -7860,106 +7987,107 @@
     window.cambiarMotorIACentral = function(val) {
       localStorage.setItem('rr_active_text_ai', val);
       
-      const inputLabel = document.getElementById('ai-hub-quick-input-label');
-      const quickKeyInput = document.getElementById('ai-hub-quick-key');
-      const quickLink = document.getElementById('ai-hub-quick-link');
-      
-      if (!quickKeyInput) return;
+      const targets = [
+        { label: 'ai-hub-quick-input-label', key: 'ai-hub-quick-key', link: 'ai-hub-quick-link' },
+        { label: 'ai-hub-quick-input-label-op', key: 'ai-hub-quick-key-op', link: 'ai-hub-quick-link-op' }
+      ];
 
-      // Resetear tipo de input
-      quickKeyInput.type = (val === 'ollama' || val === 'pollinations') ? 'text' : 'password';
+      targets.forEach(t => {
+        const inputLabel = document.getElementById(t.label);
+        const quickKeyInput = document.getElementById(t.key);
+        const quickLink = document.getElementById(t.link);
+        
+        if (!quickKeyInput) return;
 
-      // Configurar inputs específicos
-      if (val === 'gemini') {
-        if (inputLabel) inputLabel.innerText = "Google Gemini API Key (Gemini 2.0)";
-        quickKeyInput.placeholder = "Pega tu Google Gemini Key (AIzaSy...)";
-        if (quickLink) {
-          quickLink.href = "https://aistudio.google.com/apikey";
-          quickLink.innerText = "🔗 Key Gratis →";
-          quickLink.onclick = null;
+        // Resetear tipo de input
+        quickKeyInput.type = (val === 'ollama' || val === 'pollinations') ? 'text' : 'password';
+
+        // Configurar inputs específicos
+        if (val === 'gemini') {
+          if (inputLabel) inputLabel.innerText = "Google Gemini API Key (Gemini 2.0)";
+          quickKeyInput.placeholder = "Pega tu Google Gemini Key (AIzaSy...)";
+          if (quickLink) {
+            quickLink.href = "https://aistudio.google.com/apikey";
+            quickLink.innerText = "🔗 Key Gratis →";
+            quickLink.onclick = null;
+          }
+        } else if (val === 'anthropic') {
+          if (inputLabel) inputLabel.innerText = "Anthropic Claude API Key";
+          quickKeyInput.placeholder = "Pega tu Claude API Key (sk-ant-...)";
+          if (quickLink) {
+            quickLink.href = "https://console.anthropic.com/";
+            quickLink.innerText = "🔗 Obtener Key →";
+            quickLink.onclick = null;
+          }
+        } else if (val === 'groq') {
+          if (inputLabel) inputLabel.innerText = "Groq Llama 3 API Key";
+          quickKeyInput.placeholder = "Pega tu Groq API Key (gsk_...)";
+          if (quickLink) {
+            quickLink.href = "https://console.groq.com/keys";
+            quickLink.innerText = "🔗 Key Gratis →";
+            quickLink.onclick = null;
+          }
+        } else if (val === 'deepseek') {
+          if (inputLabel) inputLabel.innerText = "DeepSeek API Key";
+          quickKeyInput.placeholder = "Pega tu DeepSeek API Key (sk-...)";
+          if (quickLink) {
+            quickLink.href = "https://platform.deepseek.com/api_keys";
+            quickLink.innerText = "🔗 Obtener Key ($5 Gratis) →";
+            quickLink.onclick = null;
+          }
+        } else if (val === 'openrouter') {
+          if (inputLabel) inputLabel.innerText = "OpenRouter API Key";
+          quickKeyInput.placeholder = "Pega tu OpenRouter API Key (sk-or-...)";
+          if (quickLink) {
+            quickLink.href = "https://openrouter.ai/keys";
+            quickLink.innerText = "🔗 Key Gratis →";
+            quickLink.onclick = null;
+          }
+        } else if (val === 'openai') {
+          if (inputLabel) inputLabel.innerText = "OpenAI ChatGPT API Key";
+          quickKeyInput.placeholder = "Pega tu OpenAI API Key (sk-proj-...)";
+          if (quickLink) {
+            quickLink.href = "https://platform.openai.com/api-keys";
+            quickLink.innerText = "🔗 Obtener Key →";
+            quickLink.onclick = null;
+          }
+        } else if (val === 'ollama') {
+          if (inputLabel) inputLabel.innerText = "Dirección IP / Puerto de Ollama Local";
+          quickKeyInput.placeholder = "Ej: http://10.21.41.168:18790";
+          if (quickLink) {
+            quickLink.href = "#";
+            quickLink.innerText = "⚡ Probar Conexión Local";
+            quickLink.onclick = function(e) {
+              e.preventDefault();
+              const currentVal = quickKeyInput.value.trim() || 'http://10.21.41.168:18790';
+              abrirConfigAI();
+              const modalOllamaInp = document.getElementById('cfg-ollama-url');
+              if (modalOllamaInp) modalOllamaInp.value = currentVal;
+              probarConexionOllama();
+            };
+          }
+        } else if (val === 'pollinations') {
+          if (inputLabel) inputLabel.innerText = "Motor Gratuito Pollinations";
+          quickKeyInput.placeholder = "No requiere llave - Listo para usar gratis";
+          if (quickLink) {
+            quickLink.href = "https://pollinations.ai/";
+            quickLink.innerText = "🔗 Conoce Pollinations →";
+            quickLink.onclick = null;
+          }
         }
-      } else if (val === 'anthropic') {
-        if (inputLabel) inputLabel.innerText = "Anthropic Claude API Key";
-        quickKeyInput.placeholder = "Pega tu Claude API Key (sk-ant-...)";
-        if (quickLink) {
-          quickLink.href = "https://console.anthropic.com/";
-          quickLink.innerText = "🔗 Obtener Key →";
-          quickLink.onclick = null;
-        }
-      } else if (val === 'groq') {
-        if (inputLabel) inputLabel.innerText = "Groq Llama 3 API Key";
-        quickKeyInput.placeholder = "Pega tu Groq API Key (gsk_...)";
-        if (quickLink) {
-          quickLink.href = "https://console.groq.com/keys";
-          quickLink.innerText = "🔗 Key Gratis →";
-          quickLink.onclick = null;
-        }
-      } else if (val === 'deepseek') {
-        if (inputLabel) inputLabel.innerText = "DeepSeek API Key";
-        quickKeyInput.placeholder = "Pega tu DeepSeek API Key (sk-...)";
-        if (quickLink) {
-          quickLink.href = "https://platform.deepseek.com/api_keys";
-          quickLink.innerText = "🔗 Obtener Key ($5 Gratis) →";
-          quickLink.onclick = null;
-        }
-      } else if (val === 'openrouter') {
-        if (inputLabel) inputLabel.innerText = "OpenRouter API Key";
-        quickKeyInput.placeholder = "Pega tu OpenRouter API Key (sk-or-...)";
-        if (quickLink) {
-          quickLink.href = "https://openrouter.ai/keys";
-          quickLink.innerText = "🔗 Key Gratis →";
-          quickLink.onclick = null;
-        }
-      } else if (val === 'openai') {
-        if (inputLabel) inputLabel.innerText = "OpenAI ChatGPT API Key";
-        quickKeyInput.placeholder = "Pega tu OpenAI API Key (sk-proj-...)";
-        if (quickLink) {
-          quickLink.href = "https://platform.openai.com/api-keys";
-          quickLink.innerText = "🔗 Obtener Key →";
-          quickLink.onclick = null;
-        }
-      } else if (val === 'ollama') {
-        if (inputLabel) inputLabel.innerText = "Dirección IP / Puerto de Ollama Local";
-        quickKeyInput.placeholder = "Ej: http://10.21.41.168:18790";
-        if (quickLink) {
-          quickLink.href = "#";
-          quickLink.innerText = "⚡ Probar Conexión Local";
-          quickLink.onclick = function(e) {
-            e.preventDefault();
-            // Inyectar URL actual al input del modal de prueba y probar
-            const currentVal = quickKeyInput.value.trim() || 'http://10.21.41.168:18790';
-            abrirConfigAI();
-            const modalOllamaInp = document.getElementById('cfg-ollama-url');
-            if (modalOllamaInp) modalOllamaInp.value = currentVal;
-            probarConexionOllama();
-          };
-        }
-      } else if (val === 'pollinations') {
-        if (inputLabel) inputLabel.innerText = "Motor Gratuito Pollinations";
-        quickKeyInput.placeholder = "No requiere llave - Listo para usar gratis";
-        if (quickLink) {
-          quickLink.href = "https://pollinations.ai/";
-          quickLink.innerText = "🔗 Conoce Pollinations →";
-          quickLink.onclick = null;
-        }
-      }
+      });
 
       actualizarEstadoHubIA();
     };
 
     window.actualizarEstadoHubIA = function() {
-      const wrapper = document.getElementById('ai-central-hub-wrapper');
-      if (!wrapper) return;
+      const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'ollama';
       
-      const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'gemini';
-      const statusText = document.getElementById('ai-hub-status-text');
-      const quickKeyInput = document.getElementById('ai-hub-quick-key');
-      const selector = document.getElementById('ai-hub-quick-engine');
-
-      // Sincronizar selector si difiere
-      if (selector && selector.value !== activeTextAi) {
-        selector.value = activeTextAi;
-      }
+      const selectors = ['ai-hub-quick-engine', 'ai-hub-quick-engine-op'];
+      selectors.forEach(sId => {
+        const el = document.getElementById(sId);
+        if (el && el.value !== activeTextAi) el.value = activeTextAi;
+      });
 
       // Validar si el motor seleccionado tiene llave configurada
       let hasKey = false;
@@ -7999,24 +8127,38 @@
         hasKey = !!keyVal;
       }
 
-      if (hasKey) {
-        statusText.innerHTML = `🟢 <b style="color:#2dd4bf">IA ACTIVA</b> • Motor: <span style="text-transform:uppercase;color:#818cf8;font-weight:700">${activeTextAi}</span> listo en producción.`;
-        if (quickKeyInput) {
-          quickKeyInput.value = keyVal;
+      const panels = [
+        { status: 'ai-hub-status-text', key: 'ai-hub-quick-key' },
+        { status: 'ai-hub-status-text-op', key: 'ai-hub-quick-key-op' }
+      ];
+
+      panels.forEach(p => {
+        const statusText = document.getElementById(p.status);
+        const quickKeyInput = document.getElementById(p.key);
+        if (!statusText) return;
+
+        if (hasKey) {
+          statusText.innerHTML = `🟢 <b style="color:#2dd4bf">IA ACTIVA</b> • Motor: <span style="text-transform:uppercase;color:#818cf8;font-weight:700">${activeTextAi}</span> listo en producción.`;
+          if (quickKeyInput) {
+            quickKeyInput.value = keyVal;
+          }
+        } else {
+          statusText.innerHTML = `🔴 <b style="color:#f43f5e">IA INACTIVA</b> • El motor seleccionado (<span style="text-transform:uppercase;color:#f472b6;font-weight:700">${activeTextAi}</span>) no tiene su llave API configurada.`;
+          if (quickKeyInput) {
+            quickKeyInput.value = "";
+            quickKeyInput.placeholder = `Ingresa la llave/IP para ${activeTextAi.toUpperCase()}`;
+          }
         }
-      } else {
-        statusText.innerHTML = `🔴 <b style="color:#f43f5e">IA INACTIVA</b> • El motor seleccionado (<span style="text-transform:uppercase;color:#f472b6;font-weight:700">${activeTextAi}</span>) no tiene su llave API configurada.`;
-        if (quickKeyInput) {
-          quickKeyInput.value = "";
-          quickKeyInput.placeholder = `Ingresa la llave/IP para ${activeTextAi.toUpperCase()}`;
-        }
-      }
+      });
     };
 
-    window.activarIACentralRapido = function() {
-      const selector = document.getElementById('ai-hub-quick-engine');
-      const activeTextAi = selector ? selector.value : (localStorage.getItem('rr_active_text_ai') || 'gemini');
-      const keyInput = document.getElementById('ai-hub-quick-key');
+    window.activarIACentralRapido = function(isOp = false) {
+      const sId = isOp ? 'ai-hub-quick-engine-op' : 'ai-hub-quick-engine';
+      const kId = isOp ? 'ai-hub-quick-key-op' : 'ai-hub-quick-key';
+      
+      const selector = document.getElementById(sId);
+      const activeTextAi = selector ? selector.value : (localStorage.getItem('rr_active_text_ai') || 'ollama');
+      const keyInput = document.getElementById(kId);
       if (!keyInput) return;
       const keyVal = keyInput.value.trim();
 
@@ -8110,7 +8252,7 @@
 
     // --- HUB MULTI-IA CORE ---
     window.rrFetchTextAI = async function(prompt, systemPrompt = '') {
-      const engine = localStorage.getItem('rr_active_text_ai') || 'gemini';
+      const engine = localStorage.getItem('rr_active_text_ai') || 'ollama';
       
       const gKey = localStorage.getItem('rr_g_key_manual') || '';
       const groqKey = localStorage.getItem('rr_groq_key') || '';
@@ -8120,7 +8262,7 @@
       const togetherKey = localStorage.getItem('rr_together_key') || '';
       const mistralKey = localStorage.getItem('rr_mistral_key') || '';
       const hfKey = localStorage.getItem('rr_hf_key') || '';
-      const ollamaUrl = localStorage.getItem('ollama_url') || 'http://localhost:11434';
+      const ollamaUrl = localStorage.getItem('ollama_url') || 'http://10.21.41.168:18790';
 
       let endpoint = '';
       let headers = { 'Content-Type': 'application/json' };
@@ -8217,14 +8359,26 @@
           if(data.error) throw new Error(data.error || 'Error en Ollama');
           return data?.message?.content || '';
         }
-        throw new Error('Motor de IA de texto no soportado');
+        else if (engine === 'pollinations') {
+          endpoint = 'https://text.pollinations.ai/';
+          body = { 
+            messages: [
+              { role: 'system', content: systemPrompt || 'Eres un asistente útil.' }, 
+              { role: 'user', content: prompt }
+            ] 
+          };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          if (!res.ok) throw new Error('Error al conectar con Pollinations');
+          return await res.text();
+        }
+        throw new Error('Motor de IA de texto no soportado (' + engine + ')');
       } catch (err) {
         console.error('Error en rrFetchTextAI:', err);
         throw err;
       }
     };
 
-    window.rrFetchImageAI = async function(prompt) {
+    window.rrFetchImageAI = async function(prompt, face1 = '', face2 = '') {
       const engine = localStorage.getItem('rr_active_img_ai') || 'replicate';
       
       // Leer token desde localStorage (configurado por el usuario en ⚙️ Config IA)
@@ -8239,16 +8393,96 @@
 
       // Helper: polling Replicate hasta que el job termina
       const replicateWait = async (predictionUrl) => {
-        headers['Authorization'] = `Bearer ${repKey}`;
+        const localHeaders = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${repKey}`
+        };
         for (let i = 0; i < 60; i++) {
           await new Promise(r => setTimeout(r, 3000));
-          const r = await fetch(predictionUrl, { headers });
+          const r = await fetch(predictionUrl, { headers: localHeaders });
           const d = await r.json();
           if (d.status === 'succeeded') return d.output;
           if (d.status === 'failed') throw new Error('Replicate job failed: ' + (d.error || ''));
         }
         throw new Error('Replicate: tiempo de espera agotado');
       };
+
+      // Si el usuario provee rostros para consistencia facial
+      if (face1 || face2) {
+        const refFace1 = face1 || face2;
+        const refFace2 = face2 || face1;
+
+        if (falKey) {
+          // --- EJECUCIÓN EN PARALELO EN FAL.AI (InstantID) ---
+          const callFalInstantID = async (faceData) => {
+            const res = await fetch('https://queue.fal.run/fal-ai/instantid', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Key ${falKey}`
+              },
+              body: JSON.stringify({
+                prompt: prompt,
+                face_image_url: faceData,
+                image_size: 'square_hd',
+                num_inference_steps: 30,
+                guidance_scale: 7,
+                ip_adapter_scale: 0.8
+              })
+            });
+            const data = await res.json();
+            if (data.images && data.images.length > 0) return data.images[0].url;
+            throw new Error(data.detail || 'Fallo InstantID en Fal.ai');
+          };
+
+          try {
+            const urls = await Promise.all([
+              callFalInstantID(refFace1),
+              callFalInstantID(refFace2)
+            ]);
+            return urls;
+          } catch (falErr) {
+            console.error("Fallo InstantID Fal.ai, intentando Replicate si está disponible", falErr);
+            if (!repKey) throw falErr;
+          }
+        }
+
+        if (repKey) {
+          // --- EJECUCIÓN EN PARALELO EN REPLICATE (InstantID) ---
+          const callReplicateInstantID = async (faceData) => {
+            const res = await fetch('https://api.replicate.com/v1/predictions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${repKey}`,
+                'Prefer': 'wait'
+              },
+              body: JSON.stringify({
+                version: '0a9fefc7b558503d2e9ca7ff566b6c2f90a2c5a0459a930773e3146d29f041ff', // versión oficial de instant-id/instant-id
+                input: {
+                  prompt: prompt,
+                  face_image: faceData,
+                  num_inference_steps: 30,
+                  guidance_scale: 7,
+                  ip_adapter_scale: 0.8
+                }
+              })
+            });
+            const data = await res.json();
+            if (data.output) return Array.isArray(data.output) ? data.output[0] : data.output;
+            if (data.urls?.get) return await replicateWait(data.urls.get);
+            throw new Error(data.error || 'Fallo InstantID en Replicate');
+          };
+
+          const urls = await Promise.all([
+            callReplicateInstantID(refFace1),
+            callReplicateInstantID(refFace2)
+          ]);
+          return urls;
+        }
+
+        throw new Error('Consistencia de Rostro requiere que configures Fal.ai Key o Replicate Key en el menú de Configuración IA.');
+      }
 
       try {
         // ─────────────────────────────────────────────
@@ -19278,14 +19512,21 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       // Mostrar e inicializar el Centro de IA Central y Visual
       const aiHubWrapper = document.getElementById('ai-central-hub-wrapper');
-      if (aiHubWrapper) {
-        aiHubWrapper.style.display = 'block';
-        const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'gemini';
-        if (typeof cambiarMotorIACentral === 'function') {
-          cambiarMotorIACentral(activeTextAi);
-        } else if (typeof actualizarEstadoHubIA === 'function') {
-          actualizarEstadoHubIA();
-        }
+      const aiHubWrapperOp = document.getElementById('ai-central-hub-wrapper-op');
+      
+      if (role === 'operador') {
+        if (aiHubWrapper) aiHubWrapper.style.display = 'none';
+        if (aiHubWrapperOp) aiHubWrapperOp.style.display = 'block';
+      } else {
+        if (aiHubWrapper) aiHubWrapper.style.display = 'block';
+        if (aiHubWrapperOp) aiHubWrapperOp.style.display = 'none';
+      }
+
+      const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'ollama';
+      if (typeof cambiarMotorIACentral === 'function') {
+        cambiarMotorIACentral(activeTextAi);
+      } else if (typeof actualizarEstadoHubIA === 'function') {
+        actualizarEstadoHubIA();
       }
     }
 
@@ -20031,6 +20272,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       }
       if (typeof window.updateImageEngineBadge === 'function') {
         window.updateImageEngineBadge();
+      }
+      if (typeof actualizarEstadoHubIA === 'function') {
+        actualizarEstadoHubIA();
       }
     }
 
@@ -30168,7 +30412,7 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
       const themeValue = themeSel.value;
       const themeName = themeSel.options[themeSel.selectedIndex].text;
       
-      const motorSeleccionado = localStorage.getItem('rr_active_text_ai') || 'gemini';
+      const motorSeleccionado = localStorage.getItem('rr_active_text_ai') || 'ollama';
 
       resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Razonando con motor de IA (${motorSeleccionado})...</div>`;
 
@@ -30236,6 +30480,88 @@ Reglas estrictas:
       }
     };
 
+    // --- VARIABLES DE ESTADO PARA FOTOS DE ROSTRO BASE ---
+    window.selectedFace1 = "";
+    window.selectedFace2 = "";
+    window.selectedFace1Admin = "";
+    window.selectedFace2Admin = "";
+
+    window.QUICK_SCENARIOS = [
+      { label: "🤳 Selfie Espejo", value: "selfie in the bathroom mirror, casual outfit, smartphone reflection visible in mirror, cozy indoor lighting, natural phone camera shot" },
+      { label: "🚗 Selfie Auto", value: "casual amateur selfie inside a car, wearing seatbelt, daytime natural sunlight through the car window, raw smartphone selfie style" },
+      { label: "☕ Café en Casa", value: "informal phone selfie holding a coffee mug in a cozy home kitchen, messy hair, warm morning natural light, casual daily look" },
+      { label: "👟 Caminando Calle", value: "candid smartphone selfie walking down a city street, wind in hair, natural outdoor daylight, realistic mobile camera picture" },
+      { label: "🛌 Selfie Pijama", value: "cozy bed selfie wearing soft comfortable pajamas, natural morning sunlight, casual daily home vibe, real phone camera shot" },
+      { label: "🏋️ Espejo Gym", value: "casual selfie in front of the gym mirror, holding smartphone, wearing athletic workout clothes, raw fitness aesthetic" },
+      { label: "🍕 Comiendo Pizza", value: "candid selfie at a dining table holding a slice of pizza, laughing happily, warm casual indoor home lighting, phone photo" }
+    ];
+
+    window.handleFaceUpload = function(event, index, suffix) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const base64 = e.target.result;
+        if (suffix === '-admin') {
+          if (index === 1) window.selectedFace1Admin = base64;
+          else window.selectedFace2Admin = base64;
+        } else {
+          if (index === 1) window.selectedFace1 = base64;
+          else window.selectedFace2 = base64;
+        }
+        
+        // Mostrar miniatura
+        const preview = document.getElementById(`face-preview-${index}${suffix}`);
+        const img = document.getElementById(`face-img-${index}${suffix}`);
+        if (preview && img) {
+          img.src = base64;
+          preview.style.display = 'flex';
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+
+    window.removeFace = function(index, suffix) {
+      if (suffix === '-admin') {
+        if (index === 1) window.selectedFace1Admin = "";
+        else window.selectedFace2Admin = "";
+      } else {
+        if (index === 1) window.selectedFace1 = "";
+        else window.selectedFace2 = "";
+      }
+      
+      const fileInput = document.getElementById(`face-file-${index}${suffix}`);
+      if (fileInput) fileInput.value = "";
+      
+      const preview = document.getElementById(`face-preview-${index}${suffix}`);
+      if (preview) preview.style.display = 'none';
+    };
+
+    window.selectQuickScenario = function(index, suffix) {
+      const text = window.QUICK_SCENARIOS[index].value;
+      const textarea = document.getElementById(`img-situation${suffix}`);
+      if (textarea) {
+        textarea.value = text;
+      }
+    };
+
+    window.renderQuickScenarios = function() {
+      ['', '-admin'].forEach(suffix => {
+        const container = document.getElementById(`quick-scenarios-container${suffix}`);
+        if (!container) return;
+        
+        let html = '';
+        window.QUICK_SCENARIOS.forEach((sc, idx) => {
+          html += `
+            <button onclick="window.selectQuickScenario(${idx}, '${suffix}')" style="background:rgba(236,72,153,0.1); border:1px solid rgba(236,72,153,0.3); color:#f472b6; border-radius:12px; padding:4px 10px; font-size:0.6rem; font-weight:700; cursor:pointer; transition:0.2s; white-space:nowrap;" onmouseover="this.style.background='rgba(236,72,153,0.3)'" onmouseout="this.style.background='rgba(236,72,153,0.1)'">
+              ${sc.label}
+            </button>
+          `;
+        });
+        container.innerHTML = html;
+      });
+    };
+
     window.populateImgModels = function() {
       const opSel = document.getElementById('img-model-select');
       const admSel = document.getElementById('img-model-select-admin');
@@ -30267,6 +30593,9 @@ Reglas estrictas:
         html += '<option value="__custom__">✍️ Otro/Manual...</option>';
         admSel.innerHTML = html;
       }
+
+      // 3. Renderizar escenarios rápidos
+      window.renderQuickScenarios();
     };
 
     window.generateAIPhotos = async function(isAdmin = false) {
@@ -30297,24 +30626,31 @@ Reglas estrictas:
         return;
       }
 
+      // Obtener fotos de rostro base (base64) cargadas
+      const face1 = isAdmin ? window.selectedFace1Admin : window.selectedFace1;
+      const face2 = isAdmin ? window.selectedFace2Admin : window.selectedFace2;
+
       // Desactivar UI y mostrar loader
       btn.disabled = true;
       if (placeholderEl) placeholderEl.style.display = 'none';
       resultsEl.style.display = 'none';
       resultsEl.innerHTML = '';
       loaderEl.style.display = 'block';
-      statusEl.textContent = 'Generando prompt profesional con IA de Texto...';
+      statusEl.textContent = 'Generando prompt estilo móvil con IA de Texto...';
 
       try {
-        // 1. Expandir prompt usando rrFetchTextAI
-        const promptExpansionText = `Actúa como un ingeniero de prompts profesional para generadores de imágenes (como Midjourney, Flux, SDXL).
-El usuario quiere generar 2 fotos de la modelo: "${modelName}".
+        // 1. Expandir prompt usando rrFetchTextAI, enfocado en cámara móvil gama media y selfie
+        const promptExpansionText = `Actúa como un ingeniero de prompts profesional para generadores de imágenes (como Flux, SDXL, InstantID).
+El usuario quiere generar fotos de la modelo: "${modelName}".
 La situación o escenario es: "${situation}".
 
-Escribe un prompt en inglés extremadamente detallado, profesional y realista.
-El prompt debe describir físicamente a la modelo de forma atractiva y consistente: rasgos faciales definidos, ojos expresivos, misma estructura facial, tipo y color de cabello consistente, pose natural, vestimenta adecuada al escenario.
-Describe el entorno con iluminación cinematográfica de alta calidad (cinematic lighting), profundidad de campo (bokeh effect), tomada con una cámara profesional (ej. 'shot on 85mm lens, f/1.8, photo, photorealistic, 8k resolution, highly detailed skin texture').
-El prompt debe estar en inglés para que los motores de imagen lo entiendan perfectamente.
+Escribe un prompt en inglés extremadamente realista enfocado a estilo AMATEUR y CASUAL, simulando una foto tomada con un smartphone de gama media (como un celular común, selfie casual, espejo o foto diaria informal).
+Instrucciones del estilo visual:
+- Debe parecer una foto casual de celular ("raw amateur phone selfie", "casual smartphone snapshot", "taken with mid-range mobile phone camera").
+- Iluminación natural cotidiana (ej: luz de cocina, luz solar del auto, luz de baño común), NADA de iluminación cinematográfica perfecta ni flashes de estudio profesional.
+- Evita el efecto bokeh/desenfoque de estudio exagerado; el fondo debe verse nítido pero casual.
+- Agrega detalles de imperfección ligera de cámara de móvil ("slight mobile camera noise", "natural skin texture with micro-imperfections", "casual handheld pose").
+- El prompt debe estar en inglés para que los motores de imagen lo entiendan perfectamente.
 
 Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicaciones, sin introducciones y sin comillas.`;
 
@@ -30323,14 +30659,14 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
           expandedPrompt = await window.rrFetchTextAI(promptExpansionText, 'Solo responde con el prompt en inglés sin preámbulos.');
         } catch (errText) {
           console.warn("Error expandiendo prompt, usando prompt original", errText);
-          expandedPrompt = `High quality photo of ${modelName}, ${situation}, highly detailed face, consistent facial traits, photorealistic, 8k resolution, cinematic lighting, shot on 85mm lens.`;
+          expandedPrompt = `Raw amateur phone photo of ${modelName}, ${situation}, taken with mid-range mobile phone camera, casual handheld selfie look, natural lighting, grain.`;
         }
 
         console.log("Prompt profesional generado:", expandedPrompt);
-        statusEl.textContent = 'Enviando prompt a IA de Imagen...';
+        statusEl.textContent = (face1 || face2) ? 'Fijando facciones del rostro e invocando InstantID...' : 'Enviando prompt a IA de Imagen...';
 
-        // 2. Generar fotos usando rrFetchImageAI
-        const images = await window.rrFetchImageAI(expandedPrompt);
+        // 2. Generar fotos usando rrFetchImageAI (pasando imágenes de rostro si existen)
+        const images = await window.rrFetchImageAI(expandedPrompt, face1, face2);
         if (!images || !Array.isArray(images) || images.length === 0) {
           throw new Error("No se recibieron imágenes de la API.");
         }
@@ -30338,15 +30674,27 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         // 3. Renderizar resultados
         let html = '';
         images.forEach((imgUrl, idx) => {
-          html += `
-            <div style="position:relative; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.5); display:flex; flex-direction:column; height: 100%;">
-              <img src="${imgUrl}" style="width:100%; height:auto; object-fit:cover; aspect-ratio:1/1;" alt="Versión ${idx+1}">
-              <div style="padding:6px; display:flex; gap:6px; background:rgba(15,23,42,0.9); justify-content:center; align-items:center;">
-                <a href="${imgUrl}" download="foto_${modelName.replace(/\s+/g, '_')}_v${idx+1}.webp" target="_blank" style="flex:1; text-align:center; background:#ec4899; color:white; border:none; padding:4px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; text-decoration:none; transition:background 0.2s;" onmouseover="this.style.background='#f43f5e'" onmouseout="this.style.background='#ec4899'">Descargar</a>
-                <button onclick="navigator.clipboard.writeText('${imgUrl}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'URL Copiada', showConfirmButton:false, timer:1500, background:#1e293b, color:#fff});" style="flex:1; background:#475569; color:white; border:none; padding:4px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#475569'">Copiar URL</button>
+          // Si el objeto de la imagen es un video renderizado (por ejemplo Wan-video)
+          if (imgUrl && typeof imgUrl === 'object' && imgUrl.type === 'video') {
+            html += `
+              <div style="position:relative; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.5); display:flex; flex-direction:column; height: 100%;">
+                <video src="${imgUrl.url}" controls style="width:100%; height:auto; aspect-ratio:1/1; object-fit:cover;"></video>
+                <div style="padding:6px; display:flex; gap:6px; background:rgba(15,23,42,0.9); justify-content:center; align-items:center;">
+                  <a href="${imgUrl.url}" download="video_${modelName.replace(/\s+/g, '_')}_v${idx+1}.mp4" target="_blank" style="flex:1; text-align:center; background:#ec4899; color:white; border:none; padding:4px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; text-decoration:none; transition:background 0.2s;" onmouseover="this.style.background='#f43f5e'" onmouseout="this.style.background='#ec4899'">Descargar</a>
+                </div>
               </div>
-            </div>
-          `;
+            `;
+          } else {
+            html += `
+              <div style="position:relative; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.5); display:flex; flex-direction:column; height: 100%;">
+                <img src="${imgUrl}" style="width:100%; height:auto; object-fit:cover; aspect-ratio:1/1;" alt="Versión ${idx+1}">
+                <div style="padding:6px; display:flex; gap:6px; background:rgba(15,23,42,0.9); justify-content:center; align-items:center;">
+                  <a href="${imgUrl}" download="foto_${modelName.replace(/\s+/g, '_')}_v${idx+1}.webp" target="_blank" style="flex:1; text-align:center; background:#ec4899; color:white; border:none; padding:4px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; text-decoration:none; transition:background 0.2s;" onmouseover="this.style.background='#f43f5e'" onmouseout="this.style.background='#ec4899'">Descargar</a>
+                  <button onclick="navigator.clipboard.writeText('${imgUrl}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'URL Copiada', showConfirmButton:false, timer:1500, background:'#1e293b', color:#fff});" style="flex:1; background:#475569; color:white; border:none; padding:4px 8px; border-radius:6px; font-size:0.65rem; font-weight:700; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#475569'">Copiar URL</button>
+                </div>
+              </div>
+            `;
+          }
         });
 
         resultsEl.innerHTML = html;

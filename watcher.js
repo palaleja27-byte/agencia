@@ -287,41 +287,9 @@ async function watchPanel(panel, perfiles) {
 
           const perfil = perfiles.find(p => p.id_datame === id);
           if (!perfil) {
-            // 🧠 AUTO-CALIBRACIÓN DINÁMICA (En Caliente)
-            // Buscar si el perfil existe en algún otro panel de la base de datos
-            const { data: globalCheck } = await supabase.from('datame_perfiles').select('*').eq('id_datame', id).maybeSingle();
-            if (globalCheck) {
-              const correctPanelId = panel.id;
-              console.log(`  ⚙️ [AUTO-CALIBRAR] Moviendo perfil ${globalCheck.modelo} (ID: ${id}) del PANEL-${globalCheck.panel_id} al PANEL-${correctPanelId} en Supabase...`);
-              
-              // Actualizar panel_id en Supabase
-              const { error: updateErr } = await supabase.from('datame_perfiles').update({ panel_id: correctPanelId }).eq('id_datame', id);
-              if (!updateErr) {
-                // Inyectar en memoria local del watcher para que no tenga que checkear de nuevo
-                perfiles.push({ ...globalCheck, panel_id: correctPanelId });
-                await upsertTurno(id, pts, globalCheck.modelo, nombre);
-              } else {
-                console.error(`  ❌ Error al auto-calibrar perfil ${id}:`, updateErr.message);
-              }
-            } else {
-              // 🧠 AUTO-REGISTRAR NUEVO PERFIL
-              console.log(`  ➕ [AUTO-REGISTRAR] Perfil ID:${id} no existe en Supabase. Creándolo para el PANEL-${panel.id}...`);
-              const nuevoModeloNombre = `NUEVO_${id}`;
-              const { data: newProfile, error: insertErr } = await supabase.from('datame_perfiles').insert({
-                id_datame: id,
-                modelo: nuevoModeloNombre,
-                panel_id: panel.id,
-                activo: true
-              }).select('*').maybeSingle();
-
-              if (!insertErr && newProfile) {
-                console.log(`  ✅ Perfil ${nuevoModeloNombre} creado con éxito.`);
-                perfiles.push(newProfile);
-                await upsertTurno(id, pts, nuevoModeloNombre, nombre);
-              } else {
-                console.error(`  ❌ Error al registrar automáticamente el perfil ${id}:`, insertErr ? insertErr.message : 'Respuesta vacía');
-              }
-            }
+            // Perfil no registrado — ignorar silenciosamente.
+            // El registro de perfiles se hace UNA SOLA VEZ via scripts/insert_profiles_prod.js
+            // (GitHub Actions workflow: db_insert.yml → workflow_dispatch)
             continue;
           }
 
@@ -445,36 +413,13 @@ async function watchPanel(panel, perfiles) {
 
       log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
 
-      // Coleccionar perfiles pendientes de ubicar (panel_id === null)
-      const pendientes = (allPerfiles || []).filter(p => p.panel_id === null);
-      if (pendientes.length) {
-        log(`🔍 Se encontraron ${pendientes.length} perfiles nuevos pendientes de ubicar en Datame.`);
-      }
-
       await Promise.all(panels.map(panel => {
-        // Unir perfiles asignados a este panel + los pendientes de ubicar para ver si están aquí
-        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id || p.panel_id === null);
-        if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles asociados`); return Promise.resolve(); }
+        // Solo perfiles asignados explícitamente a este panel
+        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id && p.activo);
+        if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles registrados para este panel`); return Promise.resolve(); }
+        log(`  📋 ${panel.nombre}: ${perfiles.length} perfiles asignados`);
         return watchPanel(panel, perfiles);
       }));
-
-      // 🧠 POST-CICLO: Verificar si algún perfil pendiente de ubicar NO fue encontrado en ningún panel
-      // Si sigue con panel_id === null después de que terminó el ciclo de los 3 paneles, lo marcamos como inexistente.
-      try {
-        const { data: checkPendientes } = await supabase.from('datame_perfiles').select('*').eq('activo', true).is('panel_id', null);
-        if (checkPendientes?.length) {
-          for (const p of checkPendientes) {
-            log(`⚠️ El perfil ${p.modelo} (ID: ${p.id_datame}) no fue encontrado en ningún panel activo de Datame.`);
-            await supabase.from('datame_perfiles')
-              .update({ 
-                modelo: `⚠️ INEXISTENTE (${p.id_datame})`
-              })
-              .eq('id_datame', p.id_datame);
-          }
-        }
-      } catch (checkErr) {
-        log(`❌ Error al validar perfiles inexistentes: ${checkErr.message}`);
-      }
 
     } else {
       log('❌ Sin paneles activos en Supabase (o tabla vacía/inactiva)');

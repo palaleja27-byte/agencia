@@ -1,46 +1,79 @@
-name: Insert Missing Database Profiles
+name: 🗄️ Registro Maestro de Perfiles (ONE-TIME)
 
+# ──────────────────────────────────────────────────────────────────
+# Ejecutar manualmente desde GitHub Actions → workflow_dispatch
+# o automáticamente si se modifica el script de registro
+# ──────────────────────────────────────────────────────────────────
 on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Modo prueba (solo imprime, no escribe en DB)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
   push:
     paths:
-      - '.github/workflows/db_insert.yml'
       - 'scripts/insert_profiles_prod.js'
-  workflow_dispatch:
+      - '.github/workflows/db_insert.yml'
 
 jobs:
-  db-insert:
+  register-profiles:
+    name: Sincronizar Perfiles → Supabase
     runs-on: ubuntu-latest
     permissions:
       contents: write
+
     steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: ⚙️ Setup Node.js 20
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
-      - name: Install dependencies and Run
+      - name: 📦 Instalar dependencias
+        run: |
+          cd $GITHUB_WORKSPACE
+          npm install @supabase/supabase-js node-fetch
+          echo "✅ Dependencias instaladas."
+
+      - name: 🔑 Verificar credenciales
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          rm -f package.json package-lock.json
-          npm init -y
-          npm install @supabase/supabase-js
-          node scripts/insert_profiles_prod.js > db_insert_log.txt 2>&1
+          if [ -z "$SUPABASE_URL" ]; then echo "❌ SUPABASE_URL no configurado"; exit 1; fi
+          if [ -z "$SUPABASE_SERVICE_KEY" ]; then echo "❌ SUPABASE_SERVICE_KEY no configurado"; exit 1; fi
+          echo "✅ Credenciales OK"
+
+      - name: 🗄️ Registrar / Sincronizar Perfiles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          echo "=== REGISTRO MAESTRO DE PERFILES ===" | tee db_insert_log.txt
+          echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" | tee -a db_insert_log.txt
+          echo "Dry-run mode: $DRY_RUN" | tee -a db_insert_log.txt
+          echo "---" | tee -a db_insert_log.txt
+          node scripts/insert_profiles_prod.js 2>&1 | tee -a db_insert_log.txt
+
+      - name: 📊 Generar reporte de estado
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          echo "" >> db_insert_log.txt
+          echo "=== ESTADO FINAL ===" >> db_insert_log.txt
           node scripts/write_perfiles_status.js >> db_insert_log.txt 2>&1
 
-      - name: Commit and Push Status Report
+      - name: 💾 Commit reporte
         run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "AgenciaRR Bot"
+          git config --global user.email "bot@agenciarr.com"
           git add perfiles_status.md db_insert_log.txt
-          git commit -m "chore(database): update perfiles_status.md report and logs [skip ci]" || echo "No changes to commit"
-          git push
-
-
-
-
+          git diff --staged --quiet || git commit -m "chore(db): sincronizar perfiles → datame_perfiles [skip ci]"
+          git push || echo "Nada que pushear"

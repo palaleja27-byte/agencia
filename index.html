@@ -6575,19 +6575,35 @@
       
       <!-- GENERATOR SECTION -->
       <div style="margin-top:24px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.1);">
-        <h4 style="margin:0 0 12px; font-size:0.95rem; color:#f472b6; text-transform:uppercase;">✨ Generador Inteligente (Por Temática)</h4>
-        <!-- No API key input needed anymore for local intelligent generation -->
-        <div style="display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
-          <select id="ice-gen-theme" style="flex:1; min-width:250px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:10px; border-radius:8px; outline:none; font-size:0.85rem;">
-            <option value="Hot talks">🌶️ Hot talks (Seducción, atrevido, coqueto)</option>
-            <option value="Real love">💖 Real love (Romance, conexión profunda, dulce)</option>
-            <option value="Friendship">🤝 Friendship (Amistoso, casual, divertido)</option>
-            <option value="Setup for Mail">📧 Setup for Mail (General, intrigante, primer contacto)</option>
-          </select>
-          <button onclick="window.generateIcebreaker()" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:8px 24px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar Opciones</button>
+        <h4 style="margin:0 0 12px; font-size:0.95rem; color:#f472b6; text-transform:uppercase;">✨ Generador Inteligente y Contextual</h4>
+        
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:10px;">
+          <div>
+            <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Modelo (Tono/Personalidad)</label>
+            <select id="ice-gen-model" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 10px; border-radius:8px; outline:none; font-size:0.8rem; cursor:pointer;">
+              <option value="">-- Tono General --</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Temática</label>
+            <select id="ice-gen-theme" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 10px; border-radius:8px; outline:none; font-size:0.8rem; cursor:pointer;">
+              <option value="Hot talks">🌶️ Hot talks (Seducción, atrevido, coqueto)</option>
+              <option value="Real love">💖 Real love (Romance, conexión profunda, dulce)</option>
+              <option value="Friendship">🤝 Friendship (Amistoso, casual, divertido)</option>
+              <option value="Setup for Mail">📧 Setup for Mail (General, intrigante, primer contacto)</option>
+            </select>
+          </div>
         </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Contexto del Cliente / Intereses (Opcional)</label>
+          <textarea id="ice-gen-context" placeholder="Ej: le gusta viajar a la playa, vive en Miami, es deportista, busca relación divertida..." style="width:100%; height:45px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; font-size:0.8rem; padding:8px; resize:none; outline:none;"></textarea>
+        </div>
+
+        <button onclick="window.generateIcebreaker()" style="width:100%; background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s; margin-bottom:12px;">✨ Generar Icebreakers de Alto Impacto</button>
+        
         <div id="ice-gen-results" style="background:rgba(255,255,255,0.03); border-radius:12px; padding:16px; min-height:80px; font-size:0.85rem; color:#cbd5e1; display:flex; flex-direction:column; gap:8px;">
-          <div style="text-align:center; color:#64748b; font-style:italic; padding:12px 0;">Selecciona una temática y haz clic en "Generar Opciones"...</div>
+          <div style="text-align:center; color:#64748b; font-style:italic; padding:12px 0;">Configura las opciones y haz clic en "Generar Icebreakers de Alto Impacto"...</div>
         </div>
       </div>
     </div>
@@ -29910,6 +29926,66 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
     }
 
+    window.generateIcebreaker = async function() {
+      const themeSel = document.getElementById('ice-gen-theme');
+      const resultsEl = document.getElementById('ice-gen-results');
+      const modelSel = document.getElementById('ice-gen-model');
+      const contextEl = document.getElementById('ice-gen-context');
+      
+      if (!themeSel || !resultsEl) return;
+
+      const themeValue = themeSel.value;
+      const themeName = themeSel.options[themeSel.selectedIndex].text;
+      const selectedModelName = modelSel ? modelSel.value : '';
+      const clientContext = contextEl ? contextEl.value.trim() : '';
+      
+      const motorSeleccionado = localStorage.getItem('rr_active_text_ai') || 'ollama';
+
+      resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Razonando y adaptando tono a la personalidad (${motorSeleccionado})...</div>`;
+
+      try {
+        let contextualPrompt = `Actúa como un experto en psicología persuasiva, dating de alto valor y seducción. Genera 3 frases rompehielos (icebreakers) en español para iniciar una conversación en una plataforma de citas.
+
+CONFIGURACIÓN DE CONTEXTO:
+- Temática requerida: ${themeName} (${themeValue}).`;
+
+        if (selectedModelName) {
+          contextualPrompt += `\n- Personalidad/Nombre de la Modelo que envía el mensaje: ${selectedModelName} (adapta el tono de voz para que parezca escrito por ella de forma auténtica, natural y atractiva).`;
+        } else {
+          contextualPrompt += `\n- Tono de voz: Femenino, intrigante, juguetón y natural.`;
+        }
+
+        if (clientContext) {
+          contextualPrompt += `\n- Contexto o intereses del Cliente chateando: "${clientContext}" (utiliza este gancho/información de forma sutil pero directa para llamar su atención inmediatamente).`;
+        }
+
+        contextualPrompt += `\n\nREGLAS ESTRICTAS DE RESPUESTA:
+- Deben ser extremadamente creativos, con alta tensión conversacional y enfocados a generar intriga (curiosity gap).
+- NUNCA usar frases cliché o saludos sosos como "hola cómo estás".
+- Máximo 120 caracteres por frase.
+- Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS. No enumeres, no pongas introducciones ni conclusiones.`;
+
+        const outputText = await window.rrFetchTextAI(contextualPrompt, 'Eres un asistente experto en redactar ganchos e icebreakers de dating. Responde únicamente con las frases separadas por |.');
+        
+        const selected = outputText.split('|').map(s => s.trim()).filter(s => s.length > 5).slice(0,3);
+
+        if (selected.length === 0) throw new Error("La IA no generó el formato esperado con separadores (|).");
+
+        let html = `<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">Ganchos adaptados al contexto (${motorSeleccionado}):</div>`;
+        selected.forEach(ice => {
+          const cleanIce = ice.replace(/'/g, "\\\'").replace(/"/g, '&quot;');
+          html += `<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; border-left:3px solid #ec4899; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div style="flex:1; font-size:0.8rem; line-height:1.3; color:#f8fafc;">${ice}</div>
+            <button onclick="navigator.clipboard.writeText('${cleanIce}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'Copiado', showConfirmButton:false, timer:1500, background:'#1e293b', color:#fff});" style="background:#475569; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.7rem; cursor:pointer; flex-shrink:0; transition:background 0.2s;" onmouseover="this.style.background='#ec4899'" onmouseout="this.style.background='#475569'">Copiar</button>
+          </div>`;
+        });
+        resultsEl.innerHTML = html;
+      } catch (e) {
+        console.error("Error en generateIcebreaker:", e);
+        resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">❌ ${e.message}</div>`;
+      }
+    };
+
     // GHOST PROTOCOL: Monitoreo inteligente de inactividad por Operador
     const ghostVars = {
       lastInteraction: Date.now(),
@@ -30594,7 +30670,19 @@ Reglas estrictas:
         admSel.innerHTML = html;
       }
 
-      // 3. Renderizar escenarios rápidos
+      // 3. Popular select de modelos para el generador de icebreakers
+      const iceModelSel = document.getElementById('ice-gen-model');
+      if (iceModelSel && window.currentOpName) {
+        const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === (window.currentOpName || '').trim().toUpperCase());
+        const profiles = op ? (op.profiles || []) : [];
+        let html = '<option value="">-- Tono General --</option>';
+        profiles.forEach(p => {
+          html += `<option value="${p.model}">${p.model}</option>`;
+        });
+        iceModelSel.innerHTML = html;
+      }
+
+      // 4. Renderizar escenarios rápidos
       window.renderQuickScenarios();
     };
 

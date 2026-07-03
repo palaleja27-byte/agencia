@@ -7832,6 +7832,7 @@
          alert('✅ Llaves guardadas correctamente.');
       }
       actualizarEstadoHubIA();
+      cerrarConfigAI(); // Cerrar el modal después de guardar correctamente
     }
 
     // --- CENTRO DE IA CONTROL CENTRAL ---
@@ -7839,25 +7840,58 @@
       const wrapper = document.getElementById('ai-central-hub-wrapper');
       if (!wrapper) return;
       
-      const gKey = localStorage.getItem('rr_g_key_manual') || '';
       const activeTextAi = localStorage.getItem('rr_active_text_ai') || 'gemini';
       const statusText = document.getElementById('ai-hub-status-text');
       const quickKeyInput = document.getElementById('ai-hub-quick-key');
-      const quickForm = document.getElementById('ai-hub-quick-form');
 
-      if (gKey) {
-        // La IA está activa
-        statusText.innerHTML = `🟢 <b style="color:#2dd4bf">IA ACTIVA</b> • Motor: <span style="text-transform:uppercase;color:#818cf8;font-weight:700">${activeTextAi}</span> en producción alimentando todos los módulos.`;
+      // Validar si el motor seleccionado tiene llave configurada
+      let hasKey = false;
+      let keyVal = "";
+      
+      if (activeTextAi === 'gemini') {
+        keyVal = localStorage.getItem('rr_g_key_manual') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'groq') {
+        keyVal = localStorage.getItem('rr_groq_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'deepseek') {
+        keyVal = localStorage.getItem('rr_deepseek_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'openrouter') {
+        keyVal = localStorage.getItem('rr_or_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'openai') {
+        keyVal = localStorage.getItem('rr_openai_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'anthropic') {
+        keyVal = localStorage.getItem('rr_ai_stk_manual') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'together') {
+        keyVal = localStorage.getItem('rr_together_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'mistral') {
+        keyVal = localStorage.getItem('rr_mistral_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'huggingface') {
+        keyVal = localStorage.getItem('rr_hf_key') || '';
+        hasKey = !!keyVal;
+      } else if (activeTextAi === 'pollinations') {
+        hasKey = true; // Gratis, no requiere key
+      } else if (activeTextAi === 'ollama') {
+        hasKey = true; // Local, no requiere key externa
+      }
+
+      if (hasKey) {
+        statusText.innerHTML = `🟢 <b style="color:#2dd4bf">IA ACTIVA</b> • Motor: <span style="text-transform:uppercase;color:#818cf8;font-weight:700">${activeTextAi}</span> listo en producción.`;
         if (quickKeyInput) {
-          quickKeyInput.value = gKey;
-          quickKeyInput.placeholder = "IA lista — Llave guardada localmente";
+          quickKeyInput.value = keyVal;
+          quickKeyInput.placeholder = `Motor ${activeTextAi.toUpperCase()} listo y configurado.`;
         }
       } else {
-        // La IA está inactiva
-        statusText.innerHTML = `🔴 <b style="color:#f43f5e">IA INACTIVA</b> • Todo el sistema requiere una llave Google Gemini activa para funcionar.`;
+        statusText.innerHTML = `🔴 <b style="color:#f43f5e">IA INACTIVA</b> • El motor seleccionado (<span style="text-transform:uppercase;color:#f472b6;font-weight:700">${activeTextAi}</span>) no tiene su llave API configurada.`;
         if (quickKeyInput) {
           quickKeyInput.value = "";
-          quickKeyInput.placeholder = "Pega tu Google Gemini Key (AIzaSy...) para encender el sistema";
+          quickKeyInput.placeholder = `Ingresa la llave para ${activeTextAi.toUpperCase()} o presiona Ajustes Avanzados`;
         }
       }
     };

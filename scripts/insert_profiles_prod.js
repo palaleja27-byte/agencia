@@ -155,6 +155,36 @@ async function run() {
   console.log(`\n╔══════════════════════════════════════════╗`);
   console.log(`║  REGISTRO MAESTRO DE PERFILES — RR 2026  ║`);
   console.log(`╚══════════════════════════════════════════╝\n`);
+
+  // ── Sincronizar Paneles de Tableau ──
+  console.log(`\n📊 Sincronizando tabla tableau_panels...`);
+  try {
+    const panelsToRegister = [
+      {
+        id: 1,
+        nombre: 'ROMERO OFICIAL',
+        server: 'https://prod-uk-a.online.tableau.com',
+        site: 'partnerdata',
+        view_name: 'Revenuedetailed',
+        token_name: 'Analytics',
+        activo: true
+      },
+      {
+        id: 2,
+        nombre: 'ROMERO ICES',
+        server: 'https://prod-uk-a.online.tableau.com',
+        site: 'partnerdata',
+        view_name: 'Chaticeswithoutphoto',
+        token_name: 'Analytics',
+        activo: true
+      }
+    ];
+    await sbUpsert('tableau_panels', panelsToRegister);
+    console.log(`✅ tableau_panels sincronizados con éxito (ROMERO OFICIAL & ROMERO ICES).`);
+  } catch (panelErr) {
+    console.error(`⚠️ Error registrando tableau_panels (revisar políticas):`, panelErr.message);
+  }
+
   console.log(`📋 Total perfiles a sincronizar: ${ALL_PROFILES.length}`);
 
   // Cargar todos los perfiles existentes en DB para comparar

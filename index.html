@@ -5843,7 +5843,11 @@
             <span style="background:rgba(99,102,241,0.15);color:#818cf8;padding:2px 10px;border-radius:8px;font-size:.65rem;font-weight:700;">OFICIAL UK</span>
             <span onclick="event.stopPropagation(); mostrarInfoTableau();" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;" onmouseover="this.style.background='rgba(129, 140, 248, 0.3)'" onmouseout="this.style.background='rgba(129, 140, 248, 0.15)'" title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;">
+            <select id="tableau-panel-filter" onchange="renderTableauPanel()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:4px 8px; color:#fff; font-size:0.65rem; cursor:pointer; outline:none; font-weight:700;">
+              <option value="ALL">🌟 Todos los Paneles (Consolidado)</option>
+              <option value="1" selected>📊 Romero Oficial (Revenuedetailed)</option>
+              <option value="2">🧊 Romero Ices (Chaticeswithoutphoto)</option>
+            </select>
             <button onclick="event.stopPropagation(); loadTableauData().then(renderTableauPanel); tableauLog('🔄 Recargando datos desde Supabase...', 'info');" 
                style="background:rgba(20,184,166,0.1); border:1px solid rgba(20,184,166,0.3); color:#2dd4bf; border-radius:8px; padding:3px 12px; font-size:.65rem; cursor:pointer; transition:.2s;"
                onmouseover="this.style.background='rgba(20,184,166,0.2)'">
@@ -5855,7 +5859,6 @@
                🚀 Sync GitHub
             </button>
             <span id="tableau-chevron" style="color:#818cf8;font-size:.85rem;transition:.3s;">▼</span>
-          </div>
         </div>
 
         <!-- Body con Datos Crudos -->
@@ -6034,10 +6037,20 @@
       function renderTableauPanel() {
         const container = document.getElementById('tableau-data-container');
         if (!container) return;
-        const entries = Object.entries(_dpTableauData);
+        
+        const filterVal = document.getElementById('tableau-panel-filter')?.value || 'ALL';
+        let rawEntries = Object.entries(_dpTableauData);
+        
+        // Filtrar por Panel ID si corresponde
+        if (filterVal !== 'ALL') {
+          const targetPanelId = parseInt(filterVal);
+          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && d.data_json && d.data_json.panel_id === targetPanelId);
+        }
+        
+        const entries = rawEntries;
 
         if (entries.length === 0) {
-          container.innerHTML = '<div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">Sin datos cargados. Clic en ↻ Sync.</div>';
+          container.innerHTML = `<div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">No hay perfiles registrados en el Panel ${filterVal}. Clic en 🚀 Sync GitHub o cambia el filtro.</div>`;
           return;
         }
 
@@ -6050,7 +6063,7 @@
         const useFilter = allMappedIds.size > 0;
 
         if (typeof tableauLog === 'function') {
-          tableauLog(`🗺 Mapa: ${allMappedIds.size} IDs | Tableau: ${entries.length} IDs`, 'info');
+          tableauLog(`🗺 Mapa: ${allMappedIds.size} IDs | Tableau (Filtrado): ${entries.length} IDs`, 'info');
           const sample = entries.slice(0,3).map(([id])=>id).join(', ');
           tableauLog(`🔍 Muestra Tableau: ${sample}`, 'info');
         }
@@ -23114,7 +23127,12 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/Passport_16741406948180/Revenuedetailed/a1b984e1-4523-421f-8d09-9540cb1bb32a/GRUPOROMERO" target="_blank"
             style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fbbf24;border-radius:8px;padding:5px 10px;font-size:.62rem;font-weight:700;text-decoration:none;transition:.2s;"
             onmouseover="this.style.background='rgba(251,191,36,0.15)'" onmouseout="this.style.background='rgba(251,191,36,0.08)'">
-            🇬🇧 Ver Tableau UK
+            🇬🇧 Ver Tableau 1 (Oficial)
+          </a>
+          <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/ices/Chaticeswithoutphoto/d2040f5c-ede0-4822-8f90-7f211d0259f7/GRUPOROMERO" target="_blank"
+            style="background:rgba(192,132,252,0.08);border:1px solid rgba(192,132,252,0.2);color:#c084fc;border-radius:8px;padding:5px 10px;font-size:.62rem;font-weight:700;text-decoration:none;transition:.2s;"
+            onmouseover="this.style.background='rgba(192,132,252,0.15)'" onmouseout="this.style.background='rgba(192,132,252,0.08)'">
+            🇬🇧 Ver Tableau 2 (Ices)
           </a>
           <div id="cia-last-update" style="font-size:.55rem;color:#475569;font-style:italic;">Cargando...</div>
         </div>
@@ -25066,12 +25084,16 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Compatible con el código legado de renderTableauPanel()
       // ─────────────────────────────────────────────────────────────
       function renderTableauPanelLegacy() {
-        const container = document.getElementById('tableau-data-container');
-        if (!container) return;
-        const entries = Object.entries(_dpTableauData || {});
+        const filterVal = document.getElementById('tableau-panel-filter')?.value || 'ALL';
+        let rawEntries = Object.entries(_dpTableauData || {});
+        if (filterVal !== 'ALL') {
+          const targetPanelId = parseInt(filterVal);
+          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && d.data_json && d.data_json.panel_id === targetPanelId);
+        }
+        const entries = rawEntries;
 
         if (entries.length === 0) {
-          container.innerHTML = '<div style="color:#475569;font-size:.7rem;text-align:center;grid-column:1/-1;padding:20px;">Sin datos Tableau. Clic en 🚀 Sync GitHub.</div>';
+          container.innerHTML = '<div style="color:#475569;font-size:.7rem;text-align:center;grid-column:1/-1;padding:20px;">Sin datos Tableau en este panel.</div>';
           return;
         }
 
@@ -25082,7 +25104,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const useFilter = allMappedIds.size > 0;
         const filteredEntries = useFilter ? entries.filter(([id]) => allMappedIds.has(String(id).trim())) : entries;
 
-        if (typeof tableauLog === 'function') tableauLog(`✅ Perfiles Tableau: ${filteredEntries.length}`, 'success');
+        if (typeof tableauLog === 'function') tableauLog(`✅ Perfiles Tableau (Filtrado): ${filteredEntries.length}`, 'success');
 
         const idToOp = {};
         const idToModelo = {};

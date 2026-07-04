@@ -5843,7 +5843,7 @@
             <span style="background:rgba(99,102,241,0.15);color:#818cf8;padding:2px 10px;border-radius:8px;font-size:.65rem;font-weight:700;">OFICIAL UK</span>
             <span onclick="event.stopPropagation(); mostrarInfoTableau();" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;" onmouseover="this.style.background='rgba(129, 140, 248, 0.3)'" onmouseout="this.style.background='rgba(129, 140, 248, 0.15)'" title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
           </div>
-            <select id="tableau-panel-filter" onchange="renderTableauPanel()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:4px 8px; color:#fff; font-size:0.65rem; cursor:pointer; outline:none; font-weight:700;">
+            <select id="tableau-panel-filter" onclick="event.stopPropagation()" onchange="renderTableauPanel()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:4px 8px; color:#fff; font-size:0.65rem; cursor:pointer; outline:none; font-weight:700;">
               <option value="ALL">🌟 Todos los Paneles (Consolidado)</option>
               <option value="1" selected>📊 Romero Oficial (Revenuedetailed)</option>
               <option value="2">🧊 Romero Ices (Chaticeswithoutphoto)</option>
@@ -6039,12 +6039,36 @@
         if (!container) return;
         
         const filterVal = document.getElementById('tableau-panel-filter')?.value || 'ALL';
+        if (filterVal === '1' || filterVal === '2') {
+          window.ciaActivePanel = parseInt(filterVal);
+          const btn1 = document.getElementById('cia-btn-t1');
+          const btn2 = document.getElementById('cia-btn-t2');
+          if (btn1) {
+            if (window.ciaActivePanel === 1) {
+              btn1.style.background = 'rgba(251,191,36,0.2)';
+              btn1.style.border = '1px solid #fbbf24';
+            } else {
+              btn1.style.background = 'rgba(251,191,36,0.08)';
+              btn1.style.border = '1px solid rgba(251,191,36,0.2)';
+            }
+          }
+          if (btn2) {
+            if (window.ciaActivePanel === 2) {
+              btn2.style.background = 'rgba(192,132,252,0.2)';
+              btn2.style.border = '1px solid #c084fc';
+            } else {
+              btn2.style.background = 'rgba(192,132,252,0.08)';
+              btn2.style.border = '1px solid rgba(192,132,252,0.2)';
+            }
+          }
+        }
+        
         let rawEntries = Object.entries(_dpTableauData);
         
         // Filtrar por Panel ID si corresponde
         if (filterVal !== 'ALL') {
           const targetPanelId = parseInt(filterVal);
-          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && d.data_json && d.data_json.panel_id === targetPanelId);
+          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && (d.panel_id === targetPanelId || d.data_json?.panel_id === targetPanelId));
         }
         
         const entries = rawEntries;
@@ -23124,16 +23148,24 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
             onmouseover="this.style.background='rgba(129,140,248,0.2)'" onmouseout="this.style.background='rgba(129,140,248,0.12)'">
             🚀 Sync GitHub
           </button>
-          <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/Passport_16741406948180/Revenuedetailed/a1b984e1-4523-421f-8d09-9540cb1bb32a/GRUPOROMERO" target="_blank"
-            style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);color:#fbbf24;border-radius:8px;padding:5px 10px;font-size:.62rem;font-weight:700;text-decoration:none;transition:.2s;"
-            onmouseover="this.style.background='rgba(251,191,36,0.15)'" onmouseout="this.style.background='rgba(251,191,36,0.08)'">
-            🇬🇧 Ver Tableau 1 (Oficial)
-          </a>
-          <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/ices/Chaticeswithoutphoto/d2040f5c-ede0-4822-8f90-7f211d0259f7/GRUPOROMERO" target="_blank"
-            style="background:rgba(192,132,252,0.08);border:1px solid rgba(192,132,252,0.2);color:#c084fc;border-radius:8px;padding:5px 10px;font-size:.62rem;font-weight:700;text-decoration:none;transition:.2s;"
-            onmouseover="this.style.background='rgba(192,132,252,0.15)'" onmouseout="this.style.background='rgba(192,132,252,0.08)'">
-            🇬🇧 Ver Tableau 2 (Ices)
-          </a>
+          <span style="display:inline-flex;align-items:center;gap:3px;margin-right:2px;">
+            <button id="cia-btn-t1"
+              onclick="event.stopPropagation(); window.ciaSetTableauPanel(1);"
+              style="background:rgba(251,191,36,0.2);border:1px solid #fbbf24;color:#fbbf24;border-radius:8px;padding:5px 10px;font-size:.62rem;font-weight:700;cursor:pointer;transition:.2s;">
+              🇬🇧 Tableau 1 (Oficial)
+            </button>
+            <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/Passport_16741406948180/Revenuedetailed/a1b984e1-4523-421f-8d09-9540cb1bb32a/GRUPOROMERO" target="_blank"
+              style="color:#fbbf24;font-size:.75rem;text-decoration:none;font-weight:900;" title="Abrir en Tableau Online">↗</a>
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px;">
+            <button id="cia-btn-t2"
+              onclick="event.stopPropagation(); window.ciaSetTableauPanel(2);"
+              style="background:rgba(192,132,252,0.08);border:1px solid rgba(192,132,252,0.2);color:#c084fc;border-radius:8px;padding:5px 10px;font-size:.62rem;font-weight:700;cursor:pointer;transition:.2s;">
+              🇬🇧 Tableau 2 (Ices)
+            </button>
+            <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/ices/Chaticeswithoutphoto/d2040f5c-ede0-4822-8f90-7f211d0259f7/GRUPOROMERO" target="_blank"
+              style="color:#c084fc;font-size:.75rem;text-decoration:none;font-weight:900;" title="Abrir en Tableau Online">↗</a>
+          </span>
           <div id="cia-last-update" style="font-size:.55rem;color:#475569;font-style:italic;">Cargando...</div>
         </div>
       </div>
@@ -23405,7 +23437,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               <div>[SISTEMA] Consola lista.</div>
             </div>
           </div>
-          <div id="tableau-data-container" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+          <div id="cia-tableau-data-container" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
             <div style="color:#475569;font-size:.7rem;text-align:center;grid-column:1/-1;padding:20px;">
               Iniciando auditoría Tableau UK...
             </div>
@@ -23436,6 +23468,40 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       if (typeof _dpTableauData === 'undefined') { var _dpTableauData = {}; }
 
       // ── Datos operativos globales de la CIA ──
+      window.ciaActivePanel = 1;
+      window.ciaSetTableauPanel = function(panelId) {
+        window.ciaActivePanel = panelId;
+        const btn1 = document.getElementById('cia-btn-t1');
+        const btn2 = document.getElementById('cia-btn-t2');
+        if (btn1) {
+          if (panelId === 1) {
+            btn1.style.background = 'rgba(251,191,36,0.2)';
+            btn1.style.border = '1px solid #fbbf24';
+          } else {
+            btn1.style.background = 'rgba(251,191,36,0.08)';
+            btn1.style.border = '1px solid rgba(251,191,36,0.2)';
+          }
+        }
+        if (btn2) {
+          if (panelId === 2) {
+            btn2.style.background = 'rgba(192,132,252,0.2)';
+            btn2.style.border = '1px solid #c084fc';
+          } else {
+            btn2.style.background = 'rgba(192,132,252,0.08)';
+            btn2.style.border = '1px solid rgba(192,132,252,0.2)';
+          }
+        }
+        const selectFilter = document.getElementById('tableau-panel-filter');
+        if (selectFilter) {
+          selectFilter.value = String(panelId);
+        }
+        if (typeof renderTableauPanel === 'function') renderTableauPanel();
+        if (typeof renderTableauPanelLegacy === 'function') renderTableauPanelLegacy();
+        if (typeof tableauLog === 'function') {
+          tableauLog(`🔄 Vista cambiada a Panel ${panelId === 1 ? '1 (Oficial)' : '2 (Ices)'}`, 'info');
+        }
+      };
+
       window._ciaData = {
         corte:      [],   // registros operaciones de hoy
         historial:  [],   // registros últimos 30 días
@@ -25084,11 +25150,14 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       // Compatible con el código legado de renderTableauPanel()
       // ─────────────────────────────────────────────────────────────
       function renderTableauPanelLegacy() {
+        const container = document.getElementById('cia-tableau-data-container');
+        if (!container) return;
+
         const filterVal = document.getElementById('tableau-panel-filter')?.value || 'ALL';
         let rawEntries = Object.entries(_dpTableauData || {});
         if (filterVal !== 'ALL') {
           const targetPanelId = parseInt(filterVal);
-          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && d.data_json && d.data_json.panel_id === targetPanelId);
+          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && (d.panel_id === targetPanelId || d.data_json?.panel_id === targetPanelId));
         }
         const entries = rawEntries;
 
@@ -25173,10 +25242,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         container.innerHTML = html;
       }
 
-      // ─────────────────────────────────────────────────────────────
-      // FUNCIONES LEGACY (compatibilidad con código externo)
-      // ─────────────────────────────────────────────────────────────
-      function toggleTableauPanel() { ciaSwitchTab(0); }
+      // toggleTableauPanel legacy removed to prevent overriding accordion functionality
 
       function tableauLog(msg, type='info') {
         const cons = document.getElementById('tableau-console');
@@ -26506,7 +26572,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           if (typeof tableauLog === 'function') tableauLog(`🔍 Consultando tabla '${tbl}'...`, 'info');
 
           // Timeout independiente por tabla
-          const fetchPromise = _sb.from(tbl).select('perfil_id, valor, updated_at, data_json');
+          const fetchPromise = _sb.from(tbl).select('perfil_id, valor, updated_at, data_json, panel_id, panel_nombre');
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error(`Timeout tabla ${tbl}`)), TABLEAU_TIMEOUT_MS)
           );
@@ -26570,8 +26636,10 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })()
           : (djRaw || {});
         _dpTableauData[String(row.perfil_id).trim()] = {
-          valor:     Number(row.valor) || 0,
-          data_json: dj
+          valor:        Number(row.valor) || 0,
+          panel_id:     row.panel_id,
+          panel_nombre: row.panel_nombre,
+          data_json:    dj
         };
       });
 

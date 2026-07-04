@@ -125,26 +125,38 @@ def sb_log_error(msg: str):
 def fetch_tableau_panels() -> list:
     """
     Lee tableau_panels desde Supabase.
-    Si la tabla no existe todavía, usa el fallback hardcodeado.
+    Garantiza que tanto ROMERO OFICIAL (id: 1) como ROMERO ICES (id: 2) estén presentes en la lista.
     """
     rows = sb_get("tableau_panels?select=*&activo=eq.true&order=id")
-    if rows:
-        print(f"   ✅ {len(rows)} paneles de Tableau cargados desde Supabase")
-        return rows
-
-    # Fallback: panel ROMERO por defecto
-    # NOTA: La vista real en Tableau es "Revenuedetailed" dentro del workbook
-    # "Passport_16741406948180". GRUPOROMERO es el filtro de usuario que
-    # Tableau aplica automáticamente según el token PAT — NO es una vista.
-    print("   📋 Usando fallback: 1 panel ROMERO hardcodeado")
-    return [{
-        "id": 1,
-        "nombre": "ROMERO OFICIAL",
-        "server": "https://prod-uk-a.online.tableau.com",
-        "site":   "partnerdata",
-        "view_name": "Revenuedetailed",   # ← Vista real (no GRUPOROMERO)
-        "token_name": "Analytics",
-    }]
+    if not rows:
+        rows = []
+    
+    # Asegurar que ROMERO OFICIAL (id: 1) esté en la lista
+    if not any(r.get("id") == 1 for r in rows):
+        rows.append({
+            "id": 1,
+            "nombre": "ROMERO OFICIAL",
+            "server": "https://prod-uk-a.online.tableau.com",
+            "site":   "partnerdata",
+            "view_name": "Revenuedetailed",
+            "token_name": "Analytics",
+            "activo": True
+        })
+        
+    # Asegurar que ROMERO ICES (id: 2) esté en la lista
+    if not any(r.get("id") == 2 for r in rows):
+        rows.append({
+            "id": 2,
+            "nombre": "ROMERO ICES",
+            "server": "https://prod-uk-a.online.tableau.com",
+            "site":   "partnerdata",
+            "view_name": "Chaticeswithoutphoto",
+            "token_name": "Analytics",
+            "activo": True
+        })
+        
+    print(f"   ✅ {len(rows)} paneles de Tableau a procesar (garantizados Oficial e Ices)")
+    return rows
 
 
 def fetch_panel_ids(panel_id: int) -> set:
@@ -189,7 +201,7 @@ def fetch_datame_ids() -> set:
 # ═══════════════════════════════════════════════════════════════════
 # SINCRONIZACIÓN DE UN PANEL
 # ═══════════════════════════════════════════════════════════════════
-def sync_panel(panel: dict, token_secret: str) -> int:
+def sync_panel(panel: dict, token_secret: str, token_name: str = "Analytics") -> int:
     """
     Descarga el CSV de la vista de Tableau de este panel,
     filtra por la whitelist de IDs y sube a Supabase.
@@ -200,7 +212,6 @@ def sync_panel(panel: dict, token_secret: str) -> int:
     server       = panel.get("server", "https://prod-uk-a.online.tableau.com")
     site         = panel.get("site", "partnerdata")
     view_name    = panel["view_name"]
-    token_name   = panel.get("token_name", "Analytics")
 
     print(f"\n{'═'*60}")
     print(f"📋 Panel {panel_id}: {panel_nombre} → vista: {view_name}")
@@ -378,14 +389,28 @@ def sync_panel(panel: dict, token_secret: str) -> int:
             for c in rec["df"].columns
         )
 
-    # Primero intentar fuente con revenue, luego la de más matches
-    best_with_revenue = [r for r in found_records if has_revenue(r)]
-    if best_with_revenue:
-        best = max(best_with_revenue, key=lambda x: len(x["matched"]))
-        print(f"\n   🎯 FUENTE GANADORA (con revenue): '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
-    else:
-        best = max(found_records, key=lambda x: len(x["matched"]))
-        print(f"\n   🎯 FUENTE GANADORA (sin revenue, solo IDs): '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+    # Priorizar la vista configurada en el panel (view_name)
+    best = None
+    if view_name:
+        matched_views = [r for r in found_records if view_name.lower() in r["vista"].lower() or view_name.lower() in r["workbook"].lower()]
+        if matched_views:
+            best_with_revenue = [r for r in matched_views if has_revenue(r)]
+            if best_with_revenue:
+                best = max(best_with_revenue, key=lambda x: len(x["matched"]))
+            else:
+                best = max(matched_views, key=lambda x: len(x["matched"]))
+            print(f"\n   🎯 FUENTE CONFIGURADA SELECCIONADA: '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+
+    if not best:
+        # Fallback a la lógica original si no se encuentra coincidencia con la vista configurada
+        best_with_revenue = [r for r in found_records if has_revenue(r)]
+        if best_with_revenue:
+            best = max(best_with_revenue, key=lambda x: len(x["matched"]))
+            print(f"\n   🎯 FUENTE GANADORA POR DEFECTO (con revenue): '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+        else:
+            best = max(found_records, key=lambda x: len(x["matched"]))
+            print(f"\n   🎯 FUENTE GANADORA POR DEFECTO (sin revenue): '{best['workbook']}' / '{best['vista']}' — {len(best['matched'])} perfiles")
+        
         print(f"      ⚠️  Todas las fuentes encontradas:")
         for r in found_records:
             cols = [c for c in r["df"].columns if any(k in c.upper() for k in REVENUE_KEYS)]
@@ -724,13 +749,16 @@ def sync_tableau():
         token_env_name = f"TABLEAU_TOKEN_SECRET_{panel_id}"
         token_secret = os.getenv(token_env_name) or global_token_secret
 
+        token_name_env = f"TABLEAU_TOKEN_NAME_{panel_id}"
+        token_name = os.getenv(token_name_env) or panel.get("token_name", "Analytics")
+
         if not token_secret:
             print(f"❌ Panel {panel_id} [{panel_nombre}] saltado: no se encontró {token_env_name} ni TABLEAU_TOKEN_SECRET global.")
             continue
 
         try:
-            print(f"🔑 Usando token de: {token_env_name if os.getenv(token_env_name) else 'TABLEAU_TOKEN_SECRET (Global)'}")
-            n = sync_panel(panel, token_secret)
+            print(f"🔑 Usando token de: {token_env_name if os.getenv(token_env_name) else 'TABLEAU_TOKEN_SECRET (Global)'} | Nombre token: {token_name}")
+            n = sync_panel(panel, token_secret, token_name)
             total_synced += n
         except Exception as e:
             msg = f"Error en panel {panel_nombre}: {str(e)}"

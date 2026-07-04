@@ -709,22 +709,31 @@ def sync_tableau():
         print("❌ Abortado: faltan credenciales.")
         return
 
-    token_secret = os.getenv("TABLEAU_TOKEN_SECRET")
-    if not token_secret:
-        print("❌ Abortado: TABLEAU_TOKEN_SECRET no está configurado.")
-        return
-
+    global_token_secret = os.getenv("TABLEAU_TOKEN_SECRET")
+    
     print("\n🚀 Iniciando sincronización multi-panel Tableau...")
     print("🔍 Cargando paneles desde Supabase...")
     panels = fetch_tableau_panels()
 
     total_synced = 0
     for panel in panels:
+        panel_id = panel.get("id")
+        panel_nombre = panel.get("nombre", "?")
+        
+        # Buscar token dinámico para este panel en particular (ej: TABLEAU_TOKEN_SECRET_2)
+        token_env_name = f"TABLEAU_TOKEN_SECRET_{panel_id}"
+        token_secret = os.getenv(token_env_name) or global_token_secret
+
+        if not token_secret:
+            print(f"❌ Panel {panel_id} [{panel_nombre}] saltado: no se encontró {token_env_name} ni TABLEAU_TOKEN_SECRET global.")
+            continue
+
         try:
+            print(f"🔑 Usando token de: {token_env_name if os.getenv(token_env_name) else 'TABLEAU_TOKEN_SECRET (Global)'}")
             n = sync_panel(panel, token_secret)
             total_synced += n
         except Exception as e:
-            msg = f"Error en panel {panel.get('nombre','?')}: {str(e)}"
+            msg = f"Error en panel {panel_nombre}: {str(e)}"
             print(f"   ❌ {msg}")
             sb_log_error(msg)
 
@@ -734,3 +743,4 @@ def sync_tableau():
 
 if __name__ == "__main__":
     sync_tableau()
+

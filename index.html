@@ -6914,11 +6914,14 @@
            
            <label style="display:block; font-size:0.75rem; color:#fff; margin-bottom:5px; font-weight:bold;">⚙️ MOTOR DE IMAGEN ACTIVO</label>
            <select id="cfg-active-img-ai" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:10px; color:#fff; font-size:0.85rem; margin-bottom:10px;">
-             <optgroup label="🌐 Cloud — Alta Calidad">
-               <option value="replicate">Replicate — Flux-Dev (Mejor calidad)</option>
-               <option value="fal">Fal.ai — Flux FaceSwap</option>
-               <option value="stability">Stability AI — SDXL Core</option>
-             </optgroup>
+              <optgroup label="🌐 Cloud — Alta Calidad">
+                <option value="replicate">Replicate — Flux-Dev (Mejor calidad)</option>
+                <option value="fal">Fal.ai — Flux FaceSwap (Dev)</option>
+                <option value="fal-banana-pro">Fal.ai — Google Nano-Banana Pro (Alta Fidelidad)</option>
+                <option value="fal-banana-2">Fal.ai — Google Nano-Banana 2 (Rápido & Rostros)</option>
+                <option value="fal-flux-schnell">Fal.ai — Flux Schnell (Ultra Rápido)</option>
+                <option value="stability">Stability AI — SDXL Core</option>
+              </optgroup>
              <optgroup label="🇨🇳 Modelos Asiáticos Fotorrealistas">
                <option value="hidream">🔥 HiDream-I1 (China) — Rostros HD</option>
                <option value="kolors">🎨 Kolors (Kuaishou) — Retratos Reales</option>
@@ -8651,9 +8654,38 @@
             return uploadData.file_url;
           };
 
-          // Helper: Generar imagen base ultra realista usando Flux Dev en Fal.ai
+          // Helper: Generar imagen base usando el modelo de Fal seleccionado (o por defecto Flux Dev)
           const generateBaseImageFal = async (pText, seed) => {
-            const res = await fetch('https://queue.fal.run/fal-ai/flux/dev', {
+            let modelPath = 'fal-ai/flux/dev';
+            if (engine === 'fal-banana-pro') modelPath = 'fal-ai/nano-banana-pro';
+            else if (engine === 'fal-banana-2') modelPath = 'fal-ai/nano-banana-2';
+            else if (engine === 'fal-flux-schnell') modelPath = 'fal-ai/flux/schnell';
+
+            try {
+              const res = await fetch(`https://queue.fal.run/${modelPath}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Key ${falKey}`
+                },
+                body: JSON.stringify({
+                  prompt: pText,
+                  image_size: 'square_hd',
+                  num_inference_steps: (modelPath.includes('schnell') ? 4 : 28),
+                  guidance_scale: (modelPath.includes('schnell') ? 1.0 : 3.5),
+                  seed: seed
+                })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.images && data.images.length > 0) return data.images[0].url;
+              }
+            } catch(e) {
+              console.warn(`Error al usar ${modelPath}, cayendo a fal-ai/flux/dev`, e);
+            }
+            
+            // Fallback a flux/dev
+            const resFallback = await fetch('https://queue.fal.run/fal-ai/flux/dev', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -8667,10 +8699,10 @@
                 seed: seed
               })
             });
-            if (!res.ok) throw new Error(`Fal Flux Dev HTTP ${res.status}`);
-            const data = await res.json();
-            if (data.images && data.images.length > 0) return data.images[0].url;
-            throw new Error('No se pudo generar la imagen base con Flux Dev');
+            if (!resFallback.ok) throw new Error(`Fal Flux Dev fallback HTTP ${resFallback.status}`);
+            const dataFallback = await resFallback.json();
+            if (dataFallback.images && dataFallback.images.length > 0) return dataFallback.images[0].url;
+            throw new Error('No se pudo generar la imagen base con Flux Dev en fallback');
           };
 
           // Helper: Intercambiar rostro usando Face-Swap en Fal.ai
@@ -8917,15 +8949,26 @@
         // ─────────────────────────────────────────────
         // FAL.AI — Flux Schnell
         // ─────────────────────────────────────────────
-        else if (engine === 'fal') {
+        else if (engine.startsWith('fal')) {
           if (!falKey) throw new Error('Llave de Fal.ai no configurada');
-          endpoint = 'https://queue.fal.run/fal-ai/flux/schnell';
+          let modelPath = 'fal-ai/flux/dev';
+          if (engine === 'fal-banana-pro') modelPath = 'fal-ai/nano-banana-pro';
+          else if (engine === 'fal-banana-2') modelPath = 'fal-ai/nano-banana-2';
+          else if (engine === 'fal-flux-schnell') modelPath = 'fal-ai/flux/schnell';
+
+          endpoint = `https://queue.fal.run/${modelPath}`;
           headers['Authorization'] = `Key ${falKey}`;
-          body = { prompt, num_images: 2 };
+          body = {
+            prompt: prompt,
+            num_images: 2,
+            image_size: 'square_hd',
+            num_inference_steps: (modelPath.includes('schnell') ? 4 : 28),
+            guidance_scale: (modelPath.includes('schnell') ? 1.0 : 3.5)
+          };
           const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
           const data = await res.json();
           if (data.images) return data.images.map(img => img.url);
-          throw new Error('Error en la respuesta de Fal.ai');
+          throw new Error(`Error en la respuesta de Fal.ai (${modelPath})`);
         }
 
         // ─────────────────────────────────────────────
@@ -31352,7 +31395,16 @@ Reglas estrictas:
 
       const motorImg = window.getPerUserSetting('rr_active_img_ai') || 'pollinations';
       const motorTxt = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
-      const motorLabel = { pollinations: '⚡ Pollinations (gratis)', replicate: 'Replicate (Flux)', fal: 'Fal.ai (Flux)', stability: 'Stability AI', huggingface: 'HuggingFace' }[motorImg] || motorImg;
+      const motorLabel = {
+        pollinations: '⚡ Pollinations (gratis)',
+        replicate: 'Replicate (Flux)',
+        fal: 'Fal.ai (Flux FaceSwap)',
+        'fal-banana-pro': 'Google Nano-Banana Pro',
+        'fal-banana-2': 'Google Nano-Banana 2',
+        'fal-flux-schnell': 'Fal.ai (Flux Schnell)',
+        stability: 'Stability AI',
+        huggingface: 'HuggingFace'
+      }[motorImg] || motorImg;
 
       // Desactivar UI y mostrar loader
       btn.disabled = true;

@@ -8651,38 +8651,66 @@
             return uploadData.file_url;
           };
 
-          // --- EJECUCIÓN EN PARALELO EN FAL.AI (InstantID) ---
-          const callFalInstantID = async (faceData) => {
-            const faceUrl = await uploadToFal(faceData);
-            const res = await fetch('https://queue.fal.run/fal-ai/instantid', {
+          // Helper: Generar imagen base ultra realista usando Flux Dev en Fal.ai
+          const generateBaseImageFal = async (pText, seed) => {
+            const res = await fetch('https://queue.fal.run/fal-ai/flux/dev', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Key ${falKey}`
               },
               body: JSON.stringify({
-                prompt: prompt,
-                face_image_url: faceUrl,
+                prompt: pText,
                 image_size: 'square_hd',
-                num_inference_steps: 30,
-                guidance_scale: 7,
-                ip_adapter_scale: 0.95,
-                controlnet_conditioning_scale: 1.0
+                num_inference_steps: 28,
+                guidance_scale: 3.5,
+                seed: seed
               })
             });
+            if (!res.ok) throw new Error(`Fal Flux Dev HTTP ${res.status}`);
             const data = await res.json();
             if (data.images && data.images.length > 0) return data.images[0].url;
-            throw new Error(data.detail || 'Fallo InstantID en Fal.ai');
+            throw new Error('No se pudo generar la imagen base con Flux Dev');
+          };
+
+          // Helper: Intercambiar rostro usando Face-Swap en Fal.ai
+          const swapFaceFal = async (baseImgUrl, faceBase64) => {
+            const faceUrl = await uploadToFal(faceBase64);
+            const res = await fetch('https://queue.fal.run/fal-ai/face-swap', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Key ${falKey}`
+              },
+              body: JSON.stringify({
+                base_image_url: baseImgUrl,
+                swap_image_url: faceUrl
+              })
+            });
+            if (!res.ok) throw new Error(`Fal FaceSwap HTTP ${res.status}`);
+            const data = await res.json();
+            if (data.image && data.image.url) return data.image.url;
+            throw new Error('Fallo al realizar el intercambio de rostro (FaceSwap)');
           };
 
           try {
+            console.log("[Fal.ai Pipeline] Generando imágenes base con Flux Dev...");
+            const seed1 = Math.floor(Math.random() * 999999);
+            const seed2 = Math.floor(Math.random() * 999999);
+            
+            const [baseImg1, baseImg2] = await Promise.all([
+              generateBaseImageFal(prompt, seed1),
+              generateBaseImageFal(prompt + ", candid, natural pose", seed2)
+            ]);
+
+            console.log("[Fal.ai Pipeline] Realizando FaceSwap de alta precisión...");
             const urls = await Promise.all([
-              callFalInstantID(refFace1),
-              callFalInstantID(refFace2)
+              swapFaceFal(baseImg1, refFace1),
+              swapFaceFal(baseImg2, refFace2)
             ]);
             return urls;
           } catch (falErr) {
-            console.error("Fallo InstantID Fal.ai, intentando Replicate si está disponible", falErr);
+            console.error("Fallo pipeline FaceSwap Fal.ai, intentando Replicate si está disponible", falErr);
             if (!repKey) throw falErr;
           }
         }
@@ -8740,7 +8768,7 @@
         }
 
         // Prompt enriquecido para conservar rasgos faciales del modelo base, prohibiendo estereotipos externos
-        const consistencePrompt = prompt + ", keep exact facial structure, match face shape and features of the reference model, photorealistic face, highly detailed skin texture, raw amateur phone quality, 8k";
+        const consistencePrompt = prompt + ", raw photo, natural lighting, real human features, detailed skin texture, smartphone amateur photo, high fidelity";
 
         if (hfKey) {
           try {
@@ -31322,8 +31350,8 @@ Reglas estrictas:
       const face1 = isAdmin ? window.selectedFace1Admin : window.selectedFace1;
       const face2 = isAdmin ? window.selectedFace2Admin : window.selectedFace2;
 
-      const motorImg = localStorage.getItem('rr_active_img_ai') || 'pollinations';
-      const motorTxt = localStorage.getItem('rr_active_text_ai') || 'pollinations';
+      const motorImg = window.getPerUserSetting('rr_active_img_ai') || 'pollinations';
+      const motorTxt = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
       const motorLabel = { pollinations: '⚡ Pollinations (gratis)', replicate: 'Replicate (Flux)', fal: 'Fal.ai (Flux)', stability: 'Stability AI', huggingface: 'HuggingFace' }[motorImg] || motorImg;
 
       // Desactivar UI y mostrar loader

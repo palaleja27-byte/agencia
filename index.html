@@ -6063,7 +6063,7 @@
           }
         }
         
-        let rawEntries = Object.entries(_dpTableauData);
+        let rawEntries = Object.entries(_dpTableauData).filter(([k]) => k.includes('_'));
         
         // Filtrar por Panel ID si corresponde
         if (filterVal !== 'ALL') {
@@ -6093,7 +6093,10 @@
         }
 
         const filteredEntries = useFilter
-          ? entries.filter(([id]) => allMappedIds.has(String(id).trim()))
+          ? entries.filter(([id]) => {
+              const pid = String(id).split('_')[0].trim();
+              return allMappedIds.has(pid);
+            })
           : entries;
 
         if (typeof tableauLog === 'function') {
@@ -6124,7 +6127,7 @@
 
         filteredEntries.forEach(([id, d]) => {
           const val = typeof d === 'object' ? Number(d.valor||0) : Number(d||0);
-          const pid = String(id).trim();
+          const pid = String(id).split('_')[0].trim();
           const turno = idToTurno[pid] || 'Sin Turno';
           if (turnosTotal[turno] !== undefined) turnosTotal[turno] += val;
           else turnosTotal['Sin Turno'] += val;
@@ -6226,8 +6229,9 @@
           const val = typeof rawData === 'object' ? Number(rawData.valor||0) : Number(rawData||0);
           const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
 
-          const nombreReal = String(idToModelo[String(id).trim()] || 'Perfil ' + id);
-          const opAsignado = String(idToOp[String(id).trim()] || dj['Admin'] || dj['admin'] || 'No Asignado');
+          const pid = String(id).split('_')[0].trim();
+          const nombreReal = String(idToModelo[pid] || 'Perfil ' + pid);
+          const opAsignado = String(idToOp[pid] || dj['Admin'] || dj['admin'] || 'No Asignado');
 
           const sourceID = String(dj['source ID'] || dj['source_id'] || '');
           const maxHour = dj['Max Hour'] !== undefined ? dj['Max Hour'] : (dj['max_hour'] !== undefined ? dj['max_hour'] : '');
@@ -6317,7 +6321,7 @@
           return `
           <div style="background:rgba(99,102,241,0.04);border-radius:12px;padding:12px;border:1px solid rgba(99,102,241,0.15);display:flex;flex-direction:column;gap:6px;transition:.2s;" onmouseover="this.style.borderColor='rgba(129,140,248,0.4)'" onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${id}</div>
+              <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${pid}</div>
               <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
             <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px;">${nombreReal}</div>
@@ -6334,16 +6338,42 @@
             </div>
             
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-               <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">${val > 0 ? '$'+val.toLocaleString('en-US',{minimumFractionDigits:2}) : '📋 En Tableau'}</div>
+               <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?(window.ciaActivePanel===2?'#a855f7':'#2dd4bf'):'#475569'};font-weight:${val>0?'900':'500'};">
+                 ${val > 0 ? (window.ciaActivePanel===2 ? val.toFixed(2) + '%' : '$'+val.toLocaleString('en-US',{minimumFractionDigits:2})) : '📋 En Tableau'}
+               </div>
                <div style="font-size:0.48rem;color:#334155;display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
-                 ${maxHourDisplay ? `<span style="font-size:0.48rem;background:rgba(251,191,36,0.1);color:#fbbf24;padding:1px 4px;border-radius:3px;font-weight:700;white-space:nowrap;">🕒 Max: ${maxHourDisplay}</span>` : ''}
+                 ${maxHourDisplay && window.ciaActivePanel !== 2 ? `<span style="font-size:0.48rem;background:rgba(251,191,36,0.1);color:#fbbf24;padding:1px 4px;border-radius:3px;font-weight:700;white-space:nowrap;">🕒 Max: ${maxHourDisplay}</span>` : ''}
                  <span>#${idx+1}</span>
                </div>
             </div>
             <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;margin-bottom:4px;">
-              <div style="width:${percent||8}%;height:100%;background:#818cf8;border-radius:2px;opacity:${val>0?1:0.3};"></div>
+              <div style="width:${percent||8}%;height:100%;background:${window.ciaActivePanel===2?'#a855f7':'#818cf8'};border-radius:2px;opacity:${val>0?1:0.3};"></div>
             </div>
-            ${metricasExtra ? `<div style="margin-top:2px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(129,140,248,0.2) transparent;">${metricasExtra}</div>` : ''}
+            ${window.ciaActivePanel === 2 ? 
+              (dj.icebreakers && dj.icebreakers.length > 0 ? 
+                `<div style="margin-top:4px;">
+                  <span style="font-size:0.55rem; color:#c084fc; font-weight:800; text-transform:uppercase;">🧊 Icebreakers (${dj.icebreakers.length}):</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; max-height:150px; overflow-y:auto; margin-top:4px; padding-right:4px;" class="custom-scrollbar">
+                    ${dj.icebreakers.map(ib => {
+                      const rate = ib.conversion_rate || 0.0;
+                      const text = ib.text || 'Sin texto';
+                      return `
+                        <div style="background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.12); border-radius:6px; padding:8px; font-size:0.55rem; color:#e2e8f0; line-height:1.3; position:relative;">
+                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-weight:800;">
+                            <span style="color:#c084fc;">Conversión: <span style="color:#2dd4bf; background:rgba(45,212,191,0.1); padding:1px 4px; border-radius:3px; font-size:0.5rem; margin-left:3px;">${rate}%</span></span>
+                            <button onclick="window.copyIcebreakerToClipboard(this, '${encodeURIComponent(text)}')" 
+                              style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-size:0.5rem; display:flex; align-items:center; gap:2px; padding:2px; font-weight:bold; transition:.2s;" 
+                              onmouseover="this.style.color='#c084fc'" onmouseout="this.style.color='#cbd5e1'">📋 Copiar</button>
+                          </div>
+                          <div style="font-style:italic; color:#cbd5e1; word-break:break-word; border-top:1px solid rgba(168,85,247,0.08); padding-top:4px; margin-top:2px;">"${text}"</div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>` : '<div style="font-size:0.55rem; color:#475569; text-align:center; padding:10px;">Sin icebreakers registrados</div>'
+              ) : 
+              (metricasExtra ? `<div style="margin-top:2px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(129,140,248,0.2) transparent;">${metricasExtra}</div>` : '')
+            }
           </div>
           `;
         }).join('');
@@ -7966,25 +7996,73 @@
       ejecutarAnalisisAvanzado();
     }
 
+    // Suffix per active user/role to namespaces settings in localStorage & Supabase
+    window.getCurrentUserSuffix = function() {
+      const role = typeof currentRole !== 'undefined' ? currentRole : 'operador';
+      if (role === 'admin') return '_admin';
+      const name = typeof currentOpName !== 'undefined' && currentOpName ? currentOpName.replace(/\s+/g, '_').toLowerCase() : 'operador';
+      return '_' + name;
+    };
+
+    window.getPerUserSetting = function(key) {
+      const suffix = window.getCurrentUserSuffix();
+      return localStorage.getItem(key + suffix) || localStorage.getItem(key) || '';
+    };
+
+    window.setPerUserSetting = function(key, value) {
+      const suffix = window.getCurrentUserSuffix();
+      localStorage.setItem(key + suffix, value);
+      localStorage.setItem(key, value); // Fallback local
+      if (window._sb) {
+        window._sb.from('kv_store').upsert({ key: key + suffix, value: value }, { onConflict: 'key' }).then(() => {
+          // Actualizar caché de memoria en realtime
+          if (typeof _sbMemCache !== 'undefined') {
+            _sbMemCache[key + suffix] = value;
+          }
+        });
+      }
+    window.syncUserSpecificSettings = function() {
+      if (window._sb) {
+        const suffix = window.getCurrentUserSuffix();
+        window._sb.from('kv_store')
+          .select('key, value')
+          .like('key', 'rr_%' + suffix)
+          .then(({ data, error }) => {
+            if (!error && data) {
+              data.forEach(row => {
+                localStorage.setItem(row.key, row.value);
+                if (typeof _sbMemCache !== 'undefined') {
+                  _sbMemCache[row.key] = row.value;
+                }
+              });
+              console.log('[USER-SYNC] Sincronizadas llaves desde Supabase para el sufijo', suffix, data.length);
+              if (typeof actualizarEstadoHubIA === 'function') {
+                actualizarEstadoHubIA();
+              }
+            }
+          }).catch(e => console.warn('[USER-SYNC] Error:', e));
+      }
+    };
+
     // --- NUEVAS FUNCIONES CONFIGURACIÓN AI (v8.6) ---
     function abrirConfigAI() {
       const m = document.getElementById('modal-ai-config');
       if (!m) return;
-      document.getElementById('cfg-active-text-ai').value = localStorage.getItem('rr_active_text_ai') || 'ollama';
-      document.getElementById('cfg-active-img-ai').value = localStorage.getItem('rr_active_img_ai') || 'replicate';
+      document.getElementById('cfg-active-text-ai').value = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
+      document.getElementById('cfg-active-img-ai').value = window.getPerUserSetting('rr_active_img_ai') || 'pollinations';
       
-      document.getElementById('cfg-g-key').value = localStorage.getItem('rr_g_key_manual') || '';
-      document.getElementById('cfg-groq-key').value = localStorage.getItem('rr_groq_key') || '';
-      document.getElementById('cfg-deepseek-key').value = localStorage.getItem('rr_deepseek_key') || '';
-      document.getElementById('cfg-or-key').value = localStorage.getItem('rr_or_key') || '';
-      document.getElementById('cfg-openai-key').value = localStorage.getItem('rr_openai_key') || '';
-      document.getElementById('cfg-ai-stk').value = localStorage.getItem('rr_ai_stk_manual') || '';
-      document.getElementById('cfg-together-key').value = localStorage.getItem('rr_together_key') || '';
-      document.getElementById('cfg-mistral-key').value = localStorage.getItem('rr_mistral_key') || '';
-      document.getElementById('cfg-hf-key').value = localStorage.getItem('rr_hf_key') || '';
-      const savedOllamaUrl = localStorage.getItem('ollama_url') || 'http://10.21.41.168:18790';
+      document.getElementById('cfg-g-key').value = window.getPerUserSetting('rr_g_key_manual') || '';
+      document.getElementById('cfg-groq-key').value = window.getPerUserSetting('rr_groq_key') || '';
+      document.getElementById('cfg-deepseek-key').value = window.getPerUserSetting('rr_deepseek_key') || '';
+      document.getElementById('cfg-or-key').value = window.getPerUserSetting('rr_or_key') || '';
+      document.getElementById('cfg-openai-key').value = window.getPerUserSetting('rr_openai_key') || '';
+      document.getElementById('cfg-ai-stk').value = window.getPerUserSetting('rr_ai_stk_manual') || '';
+      document.getElementById('cfg-together-key').value = window.getPerUserSetting('rr_together_key') || '';
+      document.getElementById('cfg-mistral-key').value = window.getPerUserSetting('rr_mistral_key') || '';
+      document.getElementById('cfg-hf-key').value = window.getPerUserSetting('rr_hf_key') || '';
+      const savedOllamaUrl = window.getPerUserSetting('ollama_url') || 'http://10.21.41.168:18790';
       document.getElementById('cfg-ollama-url').value = savedOllamaUrl;
-      const savedOllamaModel = localStorage.getItem('ollama_model') || 'qwen2.5:7b';
+      const savedOllamaModel = window.getPerUserSetting('ollama_model') || 'qwen2.5:7b';
       document.getElementById('cfg-ollama-model').value = savedOllamaModel;
       // Sincronizar preset selector
       const presetSel = document.getElementById('cfg-ollama-model-preset');
@@ -7993,10 +8071,10 @@
         presetSel.value = presetOpts.includes(savedOllamaModel) ? savedOllamaModel : '__custom__';
       }
       
-      document.getElementById('cfg-replicate-key').value = localStorage.getItem('rr_replicate_key') || '';
-      document.getElementById('cfg-fal-key').value = localStorage.getItem('rr_fal_key') || '';
-      document.getElementById('cfg-stability-key').value = localStorage.getItem('rr_stability_key') || '';
-      document.getElementById('cfg-deepai-key').value = localStorage.getItem('rr_deepai_key') || '';
+      document.getElementById('cfg-replicate-key').value = window.getPerUserSetting('rr_replicate_key') || '';
+      document.getElementById('cfg-fal-key').value = window.getPerUserSetting('rr_fal_key') || '';
+      document.getElementById('cfg-stability-key').value = window.getPerUserSetting('rr_stability_key') || '';
+      document.getElementById('cfg-deepai-key').value = window.getPerUserSetting('rr_deepai_key') || '';
       
       m.classList.add('open');
     }
@@ -8004,28 +8082,28 @@
       document.getElementById('modal-ai-config').classList.remove('open');
     }
     function guardarConfigAI() {
-      localStorage.setItem('rr_active_text_ai', document.getElementById('cfg-active-text-ai').value);
-      localStorage.setItem('rr_active_img_ai', document.getElementById('cfg-active-img-ai').value);
+      window.setPerUserSetting('rr_active_text_ai', document.getElementById('cfg-active-text-ai').value);
+      window.setPerUserSetting('rr_active_img_ai', document.getElementById('cfg-active-img-ai').value);
       
       const gKeyManual = document.getElementById('cfg-g-key').value.trim();
-      localStorage.setItem('rr_g_key_manual', gKeyManual);
-      localStorage.setItem('rr_ai_api_key', gKeyManual); // Unificar con el Coach de IA y otros módulos antiguos del operador
+      window.setPerUserSetting('rr_g_key_manual', gKeyManual);
+      window.setPerUserSetting('rr_ai_api_key', gKeyManual); // Unificar con el Coach de IA y otros módulos antiguos del operador
       
-      localStorage.setItem('rr_groq_key', document.getElementById('cfg-groq-key').value.trim());
-      localStorage.setItem('rr_deepseek_key', document.getElementById('cfg-deepseek-key').value.trim());
-      localStorage.setItem('rr_or_key', document.getElementById('cfg-or-key').value.trim());
-      localStorage.setItem('rr_openai_key', document.getElementById('cfg-openai-key').value.trim());
-      localStorage.setItem('rr_ai_stk_manual', document.getElementById('cfg-ai-stk').value.trim());
-      localStorage.setItem('rr_together_key', document.getElementById('cfg-together-key').value.trim());
-      localStorage.setItem('rr_mistral_key', document.getElementById('cfg-mistral-key').value.trim());
-      localStorage.setItem('rr_hf_key', document.getElementById('cfg-hf-key').value.trim());
-      localStorage.setItem('ollama_url', document.getElementById('cfg-ollama-url').value.trim());
-      localStorage.setItem('ollama_model', document.getElementById('cfg-ollama-model').value.trim() || 'qwen2.5:7b');
+      window.setPerUserSetting('rr_groq_key', document.getElementById('cfg-groq-key').value.trim());
+      window.setPerUserSetting('rr_deepseek_key', document.getElementById('cfg-deepseek-key').value.trim());
+      window.setPerUserSetting('rr_or_key', document.getElementById('cfg-or-key').value.trim());
+      window.setPerUserSetting('rr_openai_key', document.getElementById('cfg-openai-key').value.trim());
+      window.setPerUserSetting('rr_ai_stk_manual', document.getElementById('cfg-ai-stk').value.trim());
+      window.setPerUserSetting('rr_together_key', document.getElementById('cfg-together-key').value.trim());
+      window.setPerUserSetting('rr_mistral_key', document.getElementById('cfg-mistral-key').value.trim());
+      window.setPerUserSetting('rr_hf_key', document.getElementById('cfg-hf-key').value.trim());
+      window.setPerUserSetting('ollama_url', document.getElementById('cfg-ollama-url').value.trim());
+      window.setPerUserSetting('ollama_model', document.getElementById('cfg-ollama-model').value.trim() || 'qwen2.5:7b');
       
-      localStorage.setItem('rr_replicate_key', document.getElementById('cfg-replicate-key').value.trim());
-      localStorage.setItem('rr_fal_key', document.getElementById('cfg-fal-key').value.trim());
-      localStorage.setItem('rr_stability_key', document.getElementById('cfg-stability-key').value.trim());
-      localStorage.setItem('rr_deepai_key', document.getElementById('cfg-deepai-key').value.trim());
+      window.setPerUserSetting('rr_replicate_key', document.getElementById('cfg-replicate-key').value.trim());
+      window.setPerUserSetting('rr_fal_key', document.getElementById('cfg-fal-key').value.trim());
+      window.setPerUserSetting('rr_stability_key', document.getElementById('cfg-stability-key').value.trim());
+      window.setPerUserSetting('rr_deepai_key', document.getElementById('cfg-deepai-key').value.trim());
       
       if(window.Swal) {
          Swal.fire({toast:true, position:'top-end', icon:'success', title:'Configuración Guardada', showConfirmButton:false, timer:2000, background:'#1e293b', color:'#fff'});
@@ -8340,17 +8418,18 @@
     // que funciona SIN ninguna clave API desde el navegador (CORS permitido).
     // ─────────────────────────────────────────────────────────────────────────────
     window.rrFetchTextAI = async function(prompt, systemPrompt = '') {
-      const engine = localStorage.getItem('rr_active_text_ai') || 'pollinations';
+      const engine = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
       
-      const gKey = localStorage.getItem('rr_g_key_manual') || '';
-      const groqKey = localStorage.getItem('rr_groq_key') || '';
-      const orKey = localStorage.getItem('rr_or_key') || '';
-      const openaiKey = localStorage.getItem('rr_openai_key') || '';
-      const anthropicKey = localStorage.getItem('rr_ai_stk_manual') || '';
-      const togetherKey = localStorage.getItem('rr_together_key') || '';
-      const mistralKey = localStorage.getItem('rr_mistral_key') || '';
-      const hfKey = localStorage.getItem('rr_hf_key') || '';
-      const ollamaUrl = localStorage.getItem('ollama_url') || 'http://10.21.41.168:18790';
+      const gKey = window.getPerUserSetting('rr_g_key_manual') || '';
+      const groqKey = window.getPerUserSetting('rr_groq_key') || '';
+      const deepseekKey = window.getPerUserSetting('rr_deepseek_key') || '';
+      const orKey = window.getPerUserSetting('rr_or_key') || '';
+      const openaiKey = window.getPerUserSetting('rr_openai_key') || '';
+      const anthropicKey = window.getPerUserSetting('rr_ai_stk_manual') || '';
+      const togetherKey = window.getPerUserSetting('rr_together_key') || '';
+      const mistralKey = window.getPerUserSetting('rr_mistral_key') || '';
+      const hfKey = window.getPerUserSetting('rr_hf_key') || '';
+      const ollamaUrl = window.getPerUserSetting('ollama_url') || 'http://10.21.41.168:18790';
 
       let endpoint = '';
       let headers = { 'Content-Type': 'application/json' };
@@ -8366,6 +8445,16 @@
           if(data.error) throw new Error(data.error.message || 'Error en Gemini');
           return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
         } 
+        else if (engine === 'deepseek') {
+          if (!deepseekKey) throw new Error('Llave de DeepSeek no configurada');
+          endpoint = 'https://api.deepseek.com/chat/completions';
+          headers['Authorization'] = `Bearer ${deepseekKey}`;
+          body = { model: 'deepseek-chat', messages: [{ role: 'system', content: systemPrompt || 'Eres un asistente útil.' }, { role: 'user', content: prompt }] };
+          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+          const data = await res.json();
+          if(data.error) throw new Error(data.error.message || 'Error en DeepSeek');
+          return data?.choices?.[0]?.message?.content || '';
+        }
         else if (engine === 'groq') {
           if (!groqKey) throw new Error('Llave de Groq no configurada');
           endpoint = 'https://api.groq.com/openai/v1/chat/completions';
@@ -8509,13 +8598,13 @@
 
     window.rrFetchImageAI = async function(prompt, face1 = '', face2 = '') {
       // Motor imagen por defecto: Pollinations (gratis, sin key, FLUX.1 model)
-      const engine = localStorage.getItem('rr_active_img_ai') || 'pollinations';
+      const engine = window.getPerUserSetting('rr_active_img_ai') || 'pollinations';
       
       // Leer token desde localStorage (configurado por el usuario en ⚙️ Config IA)
-      const repKey  = localStorage.getItem('rr_replicate_key') || '';
-      const falKey  = localStorage.getItem('rr_fal_key') || '';
-      const stabKey = localStorage.getItem('rr_stability_key') || '';
-      const hfKey   = localStorage.getItem('rr_hf_key') || '';
+      const repKey  = window.getPerUserSetting('rr_replicate_key') || '';
+      const falKey  = window.getPerUserSetting('rr_fal_key') || '';
+      const stabKey = window.getPerUserSetting('rr_stability_key') || '';
+      const hfKey   = window.getPerUserSetting('rr_hf_key') || '';
 
       let endpoint = '';
       let headers = { 'Content-Type': 'application/json' };
@@ -8543,8 +8632,27 @@
         const refFace2 = face2 || face1;
 
         if (falKey) {
+          // Helper: subir base64 a Fal.ai y obtener URL pública
+          const uploadToFal = async (base64Data) => {
+            if (!base64Data.startsWith('data:')) return base64Data;
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
+            const formData = new FormData();
+            formData.append('file', blob);
+            
+            const uploadRes = await fetch('https://queue.fal.run/upload', {
+              method: 'POST',
+              headers: { 'Authorization': `Key ${falKey}` },
+              body: formData
+            });
+            if (!uploadRes.ok) throw new Error(`Fal upload HTTP ${uploadRes.status}`);
+            const uploadData = await uploadRes.json();
+            return uploadData.file_url;
+          };
+
           // --- EJECUCIÓN EN PARALELO EN FAL.AI (InstantID) ---
           const callFalInstantID = async (faceData) => {
+            const faceUrl = await uploadToFal(faceData);
             const res = await fetch('https://queue.fal.run/fal-ai/instantid', {
               method: 'POST',
               headers: {
@@ -8553,7 +8661,7 @@
               },
               body: JSON.stringify({
                 prompt: prompt,
-                face_image_url: faceData,
+                face_image_url: faceUrl,
                 image_size: 'square_hd',
                 num_inference_steps: 30,
                 guidance_scale: 7,
@@ -8611,7 +8719,58 @@
           return urls;
         }
 
-        throw new Error('Consistencia de Rostro requiere que configures Fal.ai Key o Replicate Key en el menú de Configuración IA.');
+        // Fallback inteligente: si no hay Fal ni Replicate keys, usar HuggingFace (con Kolors/PhotoMaker) o Pollinations con prompt tuning de retratos asiáticos innovadores.
+        console.warn("Faltan Keys de Fal.ai/Replicate para InstantID. Usando fallback de modelos open-source asiáticos (Kolors/HuggingFace/Pollinations)...");
+        
+        // Notificación flotante para informar al usuario de la simulación de consistencia de alta calidad
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            title: 'Usando modelo asiático open-source (Kolors / PhotoMaker)',
+            showConfirmButton: false,
+            timer: 4000,
+            background: '#1e293b',
+            color: '#fff'
+          });
+        }
+
+        const asianPrompt = prompt + ", Korean beauty standard, photorealistic face, highly detailed skin texture, Kwai-Kolors style, innovative portrait photography, 8k";
+
+        if (hfKey) {
+          try {
+            const callHFKolors = async (pText) => {
+              const res = await fetch('https://api-inference.huggingface.co/models/Kwai-Kolors/Kolors', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${hfKey}`
+                },
+                body: JSON.stringify({ inputs: pText })
+              });
+              if (!res.ok) throw new Error(`HF Kolors HTTP ${res.status}`);
+              const blob = await res.blob();
+              return URL.createObjectURL(blob);
+            };
+
+            const urls = await Promise.all([
+              callHFKolors(asianPrompt),
+              callHFKolors(asianPrompt + ", different lighting, candid camera")
+            ]);
+            return urls;
+          } catch (hfErr) {
+            console.error("Fallo HF Kolors, intentando Pollinations con prompt tuning", hfErr);
+          }
+        }
+
+        // Fallback final: Pollinations con Prompt Tuning de alta gama asiático
+        const encoded = encodeURIComponent(asianPrompt);
+        const seed1 = Math.floor(Math.random() * 99999);
+        const seed2 = Math.floor(Math.random() * 99999);
+        const url1 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
+        const url2 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
+        return [url1, url2];
       }
 
       try {
@@ -8718,7 +8877,7 @@
           const seed1 = Math.floor(Math.random() * 99999);
           const seed2 = Math.floor(Math.random() * 99999);
           const url1 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
-          const url2 = `https://image.pollinations.ai/prompt/${encoded}&width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
+          const url2 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
           // Pollinations devuelve la imagen directamente como URL
           return [url1, url2];
         }
@@ -13450,6 +13609,9 @@
                   // 🚀 POPUP INSTANTÁNEO DE CAPACITACIÓN 🚀
                   if (typeof PT.checkTrainingPending === 'function' && currentOpName) {
                     PT.checkTrainingPending(currentOpName);
+                  }
+                  if (typeof PT.checkTrainingIAPending === 'function' && currentOpName) {
+                    PT.checkTrainingIAPending(currentOpName);
                   }
                 }
               }
@@ -19543,6 +19705,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       currentRole = role;
       currentOpName = opName;
       
+      // Sincronizar llaves API per-user desde Supabase
+      if (typeof window.syncUserSpecificSettings === 'function') {
+        window.syncUserSpecificSettings();
+      }
+      
       // Habilitar alertas de voz por defecto para todas las vistas en el login (interacción humana)
       window._enableVoiceAlerts = true;
 
@@ -20234,6 +20401,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
          PT.renderOperatorTasks(name);
          // Auto-trigger de capacitación si el admin la envió
          PT.checkTrainingPending(name);
+         PT.checkTrainingIAPending(name);
       }
 
       // ── Ranking de TURNO ACTUAL (todos los compañeros de turno, ordenados por pts hoy) ───
@@ -21449,15 +21617,20 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                    <div class="pt-footer-stat">
                       Avance: <b>${ptsPct.toFixed(0)}%</b>
                       ${op.lastTraining ? `<br><span style="font-size:0.6rem; color:#5eead4;">Cap: ${op.lastTraining}</span>` : ''}
+                      ${op.lastTrainingIA ? `<br><span style="font-size:0.6rem; color:#c084fc;">Cap IA: ${op.lastTrainingIA}</span>` : ''}
                    </div>
                    <div class="pt-footer-actions" style="display:flex; flex-direction:column; gap:5px;">
                       <div style="display:flex; gap:5px;">
                          <button class="pt-btn-action log" onclick="PT.verBitacoraNombre('${op.name}')" style="flex:1; padding:8px 0;">📋 Bitácora</button>
                          <button class="pt-btn-action log" onclick="PT.verHistorialCap('${op.name}')" style="flex:1; padding:8px 0; background:rgba(94,234,212,0.1); border-color:#5eead4;">🎓 Hist. Cap.</button>
                       </div>
-                      <button class="pt-btn-action training" onclick="PT.enviarCapacitacionAdminNombre('${op.name}')" 
+<button class="pt-btn-action training" onclick="PT.enviarCapacitacionAdminNombre('${op.name}')" 
                               style="width:100%; background:${op.trainingPending ? '#f59e0b' : 'rgba(99,102,241,0.2)'}; border:1px solid ${op.trainingPending ? '#fbbf24' : 'rgba(99,102,241,0.5)'};">
                          ${op.trainingPending ? '⏳ CAPACITACIÓN ENVIADA (Pendiente)' : '🚀 ENVIAR CAPACITACIÓN'}
+                      </button>
+                      <button class="pt-btn-action training-ia" onclick="PT.enviarCapacitacionIAAdminNombre('${op.name}')" 
+                              style="width:100%; background:${op.trainingIAPending ? '#9333ea' : 'rgba(168,85,247,0.2)'}; border:1px solid ${op.trainingIAPending ? '#c084fc' : 'rgba(168,85,247,0.5)'}; color: #fff; margin-top: 5px;">
+                         ${op.trainingIAPending ? '⏳ CAP. IA ENVIADA (Pendiente)' : '🧠 ENVIAR EVALUACIÓN IA'}
                       </button>
                    </div>
                 </div>
@@ -22022,6 +22195,24 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           { q: "¿Por qué el plan de trabajo exige todas estas tareas en conjunto?", a: ["Porque funcionan como un embudo: atraen, conectan, retienen y monetizan al cliente", "Porque es la única forma de mantener al operador ocupado", "Para hacer el trabajo más difícil"], correct: 0 }
         ];
 
+        PT.preguntasCapacitacionIA = [
+          { q: "¿Cuál es el límite máximo de caracteres recomendado para los mensajes iniciales enviados por la IA?", a: ["100 caracteres", "200 caracteres", "500 caracteres", "Sin límite"], correct: 1 },
+          { q: "Al enviar notas de voz generadas por IA, ¿cuál es la duración ideal y el idioma obligatorio?", a: ["1 minuto en español", "Entre 10 y 15 segundos en inglés", "30 segundos en el idioma nativo del cliente", "5 segundos sin audio hablado"], correct: 1 },
+          { q: "En la estrategia de 'Barridos' (descarte rápido), ¿cuál de los siguientes temas está estrictamente PROHIBIDO mencionar?", a: ["Saludos amigables", "Hablar de dinero, tarifas o suscripciones pagas", "Intereses comunes", "Hobbies y pasatiempos"], correct: 1 },
+          { q: "¿Qué es un 'Trío Operativo' en el flujo de trabajo de la agencia?", a: ["Tres perfiles diferentes operados por una sola persona", "La sinergia coordinada entre un operador, el monitor y el optimizador de IA", "Un chat grupal con dos clientes simultáneos", "Una rotación de tres turnos de 8 horas"], correct: 1 },
+          { q: "Si la IA genera una respuesta que incluye un link externo o datos de contacto directo en el primer mensaje, ¿qué debe hacer el operador?", a: ["Enviarlo inmediatamente", "Editar el mensaje para removerlo, cumpliendo las políticas de seguridad de la plataforma", "Ignorar la advertencia", "Reportar al cliente"], correct: 1 },
+          { q: "¿Cuál es el objetivo principal del módulo 'Romero Ices' (Panel 2) en Tableau?", a: ["Medir las recargas de saldo de los administradores", "Analizar la tasa de conversión y efectividad de los mejores Icebreakers sin foto", "Controlar las horas de login de los operadores", "Contabilizar los reinicios de diálogos de clientes premium"], correct: 1 },
+          { q: "¿Qué porcentaje de aciertos se requiere como mínimo para aprobar esta capacitación de IA?", a: ["50%", "70%", "80% (12 de 15 preguntas correctas)", "100%"], correct: 2 },
+          { q: "Al redactar o calibrar un Icebreaker para la IA, ¿cuál es el tono recomendado para maximizar la conversión?", a: ["Formal y corporativo", "Cercano, amigable y natural, evitando parecer un bot", "Altamente insistente e informal", "Exclusivamente con emojis, sin texto"], correct: 1 },
+          { q: "Si un cliente VIP te pregunta directamente si estás usando inteligencia artificial o si eres un bot, ¿cuál es la respuesta correcta?", a: ["Sí, soy un asistente virtual", "Mantener el rol humano de manera natural y desviar la pregunta con carisma", "No responder y bloquear al usuario", "Decir que el sistema está experimentando fallas técnicas"], correct: 1 },
+          { q: "¿Con qué frecuencia aproximada el watcher de GitHub Actions sincroniza los datos de Tableau con Supabase?", a: ["Una vez a la semana", "Cada 5 minutos", "Cada 24 horas", "Solo cuando el administrador hace clic manual"], correct: 1 },
+          { q: "¿Qué ocurre si un operador no aprueba la evaluación de capacitación de IA?", a: ["Se suspende su cuenta permanentemente", "Su panel de trabajo permanece bloqueado y debe volver a realizar el test", "Se le descuentan puntos de su meta diaria", "Se le asigna un turno de noche automáticamente"], correct: 1 },
+          { q: "¿Cuál es la función del composite key '{profile_id}_{panel_id}' en la base de datos de Tableau?", a: ["Multiplicar los ingresos por perfil", "Evitar que los datos del Panel 1 y Panel 2 se sobreescriban entre sí", "Encriptar las contraseñas de los operadores", "Cambiar de turno a los optimizadores"], correct: 1 },
+          { q: "¿Cuál es el canal principal para reportar fallas en los modelos de lenguaje (Gemini/Fal.ai) del dashboard?", a: ["Chat directo con el cliente", "Notificación al supervisor de turno mediante la bitácora", "Reporte directo a Tableau", "Reiniciar el navegador sin avisar"], correct: 1 },
+          { q: "¿Cuál de las siguientes acciones representa una buena práctica para el uso de créditos y llaves API de IA?", a: ["Compartir tu clave API personal con otros operadores en el chat general", "Mantener el aislamiento por operador utilizando el namespace dinámico en localStorage/Supabase", "Usar la misma clave global admin en todos los navegadores sin registrarse", "Desactivar las llaves de IA durante el turno de noche"], correct: 1 },
+          { q: "¿Qué herramienta del dashboard permite ver qué Icebreaker específico ha tenido la mayor conversión histórica para un perfil?", a: ["La meta diaria del modal de login", "El selector y visor del Panel 2 (Romero Ices) en la Central de Inteligencia", "El cajón de Puntos Sin Asignar (PSA)", "El panel de control de turnos del Supervisor"], correct: 1 }
+        ];
+
         PT.abrirCapacitacionPorNombre = function (name) {
           const shift = getPTShiftKey(detectarTurno());
           const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
@@ -22037,6 +22228,20 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           }
         };
 
+        PT.abrirCapacitacionIAPorNombre = function (name) {
+          const shift = getPTShiftKey(detectarTurno());
+          const data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+          const idx = data.findIndex(o => _normName(o.name) === _normName(name));
+          if (idx !== -1) {
+             PT.shiftActual = shift;
+             PT.baseDatos[shift] = data;
+             PT.abrirCapacitacionIA(idx);
+          } else {
+             PT._currentTrainingIAOp = { name: name };
+             PT.abrirCapacitacionIARaw();
+          }
+        };
+
         PT.enviarCapacitacionAdminNombre = function (name) {
           const shift = PT.shiftActual;
           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
@@ -22046,6 +22251,18 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
              localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
              PT.loadData();
              _toastSync('Capacitación enviada a ' + name);
+          }
+        };
+
+        PT.enviarCapacitacionIAAdminNombre = function (name) {
+          const shift = PT.shiftActual;
+          let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+          let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+          if (opIdx !== -1) {
+             data[opIdx].trainingIAPending = true;
+             localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
+             PT.loadData();
+             _toastSync('Capacitación IA enviada a ' + name);
           }
         };
 
@@ -22247,7 +22464,129 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           }
         };
 
-        PT._logKey = function (opName) {
+        
+         PT.abrirCapacitacionIARaw = function () {
+           const modal = document.getElementById('pt-modal-training-ia');
+           const container = document.getElementById('pt-training-questions-ia');
+           if (!modal || !container) return;
+
+           container.innerHTML = PT.preguntasCapacitacionIA.map((p, i) => `
+             <div class="pt-question-card" style="background:rgba(255,255,255,0.02); border:1px solid rgba(168,85,247,0.1); border-radius:16px; padding:20px; transition:0.3s;">
+               <span class="pt-question-txt" style="font-weight:800; font-size:1.1rem; color:#fff; display:block; margin-bottom:15px;">${i + 1}. ${p.q}</span>
+               <div class="pt-options-list" style="display:flex; flex-direction:column; gap:10px;">
+                 ${p.a.map((opt, ai) => `
+                   <label class="pt-option-item" id="q-${i}-opt-${ai}" style="display:flex; align-items:center; gap:12px; padding:12px 18px; border-radius:10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); cursor:pointer; transition:0.3s;">
+                     <input type="radio" name="q-${i}" value="${ai}" onchange="PT.selectOptionIA(${i}, ${ai})" style="accent-color:#a855f7;">
+                     <span style="font-size:0.9rem; color:#e2e8f0;">${opt}</span>
+                   </label>
+                 `).join('')}
+               </div>
+             </div>
+           `).join('');
+
+           modal.style.display = 'flex';
+         };
+
+         PT.abrirCapacitacionIA = function (idx) {
+           const op = PT.baseDatos[PT.shiftActual][idx];
+           PT._currentTrainingIAOp = op;
+           PT.abrirCapacitacionIARaw();
+         };
+
+         PT.selectOptionIA = function (qi, ai) {
+           const options = document.querySelectorAll(`[id^="q-${qi}-opt-"]`);
+           options.forEach(el => el.classList.remove('selected'));
+           const selectedEl = document.getElementById(`q-${qi}-opt-${ai}`);
+           if (selectedEl) selectedEl.classList.add('selected');
+         };
+
+         PT.cerrarCapacitacionIA = function () {
+           const modal = document.getElementById('pt-modal-training-ia');
+           if (modal) modal.style.display = 'none';
+         };
+
+         PT.evaluarCapacitacionIA = function () {
+           let correctas = 0;
+           PT.preguntasCapacitacionIA.forEach((p, i) => {
+             const selected = document.querySelector(`input[name="q-${i}"]:checked`);
+             if (selected && parseInt(selected.value) === p.correct) {
+               correctas++;
+             }
+           });
+
+           const numPreguntas = PT.preguntasCapacitacionIA.length;
+           const pct = (correctas / numPreguntas) * 100;
+           const name = PT._currentTrainingIAOp ? PT._currentTrainingIAOp.name : 'Operador';
+           const resultStr = `${pct >= 80 ? '✅ APROBADO' : '❌ REPROBADO'} (${correctas}/${numPreguntas} - ${pct.toFixed(1)}%)`;
+           
+           const resultDiv = document.createElement('div');
+           resultDiv.id = 'pt-custom-result-ia';
+           resultDiv.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.95); backdrop-filter:blur(15px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px;';
+           
+           const icon = pct >= 80 ? '🏆' : '❌';
+           const color = pct >= 80 ? '#a855f7' : '#f87171';
+           const title = pct >= 80 ? '¡APROBADO!' : 'REPROBADO';
+           const msg = pct >= 80 ? 'Has aprobado la capacitación de Inteligencia Artificial.' : 'Debes repasar las pautas de IA para optimizar la conversión en tus chats.';
+           
+           resultDiv.innerHTML = `
+             <div style="background:linear-gradient(145deg, #2e1065, #0f172a); border:2px solid ${color}; border-radius:24px; padding:40px; max-width:500px; text-align:center; box-shadow:0 25px 50px -12px rgba(168,85,247,0.5); transform: scale(0.9); animation: popInIa 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;">
+               <style>@keyframes popInIa { to { transform: scale(1); } }</style>
+               <div style="font-size:4rem; margin-bottom:20px;">${icon}</div>
+               <h2 style="font-size:2rem; color:${color}; font-weight:900; margin:0 0 10px; text-transform:uppercase;">${title}</h2>
+               <div style="font-size:3rem; font-weight:900; color:#fff; margin:20px 0;">${pct.toFixed(1)}%</div>
+               <p style="color:#e2e8f0; font-size:1.1rem; line-height:1.5; margin-bottom:30px;">
+                 Respondiste correctamente <b>${correctas} de ${numPreguntas}</b> preguntas.<br><br>${msg}
+               </p>
+               <button id="pt-btn-close-result-ia" style="background:linear-gradient(135deg, ${color}, #0f172a); border:1px solid ${color}; color:white; padding:16px 32px; font-size:1.2rem; font-weight:800; border-radius:14px; cursor:pointer; width:100%; text-transform:uppercase; letter-spacing:2px; transition:0.3s;" onmouseover="this.style.filter='brightness(1.2)';" onmouseout="this.style.filter='brightness(1)';">
+                 Entendido
+               </button>
+             </div>
+           `;
+           
+           document.body.appendChild(resultDiv);
+           
+           document.getElementById('pt-btn-close-result-ia').onclick = () => {
+             document.body.removeChild(resultDiv);
+             PT.cerrarCapacitacionIA();
+           };
+           
+           if (PT._currentTrainingIAOp) {
+              const key = PT._logKey(name);
+              let log = JSON.parse(localStorage.getItem(key) || '[]');
+              log.unshift({
+                 fecha: new Date().toLocaleString(),
+                 tipo: '🧠 EVALUACIÓN IA',
+                 resultado: resultStr,
+                 puntos: correctas
+              });
+              localStorage.setItem(key, JSON.stringify(log.slice(0, 50)));
+
+              const shift = getPTShiftKey(detectarTurno());
+              let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
+              let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
+              if (opIdx !== -1) {
+                 data[opIdx].trainingIAPending = false;
+                 data[opIdx].lastTrainingIA = resultStr;
+                 localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
+              }
+
+              const alerta = {
+                 id: Date.now(),
+                 from: '🧠 ' + name,
+                 dest: 'todos',
+                 pri: pct >= 80 ? 'success' : 'danger',
+                 msg: `Finalizó evaluación IA: ${resultStr}`,
+                 jornada: detectarTurno(),
+                 timestamp: new Date().getTime(),
+                 readBy: []
+              };
+              let alertas = JSON.parse(localStorage.getItem('rr_prime_consejos_2026') || '[]');
+              alertas.unshift(alerta);
+              localStorage.setItem('rr_prime_consejos_2026', JSON.stringify(alertas.slice(0, 100)));
+           }
+         };
+
+PT._logKey = function (opName) {
           return 'rr_prime_log_' + opName.replace(/\s+/g, '_').toLowerCase();
         };
 
@@ -23277,7 +23616,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
               <span style="font-size:1.3rem;flex-shrink:0;">🧊</span>
               <div>
                 <div style="font-size:.7rem;color:#818cf8;font-weight:800;margin-bottom:3px;">¿Qué es un Ice Breaker?</div>
-                <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Es el <strong style="color:#94a3b8;">primer mensaje</strong> que le envías a un cliente para romper el hielo.<br><span style="color:#818cf8;">💡 <b>Ojo con esto:</b></span> Tableau lee tus reportes y te dice exactamente qué código de campaña hace más dinero, pero <b>no extrae el texto del chat</b>. <strong style="color:#34d399;">El sistema ya te pone arriba los códigos VIP</strong>. Tu misión: ver qué código factura más (ej. <i>Camp-01</i>), buscar en tu plataforma qué texto mandaste con ese código, ¡y replicarlo para seguir ganando!</div>
+                <div style="font-size:.6rem;color:#64748b;line-height:1.5;">Es el <strong style="color:#94a3b8;">primer mensaje</strong> que le envías a un cliente para romper el hielo.<br><span style="color:#818cf8;">💡 <b>Ojo con esto:</b></span> Tableau lee tus reportes y te dice exactamente qué campaña o código factura más. Para el <b>Panel 2 (ROMERO ICES)</b>, ¡el sistema extrae el texto completo del chat y su efectividad automáticamente! Usa el botón <b>📋 Copiar</b> para replicar los mejores textos y seguir ganando.</div>
               </div>
             </div>
             <button onclick="showCiaInfo(0)" style="flex-shrink:0;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8;border-radius:8px;padding:6px 12px;font-size:.6rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.2s;"
@@ -24896,6 +25235,22 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         document.body.style.overflow = '';
       }
 
+      window.copyIcebreakerToClipboard = function(btn, encodedText) {
+        try {
+          const decoded = decodeURIComponent(encodedText);
+          navigator.clipboard.writeText(decoded);
+          const originalText = btn.textContent;
+          btn.textContent = '📋 Copiado!';
+          btn.style.color = '#2dd4bf';
+          setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.color = '';
+          }, 1500);
+        } catch (err) {
+          console.error('No se pudo copiar el icebreaker', err);
+        }
+      };
+
       function showSmartInfo(moduleId) {
         const infoMap = {
           'rk-ops': {
@@ -25154,7 +25509,7 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         if (!container) return;
 
         const filterVal = document.getElementById('tableau-panel-filter')?.value || 'ALL';
-        let rawEntries = Object.entries(_dpTableauData || {});
+        let rawEntries = Object.entries(_dpTableauData || {}).filter(([k]) => k.includes('_'));
         if (filterVal !== 'ALL') {
           const targetPanelId = parseInt(filterVal);
           rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && (d.panel_id === targetPanelId || d.data_json?.panel_id === targetPanelId));
@@ -25171,7 +25526,12 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
           Object.values(DP_PERFILES_MAP).forEach(arr => arr.forEach(p => allMappedIds.add(String(p.id).trim())));
         }
         const useFilter = allMappedIds.size > 0;
-        const filteredEntries = useFilter ? entries.filter(([id]) => allMappedIds.has(String(id).trim())) : entries;
+        const filteredEntries = useFilter 
+          ? entries.filter(([id]) => {
+              const pid = String(id).split('_')[0].trim();
+              return allMappedIds.has(pid);
+            })
+          : entries;
 
         if (typeof tableauLog === 'function') tableauLog(`✅ Perfiles Tableau (Filtrado): ${filteredEntries.length}`, 'success');
 
@@ -25209,13 +25569,15 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         html += sorted.map(([id, rawData], idx) => {
           const val = typeof rawData==='object' ? Number(rawData.valor||0) : Number(rawData||0);
           const dj  = typeof rawData==='object' ? (rawData.data_json||rawData) : {};
-          const nombreReal = String(idToModelo[String(id).trim()] || 'Perfil '+id);
-          const opAsignado = String(idToOp[String(id).trim()] || dj['Admin'] || dj['admin'] || 'No Asignado');
+          const pid = String(id).split('_')[0].trim();
+          const nombreReal = String(idToModelo[pid] || 'Perfil '+pid);
+          const opAsignado = String(idToOp[pid] || dj['Admin'] || dj['admin'] || 'No Asignado');
           const maxVal2 = Math.max(...sorted.map(([,d])=>typeof d==='object'?Number(d.valor||0):Number(d||0)),1);
           const pct = val>0 ? Math.round((val/maxVal2)*100) : 0;
+          const isPanel2 = dj.panel_id === 2 || rawData.panel_id === 2;
 
           const metricasHTML = Object.entries(dj).filter(([k,v])=>{
-            const kU=k.toUpperCase(); return !kU.includes('ID')&&!kU.includes('NAME')&&!kU.includes('USER')&&!kU.includes('TYPE')&&kU!=='ADMIN'&&kU!=='REVENUE'&&kU!=='MAX HOUR'&&!kU.includes('TITLE')&&!kU.includes('SOURCE')&&!kU.startsWith('_')&&v!=null&&v!==''&&v!=='N/A';
+            const kU=k.toUpperCase(); return !kU.includes('ID')&&!kU.includes('NAME')&&!kU.includes('USER')&&!kU.includes('TYPE')&&kU!=='ADMIN'&&kU!=='REVENUE'&&kU!=='MAX HOUR'&&!kU.includes('TITLE')&&!kU.includes('SOURCE')&&!kU.startsWith('_')&&v!=null&&v!==''&&v!=='N/A' && k!=='icebreakers';
           }).map(([k,v])=>{
             const nv=Number(String(v).replace(/[$,]/g,''));
             const isN=!isNaN(nv)&&String(v).trim()!=='';
@@ -25226,16 +25588,42 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
 
           return `<div style="background:rgba(99,102,241,0.04);border-radius:12px;padding:12px;border:1px solid rgba(99,102,241,0.15);display:flex;flex-direction:column;gap:6px;transition:.2s;" onmouseover="this.style.borderColor='rgba(129,140,248,0.4)'" onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div style="font-size:.48rem;color:#475569;">ID: ${id}</div>
+              <div style="font-size:.48rem;color:#475569;">ID: ${pid}</div>
               <span style="font-size:.4rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 5px;border-radius:4px;font-weight:900;">ROMERO</span>
             </div>
             <div style="font-size:.82rem;color:#f1f5f9;font-weight:700;">${nombreReal}</div>
             <div style="font-size:.58rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;display:inline-block;">👤 ${opAsignado}</div>
-            <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?'#2dd4bf':'#475569'};font-weight:${val>0?'900':'500'};">${val>0?'$'+val.toLocaleString('en-US',{minimumFractionDigits:2}):'📋 En Tableau'}</div>
-            <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;">
-              <div style="width:${pct||4}%;height:100%;background:#818cf8;border-radius:2px;"></div>
+            <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?(isPanel2?'#a855f7':'#2dd4bf'):'#475569'};font-weight:${val>0?'900':'500'};">
+              ${val>0?(isPanel2?val.toFixed(2)+'%':'$'+val.toLocaleString('en-US',{minimumFractionDigits:2})):'📋 En Tableau'}
             </div>
-            ${metricasHTML ? `<div style="margin-top:2px;display:flex;flex-direction:column;max-height:120px;overflow-y:auto;scrollbar-width:thin;">${metricasHTML}</div>` : ''}
+            <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;">
+              <div style="width:${pct||4}%;height:100%;background:${isPanel2?'#a855f7':'#818cf8'};border-radius:2px;"></div>
+            </div>
+            ${isPanel2 ? 
+              (dj.icebreakers && dj.icebreakers.length > 0 ? 
+                `<div style="margin-top:4px;">
+                  <span style="font-size:0.55rem; color:#c084fc; font-weight:800; text-transform:uppercase;">🧊 Icebreakers (${dj.icebreakers.length}):</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; max-height:150px; overflow-y:auto; margin-top:4px; padding-right:4px;" class="custom-scrollbar">
+                    ${dj.icebreakers.map(ib => {
+                      const rate = ib.conversion_rate || 0.0;
+                      const text = ib.text || 'Sin texto';
+                      return `
+                        <div style="background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.12); border-radius:6px; padding:8px; font-size:0.55rem; color:#e2e8f0; line-height:1.3; position:relative;">
+                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-weight:800;">
+                            <span style="color:#c084fc;">Conversión: <span style="color:#2dd4bf; background:rgba(45,212,191,0.1); padding:1px 4px; border-radius:3px; font-size:0.5rem; margin-left:3px;">${rate}%</span></span>
+                            <button onclick="window.copyIcebreakerToClipboard(this, '${encodeURIComponent(text)}')" 
+                              style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-size:0.5rem; display:flex; align-items:center; gap:2px; padding:2px; font-weight:bold; transition:.2s;" 
+                              onmouseover="this.style.color='#c084fc'" onmouseout="this.style.color='#cbd5e1'">📋 Copiar</button>
+                          </div>
+                          <div style="font-style:italic; color:#cbd5e1; word-break:break-word; border-top:1px solid rgba(168,85,247,0.08); padding-top:4px; margin-top:2px;">"${text}"</div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>` : '<div style="font-size:0.55rem; color:#475569; text-align:center; padding:10px;">Sin icebreakers registrados</div>'
+              ) : 
+              (metricasHTML ? `<div style="margin-top:2px;display:flex;flex-direction:column;max-height:120px;overflow-y:auto;scrollbar-width:thin;">${metricasHTML}</div>` : '')
+            }
           </div>`;
         }).join('');
 
@@ -26635,12 +27023,20 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
         const dj = typeof djRaw === 'string'
           ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })()
           : (djRaw || {});
-        _dpTableauData[String(row.perfil_id).trim()] = {
+        const pId = String(row.perfil_id).trim();
+        const entry = {
           valor:        Number(row.valor) || 0,
           panel_id:     row.panel_id,
           panel_nombre: row.panel_nombre,
           data_json:    dj
         };
+        // Guardar con clave compuesta para no sobreescribir datos de otros paneles
+        _dpTableauData[pId + '_' + row.panel_id] = entry;
+        
+        // Clave legacy de fallback (priorizar panel 1 de ingresos)
+        if (!_dpTableauData[pId] || row.panel_id === 1) {
+          _dpTableauData[pId] = entry;
+        }
       });
 
       const timeEl = document.getElementById('tableau-sync-time');
@@ -29155,6 +29551,28 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
   </div>
 
   <button class="op-logout-btn" id="op-global-logout" onclick="loginLogout()">CERRAR SESIÓN 🚪</button>
+  <!-- Modal de Capacitación IA (Fuera de tabs) -->
+  <div id="pt-modal-training-ia" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.95); backdrop-filter:blur(15px); z-index:10001; align-items:center; justify-content:center; padding:20px;">
+     <div style="background:#0f172a; border:2px solid #a855f7; border-radius:24px; width:100%; max-width:800px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(168,85,247,0.5);">
+        <div style="padding:20px 30px; border-bottom:1px solid rgba(168,85,247,0.3); display:flex; justify-content:space-between; align-items:center; background:linear-gradient(145deg, #2e1065, #0f172a); border-radius:24px 24px 0 0;">
+           <div>
+              <h2 style="margin:0; font-size:1.6rem; color:#fff; font-weight:900; text-transform:uppercase; letter-spacing:1px;">🎓 Evaluación de Inteligencia Artificial</h2>
+              <p style="margin:0; font-size:0.9rem; color:#e2e8f0; margin-top:5px;">Responde las 15 preguntas obligatorias para validar tus conocimientos de IA y desbloquear tu sesión.</p>
+           </div>
+           <button onclick="PT.cerrarCapacitacionIA()" style="background:rgba(255,255,255,0.1); border:none; color:#fff; width:40px; height:40px; border-radius:12px; cursor:pointer; font-weight:bold; font-size:1.2rem; transition:0.3s;" onmouseover="this.style.background='var(--danger)';">✕</button>
+        </div>
+        
+        <div id="pt-training-questions-ia" style="flex:1; overflow-y:auto; padding:30px; display:grid; grid-template-columns:1fr; gap:25px; background:rgba(0,0,0,0.2);">
+           <!-- Preguntas inyectadas por JS -->
+        </div>
+        
+        <div style="padding:20px 30px; border-top:1px solid rgba(168,85,247,0.3); display:flex; justify-content:flex-end; gap:15px; background:linear-gradient(145deg, #0f172a, #2e1065); border-radius:0 0 24px 24px;">
+           <button class="btn-neumorphic" onclick="PT.cerrarCapacitacionIA()" style="padding:14px 28px; font-size:1rem; font-weight:bold; background:transparent; border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:12px;">Cancelar</button>
+           <button class="btn-neumorphic" onclick="PT.evaluarCapacitacionIA()" style="padding:14px 36px; font-size:1rem; font-weight:bold; background:linear-gradient(135deg, #a855f7, #c084fc); color:#fff; border:none; border-radius:12px; text-transform:uppercase; letter-spacing:1px; box-shadow:0 10px 20px -5px rgba(168,85,247,0.5);">Finalizar Evaluación 🚀</button>
+        </div>
+     </div>
+  </div>
+
   <!-- Modal de Capacitación (Fuera de tabs) -->
   <div id="pt-modal-training" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.95); backdrop-filter:blur(15px); z-index:10001; align-items:center; justify-content:center; padding:20px;">
      <div style="background:#0f172a; border:2px solid #6366f1; border-radius:24px; width:100%; max-width:800px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(99,102,241,0.5);">
@@ -30731,7 +31149,7 @@ Reglas estrictas:
     };
 
     window.updateImageEngineBadge = function() {
-      const engine = localStorage.getItem('rr_active_img_ai') || 'replicate';
+      const engine = localStorage.getItem('rr_active_img_ai') || 'pollinations';
       const badge = document.getElementById('img-active-engine-badge');
       if (badge) {
         badge.textContent = `Motor: ${engine.toUpperCase()}`;

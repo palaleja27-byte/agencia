@@ -346,32 +346,35 @@ def sync_panel(panel: dict, token_secret: str, token_name: str = "Analytics") ->
         except Exception:
             continue
 
-        # Buscar columna de ID en el CSV
-        col_id = next(
-            (c for c in df.columns
-             if any(k in c.upper() for k in ["ID", "USER", "PERFIL", "PROFILE"])),
-            None
-        )
-        if not col_id:
-            continue
-
-        # Cruzar IDs del CSV con los IDs de datame_perfiles
-        df["_id_clean"] = df[col_id].astype(str).str.strip()
-        matched = df[df["_id_clean"].isin(datame_ids)]
-
-        if matched.empty:
-            # Intentar con regex numérico
-            df["_id_num"] = df[col_id].astype(str).apply(
-                lambda x: re.findall(r"\d{7,10}", x)[0] if re.findall(r"\d{7,10}", x) else ""
-            )
-            matched = df[df["_id_num"].isin(datame_ids)]
-            if not matched.empty:
-                df["_id_clean"] = df["_id_num"]
-
-        if not matched.empty:
+        # Buscar la mejor columna de ID en el CSV (puede haber varias como id agency model e id_trusted_user)
+        id_cols = [c for c in df.columns if any(k in c.upper() for k in ["ID", "USER", "PERFIL", "PROFILE"])]
+        
+        best_col_id = None
+        best_matched = pd.DataFrame()
+        
+        for col in id_cols:
+            df["_id_clean_temp"] = df[col].astype(str).str.strip()
+            matched_temp = df[df["_id_clean_temp"].isin(datame_ids)]
+            if matched_temp.empty:
+                # Intentar con regex numérico
+                df["_id_num_temp"] = df[col].astype(str).apply(
+                    lambda x: re.findall(r"\d{7,10}", x)[0] if re.findall(r"\d{7,10}", x) else ""
+                )
+                matched_temp = df[df["_id_num_temp"].isin(datame_ids)]
+                if not matched_temp.empty:
+                    df["_id_clean_temp"] = df["_id_num_temp"]
+            
+            if len(matched_temp) > len(best_matched):
+                best_matched = matched_temp
+                best_col_id = col
+                df["_id_clean"] = df["_id_clean_temp"]
+                
+        if best_col_id:
+            col_id = best_col_id
+            matched = best_matched
             hits = len(matched)
-            print(f"   ✅ MATCH! Vista '{view_curl}': {hits} IDs encontrados")
-            source_info = {"workbook": view_curl.split('/')[0], "vista": view_name2,
+            print(f"   ✅ MATCH! Vista '{view_curl}': {hits} IDs encontrados en columna '{col_id}'")
+            source_info = {"workbook": view_curl.split('/')[0], "vista": view_name2, "view_curl": view_curl,
                            "col_id": col_id, "df": df, "matched": matched}
             found_records.append(source_info)
 
@@ -392,7 +395,13 @@ def sync_panel(panel: dict, token_secret: str, token_name: str = "Analytics") ->
     # Priorizar la vista configurada en el panel (view_name)
     best = None
     if view_name:
-        matched_views = [r for r in found_records if view_name.lower() in r["vista"].lower() or view_name.lower() in r["workbook"].lower()]
+        def norm(s):
+            return re.sub(r'[^a-z0-9]', '', str(s).lower())
+        v_norm = norm(view_name)
+        matched_views = [
+            r for r in found_records 
+            if v_norm in norm(r["vista"]) or v_norm in norm(r["workbook"]) or v_norm in norm(r.get("view_curl", ""))
+        ]
         if matched_views:
             best_with_revenue = [r for r in matched_views if has_revenue(r)]
             if best_with_revenue:
@@ -443,6 +452,88 @@ def sync_panel(panel: dict, token_secret: str, token_name: str = "Analytics") ->
     print(f"   🔍 Primeras 5 filas de nuestros perfiles:")
     for i, row in matched.head(5).iterrows():
         print(f"      [{i}] ID={row[col_id]} | Valor={row.get(col_val, 'N/A')}")
+
+    # ── ESTRUCTURACIÓN Y SUBIDA DE DATOS ──
+    view_real_norm = re.sub(r'[^a-z0-9]', '', view_real.lower())
+    is_ices_panel = "chaticeswithoutphoto" in view_real_norm or "ices" in view_real_norm
+    
+    if is_ices_panel:
+        print("   🧊 Procesando formato especial de Chaticeswithoutphoto...")
+        payload = []
+        seen = {}
+        
+        # Encontrar las columnas relevantes
+        icebreaker_col = next((c for c in df.columns if "ICEBREAKER" in c.upper() or "MESSAGE" in c.upper() or "TEXTO" in c.upper()), None)
+        conversion_col = next((c for c in df.columns if "CONVERSION" in c.upper() or "CONV" in c.upper() or "RATE" in c.upper() or "%" in c.upper()), None)
+        category_col = next((c for c in df.columns if "CATEGORY" in c.upper() or "CATEGORIA" in c.upper()), None)
+        
+        print(f"      → Columna Icebreaker: '{icebreaker_col}'")
+        print(f"      → Columna Conversión: '{conversion_col}'")
+        print(f"      → Columna Categoría:  '{category_col}'")
+
+        # Agrupar por perfil
+        for _, row in matched.iterrows():
+            raw_id = str(row["_id_clean"]).strip()
+            nums   = re.findall(r"\d{7,10}", raw_id)
+            id_clean = nums[0] if nums else raw_id
+            
+            # Obtener datos de la fila
+            ib_text = str(row[icebreaker_col]).strip() if icebreaker_col else ""
+            if not ib_text or ib_text.lower() == "nan" or ib_text.lower() == "none":
+                continue
+                
+            conversion_val = 0.0
+            if conversion_col:
+                try:
+                    raw_val_str = str(row[conversion_col])
+                    had_pct_symbol = "%" in raw_val_str
+                    val_str = raw_val_str.replace("%","").replace(",",".").replace(" ","").strip()
+                    conversion_val = float(val_str)
+                    if not had_pct_symbol and conversion_val < 1.0 and conversion_val > 0.0:
+                        conversion_val = round(conversion_val * 100, 2)
+                except Exception:
+                    pass
+            
+            cat_val = str(row[category_col]).strip() if category_col else ""
+            if cat_val.lower() == "nan":
+                cat_val = ""
+                
+            icebreaker_entry = {
+                "text": ib_text,
+                "conversion_rate": conversion_val,
+                "category": cat_val
+            }
+            
+            if id_clean in seen:
+                idx = seen[id_clean]
+                payload[idx]["data_json"]["icebreakers"].append(icebreaker_entry)
+                # Promedio de conversión en el valor principal
+                rates = [ib["conversion_rate"] for ib in payload[idx]["data_json"]["icebreakers"]]
+                payload[idx]["valor"] = round(sum(rates) / len(rates), 2)
+            else:
+                row_json = {
+                    "id_trusted_user": id_clean,
+                    "icebreakers": [icebreaker_entry],
+                    "panel_id": panel_id
+                }
+                seen[id_clean] = len(payload)
+                payload.append({
+                    "perfil_id":    id_clean,
+                    "panel_id":     panel_id,
+                    "panel_nombre": panel_nombre,
+                    "valor":        conversion_val,
+                    "data_json":    row_json,
+                    "updated_at":   "now()"
+                })
+                
+        print(f"   📦 {len(payload)} perfiles de la agencia listos para subir (Ices):")
+        for rec in payload:
+            print(f"      → {rec['perfil_id']} | {rec['valor']}% promedio")
+            
+        if payload:
+            print(f"\n   ⚡ CYBERPUNK UPSERT (Ices) → {len(payload)} registros...")
+            sb_rpc_upsert(payload)
+        return len(payload)
 
     # ── EXTRAER CLIENTES PREMIUM (REGULAR USERS) DESDE VISTAS DE LÍMITES ──
     clients_by_profile = {}

@@ -8666,7 +8666,8 @@
                 image_size: 'square_hd',
                 num_inference_steps: 30,
                 guidance_scale: 7,
-                ip_adapter_scale: 0.8
+                ip_adapter_scale: 0.95,
+                controlnet_conditioning_scale: 1.0
               })
             });
             const data = await res.json();
@@ -8703,7 +8704,8 @@
                   face_image: faceData,
                   num_inference_steps: 30,
                   guidance_scale: 7,
-                  ip_adapter_scale: 0.8
+                  ip_adapter_scale: 0.95,
+                  controlnet_conditioning_scale: 1.0
                 }
               })
             });
@@ -8720,8 +8722,8 @@
           return urls;
         }
 
-        // Fallback inteligente: si no hay Fal ni Replicate keys, usar HuggingFace (con Kolors/PhotoMaker) o Pollinations con prompt tuning de retratos asiáticos innovadores.
-        console.warn("Faltan Keys de Fal.ai/Replicate para InstantID. Usando fallback de modelos open-source asiáticos (Kolors/HuggingFace/Pollinations)...");
+        // Fallback inteligente: si no hay Fal ni Replicate keys, usar HuggingFace (con Kolors/PhotoMaker) o Pollinations con prompt tuning de consistencia adaptada a las fotos de referencia.
+        console.warn("Faltan Keys de Fal.ai/Replicate para InstantID. Usando fallback de modelos open-source (HuggingFace/Pollinations) manteniendo consistencia del rostro de referencia...");
         
         // Notificación flotante para informar al usuario de la simulación de consistencia de alta calidad
         if (typeof Swal !== 'undefined') {
@@ -8729,7 +8731,7 @@
             toast: true,
             position: 'top-end',
             icon: 'info',
-            title: 'Usando modelo asiático open-source (Kolors / PhotoMaker)',
+            title: 'Usando consistencia adaptativa local',
             showConfirmButton: false,
             timer: 4000,
             background: '#1e293b',
@@ -8737,7 +8739,8 @@
           });
         }
 
-        const asianPrompt = prompt + ", Korean beauty standard, photorealistic face, highly detailed skin texture, Kwai-Kolors style, innovative portrait photography, 8k";
+        // Prompt enriquecido para conservar rasgos faciales del modelo base, prohibiendo estereotipos externos
+        const consistencePrompt = prompt + ", keep exact facial structure, match face shape and features of the reference model, photorealistic face, highly detailed skin texture, raw amateur phone quality, 8k";
 
         if (hfKey) {
           try {
@@ -8756,8 +8759,8 @@
             };
 
             const urls = await Promise.all([
-              callHFKolors(asianPrompt),
-              callHFKolors(asianPrompt + ", different lighting, candid camera")
+              callHFKolors(consistencePrompt),
+              callHFKolors(consistencePrompt + ", different angle, candid snapshot")
             ]);
             return urls;
           } catch (hfErr) {
@@ -8765,8 +8768,8 @@
           }
         }
 
-        // Fallback final: Pollinations con Prompt Tuning de alta gama asiático
-        const encoded = encodeURIComponent(asianPrompt);
+        // Fallback final: Pollinations con Prompt Tuning enfocado en conservar rasgos físicos del modelo de referencia
+        const encoded = encodeURIComponent(consistencePrompt);
         const seed1 = Math.floor(Math.random() * 99999);
         const seed2 = Math.floor(Math.random() * 99999);
         const url1 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
@@ -8811,8 +8814,8 @@
         // ─────────────────────────────────────────────
         else if (engine === 'kolors') {
           endpoint = 'https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions';
-          // Kolors usa prompt engineering específico para retratos
-          const kolorsPrompt = prompt + ', portrait photography, photorealistic face, Korean beauty standard, soft skin texture, KOLORS style';
+          // Kolors usa prompt engineering específico para retratos sin forzar rasgos asiáticos
+          const kolorsPrompt = prompt + ', portrait photography, photorealistic face, keep exact facial structure of the reference model, natural skin texture, realistic look';
           headers['Authorization'] = `Bearer ${repKey}`;
           headers['Prefer'] = 'wait';
           body = { input: { prompt: kolorsPrompt, num_outputs: 2, output_format: 'webp', output_quality: 95, guidance: 4 } };
@@ -31334,11 +31337,13 @@ Reglas estrictas:
       try {
         // 1. Expandir prompt usando rrFetchTextAI, enfocado en cámara móvil gama media y selfie
         const promptExpansionText = `Actúa como un ingeniero de prompts profesional para generadores de imágenes (como Flux, SDXL, InstantID).
-El usuario quiere generar fotos de la modelo: "${modelName}".
+El usuario quiere generar fotos de la persona/modelo (determina el género hombre/mujer basándote en el nombre o descripción): "${modelName}".
 La situación o escenario es: "${situation}".
 
 Escribe un prompt en inglés extremadamente realista enfocado a estilo AMATEUR y CASUAL, simulando una foto tomada con un smartphone de gama media (como un celular común, selfie casual, espejo o foto diaria informal).
-Instrucciones del estilo visual:
+Instrucciones críticas:
+- Ajusta el género del sujeto (man/woman, guy/girl, his/her) basándote en el nombre de la modelo/modelo "${modelName}" (ej: si es FRANCISCO, el sujeto debe ser un hombre).
+- Mantén la consistencia de los rasgos físicos y de la estructura facial originales, evitando imponer estándares estéticos de otras etnias (como estándares coreanos o asiáticos) a menos que el nombre o la descripción lo especifiquen.
 - Debe parecer una foto casual de celular ("raw amateur phone selfie", "casual smartphone snapshot", "taken with mid-range mobile phone camera").
 - Iluminación natural cotidiana (ej: luz de cocina, luz solar del auto, luz de baño común), NADA de iluminación cinematográfica perfecta ni flashes de estudio profesional.
 - Evita el efecto bokeh/desenfoque de estudio exagerado; el fondo debe verse nítido pero casual.

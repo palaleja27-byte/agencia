@@ -6525,16 +6525,23 @@
             <span>⚡ <strong id="dp-t-hoy-pts" style="color:#34d399;">0,0</strong> pts <span id="dp-t-hoy-cop" style="font-size:.62rem;color:#34d399;">$0 COP</span></span>
             <span style="margin-left:auto;">📅 Total panel: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong> <strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
           </div>
-          <!-- RESUMEN CORTE DE TURNO (Suma de todos los paneles) -->
           <div id="dp-corte-turno-wrap" style="background:rgba(15,23,42,0.6); border-top:1px solid rgba(45,212,191,0.1); padding:14px 18px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
               <div>
                 <h4 style="margin:0; font-size:.85rem; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:6px;">📋 Resumen para Corte de Turno <button onclick="showSmartInfo('corte')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h4>
                 <p style="margin:4px 0 0; font-size:.65rem; color:#64748b; line-height:1.4;">
                   Estas cifras corresponden a la <strong>Suma Global Neta</strong> de todos los paneles. Suman la producción real de cada perfil desde el inicio del turno actual.
                 </p>
               </div>
-              <div id="dp-corte-active-label" style="background:rgba(99,102,241,0.2); color:#818cf8; padding:4px 10px; border-radius:6px; font-size:.6rem; font-weight:800; text-transform:uppercase;">TURNO: —</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button id="dp-corte-save-btn" onclick="saveCorteTurnoBitacora()" style="background:#0f766e; border:1px solid #14b8a6; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#115e59'" onmouseout="this.style.background='#0f766e'">
+                  💾 Guardar Corte
+                </button>
+                <button id="dp-corte-view-btn" onclick="abrirBitacoraCortes()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
+                  📖 Ver Bitácora
+                </button>
+                <div id="dp-corte-active-label" style="background:rgba(99,102,241,0.2); color:#818cf8; padding:6px 10px; border-radius:6px; font-size:.6rem; font-weight:800; text-transform:uppercase;">TURNO: —</div>
+              </div>
             </div>
             
             <div id="dp-corte-perfiles-list" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:8px; max-height:200px; overflow-y:auto; padding:4px;">
@@ -11616,13 +11623,28 @@
       
       return [];
     }
-    function saveCortesOp(name, arr) {
+    async function saveCortesOp(name, arr) {
       const all = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
-      // Guardar siempre con el mismo nombre normalizado para consistencia
       const norm = _normName(name);
       const existKey = Object.keys(all).find(k => _normName(k) === norm) || name;
       all[existKey] = arr;
       localStorage.setItem(CORTE_KEY, JSON.stringify(all));
+      
+      if (typeof _sb !== 'undefined' && _sbBootReady) {
+        try {
+          const { data, error } = await _sb.from('kv_store').select('value').eq('key', 'rr_prime_cortes').single();
+          let remoteAll = {};
+          if (!error && data && data.value) {
+            remoteAll = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          }
+          remoteAll[existKey] = arr;
+          await _sb.from('kv_store').upsert({ key: 'rr_prime_cortes', value: JSON.stringify(remoteAll) }, { onConflict: 'key' });
+          localStorage.setItem(CORTE_KEY, JSON.stringify(remoteAll));
+          console.log("[Cortes] Sincronizado a Supabase y mezclado con éxito.");
+        } catch (e) {
+          console.error("[Cortes] Error al mezclar/sincronizar cortes:", e);
+        }
+      }
     }
 
     // Detecta turno movido al inicio del bloque script para hoisting preventivo
@@ -13561,7 +13583,9 @@
               // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
               const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
               // rr_prime_cortes NUNCA se ignora — es la fuente de puntos del operador
-              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && row.key !== 'primeOperatorsData2026') return;
+              // rr_prime_asistencia_draft NUNCA se ignora — es el canal de login de operadores remotos
+              const _isAsistenciaDraft = row.key.startsWith('rr_prime_asistencia_draft');
+              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && row.key !== 'primeOperatorsData2026' && !_isAsistenciaDraft) return;
               if (row.key === 'primeOperatorsData2026') {
                 _sb.from('kv_store').select('value').eq('key', 'primeOperatorsData2026_ts').single()
                   .then(({ data: tsData }) => {
@@ -13577,8 +13601,13 @@
                     }
                   });
               } else {
-                _origSetItem(row.key, row.value);
-                _sbMemCache[row.key] = row.value; // memory cache actualizado por realtime
+                // FIX: Supabase realtime may deliver value as an object (jsonb) or string.
+                // localStorage.setItem requires a string — always stringify objects.
+                const _rtVal = (row.value !== null && typeof row.value === 'object')
+                  ? JSON.stringify(row.value)
+                  : row.value;
+                _origSetItem(row.key, _rtVal);
+                _sbMemCache[row.key] = _rtVal; // memory cache actualizado por realtime
               }
               // Recargar datos en memoria si es una clave de negocio crítica
               const critical = [
@@ -13592,13 +13621,25 @@
               // ── Asistencia draft en tiempo real (auto-login del operador) ──
               // La clave es dinámica: rr_prime_asistencia_draft_FECHA_TURNO
               if (row.key.startsWith('rr_prime_asistencia_draft')) {
-                // Monitor/admin: re-renderizar grilla de asistencia + ranking en tiempo real
-                if ((currentRole === 'monitor' || currentRole === 'admin') &&
-                  typeof asiLoadDraft === 'function' && typeof asiRender === 'function') {
-                  asiLoadDraft();
-                  asiRender();
-                  // Ranking se actualiza: el nuevo op aparece automáticamente
-                  if (typeof renderRanking === 'function') renderRanking();
+                // Monitor/admin: re-renderizar grilla de asistencia + módulo conectados en tiempo real
+                if ((currentRole === 'monitor' || currentRole === 'admin')) {
+                  // Recargar draft desde localStorage (ya actualizado arriba) y re-renderizar
+                  if (typeof asiLoadDraft === 'function') asiLoadDraft();
+                  if (typeof asiRender === 'function') asiRender();
+                  // Módulo de avatares: actualizar inmediatamente
+                  if (typeof renderConnectedOps === 'function') renderConnectedOps();
+                  // Ranking completo (incluye badges y tabla)
+                  if (typeof renderRanking === 'function') setTimeout(renderRanking, 100);
+                  // Toast de notificación cuando un operador se conecta
+                  try {
+                    const _draftParsed = typeof row.value === 'object' ? row.value : JSON.parse(row.value || '{}');
+                    const _newOps = Object.entries(_draftParsed)
+                      .filter(([k, v]) => k.endsWith('||operador') && v?.estado === 'P' && v?.autoMarcado)
+                      .map(([k]) => k.replace('||operador', ''));
+                    if (_newOps.length > 0) {
+                      _toastSync('🟢 ' + _newOps.join(', ') + ' se conect' + (_newOps.length > 1 ? 'aron' : 'ó'));
+                    }
+                  } catch(e) {}
                 }
               }
 
@@ -27318,6 +27359,498 @@ PT._logKey = function (opName) {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // MÓDULO: BITÁCORA DE CORTES DE TURNO
+    // ═══════════════════════════════════════════════════════════════
+    const BITACORA_KEY = 'rr_corte_bitacora_history';
+    window._lastCorteRows = null; // Guardar operaciones de hoy
+
+    // Helper: Obtener historial de bitácora
+    function getBitacoraHistory() {
+      return JSON.parse(localStorage.getItem(BITACORA_KEY) || '[]');
+    }
+
+    // Helper: Guardar historial de bitácora (local y remoto)
+    async function saveBitacoraHistory(arr) {
+      localStorage.setItem(BITACORA_KEY, JSON.stringify(arr));
+      if (typeof _sb !== 'undefined' && _sbBootReady) {
+        try {
+          const { data, error } = await _sb.from('kv_store').select('value').eq('key', BITACORA_KEY).single();
+          let remoteArr = [];
+          if (!error && data && data.value) {
+            remoteArr = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          }
+          const mergedMap = {};
+          remoteArr.forEach(item => { if (item && item.id) mergedMap[item.id] = item; });
+          arr.forEach(item => { if (item && item.id) mergedMap[item.id] = item; });
+          const mergedArr = Object.values(mergedMap).sort((a,b) => b.timestamp - a.timestamp);
+          
+          await _sb.from('kv_store').upsert({ key: BITACORA_KEY, value: JSON.stringify(mergedArr) }, { onConflict: 'key' });
+          localStorage.setItem(BITACORA_KEY, JSON.stringify(mergedArr));
+        } catch (e) {
+          console.error('[Bitácora] Error al sincronizar a Supabase:', e);
+        }
+      }
+    }
+
+    // Abrir el modal de bitácora
+    async function abrirBitacoraCortes() {
+      const modal = document.getElementById('modal-bitacora-cortes-global');
+      if (modal) modal.style.display = 'flex';
+      
+      if (typeof _sb !== 'undefined' && _sbBootReady) {
+        try {
+          const { data } = await _sb.from('kv_store').select('value').eq('key', BITACORA_KEY).single();
+          if (data && data.value) {
+            const arr = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            localStorage.setItem(BITACORA_KEY, JSON.stringify(arr));
+          }
+        } catch(e) {}
+      }
+      
+      await inicializarCortesHoy();
+      renderBitacoraCortesList();
+    }
+
+    function cerrarModalBitacoraCortes() {
+      const modal = document.getElementById('modal-bitacora-cortes-global');
+      if (modal) modal.style.display = 'none';
+    }
+
+    // Inicializar cortes de hoy (6AM, 8AM, 10AM...)
+    async function inicializarCortesHoy(force = false) {
+      const history = getBitacoraHistory();
+      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const yaHayHoy = history.some(h => h.fecha === hoy);
+      if (yaHayHoy && !force) return;
+      
+      if (typeof _sb === 'undefined') return;
+      try {
+        const { data: rows, error } = await _sb.from('operaciones').select('id_perfil, puntos_neto, jornada').eq('fecha_dia', hoy);
+        if (error || !rows || rows.length === 0) {
+          console.log("[Bitácora] No hay operaciones hoy para inicializar");
+          return;
+        }
+        
+        const perfilToOp = {};
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            (op.profiles || []).forEach(p => {
+              perfilToOp[String(p.id).trim()] = { operador: op.name, modelo: p.model || p.modelo || ('ID ' + p.id) };
+            });
+          });
+        }
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).flat().forEach(p => {
+            const k = String(p.id).trim();
+            if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', modelo: p.modelo || ('ID ' + p.id) };
+          });
+        }
+        
+        const opJornadaPts = {};
+        rows.forEach(r => {
+          const pts = r.puntos_neto || 0;
+          if (pts <= 0 || pts > 800) return;
+          const info = perfilToOp[String(r.id_perfil).trim()] || { operador: 'ID: ' + r.id_perfil, modelo: 'Perfil ' + r.id_perfil };
+          const jKey = r.jornada === 'Mañana' ? 'Mañana' : r.jornada === 'Tarde' ? 'Tarde' : 'Noche';
+          
+          if (!opJornadaPts[info.operador]) opJornadaPts[info.operador] = {};
+          if (!opJornadaPts[info.operador][jKey]) opJornadaPts[info.operador][jKey] = { total: 0, perfiles: {} };
+          
+          if (!opJornadaPts[info.operador][jKey].perfiles[r.id_perfil]) {
+            opJornadaPts[info.operador][jKey].perfiles[r.id_perfil] = { modelo: info.modelo, id: r.id_perfil, pts: 0 };
+          }
+          opJornadaPts[info.operador][jKey].perfiles[r.id_perfil].pts += pts;
+          opJornadaPts[info.operador][jKey].total += pts;
+        });
+        
+        const slots = [
+          { hora: '06:00', jornada: 'Mañana', factor: 0.0, label: '6:00 AM (Inicio)' },
+          { hora: '08:00', jornada: 'Mañana', factor: 0.25, label: '8:00 AM' },
+          { hora: '10:00', jornada: 'Mañana', factor: 0.50, label: '10:00 AM' },
+          { hora: '12:00', jornada: 'Mañana', factor: 0.75, label: '12:00 PM' },
+          { hora: '14:00', jornada: 'Mañana', factor: 1.00, label: '2:00 PM (Cierre M)' },
+          { hora: '14:00', jornada: 'Tarde', factor: 0.0, label: '2:00 PM (Inicio T)' },
+          { hora: '16:00', jornada: 'Tarde', factor: 0.25, label: '4:00 PM' },
+          { hora: '18:00', jornada: 'Tarde', factor: 0.50, label: '6:00 PM' },
+          { hora: '20:00', jornada: 'Tarde', factor: 0.75, label: '8:00 PM' },
+          { hora: '22:00', jornada: 'Tarde', factor: 1.00, label: '10:00 PM (Cierre T)' }
+        ];
+        
+        let cleanHistory = force ? history.filter(h => h.fecha !== hoy) : history;
+        
+        const nowTs = Date.now();
+        slots.forEach((s, sIdx) => {
+          const snapshot = {
+            id: 'corte_' + hoy + '_' + s.jornada + '_' + s.hora.replace(':',''),
+            fecha: hoy,
+            hora: s.hora,
+            label: s.label,
+            jornada: s.jornada,
+            tipo: 'automatico',
+            totalPts: 0,
+            timestamp: nowTs - (slots.length - sIdx) * 60000,
+            operadores: []
+          };
+          
+          Object.entries(opJornadaPts).forEach(([opName, jData]) => {
+            const currentShiftData = jData[s.jornada];
+            if (!currentShiftData || currentShiftData.total <= 0) return;
+            
+            const opPts = Number((currentShiftData.total * s.factor).toFixed(1));
+            const perfilesSnap = Object.values(currentShiftData.perfiles).map(p => ({
+              id: p.id,
+              modelo: p.modelo,
+              pts: Number((p.pts * s.factor).toFixed(1))
+            }));
+            
+            snapshot.operadores.push({
+              name: opName,
+              pts: opPts,
+              perfiles: perfilesSnap
+            });
+            snapshot.totalPts += opPts;
+          });
+          
+          snapshot.totalPts = Number(snapshot.totalPts.toFixed(1));
+          cleanHistory.push(snapshot);
+        });
+        
+        await saveBitacoraHistory(cleanHistory);
+      } catch (err) {
+        console.error("[Bitácora] Error inicializando cortes hoy:", err);
+      }
+    }
+
+    async function inicializarCortesHoyForce() {
+      if (confirm("¿Estás seguro de que deseas REGENERAR todos los cortes automáticos de hoy? Esto sobrescribirá cualquier edición manual realizada en los cortes de hoy.")) {
+        await inicializarCortesHoy(true);
+        renderBitacoraCortesList();
+      }
+    }
+
+    function renderBitacoraCortesList() {
+      const container = document.getElementById('bitacora-cortes-list-container');
+      if (!container) return;
+      
+      const history = getBitacoraHistory();
+      if (history.length === 0) {
+        container.innerHTML = '<div style="color:#64748b; font-size:.65rem; padding:10px; text-align:center;">Sin cortes registrados.</div>';
+        return;
+      }
+      
+      const datesMap = {};
+      history.forEach(item => {
+        if (!datesMap[item.fecha]) datesMap[item.fecha] = [];
+        datesMap[item.fecha].push(item);
+      });
+      
+      const sortedDates = Object.keys(datesMap).sort((a,b) => b.localeCompare(a));
+      
+      container.innerHTML = sortedDates.map(date => {
+        const items = datesMap[date].sort((a,b) => b.timestamp - a.timestamp);
+        const dateHtml = items.map(item => {
+          const isSelected = window._selectedBitacoraCorteId === item.id;
+          const badgeColor = item.tipo === 'manual' ? '#10b981' : '#6366f1';
+          return `<div onclick="selectBitacoraCorte('${item.id}')" style="background:${isSelected ? 'rgba(45,212,191,0.12)' : 'rgba(255,255,255,0.02)'}; border:1px solid ${isSelected ? '#2dd4bf' : 'rgba(255,255,255,0.05)'}; border-radius:6px; padding:8px 10px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:all 0.2s;" onmouseover="this.style.borderColor='#2dd4bf'">
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:0.7rem; font-weight:700; color:${isSelected ? '#2dd4bf' : '#e2e8f0'}; display:flex; align-items:center; gap:5px;">
+                ⏱️ ${item.hora} 
+                <span style="font-size:0.5rem; background:${badgeColor}; color:#fff; padding:1px 4px; border-radius:3px; font-weight:bold; text-transform:uppercase;">${item.tipo}</span>
+              </div>
+              <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">${item.label || item.jornada}</div>
+            </div>
+            <div style="text-align:right; flex-shrink:0;">
+              <div style="font-size:0.75rem; font-weight:800; color:#5eead4;">${item.totalPts || 0} pts</div>
+            </div>
+          </div>`;
+        }).join('');
+        
+        return `<div style="margin-bottom:12px;">
+          <div style="font-size:0.6rem; color:#475569; font-weight:800; text-transform:uppercase; margin-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.03); padding-bottom:2px;">📅 ${date}</div>
+          <div style="display:flex; flex-direction:column; gap:4px;">${dateHtml}</div>
+        </div>`;
+      }).join('');
+      
+      if (!window._selectedBitacoraCorteId && history.length > 0) {
+        selectBitacoraCorte(history[0].id);
+      }
+    }
+
+    function selectBitacoraCorte(id) {
+      window._selectedBitacoraCorteId = id;
+      renderBitacoraCortesList();
+      renderSelectedCorteDetail();
+    }
+
+    function renderSelectedCorteDetail() {
+      const container = document.getElementById('bitacora-selected-corte-detail');
+      const metaEl = document.getElementById('bitacora-selected-corte-meta');
+      if (!container) return;
+      
+      const history = getBitacoraHistory();
+      const item = history.find(h => h.id === window._selectedBitacoraCorteId);
+      
+      if (!item) {
+        container.innerHTML = '<div style="color:#64748b; font-size:.65rem; padding:20px; text-align:center;">Selecciona un corte para ver su desglose.</div>';
+        if (metaEl) metaEl.textContent = '—';
+        return;
+      }
+      
+      if (metaEl) {
+        metaEl.textContent = `${item.fecha} · ${item.hora} · ${item.jornada.toUpperCase()}`;
+      }
+      
+      const sortedOps = (item.operadores || []).sort((a,b) => b.pts - a.pts);
+      
+      let tableRows = sortedOps.map((op, idx) => {
+        const perfsStr = (op.perfiles || []).map(p => `${p.modelo}: ${p.pts}`).join(' · ');
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+          <td style="padding:10px 8px; font-size:0.72rem; font-weight:700; color:#e2e8f0;">
+            #${idx+1} ${op.name}
+            <div style="font-size:0.55rem; color:#475569; font-weight:normal; margin-top:2px;">${perfsStr || 'Sin perfiles'}</div>
+          </td>
+          <td style="padding:10px 8px; text-align:right;">
+            <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px;">
+              <span id="op-pts-val-${op.name.replace(/\s+/g,'_')}" style="font-size:0.85rem; font-weight:800; color:#2dd4bf;">${op.pts} pts</span>
+              <button onclick="iniciarEdicionCorteOp('${item.id}', '${op.name}')" style="background:none; border:none; color:#64748b; cursor:pointer; font-size:0.75rem; padding:2px;" title="Editar puntos" onmouseover="this.style.color='#fbbf24'">✏️</button>
+            </div>
+            <div id="op-pts-edit-box-${op.name.replace(/\s+/g,'_')}" style="display:none; justify-content:flex-end; align-items:center; gap:4px; margin-top:4px;">
+              <input type="number" step="0.1" id="op-pts-input-${op.name.replace(/\s+/g,'_')}" value="${op.pts}" style="width:65px; background:#020617; border:1px solid #334155; border-radius:4px; padding:2px 4px; color:#fff; font-size:0.7rem; text-align:right;" />
+              <button onclick="guardarEdicionCorteOp('${item.id}', '${op.name}')" style="background:#10b981; border:none; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.55rem; font-weight:bold; cursor:pointer;">OK</button>
+              <button onclick="cancelarEdicionCorteOp('${op.name}')" style="background:#1e293b; border:none; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.55rem; font-weight:bold; cursor:pointer;">✕</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+      
+      if (tableRows.length === 0) {
+        tableRows = `<tr><td colspan="2" style="text-align:center; padding:20px; color:#64748b; font-size:0.65rem;">No hay operadores en este corte.</td></tr>`;
+      }
+      
+      container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; background:rgba(255,255,255,0.01); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.03);">
+          <div style="font-size:0.7rem; color:#94a3b8;">
+            Total Corte: <strong style="color:#5eead4; font-size:0.8rem;">${item.totalPts} pts</strong>
+          </div>
+          <button onclick="copiarCorteAlPortapapeles('${item.id}')" style="background:#0284c7; border:none; color:#fff; padding:4px 10px; border-radius:4px; font-size:0.6rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:0.2s;" onmouseover="this.style.background='#0369a1'">
+            📋 Copiar a Portapapeles (WhatsApp)
+          </button>
+        </div>
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); text-align:left;">
+              <th style="padding:6px 8px; font-size:0.6rem; color:#64748b; text-transform:uppercase;">Operador / Desglose</th>
+              <th style="padding:6px 8px; text-align:right; font-size:0.6rem; color:#64748b; text-transform:uppercase;">Producción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function iniciarEdicionCorteOp(corteId, opName) {
+      const escapedName = opName.replace(/\s+/g,'_');
+      const valSpan = document.getElementById(`op-pts-val-${escapedName}`);
+      const editBox = document.getElementById(`op-pts-edit-box-${escapedName}`);
+      
+      if (valSpan) valSpan.style.display = 'none';
+      if (editBox) editBox.style.display = 'flex';
+    }
+
+    function cancelarEdicionCorteOp(opName) {
+      const escapedName = opName.replace(/\s+/g,'_');
+      const valSpan = document.getElementById(`op-pts-val-${escapedName}`);
+      const editBox = document.getElementById(`op-pts-edit-box-${escapedName}`);
+      
+      if (valSpan) valSpan.style.display = 'block';
+      if (editBox) editBox.style.display = 'none';
+    }
+
+    async function guardarEdicionCorteOp(corteId, opName) {
+      const escapedName = opName.replace(/\s+/g,'_');
+      const input = document.getElementById(`op-pts-input-${escapedName}`);
+      if (!input) return;
+      
+      const newPts = parseFloat(input.value) || 0;
+      const history = getBitacoraHistory();
+      const itemIdx = history.findIndex(h => h.id === corteId);
+      
+      if (itemIdx >= 0) {
+        const opIdx = history[itemIdx].operadores.findIndex(o => o.name === opName);
+        if (opIdx >= 0) {
+          const oldVal = history[itemIdx].operadores[opIdx].pts;
+          history[itemIdx].operadores[opIdx].pts = Number(newPts.toFixed(1));
+          
+          const perfiles = history[itemIdx].operadores[opIdx].perfiles || [];
+          if (perfiles.length > 0) {
+            const sumPerfiles = perfiles.reduce((s,p) => s + (p.pts || 0), 0);
+            if (sumPerfiles > 0) {
+              perfiles.forEach(p => {
+                p.pts = Number(((p.pts / sumPerfiles) * newPts).toFixed(1));
+              });
+            } else {
+              const div = Number((newPts / perfiles.length).toFixed(1));
+              perfiles.forEach(p => { p.pts = div; });
+            }
+          }
+          
+          history[itemIdx].totalPts = Number(history[itemIdx].operadores.reduce((s,o) => s + o.pts, 0).toFixed(1));
+          
+          await saveBitacoraHistory(history);
+          
+          const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+          if (history[itemIdx].fecha === hoy) {
+            await registrarCorte(opName, newPts, hoy, history[itemIdx].jornada);
+          }
+        }
+      }
+      
+      renderSelectedCorteDetail();
+      if (typeof renderRanking === 'function') renderRanking();
+    }
+
+    function copiarCorteAlPortapapeles(id) {
+      const history = getBitacoraHistory();
+      const item = history.find(h => h.id === id);
+      if (!item) return;
+      
+      let text = `📊 *CORTE DE TURNO - AGENCIA RR*\n`;
+      text += `📅 *Fecha:* ${item.fecha}\n`;
+      text += `⏱️ *Hora:* ${item.hora}\n`;
+      text += ` JORNADA: *${item.jornada.toUpperCase()}*\n`;
+      text += `------------------------------------\n`;
+      
+      const sortedOps = (item.operadores || []).sort((a,b) => b.pts - a.pts);
+      sortedOps.forEach((op, idx) => {
+        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '▪️';
+        text += `${medal} *${op.name}:* ${op.pts.toFixed(1)} pts\n`;
+        (op.perfiles || []).forEach(p => {
+          text += `   • _${p.modelo}:_ ${p.pts.toFixed(1)} pts\n`;
+        });
+      });
+      
+      text += `------------------------------------\n`;
+      text += `📈 *TOTAL ACUMULADO:* ${item.totalPts.toFixed(1)} pts\n`;
+      text += `🛰️ _Reporte automatizado - Central de Inteligencia_`;
+      
+      navigator.clipboard.writeText(text).then(() => {
+        alert('📋 Reporte de corte copiado al portapapeles. ¡Listo para pegar en WhatsApp!');
+      }).catch(err => {
+        console.error('Error al copiar al portapapeles:', err);
+        prompt('Copia este texto manualmente:', text);
+      });
+    }
+
+    async function saveCorteTurnoBitacora() {
+      if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
+        alert('⚠️ No hay operaciones cargadas para el turno activo. Espera a que se complete la sincronización.');
+        return;
+      }
+      
+      const btn = document.getElementById('dp-corte-save-btn');
+      const origText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.innerHTML = '⏳ Guardando...';
+        btn.disabled = true;
+      }
+      
+      try {
+        const now = new Date();
+        const fecha = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+        
+        const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
+          ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
+          : new Date().getHours();
+        const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
+        
+        const labelStr = `Manual ${hora}`;
+        
+        const perfilToOp = {};
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            (op.profiles || []).forEach(p => {
+              perfilToOp[String(p.id).trim()] = { operador: op.name, modelo: p.model || p.modelo || ('ID ' + p.id) };
+            });
+          });
+        }
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).flat().forEach(p => {
+            const k = String(p.id).trim();
+            if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', modelo: p.modelo || ('ID ' + p.id) };
+          });
+        }
+        
+        const opMap = {};
+        let totalPts = 0;
+        window._lastCorteRows.forEach(r => {
+          const pts = r.puntos_neto || 0;
+          if (pts <= 0 || pts > 800) return;
+          totalPts += pts;
+          const info = perfilToOp[String(r.id_perfil).trim()] || { operador: 'ID: ' + r.id_perfil, modelo: 'Perfil ' + r.id_perfil };
+          if (!opMap[info.operador]) opMap[info.operador] = { pts: 0, perfiles: [] };
+          opMap[info.operador].pts += pts;
+          opMap[info.operador].perfiles.push({ id: r.id_perfil, modelo: info.modelo, pts });
+        });
+        
+        const history = getBitacoraHistory();
+        const snapshot = {
+          id: 'corte_' + Date.now(),
+          fecha: fecha,
+          hora: hora,
+          label: labelStr,
+          jornada: tAct,
+          tipo: 'manual',
+          totalPts: Number(totalPts.toFixed(1)),
+          timestamp: Date.now(),
+          operadores: []
+        };
+        
+        Object.entries(opMap).forEach(([opName, data]) => {
+          snapshot.operadores.push({
+            name: opName,
+            pts: Number(data.pts.toFixed(1)),
+            perfiles: data.perfiles.map(p => ({ id: p.id, modelo: p.modelo, pts: Number(p.pts.toFixed(1)) }))
+          });
+        });
+        
+        history.unshift(snapshot);
+        await saveBitacoraHistory(history);
+        
+        for (const [opName, data] of Object.entries(opMap)) {
+          await registrarCorte(opName, data.pts, fecha, tAct);
+        }
+        
+        if (btn) {
+          btn.innerHTML = '✅ ¡Corte Guardado!';
+          btn.style.background = '#10b981';
+          btn.style.borderColor = '#34d399';
+        }
+        
+        setTimeout(() => {
+          if (btn) {
+            btn.innerHTML = origText;
+            btn.style.background = '';
+            btn.style.borderColor = '';
+            btn.disabled = false;
+          }
+        }, 3000);
+        
+        if (typeof loadData === 'function') loadData();
+        if (typeof renderRanking === 'function') renderRanking();
+        
+      } catch(e) {
+        console.error('[Corte] Error al guardar corte manual:', e);
+        alert('❌ Error al guardar corte: ' + e.message);
+        if (btn) {
+          btn.innerHTML = origText;
+          btn.disabled = false;
+        }
+      }
+    }
+
     // RESUMEN CORTE DE TURNO — Consulta autónoma a Supabase
     // No depende de _dpTurnosData; hace su propia query fresca.
     // ═══════════════════════════════════════════════════════════════
@@ -27418,6 +27951,7 @@ PT._logKey = function (opName) {
     }
 
     function _renderCorteRows(rows, corteWrap, totalEl, tAct) {
+      window._lastCorteRows = rows; // Cache de corte para bitacora
       // Construir mapa inverso id_perfil → operador
       const perfilToOp = {};
       if (typeof operatorsData !== 'undefined') {
@@ -29595,6 +30129,50 @@ PT._logKey = function (opName) {
       </div>
       <div style="margin-top:15px; font-size:0.6rem; color:#475569; text-align:center; font-style:italic;">
         Los datos se graban automáticamente al cierre de cada jornada.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL BITÁCORA DE CORTES DE TURNO (Global) ── -->
+  <div class="modal" id="modal-bitacora-cortes-global" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.9); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+    <div class="modal-content" style="max-width:950px; background:#0f172a; border: 1px solid rgba(45, 212, 191, 0.3); border-radius:12px; width:100%; max-height:85vh; display:flex; flex-direction:column; padding:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom: 1px solid rgba(45, 212, 191, 0.2); padding-bottom: 10px;">
+        <div>
+          <h2 style="margin:0; color:#2dd4bf; font-size:1.1rem; letter-spacing: 1px; display:flex; align-items:center; gap:8px;">📋 Bitácora de Cortes de Turno (Historial)</h2>
+          <div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Registro de cortes guardados cada 2h o de forma manual para validación cruzada.</div>
+        </div>
+        <button class="close-btn" onclick="cerrarModalBitacoraCortes()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
+      </div>
+      
+      <!-- Cuerpo con dos columnas (izquierda: lista de cortes, derecha: detalle del corte seleccionado) -->
+      <div style="display:flex; flex:1; min-height:0; gap:16px;">
+        <!-- Lista de Cortes (Column 1) -->
+        <div style="width:35%; border-right:1px solid rgba(255,255,255,0.05); padding-right:12px; display:flex; flex-direction:column;">
+          <h3 style="font-size:0.75rem; color:#94a3b8; text-transform:uppercase; margin-top:0; margin-bottom:10px;">Cortes Registrados</h3>
+          <div id="bitacora-cortes-list-container" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+             <!-- Inyectado por JS -->
+          </div>
+        </div>
+        
+        <!-- Detalle del Corte (Column 2) -->
+        <div style="width:65%; display:flex; flex-direction:column;">
+          <h3 style="font-size:0.75rem; color:#94a3b8; text-transform:uppercase; margin-top:0; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <span>Detalle del Corte Seleccionado</span>
+            <span id="bitacora-selected-corte-meta" style="font-size:0.65rem; color:#e2e8f0; background:rgba(45,212,191,0.15); padding:2px 8px; border-radius:4px;">—</span>
+          </h3>
+          <div id="bitacora-selected-corte-detail" style="flex:1; overflow-y:auto; background:rgba(0,0,0,0.15); border-radius:8px; padding:12px; border:1px solid rgba(255,255,255,0.02);">
+             <!-- Inyectado por JS -->
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;">
+        <button onclick="inicializarCortesHoyForce()" style="background:rgba(239, 68, 68, 0.15); border:1px solid rgba(239, 68, 68, 0.3); color:#f87171; padding:6px 12px; border-radius:8px; font-size:.65rem; font-weight:bold; cursor:pointer; margin-right:auto;" title="Forzar regeneración de cortes (6AM, 8AM, 10AM...) usando la producción de hoy">
+          ⚠️ Regenerar Cortes Hoy
+        </button>
+        <button onclick="cerrarModalBitacoraCortes()" style="background:#1e293b; border:1px solid #334155; color:#fff; padding:6px 14px; border-radius:8px; font-size:.65rem; font-weight:bold; cursor:pointer;">
+          Cerrar
+        </button>
       </div>
     </div>
   </div>

@@ -12976,8 +12976,8 @@
     // SUPABASE — SYNC EN TIEMPO REAL
     // ══════════════════════════════════════════
 
-    const SUPABASE_URL = 'https://vpyzpjgctidqmhqjboxq.supabase.co';
-    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
+    const SUPABASE_URL = 'https://buffer-reconfirm-daily.ngrok-free.dev';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.F_rDxRTPE8OU83L_CNgEGXfmirMXmMMugT29Cvc8ygQ';
 
     // Claves que NUNCA van a Supabase — son per-device
     const _SB_EXCLUDE = new Set([
@@ -13012,9 +13012,9 @@
     const _sbMemCache = {};
 
     function _initSupabase() {
-      if (!SUPABASE_URL.startsWith('https://')) return;
+      if (!SUPABASE_URL.startsWith('http')) return;
       try {
-        _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { global: { headers: { 'ngrok-skip-browser-warning': 'true' } } });
         _sbSyncOnLoad();
         // _sbRealtime() se inicializa en _bootDone para evitar suscripciones duplicadas y cuelgues
       } catch (e) {
@@ -13980,8 +13980,8 @@
           if (typeof loadData === 'function') loadData();
           if (currentRole === 'operador' && currentOpName) {
             if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
-            if (typeof renderOpStats === 'function') renderOpStats(currentOpName);
-            if (typeof PT !== 'undefined' && PT.checkTrainingPending) PT.checkTrainingPending(currentOpName);
+            if (typeof PT !== 'undefined' && typeof PT.checkTrainingPending === 'function') PT.checkTrainingPending(currentOpName);
+            if (typeof PT !== 'undefined' && typeof PT.checkTrainingIAPending === 'function') PT.checkTrainingIAPending(currentOpName);
             if (typeof renderHandoverModule === 'function') renderHandoverModule(currentOpName);
           } else {
             if (typeof renderRanking === 'function') renderRanking();
@@ -14010,8 +14010,11 @@
              if (_sbMemCache[key] !== data.value) {
                 _origSetItem(key, data.value);
                 _sbMemCache[key] = data.value;
-                if (typeof PT !== 'undefined' && PT.checkTrainingPending) {
+                if (typeof PT !== 'undefined' && typeof PT.checkTrainingPending === 'function') {
                    PT.checkTrainingPending(currentOpName);
+                }
+                if (typeof PT !== 'undefined' && typeof PT.checkTrainingIAPending === 'function') {
+                   PT.checkTrainingIAPending(currentOpName);
                 }
              }
           }
@@ -20516,8 +20519,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (typeof PT !== 'undefined' && PT.renderOperatorTasks) {
          PT.renderOperatorTasks(name);
          // Auto-trigger de capacitación si el admin la envió
-         PT.checkTrainingPending(name);
-         PT.checkTrainingIAPending(name);
+         if (typeof PT.checkTrainingPending === 'function') PT.checkTrainingPending(name);
+         if (typeof PT.checkTrainingIAPending === 'function') PT.checkTrainingIAPending(name);
       }
 
       // ── Ranking de TURNO ACTUAL (todos los compañeros de turno, ordenados por pts hoy) ───

@@ -11,6 +11,12 @@ const supabaseProxy = createProxyMiddleware({
   changeOrigin: true,
   ws: true, // Habilitar WebSockets para Supabase Realtime
   logLevel: 'info',
+  onProxyRes: function (proxyRes, req, res) {
+    // Eliminar el header WWW-Authenticate de Kong para evitar el popup de Iniciar Sesion en el navegador
+    if (proxyRes.headers['www-authenticate']) {
+      delete proxyRes.headers['www-authenticate'];
+    }
+  }
 });
 
 // Enrutar endpoints específicos de Supabase al proxy

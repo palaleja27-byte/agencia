@@ -21,6 +21,36 @@ const supabaseProxy = createProxyMiddleware({
   }
 });
 
+// Ruta de emergencia para recuperar las llaves de Supabase
+app.get('/debug-keys', (req, res) => {
+  const fs = require('fs');
+  const paths = [
+    '../supabase/docker/.env',
+    './supabase/docker/.env',
+    '../../supabase/docker/.env',
+    '../supabase/.env',
+    './supabase/.env'
+  ];
+  
+  for (let p of paths) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf8');
+        const anonMatch = content.match(/ANON_KEY=(.*)/);
+        const serviceMatch = content.match(/SERVICE_ROLE_KEY=(.*)/);
+        if (anonMatch || serviceMatch) {
+          return res.send(`
+            <h1>Llaves Encontradas en ${p}</h1>
+            <p><b>ANON_KEY:</b> ${anonMatch ? anonMatch[1] : 'No encontrada'}</p>
+            <p><b>SERVICE_ROLE_KEY:</b> ${serviceMatch ? serviceMatch[1] : 'No encontrada'}</p>
+          `);
+        }
+      }
+    } catch (e) {}
+  }
+  res.send('<h1>No se encontraron las llaves en las rutas comunes.</h1>');
+});
+
 // Enrutar endpoints específicos de Supabase al proxy usando el middleware globalmente
 app.use(supabaseProxy);
 

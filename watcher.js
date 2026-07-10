@@ -1,27 +1,42 @@
 require('dotenv').config({ path: '.env.local' });
 const { chromium } = require('playwright');
-const { createClient } = require('@supabase/supabase-js');
-// ws requerido por @supabase/supabase-js v2 en Node.js 18 (sin WebSocket nativo)
-const WebSocket = require('ws');
+const { Pool } = require('pg');
 
 // ═══════════════════════════════════════════════════════════════
 // ⚡ WATCHER MODE — Agencia RR 2026
-// ─ Usa rango MENSUAL en Datame (para total_mes preciso)
+// ─ Conexión DIRECTA a PostgreSQL (sin Kong ni PostgREST)
 // ─ Rastrea baseline por turno (reset cada vez que cambia jornada)
 // ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)
 // ═══════════════════════════════════════════════════════════════
 
-// Puerto 3000 = PostgREST directo (sin pasar por Kong en puerto 8000)
-// Esto evita el error 401 Unauthorized de Kong
-const SUPABASE_URL = 'http://localhost:3000';
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.5z-pJIlqwZglLE5yavGLqum65WOnnaaI5eZ3V00pLww';
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
-// Pasar WebSocket explícitamente y deshabilitar Realtime (el watcher solo usa REST)
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  global: { headers: {} },
-  realtime: { transport: WebSocket },
-  db: { schema: 'public' },
+// Conexión directa a PostgreSQL — sin JWT, sin Kong, sin problemas
+const pgPool = new Pool({
+  host:     'localhost',
+  port:     5432,
+  database: 'postgres',
+  user:     'postgres',
+  password: 'your-super-secret-and-long-postgres-password',
+  ssl:      false,
 });
+
+// Wrapper para queries con reintentos
+async function query(sql, params = []) {
+  let attempt = 0;
+  while (attempt < 5) {
+    try {
+      const res = await pgPool.query(sql, params);
+      return { data: res.rows, error: null };
+    } catch (err) {
+      if (attempt < 4 && (err.code === 'ECONNREFUSED' || err.code === '57P01')) {
+        attempt++;
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+      } else {
+        return { data: null, error: { message: err.message } };
+      }
+    }
+  }
+  return { data: null, error: { message: 'Max retries reached' } };
+}
 
 const MAX_RUNTIME_MS  = 5.5 * 60 * 60 * 1000;
 const CICLO_PAUSA_MS  = 5 * 60 * 1000;    // 5 min entre ciclos
@@ -79,67 +94,50 @@ const lastUpsertTotals = {}; // FIX CUOTA: Evita upserts redundantes si no hay c
 function bKey(id, fecha, jornada) { return `${id}__${fecha}__${jornada}`; }
 
 // ─────────────────────────────────────────────────────────────────
-// FUNCIONES DB CON REINTENTOS (TOLERANCIA A FALLOS DE RED / 502)
+// FUNCIONES DB — Conexión directa PostgreSQL (sin JWT)
 // ─────────────────────────────────────────────────────────────────
 async function dbSelectBaseline(idPerfil, fechaDia, jornada) {
-  let attempt = 0;
-  while (attempt < 5) {
-    const res = await supabase.from('operaciones')
-      .select('puntos_total, puntos_baseline, puntos_neto')
-      .eq('id_perfil', idPerfil)
-      .eq('fecha_dia', fechaDia)
-      .eq('jornada', jornada)
-      .maybeSingle();
-    
-    if (!res.error) return res;
-    
-    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
-      attempt++;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    } else {
-      return res;
-    }
-  }
-  return { error: { message: 'Max retries reached (fetch failed)' }, data: null };
+  const { data, error } = await query(
+    `SELECT puntos_total, puntos_baseline, puntos_neto
+     FROM public.operaciones
+     WHERE id_perfil = $1 AND fecha_dia = $2 AND jornada = $3
+     LIMIT 1`,
+    [idPerfil, fechaDia, jornada]
+  );
+  return { data: data?.[0] || null, error };
 }
 
 async function dbUpsertTurno(payload) {
-  let attempt = 0;
-  while (attempt < 5) {
-    const res = await supabase.from('operaciones')
-      .upsert(payload, { onConflict: 'id_perfil,fecha_dia,jornada' });
-      
-    if (!res.error) return res;
-    
-    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
-      attempt++;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    } else {
-      return res;
-    }
-  }
-  return { error: { message: 'Max retries reached (fetch failed)' } };
+  const { error } = await query(
+    `INSERT INTO public.operaciones
+       (id_perfil, agencia, puntos, puntos_total, puntos_baseline, puntos_neto,
+        fecha_corte, fecha_dia, jornada)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (id_perfil, fecha_dia, jornada)
+     DO UPDATE SET
+       agencia         = EXCLUDED.agencia,
+       puntos          = EXCLUDED.puntos,
+       puntos_total    = EXCLUDED.puntos_total,
+       puntos_baseline = EXCLUDED.puntos_baseline,
+       puntos_neto     = EXCLUDED.puntos_neto,
+       fecha_corte     = EXCLUDED.fecha_corte`,
+    [
+      payload.id_perfil, payload.agencia, payload.puntos,
+      payload.puntos_total, payload.puntos_baseline, payload.puntos_neto,
+      payload.fecha_corte, payload.fecha_dia, payload.jornada
+    ]
+  );
+  return { error };
 }
 
 async function dbUpdateBaseline(idPerfil, fechaDia, jornada, baselineCorr, netoCorr) {
-  let attempt = 0;
-  while (attempt < 5) {
-    const res = await supabase.from('operaciones')
-      .update({ puntos_baseline: baselineCorr, puntos_neto: netoCorr })
-      .eq('id_perfil', idPerfil)
-      .eq('fecha_dia', fechaDia)
-      .eq('jornada', jornada);
-      
-    if (!res.error) return res;
-    
-    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
-      attempt++;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    } else {
-      return res;
-    }
-  }
-  return { error: { message: 'Max retries reached (fetch failed)' } };
+  const { error } = await query(
+    `UPDATE public.operaciones
+     SET puntos_baseline = $4, puntos_neto = $5
+     WHERE id_perfil = $1 AND fecha_dia = $2 AND jornada = $3`,
+    [idPerfil, fechaDia, jornada, baselineCorr, netoCorr]
+  );
+  return { error };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -387,19 +385,19 @@ async function watchPanel(panel, perfiles) {
   while (Date.now() - startTime < MAX_RUNTIME_MS) {
     const cycleStart = Date.now();
     
-    let { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
-    
-    // 🧠 DELTA-SHIFT™: Cargar perfiles activos, incluyendo aquellos sin panel_id asignado (panel_id is null)
-    const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles')
-      .select('*')
-      .eq('activo', true)
-      .order('id');
+    // Consultar paneles y perfiles directamente via PostgreSQL
+    let { data: panels, error: panelsErr } = await query(
+      `SELECT * FROM public.datame_panels WHERE activo = true ORDER BY id`
+    );
+    const { data: allPerfiles, error: perfErr } = await query(
+      `SELECT * FROM public.datame_perfiles WHERE activo = true ORDER BY id`
+    );
 
     if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
     if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
 
     if (panels?.length) {
-      // Mapear y sobreescribir con las variables de entorno de GitHub Actions (si existen)
+      // Sobreescribir con las variables de entorno del .env.local (si existen)
       panels = panels.map(p => {
         const envUser = process.env[`PANEL${p.id}_USER`];
         const envPass = process.env[`PANEL${p.id}_PASS`];
@@ -408,7 +406,7 @@ async function watchPanel(panel, perfiles) {
         }
         return p;
       }).filter(p => {
-        const hasCreds = p.email && p.password && !p.email.includes('Ameliapenaloza');
+        const hasCreds = p.email && p.password;
         if (!hasCreds) {
           log(`[SKIP] ${p.nombre} — Sin credenciales activas configuradas`);
         }
@@ -426,7 +424,7 @@ async function watchPanel(panel, perfiles) {
       }));
 
     } else {
-      log('❌ Sin paneles activos en Supabase (o tabla vacía/inactiva)');
+      log('❌ Sin paneles activos en PostgreSQL (o tabla vacía/inactiva)');
     }
 
     const elapsed = Date.now() - cycleStart;

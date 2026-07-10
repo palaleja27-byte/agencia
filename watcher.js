@@ -11,7 +11,9 @@ const WebSocket = require('ws');
 // ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)
 // ═══════════════════════════════════════════════════════════════
 
-const SUPABASE_URL = 'http://localhost:8000';
+// Puerto 3000 = PostgREST directo (sin pasar por Kong en puerto 8000)
+// Esto evita el error 401 Unauthorized de Kong
+const SUPABASE_URL = 'http://localhost:3000';
 const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.5z-pJIlqwZglLE5yavGLqum65WOnnaaI5eZ3V00pLww';
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
 // Pasar WebSocket explícitamente y deshabilitar Realtime (el watcher solo usa REST)

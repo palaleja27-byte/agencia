@@ -1,3 +1,4 @@
+require('dotenv').config({ path: '.env.local' });
 const { chromium } = require('playwright');
 const { createClient } = require('@supabase/supabase-js');
 // ws requerido por @supabase/supabase-js v2 en Node.js 18 (sin WebSocket nativo)
@@ -10,7 +11,8 @@ const WebSocket = require('ws');
 // ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)
 // ═══════════════════════════════════════════════════════════════
 
-const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:8000';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
 // Pasar WebSocket explícitamente y deshabilitar Realtime (el watcher solo usa REST)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {

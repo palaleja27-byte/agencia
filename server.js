@@ -11,20 +11,18 @@ const supabaseProxy = createProxyMiddleware({
   changeOrigin: true,
   ws: true, // Habilitar WebSockets para Supabase Realtime
   logLevel: 'info',
+  pathFilter: (pathname, req) => {
+    return pathname.match(/^\/(rest|realtime|auth|storage|graphql)/);
+  },
   onProxyRes: function (proxyRes, req, res) {
-    // Eliminar el header WWW-Authenticate de Kong para evitar el popup de Iniciar Sesion en el navegador
     if (proxyRes.headers['www-authenticate']) {
       delete proxyRes.headers['www-authenticate'];
     }
   }
 });
 
-// Enrutar endpoints específicos de Supabase al proxy
-app.use('/rest', supabaseProxy);
-app.use('/realtime', supabaseProxy);
-app.use('/auth', supabaseProxy);
-app.use('/storage', supabaseProxy);
-app.use('/graphql', supabaseProxy);
+// Enrutar endpoints específicos de Supabase al proxy usando el middleware globalmente
+app.use(supabaseProxy);
 
 // Servir los archivos estáticos (index.html, scripts.js, etc) del directorio actual
 app.use(express.static(path.join(__dirname, '.')));

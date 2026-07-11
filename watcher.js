@@ -16,26 +16,26 @@ const fs = require('fs');
 const path = require('path');
 
 function getDynamicJWT() {
-  let secret = 'your-super-secret-jwt-token-with-at-least-32-characters-long';
+  let secret = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UifQ.8YwzqxJKnRleCLmI7aj-JtMvOK9Sjm2yaSJm2y359zI'; // fallback
   const envPath = path.join(__dirname, 'supabase', 'docker', '.env');
   if (fs.existsSync(envPath)) {
     const content = fs.readFileSync(envPath, 'utf8');
-    const match = content.match(/^JWT_SECRET=(.*)$/m);
-    if (match && match[1]) {
-      secret = match[1].trim().replace(/['"]/g, '');
+    const serviceMatch = content.match(/^SERVICE_ROLE_KEY=(.*)$/m);
+    const anonMatch = content.match(/^ANON_KEY=(.*)$/m);
+    
+    if (serviceMatch && serviceMatch[1]) {
+      secret = serviceMatch[1].trim().replace(/['"]/g, '');
+      console.log(`[AUTH] Usando SERVICE_ROLE_KEY directo del archivo: ${envPath}`);
+    } else if (anonMatch && anonMatch[1]) {
+      secret = anonMatch[1].trim().replace(/['"]/g, '');
+      console.log(`[AUTH] Usando ANON_KEY directo del archivo: ${envPath}`);
+    } else {
+      console.log(`[AUTH] No se encontró SERVICE_ROLE_KEY en el .env, usando fallback`);
     }
+  } else {
+    console.log(`[AUTH] No se encontró supabase .env, usando fallback`);
   }
-
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url').replace(/=/g, '');
-  const payload = Buffer.from(JSON.stringify({
-    role: 'service_role',
-    iss: 'supabase',
-    iat: Math.floor(Date.now() / 1000) - 60,
-    exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 365) // 1 year
-  })).toString('base64url').replace(/=/g, '');
-  
-  const signature = crypto.createHmac('sha256', secret).update(header + '.' + payload).digest('base64url').replace(/=/g, '');
-  return `${header}.${payload}.${signature}`;
+  return secret;
 }
 
 const SUPABASE_URL = 'http://localhost:8000';

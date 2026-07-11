@@ -19040,7 +19040,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (typeof _sb !== 'undefined' && _sb) {
         try {
           const val = JSON.stringify(operatorsData);
-          await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+          await _sb.from('datame_perfiles').upsert({ id_datame: String(idVal).trim(), modelo: String(modVal).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(e=>console.warn(e)); await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
         } catch(e) {
           console.warn('[asiPerfilAdd] Supabase error:', e.message);
         }
@@ -19065,7 +19065,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
       if (!op || !op.profiles) return;
       // Eliminar el perfil del array en memoria
-      op.profiles.splice(pIdx, 1);
+      const removed = op.profiles.splice(pIdx, 1)[0];
       // Guardar en localStorage inmediatamente
       saveData();
       // Marcar timestamp para que el Realtime listener ignore esta actualización
@@ -19076,7 +19076,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (typeof _sb !== 'undefined' && _sb) {
         try {
           const val = JSON.stringify(operatorsData);
-          await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+          if (removed && removed.id) { await _sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()).catch(e=>console.warn(e)); } await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
         } catch(e) {
           console.warn('[asiPerfilRemove] Supabase error:', e.message);
         }
@@ -19162,21 +19162,21 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       }
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-          .catch(e => console.warn('[addProfile] Supabase sync error:', e));
+          .catch(e => console.warn('[addProfile] Supabase sync error:', e)); _sb.from('datame_perfiles').upsert({ id_datame: String(idInput.value).trim(), modelo: String(modelInput.value).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(e => console.warn('[addProfile] Supabase profile sync error:', e));
       }
       renderOperators();
     };
 
     window.removeProfile = function (globalIndex, profileIndex) {
       if (confirm("¿Eliminar este perfil?")) {
-        operatorsData[globalIndex].profiles.splice(profileIndex, 1);
+        const removed = operatorsData[globalIndex].profiles.splice(profileIndex, 1)[0];
         saveData();
         if (typeof _localSaveTs !== 'undefined') {
           _localSaveTs['primeOperatorsData2026'] = Date.now();
         }
         if (typeof _sb !== 'undefined' && _sb) {
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-            .catch(e => console.warn('[removeProfile] Supabase sync error:', e));
+            .catch(e => console.warn('[removeProfile] Supabase sync error:', e)); if (removed && removed.id) { _sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()).catch(e => console.warn('[removeProfile] Supabase profile delete error:', e)); }
         }
         renderOperators();
       }
@@ -26614,7 +26614,7 @@ PT._logKey = function (opName) {
               });
               if (missing.length > 0) {
                 console.warn(`[Asistencia] ⚠️ Detectados ${missing.length} perfiles nuevos no registrados en 'datame_perfiles':`, missing);
-                console.warn(`[Asistencia] Estos perfiles no serán leídos por el Watcher hasta que se registren vía SQL.`);
+                const newProfiles = missing.map(m => ({ id_datame: String(m.id).trim(), modelo: m.model, panel_id: null, activo: true })); _sb.from('datame_perfiles').upsert(newProfiles, { onConflict: 'id_datame' }).then(({ error: insertErr }) => { if (insertErr) console.error('[Asistencia] Error al auto-registrar:', insertErr); else console.info(`[Asistencia] ✅ ${missing.length} perfiles auto-registrados.`); });
               } else {
                 console.info('[Asistencia] Todos los perfiles están correctamente registrados en datame_perfiles. ✅');
               }

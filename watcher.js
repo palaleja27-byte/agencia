@@ -419,13 +419,19 @@ async function watchPanel(panel, perfiles) {
 
       log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
 
-      await Promise.all(panels.map(panel => {
-        // Solo perfiles asignados explícitamente a este panel
-        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id && p.activo);
-        if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles registrados para este panel`); return Promise.resolve(); }
-        log(`  📋 ${panel.nombre}: ${perfiles.length} perfiles asignados`);
-        return watchPanel(panel, perfiles);
-      }));
+      // 4. Asignar cada perfil a su respectivo watcher/navegador
+      log(`🔘 Preparando Watchers...`);
+      const panelsPromise = Promise.all(panels.map(panel => {
+        // Perfiles asignados explícitamente a este panel, O perfiles nuevos sin panel asignado (panel_id = null)
+        const perfiles = (allPerfiles || []).filter(p => (p.panel_id === panel.id || p.panel_id == null) && p.activo);
+      
+        if (perfiles.length === 0) {
+          log(`📋 PANEL-${panel.id}: 0 perfiles (Omitiendo)`);
+          return Promise.resolve();
+        }
+        log(`📋 PANEL-${panel.id}: ${perfiles.length} perfiles asignados (incluyendo huerfanos)`);
+          return watchPanel(panel, perfiles);
+        }));
 
     } else {
       log('❌ Sin paneles activos en Supabase (o tabla vacía/inactiva)');

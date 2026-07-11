@@ -15,31 +15,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-function getDynamicJWT() {
-  let secret = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UifQ.8YwzqxJKnRleCLmI7aj-JtMvOK9Sjm2yaSJm2y359zI'; // fallback
-  const envPath = path.join(__dirname, 'supabase', 'docker', '.env');
-  if (fs.existsSync(envPath)) {
-    const content = fs.readFileSync(envPath, 'utf8');
-    const serviceMatch = content.match(/^SERVICE_ROLE_KEY=(.*)$/m);
-    const anonMatch = content.match(/^ANON_KEY=(.*)$/m);
-    
-    if (serviceMatch && serviceMatch[1]) {
-      secret = serviceMatch[1].trim().replace(/['"]/g, '');
-      console.log(`[AUTH] Usando SERVICE_ROLE_KEY directo del archivo: ${envPath}`);
-    } else if (anonMatch && anonMatch[1]) {
-      secret = anonMatch[1].trim().replace(/['"]/g, '');
-      console.log(`[AUTH] Usando ANON_KEY directo del archivo: ${envPath}`);
-    } else {
-      console.log(`[AUTH] No se encontró SERVICE_ROLE_KEY en el .env, usando fallback`);
-    }
-  } else {
-    console.log(`[AUTH] No se encontró supabase .env, usando fallback`);
-  }
-  return secret;
-}
-
-const SUPABASE_URL = 'http://localhost:8000';
-const SUPABASE_SERVICE_KEY = getDynamicJWT();
+const SUPABASE_URL = 'http://localhost:8080';
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.F_rDxRTPE8OU83L_CNgEGXfmirMXmMMugT29Cvc8ygQ';
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
 // Pasar WebSocket explícitamente y deshabilitar Realtime (el watcher solo usa REST)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {

@@ -17585,8 +17585,8 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        // FIX CUOTA: Limitar a 45 días
-        const FECHA_INICIO = localDateStr(45);
+        // FIX CUOTA: Habilitar consulta histórica desde el inicio del año (2026) para gráficas anuales
+        const FECHA_INICIO = '2026-01-01';
         const hoy = localDateStr();
         console.log('Iniciando sincronización dinámica...', 'info');
 

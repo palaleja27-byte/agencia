@@ -17,7 +17,7 @@ require('dotenv').config({ path: '.env' });
 require('dotenv').config({ path: '../supabase/docker/.env' });
 
 const SUPABASE_URL         = process.env.SUPABASE_URL         || 'http://localhost:8080';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
 if (!SUPABASE_SERVICE_KEY) {
   console.error('❌ FATAL: SUPABASE_SERVICE_KEY is not set. Aborting.');

@@ -12,8 +12,12 @@
  *   PANEL-4 → panel_id: 4  (env: PANEL4_USER / PANEL4_PASS)
  */
 
-const SUPABASE_URL         = process.env.SUPABASE_URL         || 'https://vpyzpjgctidqmhqjboxq.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config({ path: '.env' });
+require('dotenv').config({ path: '../supabase/docker/.env' });
+
+const SUPABASE_URL         = process.env.SUPABASE_URL         || 'http://localhost:8080';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 if (!SUPABASE_SERVICE_KEY) {
   console.error('❌ FATAL: SUPABASE_SERVICE_KEY is not set. Aborting.');

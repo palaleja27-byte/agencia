@@ -9916,8 +9916,10 @@
           const opName = k.replace('||operador', '');
           const normOpName = opName.toUpperCase().trim();
           const foundHorasKey = Object.keys(allHoras).find(hKey => hKey.toUpperCase().trim() === normOpName);
-          const horaInfo = foundHorasKey ? allHoras[foundHorasKey] : null;
-          if (horaInfo?.salidaTS && Date.now() > horaInfo.salidaTS) return; // turno terminado
+            const horaInfo = foundHorasKey ? allHoras[foundHorasKey] : null;
+            const hoyInicio = new Date();
+            hoyInicio.setHours(0,0,0,0);
+            if (horaInfo?.salidaTS && horaInfo.salidaTS > hoyInicio.getTime() && Date.now() > horaInfo.salidaTS) return; // turno terminado hoy
 
           // No excluimos estrictamente por hora actual vs fin del turno esperado
           // ya que el operador puede hacer horas extra o loguearse tarde.
@@ -17368,8 +17370,9 @@ function exportarDatos() {
       _localSaveTs['primeOperatorsData2026'] = Date.now();
 
       document.getElementById('modal-add-op').classList.remove('open');
-      renderRanking();
-      if (typeof renderOperators === 'function') renderOperators();
+        renderRanking();
+        if (typeof renderOperators === 'function') renderOperators();
+        if (typeof asiRender === 'function') asiRender();
       alert(`✅ Operador "${name}" agregado correctamente.`);
     }
 

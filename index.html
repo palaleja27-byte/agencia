@@ -5400,8 +5400,11 @@
           </div>
 
           <div>
-            <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:2px;">2. Rostros Base (Consistencia 100%)</label>
-            <div style="font-size:0.55rem; color:#f472b6; margin-bottom:6px; font-style:italic;">Sube 2 fotos para fijar las facciones de la modelo</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase;">2. Rostros Base (Consistencia 100%)</label>
+              <span id="face-status-indicator" style="font-size:0.55rem; font-weight:800; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); color:#fbbf24; padding:2px 8px; border-radius:6px; transition:0.3s;">🟡 Modo Estándar</span>
+            </div>
+            <div style="font-size:0.55rem; color:#f472b6; margin-bottom:6px; font-style:italic;">Sube o selecciona 2 fotos para fijar las facciones del rostro de la modelo</div>
             <div style="display: flex; gap: 10px;">
               <!-- Rostro 1 -->
               <div id="face-dropzone-1" onclick="document.getElementById('face-file-1').click()" style="flex: 1; border: 1px dashed rgba(236,72,153,0.4); border-radius: 12px; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: rgba(0,0,0,0.3); position: relative; overflow: hidden; transition: 0.2s;" onmouseover="this.style.borderColor='#f43f5e'" onmouseout="this.style.borderColor='rgba(236,72,153,0.4)'">
@@ -31884,14 +31887,52 @@ Reglas estrictas:
 
 
     // --- LOGICA DE GENERADOR DE IMÁGENES CON IA (Fase 10) ---
+    window.updateFaceConsistencyStatus = function(suffix = '') {
+      const face1 = suffix === '-admin' ? window.selectedFace1Admin : window.selectedFace1;
+      const face2 = suffix === '-admin' ? window.selectedFace2Admin : window.selectedFace2;
+      const badge = document.getElementById(`face-status-indicator${suffix}`);
+      if (!badge) return;
+      if (face1 || face2) {
+        badge.innerHTML = '🟢 Consistencia Facial 100% Activa';
+        badge.style.background = 'rgba(16,185,129,0.15)';
+        badge.style.color = '#34d399';
+        badge.style.borderColor = 'rgba(16,185,129,0.3)';
+      } else {
+        badge.innerHTML = '🟡 Modo Estándar (Sube fotos para fijar rostro 100%)';
+        badge.style.background = 'rgba(245,158,11,0.15)';
+        badge.style.color = '#fbbf24';
+        badge.style.borderColor = 'rgba(245,158,11,0.3)';
+      }
+    };
+
     window.handleImgModelSelectChange = function(val) {
       const customInput = document.getElementById('img-model-custom');
       if (customInput) customInput.style.display = (val === '__custom__') ? 'block' : 'none';
+
+      // Auto-Cargar foto del perfil para consistencia facial
+      if (val && val !== '__custom__' && window.currentOpName) {
+        const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => (o.name || '').trim().toUpperCase() === (window.currentOpName || '').trim().toUpperCase());
+        if (op && Array.isArray(op.profiles)) {
+          const p = op.profiles.find(prof => (prof.model || prof.nombre || prof.name || '').toUpperCase() === val.toUpperCase());
+          if (p && (p.foto || p.avatar || p.image)) {
+            const faceUrl = p.foto || p.avatar || p.image;
+            window.selectedFace1 = faceUrl;
+            const preview1 = document.getElementById('face-preview-1');
+            const img1 = document.getElementById('face-img-1');
+            if (preview1 && img1) {
+              img1.src = faceUrl;
+              preview1.style.display = 'flex';
+            }
+          }
+        }
+      }
+      window.updateFaceConsistencyStatus('');
     };
 
     window.handleImgModelSelectChangeAdmin = function(val) {
       const customInput = document.getElementById('img-model-custom-admin');
       if (customInput) customInput.style.display = (val === '__custom__') ? 'block' : 'none';
+      window.updateFaceConsistencyStatus('-admin');
     };
 
     window.abrirModalImagenesIA = function() {
@@ -31900,6 +31941,7 @@ Reglas estrictas:
         modal.classList.add('open');
         window.populateImgModels();
         window.updateImageEngineBadge();
+        window.updateFaceConsistencyStatus('');
       }
     };
 
@@ -31929,7 +31971,10 @@ Reglas estrictas:
       { label: "👟 Caminando Calle", value: "candid smartphone selfie walking down a city street, wind in hair, natural outdoor daylight, realistic mobile camera picture" },
       { label: "🛌 Selfie Pijama", value: "cozy bed selfie wearing soft comfortable pajamas, natural morning sunlight, casual daily home vibe, real phone camera shot" },
       { label: "🏋️ Espejo Gym", value: "casual selfie in front of the gym mirror, holding smartphone, wearing athletic workout clothes, raw fitness aesthetic" },
-      { label: "🍕 Comiendo Pizza", value: "candid selfie at a dining table holding a slice of pizza, laughing happily, warm casual indoor home lighting, phone photo" }
+      { label: "🍕 Comiendo Pizza", value: "candid selfie at a dining table holding a slice of pizza, laughing happily, warm casual indoor home lighting, phone photo" },
+      { label: "🏖️ Día de Playa", value: "candid selfie on a sunny beach, golden hour sunlight, ocean breeze, natural vacation vibe, mobile phone photo" },
+      { label: "👗 Noche Elegante", value: "casual selfie before going out for dinner, wearing stylish evening dress, soft indoor restaurant lighting, smartphone photo" },
+      { label: "🛋️ En el Sofá", value: "relaxed selfie sitting on a living room sofa with a soft blanket, casual home outfit, warm natural indoor lighting" }
     ];
 
     window.handleFaceUpload = function(event, index, suffix) {
@@ -31953,6 +31998,7 @@ Reglas estrictas:
           img.src = base64;
           preview.style.display = 'flex';
         }
+        window.updateFaceConsistencyStatus(suffix);
       };
       reader.readAsDataURL(file);
     };
@@ -31965,6 +32011,10 @@ Reglas estrictas:
         if (index === 1) window.selectedFace1 = "";
         else window.selectedFace2 = "";
       }
+      const preview = document.getElementById(`face-preview-${index}${suffix}`);
+      if (preview) preview.style.display = 'none';
+      window.updateFaceConsistencyStatus(suffix);
+    };
       
       const fileInput = document.getElementById(`face-file-${index}${suffix}`);
       if (fileInput) fileInput.value = "";

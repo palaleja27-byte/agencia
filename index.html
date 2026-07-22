@@ -12235,83 +12235,133 @@
        });
     };
 
-    // --- SUBMÓDULO: HUSOS HORARIOS INTELIGENTES EXPANDIDO ---
-    function renderTimezones() {
-      const track = document.getElementById('module-timezones');
-      if (!track) return;
-      
-      const zones = [
-        { name: 'Estados Unidos, Canadá', flags: '🇺🇸 🇨🇦 🇵🇷', tz: 'America/New_York', desc: 'USA (Este), Canadá, Puerto Rico', singles: '42%', gdp: '$76,000 (Alto)', style: 'Directo y apasionado' },
-        { name: 'Reino Unido, Irlanda', flags: '🇬🇧 🇮🇪', tz: 'Europe/London', desc: 'Europa Occidental', singles: '40%', gdp: '$46,000 (Medio-Alto)', style: 'Sarcástico y educado' },
-        { name: 'España, Italia, Alemania', flags: '🇪🇸 🇮🇹 🇩🇪', tz: 'Europe/Madrid', desc: 'Europa Occidental y Central', singles: '38%', gdp: '$48,000 (Medio-Alto)', style: 'Romántico e intelectual' },
-        { name: 'Australia, Nueva Zelanda', flags: '🇦🇺 🇳🇿', tz: 'Australia/Sydney', desc: 'Oceanía', singles: '39%', gdp: '$60,000 (Alto)', style: 'Aventurero y relajado' },
-        { name: 'México, Centroamérica', flags: '🇲🇽 🇨🇷 🇬🇹', tz: 'America/Mexico_City', desc: 'México, Costa Rica, Guatemala', singles: '35%', gdp: '$11,000 (Medio)', style: 'Cercano y divertido' },
-        { name: 'Colombia, Perú, Ecuador', flags: '🇨🇴 🇵🇪 🇪🇨', tz: 'America/Bogota', desc: 'Zona Andina', singles: '33%', gdp: '$7,000 (Emergente)', style: 'Juguetón y empático' }
-      ];
-
-      const getStatus = (hour) => {
-        if (hour >= 0 && hour < 6) return { l: '😴 Madrugada', c: '#f43f5e', bg: 'rgba(244,63,94,0.1)' };
-        if (hour >= 6 && hour < 12) return { l: '☕ Mañana', c: '#fbbf24', bg: 'rgba(251,191,36,0.1)' };
-        if (hour >= 12 && hour < 18) return { l: '☀️ Tarde', c: '#38bdf8', bg: 'rgba(56,189,248,0.1)' };
-        return { l: '🔥 Prime Time', c: '#10b981', bg: 'rgba(16,185,129,0.1)' };
-      };
-
-      // Header explicativo (Info de Rentabilidad)
-      const titleDiv = document.querySelector('#module-timezones').previousElementSibling;
-      if(titleDiv && !titleDiv.querySelector('.tz-info')) {
-         titleDiv.innerHTML += `<div class="tz-info" style="font-size:0.55rem; color:#94a3b8; margin-top:4px; line-height:1.3; background:rgba(255,255,255,0.05); padding:6px; border-radius:6px; border-left:2px solid #38bdf8;"><strong>Estrategia de Rentabilidad:</strong> No pierdas tiempo con banderas durmiendo (Madrugada). Enfoca toda tu energía de ataque en países que estén en <strong>Tarde</strong> o <strong>Prime Time</strong>, donde la billetera de los usuarios está más activa.</div>`;
+    function renderEmpalmeTableHtml(h) {
+      const items = h.empalmeItems || [];
+      if (!items.length && h.notes) {
+        return `
+          <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03);">
+            ${h.notes}
+          </div>
+        `;
+      }
+      if (!items.length) {
+        return `
+          <div style="font-size:0.65rem; color:#64748b; font-style:italic; background:rgba(0,0,0,0.15); padding:8px; border-radius:6px;">
+            Sin detalles de empalme por perfil.
+          </div>
+        `;
       }
 
-      const updateTimezones = () => {
-        const now = new Date();
-        const activeZones = zones.map(z => {
-          const formatter = new Intl.DateTimeFormat('es', { timeZone: z.tz, hour: '2-digit', minute:'2-digit', hour12: false });
-          const parts = formatter.formatToParts(now);
-          const h = parseInt(parts.find(p=>p.type==='hour').value);
-          const st = getStatus(h);
-          return { z, formatter, h, st };
-        }).filter(item => item.st.l !== '😴 Madrugada' && item.st.l !== '☕ Mañana'); // Solo dejar Tarde y Prime Time según solicitud
-
-        if (activeZones.length === 0) {
-           track.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8; font-size:0.75rem;">No hay países en Prime Time o Tarde en este momento.</div>`;
-           return;
-        }
-
-        track.innerHTML = activeZones.map(item => {
-          const { z, formatter, st } = item;
-          return `
-            <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); padding:10px; border-radius:10px; display:flex; flex-direction:column; gap:4px; position:relative; box-shadow: 0 4px 20px rgba(0,0,0,0.15); backdrop-filter: blur(8px);">
-              <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                 <div style="font-size:0.8rem; letter-spacing:2px;">${z.flags}</div>
-                 <div style="font-size:0.5rem; font-weight:800; color:${st.c}; background:${st.bg}; padding:2px 6px; border-radius:10px;">${st.l}</div>
-              </div>
-              <div style="font-size:0.58rem; color:#94a3b8; font-weight:700; text-align:left; margin-top:2px;">${z.name}</div>
-              <div style="font-size:1.2rem; font-weight:900; color:white; font-variant-numeric: tabular-nums; margin:2px 0;">${formatter.format(now)}</div>
-              <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top:4px; margin-top:2px; display:flex; flex-direction:column; gap:2px; font-size:0.52rem; color:#64748b;">
-                 <div>👤 Solteros: <strong style="color:#e2e8f0;">${z.singles}</strong></div>
-                 <div>💰 PIB per cápita: <strong style="color:#e2e8f0;">${z.gdp}</strong></div>
-                 <div style="font-style:italic; color:#38bdf8; margin-top:2px; line-height:1.2;">🎯 ${z.style}</div>
-              </div>
+      const rowsHtml = items.map(item => `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(255,255,255,0.01);">
+          <td style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.04); vertical-align:top; background:rgba(0,0,0,0.2);">
+            <div style="font-weight:900; color:#ffffff; font-size:0.75rem; display:flex; align-items:center; gap:6px;">
+              <span>🪪</span> ${item.profileName || 'N/A'}
             </div>
-          `;
-        }).join('');
-      };
-      
-      updateTimezones(); // Renderizar de inmediato sin esperar 1 segundo
-      setInterval(updateTimezones, 1000);
+            <div style="font-size:0.6rem; color:#a78bfa; font-family:monospace; margin-top:4px; font-weight:700; display:flex; align-items:center; gap:4px;">
+              <span>📊</span> ID: ${item.profileId || 'N/A'}
+            </div>
+          </td>
+          <td style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.04); color:#cbd5e1; vertical-align:top; white-space:pre-wrap; font-size:0.68rem; line-height:1.4;">
+            ${item.start || '-'}
+          </td>
+          <td style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.04); color:#cbd5e1; vertical-align:top; white-space:pre-wrap; font-size:0.68rem; line-height:1.4;">
+            ${item.progress || '-'}
+          </td>
+          <td style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.04); color:#cbd5e1; vertical-align:top; white-space:pre-wrap; font-size:0.68rem; line-height:1.4;">
+            ${item.end || '-'}
+          </td>
+          <td style="padding:10px 12px; color:#cbd5e1; vertical-align:top; white-space:pre-wrap; font-size:0.68rem; line-height:1.4;">
+            ${item.nextStep || '-'}
+          </td>
+        </tr>
+      `).join('');
+
+      return `
+        <div style="overflow-x:auto; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:10px; margin-top:6px;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.68rem; min-width:700px;">
+            <thead>
+              <tr style="background:#0f172a; border-bottom:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.58rem; text-transform:uppercase; letter-spacing:0.5px;">
+                <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.05); text-align:left; width:22%; font-weight:800; color:#fff;">
+                  🪪 NOMBRE / ID DEL PERFIL 📊
+                </th>
+                <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.05); width:20%; font-weight:800; color:#38bdf8;">
+                  ▶️ CÓMO SE INICIÓ
+                </th>
+                <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.05); width:22%; font-weight:800; color:#818cf8;">
+                  💬 CÓMO TRANSCURRIÓ
+                </th>
+                <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.05); width:18%; font-weight:800; color:#ef4444;">
+                  ⏹️ CÓMO TERMINÓ
+                </th>
+                <th style="padding:10px 12px; width:18%; font-weight:800; color:#34d399;">
+                  ➔ PRÓXIMO PASO
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
     }
 
-    // renderNewsAcordeon: iniciar carga de noticias sin recursión y llamar nuevos módulos
-    function renderNewsAcordeon() {
-      renderGrokHotTalks();
-      renderTimezones();
-      renderFechasEspeciales();
+    function addEmpalmeItemRowForm(item = {}) {
+      const container = document.getElementById('ho-empalme-items-container');
+      if (!container) return;
+
+      const rowId = 'emp_row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+      const div = document.createElement('div');
+      div.id = rowId;
+      div.className = 'ho-empalme-row-item';
+      div.style.cssText = 'background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; position:relative;';
+
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
+          <span style="font-size:0.65rem; font-weight:800; color:#c084fc; text-transform:uppercase; display:flex; align-items:center; gap:6px;">
+            <span>🪪</span> Detalle de Perfil en Empalme
+          </span>
+          <button type="button" onclick="document.getElementById('${rowId}').remove()" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; font-size:0.6rem; font-weight:bold; padding:2px 8px; border-radius:4px; cursor:pointer;">Quitar Perfil</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <label style="font-size:0.55rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:3px;">🪪 Nombre del Perfil</label>
+            <input type="text" class="ho-item-name" value="${item.profileName || ''}" placeholder="Ej: Linda_26" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:6px; border-radius:6px; outline:none;">
+          </div>
+          <div>
+            <label style="font-size:0.55rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:3px;">📊 ID del Perfil</label>
+            <input type="text" class="ho-item-id" value="${item.profileId || ''}" placeholder="Ej: 98S74S6" style="width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:6px; border-radius:6px; outline:none;">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+          <div>
+            <label style="font-size:0.55rem; color:#38bdf8; font-weight:800; text-transform:uppercase; display:flex; align-items:center; gap:4px; margin-bottom:3px;">▶️ Cómo se inició</label>
+            <textarea class="ho-item-start" placeholder="Ej: Icebreaker sobre su viaje a Cartagena." style="width:100%; height:45px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); color:white; font-size:0.65rem; padding:6px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${item.start || ''}</textarea>
+          </div>
+          <div>
+            <label style="font-size:0.55rem; color:#818cf8; font-weight:800; text-transform:uppercase; display:flex; align-items:center; gap:4px; margin-bottom:3px;">💬 Cómo transcurrió</label>
+            <textarea class="ho-item-progress" placeholder="Ej: Se interesó, hablamos de playas y trabajo, respondió bien." style="width:100%; height:45px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); color:white; font-size:0.65rem; padding:6px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${item.progress || ''}</textarea>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <div>
+            <label style="font-size:0.55rem; color:#ef4444; font-weight:800; text-transform:uppercase; display:flex; align-items:center; gap:4px; margin-bottom:3px;">⏹️ Cómo terminó</label>
+            <textarea class="ho-item-end" placeholder="Ej: Terminamos con ella preguntando si mañana estará en línea." style="width:100%; height:45px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); color:white; font-size:0.65rem; padding:6px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${item.end || ''}</textarea>
+          </div>
+          <div>
+            <label style="font-size:0.55rem; color:#34d399; font-weight:800; text-transform:uppercase; display:flex; align-items:center; gap:4px; margin-bottom:3px;">➔ Próximo paso</label>
+            <textarea class="ho-item-next" placeholder="Ej: Retomar viaje y continuar con más detalles personales." style="width:100%; height:45px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); color:white; font-size:0.65rem; padding:6px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${item.nextStep || ''}</textarea>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(div);
     }
 
-    // Legacy alias so setTimeout hook still works
-    function cargarNoticias() {}
-
-    // ── EMPALMES DE TURNO / SHIFT HANDOVERS ──────────────────────────────────
     function renderHandoverModule(opName) {
       const container = document.getElementById('handover-container');
       const badge = document.getElementById('handover-status-badge');
@@ -12328,12 +12378,13 @@
       const opDataRaw = localStorage.getItem('primeOperatorsData2026') || '[]';
       let currentPts = 0;
       let myGroup = '';
+      let currentOp = null;
       const activeOps = (typeof operatorsData !== 'undefined' ? operatorsData : [])
         .filter(o => o.group !== 'SP' && o.group !== 'N/A');
 
       try {
         const ops = JSON.parse(opDataRaw);
-        const currentOp = ops.find(o => o.name.toLowerCase() === opName.toLowerCase());
+        currentOp = ops.find(o => o.name.toLowerCase() === opName.toLowerCase()) || activeOps.find(o => o.name.toLowerCase() === opName.toLowerCase());
         if (currentOp) {
           currentPts = currentOp.points_hoy || 0;
           myGroup = currentOp.group || '';
@@ -12365,7 +12416,7 @@
 
         groupHtml += `
           <div style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.08); padding-top:15px;">
-            <h4 style="margin:0 0 10px; font-size:0.7rem; color:#a78bfa; text-transform:uppercase; font-weight:800; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">
+            <h4 style="margin:0 0 10px; font-size:0.75rem; color:#a78bfa; text-transform:uppercase; font-weight:800; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">
               👥 Empalmes de tu Grupo (${myGroup}) hoy
             </h4>
         `;
@@ -12377,7 +12428,7 @@
             </div>
           `;
         } else {
-          groupHtml += `<div style="display:flex; flex-direction:column; gap:10px;">`;
+          groupHtml += `<div style="display:flex; flex-direction:column; gap:12px;">`;
           groupHandovers.forEach(h => {
             let shiftBadge = '';
             if (h.shift === 'manana') shiftBadge = `<span style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); color:#fbbf24; padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800; text-transform:uppercase;">☀️ Mañana</span>`;
@@ -12385,21 +12436,19 @@
             else shiftBadge = `<span style="background:rgba(192,132,252,0.15); border:1px solid rgba(192,132,252,0.3); color:#c084fc; padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800; text-transform:uppercase;">🌙 Noche</span>`;
 
             groupHtml += `
-              <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:8px; padding:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                  <span style="font-size:0.7rem; font-weight:800; color:white;">👤 ${h.operator} ${shiftBadge}</span>
+              <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <span style="font-size:0.75rem; font-weight:800; color:white;">👤 ${h.operator} ${shiftBadge}</span>
                   <span style="font-size:0.6rem; color:#475569;">${new Date(h.timestamp).toLocaleTimeString()}</span>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr; gap:6px; font-size:0.65rem; margin-top:4px;">
-                  <div style="background:rgba(0,0,0,0.15); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.01);">
-                    <strong style="color:#818cf8; display:block; margin-bottom:2px; font-size:0.55rem; text-transform:uppercase;">🎯 Clientes Nuevos</strong>
-                    <span style="color:#cbd5e1; white-space:pre-wrap;">${h.newClients}</span>
-                  </div>
-                  <div style="background:rgba(0,0,0,0.15); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.01);">
-                    <strong style="color:#c084fc; display:block; margin-bottom:2px; font-size:0.55rem; text-transform:uppercase;">🔄 Instrucciones</strong>
-                    <span style="color:#cbd5e1; white-space:pre-wrap;">${h.notes || 'Ninguna instrucción.'}</span>
-                  </div>
+                
+                <div style="margin-bottom:8px;">
+                  <strong style="color:#818cf8; display:block; margin-bottom:2px; font-size:0.6rem; text-transform:uppercase;">🎯 Clientes Nuevos Capturados</strong>
+                  <div style="color:#cbd5e1; white-space:pre-wrap; font-size:0.68rem; background:rgba(0,0,0,0.2); padding:6px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
                 </div>
+
+                <strong style="color:#c084fc; display:block; margin-bottom:4px; font-size:0.6rem; text-transform:uppercase;">📋 Empalme Detallado por Perfil</strong>
+                ${renderEmpalmeTableHtml(h)}
               </div>
             `;
           });
@@ -12416,7 +12465,7 @@
               <span style="font-size:0.75rem; font-weight:800; color:#5eead4; text-transform:uppercase;">Empalme del día registrado con éxito</span>
               <span style="font-size:0.6rem; color:#64748b;">${new Date(existing.timestamp).toLocaleTimeString()}</span>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
               <div style="background:rgba(255,255,255,0.01); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.03);">
                 <div style="font-size:0.55rem; color:#64748b; text-transform:uppercase; font-weight:800;">Turno Reportado</div>
                 <div style="font-size:0.75rem; font-weight:700; color:white; text-transform:capitalize;">${existing.shift}</div>
@@ -12427,18 +12476,18 @@
               </div>
             </div>
             
-            <div style="margin-bottom:8px;">
+            <div style="margin-bottom:12px;">
               <div style="font-size:0.6rem; color:#818cf8; text-transform:uppercase; font-weight:800; margin-bottom:2px;">Clientes Nuevos</div>
-              <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:6px; border-radius:6px;">${existing.newClients || 'Ninguno reportado.'}</div>
+              <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.02);">${existing.newClients || 'Ninguno reportado.'}</div>
             </div>
             
             <div style="margin-bottom:8px;">
-              <div style="font-size:0.6rem; color:#c084fc; text-transform:uppercase; font-weight:800; margin-bottom:2px;">Instrucciones / Coberturas</div>
-              <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.2); padding:6px; border-radius:6px;">${existing.notes || 'Ninguna instrucción reportada.'}</div>
+              <div style="font-size:0.6rem; color:#c084fc; text-transform:uppercase; font-weight:800; margin-bottom:4px;">📋 Empalme Detallado por Perfil</div>
+              ${renderEmpalmeTableHtml(existing)}
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
-              <button onclick="document.getElementById('handover-container').dataset.editing='true'; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:bold;">Editar Reporte</button>
+              <button onclick="document.getElementById('handover-container').dataset.editing='true'; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; font-size:0.65rem; padding:6px 12px; border-radius:6px; cursor:pointer; font-weight:bold;">Editar Reporte</button>
             </div>
           </div>
           <div id="handover-group-list-container">${groupHtml}</div>
@@ -12449,12 +12498,9 @@
       // Si es formulario (creación o edición)
       // Verificar si el formulario ya está dibujado en el DOM
       const txtClients = document.getElementById('ho-new-clients');
-      const txtNotes = document.getElementById('ho-notes');
+      const itemsContainer = document.getElementById('ho-empalme-items-container');
 
-      if (txtClients && txtNotes) {
-        // El formulario ya existe en pantalla.
-        // NO lo re-renderizamos para no perder el foco ni el texto que el operador está escribiendo.
-        // Solo actualizamos el listado de empalmes del grupo hoy si el contenedor existe
+      if (txtClients && itemsContainer) {
         const grpContainer = document.getElementById('handover-group-list-container');
         if (grpContainer) {
           grpContainer.innerHTML = groupHtml;
@@ -12462,13 +12508,23 @@
         return;
       }
 
-      // De lo contrario, renderizar el formulario completo por primera vez
+      // Renderizar el formulario completo
       container.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:12px; padding:15px;">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div style="display:flex; flex-direction:column; gap:14px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:14px; padding:18px;">
+          <!-- Banner Header matching Image 2 -->
+          <div style="background:#000000; border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:12px 16px; color:white;">
+            <div style="font-size:0.9rem; font-weight:900; letter-spacing:0.5px; text-transform:uppercase;">
+              1. EMPALME: SIEMPRE ESPECÍFICO Y DETALLADO
+            </div>
+            <div style="font-size:0.65rem; color:#cbd5e1; margin-top:2px;">
+              Siempre lee el empalme al iniciar y crea uno igual de completo al finalizar.
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
               <label style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">Tu Turno de Hoy</label>
-              <select id="ho-shift" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:6px; border-radius:6px; outline:none;">
+              <select id="ho-shift" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.75rem; padding:8px; border-radius:8px; outline:none;">
                 <option value="manana" ${existing?.shift === 'manana' ? 'selected' : ''}>☀️ Mañana</option>
                 <option value="tarde" ${existing?.shift === 'tarde' ? 'selected' : ''}>🌆 Tarde</option>
                 <option value="noche" ${existing?.shift === 'noche' ? 'selected' : ''}>🌙 Noche</option>
@@ -12476,40 +12532,86 @@
             </div>
             <div>
               <label style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">Puntos Acumulados</label>
-              <input type="number" id="ho-points" value="${existing ? existing.points : currentPts}" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:5px; border-radius:6px; outline:none;" readonly>
+              <input type="number" id="ho-points" value="${existing ? existing.points : currentPts}" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.75rem; padding:8px; border-radius:8px; outline:none;" readonly>
               <span style="font-size:0.5rem; color:#475569;">Autocalculado del ranking</span>
             </div>
           </div>
 
           <div>
-            <label style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">🎯 Clientes Nuevos Capturados (Obligatorio)</label>
-            <textarea id="ho-new-clients" placeholder="Lista los IDs y detalles de los clientes capturados durante tu turno. Ejemplo:\n- ID: 12345 (Cliente caliente, le gusta viajar)\n- ID: 67890 (Preguntó por VIP)" style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:8px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${existing ? existing.newClients : ''}</textarea>
+            <label style="font-size:0.65rem; color:#818cf8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">🎯 Clientes Nuevos Capturados (Obligatorio)</label>
+            <textarea id="ho-new-clients" placeholder="Lista los IDs y detalles de los clientes capturados durante tu turno. Ejemplo:\n- ID: 12345 (Cliente caliente, le gusta viajar)\n- ID: 67890 (Preguntó por VIP)" style="width:100%; height:65px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:8px; border-radius:8px; outline:none; resize:none; font-family:inherit;">${existing ? (existing.newClients || '') : ''}</textarea>
           </div>
 
-          <div>
-            <label style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">🔄 Coberturas e Instrucciones de Empalme</label>
-            <textarea id="ho-notes" placeholder="Indica qué perfiles cubriste, en qué horario, qué clientes quedaron pendientes y cualquier instrucción para el siguiente operador." style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.7rem; padding:8px; border-radius:6px; outline:none; resize:none; font-family:inherit;">${existing ? existing.notes : ''}</textarea>
+          <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <label style="font-size:0.68rem; color:#c084fc; font-weight:800; text-transform:uppercase; display:flex; align-items:center; gap:6px;">
+                <span>📋</span> Empalme Detallado por Perfil
+              </label>
+              <button type="button" onclick="addEmpalmeItemRowForm()" style="background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.3); color:#c084fc; font-size:0.62rem; font-weight:800; padding:4px 10px; border-radius:6px; cursor:pointer;">+ Agregar Otro Perfil</button>
+            </div>
+
+            <div id="ho-empalme-items-container" style="display:flex; flex-direction:column; gap:12px;">
+              <!-- Empalme profile rows -->
+            </div>
           </div>
 
-          <div style="display:flex; justify-content:flex-end; gap:8px;">
-            ${existing ? `<button onclick="delete document.getElementById('handover-container').dataset.editing; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); color:#64748b; font-size:0.65rem; padding:6px 12px; border-radius:6px; cursor:pointer;">Cancelar</button>` : ''}
-            <button onclick="submitHandoverReport('${opName}')" style="background:linear-gradient(90deg, #6366f1, #a855f7); border:none; color:white; font-size:0.65rem; font-weight:bold; padding:6px 15px; border-radius:6px; cursor:pointer; box-shadow:0 4px 10px rgba(99, 102, 241, 0.2);">Enviar Reporte</button>
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+            ${existing ? `<button onclick="delete document.getElementById('handover-container').dataset.editing; renderHandoverModule('${opName}')" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); color:#64748b; font-size:0.7rem; padding:8px 14px; border-radius:8px; cursor:pointer;">Cancelar</button>` : ''}
+            <button onclick="submitHandoverReport('${opName}')" style="background:linear-gradient(90deg, #6366f1, #a855f7); border:none; color:white; font-size:0.7rem; font-weight:bold; padding:8px 20px; border-radius:8px; cursor:pointer; box-shadow:0 4px 12px rgba(99, 102, 241, 0.3);">Enviar Reporte</button>
           </div>
         </div>
         <div id="handover-group-list-container">${groupHtml}</div>
       `;
+
+      // Inicializar filas de perfiles
+      if (existing && existing.empalmeItems && existing.empalmeItems.length > 0) {
+        existing.empalmeItems.forEach(item => addEmpalmeItemRowForm(item));
+      } else if (currentOp && Array.isArray(currentOp.profiles) && currentOp.profiles.length > 0) {
+        currentOp.profiles.forEach(p => {
+          addEmpalmeItemRowForm({
+            profileName: p.nombre || p.name || p.perfil || '',
+            profileId: p.id || p.id_datame || ''
+          });
+        });
+      } else {
+        addEmpalmeItemRowForm();
+      }
     }
 
     function submitHandoverReport(opName) {
       const shift = document.getElementById('ho-shift')?.value;
       const points = parseInt(document.getElementById('ho-points')?.value || '0');
       const newClients = document.getElementById('ho-new-clients')?.value.trim();
-      const notes = document.getElementById('ho-notes')?.value.trim();
 
       if (!newClients) {
         alert('Por favor reporta los clientes nuevos capturados en tu turno (es obligatorio).');
         return;
       }
+
+      // Extraer datos de los perfiles en empalme
+      const empalmeItems = [];
+      const rows = document.querySelectorAll('.ho-empalme-row-item');
+      rows.forEach(r => {
+        const pName = r.querySelector('.ho-item-name')?.value.trim() || '';
+        const pId = r.querySelector('.ho-item-id')?.value.trim() || '';
+        const start = r.querySelector('.ho-item-start')?.value.trim() || '';
+        const progress = r.querySelector('.ho-item-progress')?.value.trim() || '';
+        const end = r.querySelector('.ho-item-end')?.value.trim() || '';
+        const nextStep = r.querySelector('.ho-item-next')?.value.trim() || '';
+
+        if (pName || pId || start || progress || end || nextStep) {
+          empalmeItems.push({
+            profileName: pName,
+            profileId: pId,
+            start: start,
+            progress: progress,
+            end: end,
+            nextStep: nextStep
+          });
+        }
+      });
+
+      const summaryNotes = empalmeItems.map(i => `[${i.profileName || 'Perfil'} | ID: ${i.profileId || '-'}]\n▶ Inicio: ${i.start}\n💬 Transcurso: ${i.progress}\n⏹ Término: ${i.end}\n➔ Próximo paso: ${i.nextStep}`).join('\n\n');
 
       const handovers = JSON.parse(localStorage.getItem('rr_shift_handovers') || '[]');
       const today = new Date();
@@ -12525,7 +12627,8 @@
         shift: shift,
         points: points,
         newClients: newClients,
-        notes: notes,
+        notes: summaryNotes,
+        empalmeItems: empalmeItems,
         timestamp: Date.now()
       };
 
@@ -12607,9 +12710,8 @@
           </div>
         `;
       } else {
-        html += `<div style="display:grid; grid-template-columns:1fr; gap:12px;">`;
+        html += `<div style="display:grid; grid-template-columns:1fr; gap:14px;">`;
         filtered.forEach(h => {
-          // Intentar cruzar puntos con su ranking actual de hoy si la fecha es hoy
           const today = new Date();
           const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
           
@@ -12647,15 +12749,14 @@
                 </div>
               </div>
 
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:8px; border-top:1px solid rgba(255,255,255,0.03); padding-top:10px;">
-                <div>
-                  <div style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🎯 Clientes Nuevos Capturados</div>
-                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
-                </div>
-                <div>
-                  <div style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🔄 Coberturas e Instrucciones</div>
-                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.notes || 'Ninguna.'}</div>
-                </div>
+              <div style="margin-bottom:10px;">
+                <div style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🎯 Clientes Nuevos Capturados</div>
+                <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
+              </div>
+
+              <div>
+                <div style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; margin-bottom:4px;">📋 Empalme Detallado por Perfil</div>
+                ${renderEmpalmeTableHtml(h)}
               </div>
             </div>
           `;
@@ -12779,15 +12880,14 @@
                 </div>
               </div>
 
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-top:8px; border-top:1px solid rgba(255,255,255,0.03); padding-top:10px;">
-                <div>
-                  <div style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🎯 Clientes Nuevos Capturados</div>
-                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
-                </div>
-                <div>
-                  <div style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🔄 Coberturas e Instrucciones</div>
-                  <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; min-height:40px; border:1px solid rgba(255,255,255,0.02);">${h.notes || 'Ninguna.'}</div>
-                </div>
+              <div style="margin-bottom:10px;">
+                <div style="font-size:0.6rem; color:#818cf8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">🎯 Clientes Nuevos Capturados</div>
+                <div style="font-size:0.7rem; color:#cbd5e1; white-space:pre-wrap; background:rgba(0,0,0,0.25); padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.02);">${h.newClients || 'Ninguno.'}</div>
+              </div>
+
+              <div>
+                <div style="font-size:0.6rem; color:#c084fc; font-weight:800; text-transform:uppercase; margin-bottom:4px;">📋 Empalme Detallado por Perfil</div>
+                ${renderEmpalmeTableHtml(h)}
               </div>
             </div>
           `;

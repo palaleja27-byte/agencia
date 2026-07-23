@@ -31910,19 +31910,33 @@ Reglas estrictas:
       if (customInput) customInput.style.display = (val === '__custom__') ? 'block' : 'none';
 
       // Auto-Cargar foto del perfil para consistencia facial
-      if (val && val !== '__custom__' && window.currentOpName) {
-        const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => (o.name || '').trim().toUpperCase() === (window.currentOpName || '').trim().toUpperCase());
-        if (op && Array.isArray(op.profiles)) {
-          const p = op.profiles.find(prof => (prof.model || prof.nombre || prof.name || '').toUpperCase() === val.toUpperCase());
-          if (p && (p.foto || p.avatar || p.image)) {
-            const faceUrl = p.foto || p.avatar || p.image;
-            window.selectedFace1 = faceUrl;
-            const preview1 = document.getElementById('face-preview-1');
-            const img1 = document.getElementById('face-img-1');
-            if (preview1 && img1) {
-              img1.src = faceUrl;
-              preview1.style.display = 'flex';
+      if (val && val !== '__custom__') {
+        const activeOpName = window.currentOpName || localStorage.getItem('rr_current_operator') || (typeof currentOpName !== 'undefined' ? currentOpName : '');
+        let targetProfile = null;
+        if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+          if (activeOpName) {
+            const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === activeOpName.trim().toUpperCase());
+            if (op && Array.isArray(op.profiles)) {
+              targetProfile = op.profiles.find(prof => (prof.model || prof.nombre || prof.name || '').trim().toUpperCase() === val.trim().toUpperCase());
             }
+          }
+          if (!targetProfile) {
+            for (const o of operatorsData) {
+              if (Array.isArray(o.profiles)) {
+                targetProfile = o.profiles.find(prof => (prof.model || prof.nombre || prof.name || '').trim().toUpperCase() === val.trim().toUpperCase());
+                if (targetProfile) break;
+              }
+            }
+          }
+        }
+        if (targetProfile && (targetProfile.foto || targetProfile.avatar || targetProfile.image || targetProfile.photo)) {
+          const faceUrl = targetProfile.foto || targetProfile.avatar || targetProfile.image || targetProfile.photo;
+          window.selectedFace1 = faceUrl;
+          const preview1 = document.getElementById('face-preview-1');
+          const img1 = document.getElementById('face-img-1');
+          if (preview1 && img1) {
+            img1.src = faceUrl;
+            preview1.style.display = 'flex';
           }
         }
       }
@@ -31955,6 +31969,10 @@ Reglas estrictas:
       const badge = document.getElementById('img-active-engine-badge');
       if (badge) {
         badge.textContent = `Motor: ${engine.toUpperCase()}`;
+      }
+      const badgeAdmin = document.getElementById('img-active-engine-badge-admin');
+      if (badgeAdmin) {
+        badgeAdmin.textContent = `Motor: ${engine.toUpperCase()}`;
       }
     };
 
@@ -32013,14 +32031,9 @@ Reglas estrictas:
       }
       const preview = document.getElementById(`face-preview-${index}${suffix}`);
       if (preview) preview.style.display = 'none';
-      window.updateFaceConsistencyStatus(suffix);
-    };
-      
       const fileInput = document.getElementById(`face-file-${index}${suffix}`);
       if (fileInput) fileInput.value = "";
-      
-      const preview = document.getElementById(`face-preview-${index}${suffix}`);
-      if (preview) preview.style.display = 'none';
+      window.updateFaceConsistencyStatus(suffix);
     };
 
     window.selectQuickScenario = function(index, suffix) {
@@ -32052,27 +32065,52 @@ Reglas estrictas:
       const opSel = document.getElementById('img-model-select');
       const admSel = document.getElementById('img-model-select-admin');
       
-      // 1. Perfiles del operador
-      if (opSel && window.currentOpName) {
-        const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === (window.currentOpName || '').trim().toUpperCase());
-        const profiles = op ? (op.profiles || []) : [];
-        let html = '<option value="">-- Seleccionar Perfil --</option>';
-        profiles.forEach(p => {
-          html += `<option value="${p.model}">${p.model} (ID: ${p.id})</option>`;
-        });
+      const activeOpName = window.currentOpName || localStorage.getItem('rr_current_operator') || localStorage.getItem('rr_last_op_name') || (typeof currentOpName !== 'undefined' ? currentOpName : '');
+
+      // 1. Perfiles del operador (Solo los modelos asignados a su perfil/operador)
+      if (opSel) {
+        let profiles = [];
+        if (activeOpName && typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+          const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === activeOpName.trim().toUpperCase());
+          if (op && Array.isArray(op.profiles)) {
+            profiles = op.profiles;
+          }
+        }
+
+        let html = '<option value="">-- Seleccionar Modelo --</option>';
+        if (profiles.length > 0) {
+          profiles.forEach(p => {
+            const mName = p.model || p.nombre || p.name || 'Modelo';
+            html += `<option value="${mName}">${mName}${p.id ? ' (ID: ' + p.id + ')' : ''}</option>`;
+          });
+        } else if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+          const opProfilesMap = new Map();
+          operatorsData.forEach(o => {
+            (o.profiles || []).forEach(p => {
+              const mName = p.model || p.nombre || p.name;
+              if (mName) opProfilesMap.set(mName.toUpperCase(), { name: mName, id: p.id });
+            });
+          });
+          opProfilesMap.forEach((pObj) => {
+            html += `<option value="${pObj.name}">${pObj.name}${pObj.id ? ' (ID: ' + pObj.id + ')' : ''}</option>`;
+          });
+        }
         html += '<option value="__custom__">✍️ Otro/Manual...</option>';
         opSel.innerHTML = html;
       }
 
-      // 2. Todos los perfiles de la agencia para Admin
+      // 2. Todos los perfiles para Admin
       if (admSel) {
         const allProfilesMap = new Map();
-        operatorsData.forEach(o => {
-          (o.profiles || []).forEach(p => {
-            if (p.model) allProfilesMap.set(p.model.toUpperCase(), p.model);
+        if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+          operatorsData.forEach(o => {
+            (o.profiles || []).forEach(p => {
+              const mName = p.model || p.nombre || p.name;
+              if (mName) allProfilesMap.set(mName.toUpperCase(), mName);
+            });
           });
-        });
-        let html = '<option value="">-- Seleccionar Perfil --</option>';
+        }
+        let html = '<option value="">-- Seleccionar Modelo --</option>';
         allProfilesMap.forEach((modelName) => {
           html += `<option value="${modelName}">${modelName}</option>`;
         });
@@ -32080,14 +32118,18 @@ Reglas estrictas:
         admSel.innerHTML = html;
       }
 
-      // 3. Popular select de modelos para el generador de icebreakers
+      // 3. Popular select de modelos para icebreakers
       const iceModelSel = document.getElementById('ice-gen-model');
-      if (iceModelSel && window.currentOpName) {
-        const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === (window.currentOpName || '').trim().toUpperCase());
-        const profiles = op ? (op.profiles || []) : [];
+      if (iceModelSel) {
+        let profiles = [];
+        if (activeOpName && typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+          const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === activeOpName.trim().toUpperCase());
+          if (op && Array.isArray(op.profiles)) profiles = op.profiles;
+        }
         let html = '<option value="">-- Tono General --</option>';
         profiles.forEach(p => {
-          html += `<option value="${p.model}">${p.model}</option>`;
+          const mName = p.model || p.nombre || p.name;
+          if (mName) html += `<option value="${mName}">${mName}</option>`;
         });
         iceModelSel.innerHTML = html;
       }
@@ -32238,8 +32280,12 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         document.removeEventListener('touchstart', unlockAudioEngine);
       }
     }
-    document.addEventListener('click', unlockAudioEngine);
-    document.addEventListener('touchstart', unlockAudioEngine);
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        if (typeof window.populateImgModels === 'function') window.populateImgModels();
+        if (typeof window.updateImageEngineBadge === 'function') window.updateImageEngineBadge();
+      }, 500);
+    });
     // --- MÓDULO REGISTRO DE MODELOS NUEVAS (DESACTIVADO) ---
     // Funcionalidad removida — los perfiles se registran directamente en Supabase
   </script>

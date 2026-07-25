@@ -9,19 +9,13 @@ import base64
 # ═══════════════════════════════════════════════════════════════════
 # CONFIGURACIÓN SUPABASE
 # ═══════════════════════════════════════════════════════════════════
-raw_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-if not raw_url or "ngrok" in raw_url or "localhost" in raw_url:
-    raw_url = "https://vpyzpjgctidqmhqjboxq.supabase.co"
-SUPABASE_URL = raw_url
-
-raw_key = (
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY = (
     os.getenv("SUPABASE_SERVICE_KEY") or
     os.getenv("SUPABASE_SERVICE_ROLE_KEY") or
+    os.getenv("SUPABASE_ANON_KEY") or
     os.getenv("SUPABASE_KEY") or ""
 )
-if not raw_key or "supabase-demo" in raw_key:
-    raw_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0"
-SUPABASE_KEY = raw_key
 BATCH_SIZE = 200
 
 # ═══════════════════════════════════════════════════════════════════

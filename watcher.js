@@ -15,8 +15,17 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vpyzpjgctidqmhqjboxq.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
+let rawUrl = process.env.SUPABASE_URL || '';
+if (!rawUrl || rawUrl.includes('ngrok') || rawUrl.includes('localhost')) {
+  rawUrl = 'https://vpyzpjgctidqmhqjboxq.supabase.co';
+}
+const SUPABASE_URL = rawUrl;
+
+let rawKey = process.env.SUPABASE_SERVICE_KEY || '';
+if (!rawKey || rawKey.includes('supabase-demo')) {
+  rawKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
+}
+const SUPABASE_SERVICE_KEY = rawKey;
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) { console.error('❌ Faltan credenciales'); process.exit(1); }
 // Pasar WebSocket explícitamente y deshabilitar Realtime (el watcher solo usa REST)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {

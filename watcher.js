@@ -163,9 +163,9 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // Re-sincronizar siempre con el baseline de la DB si ya existe y es mayor a 0
+  // Re-sincronizar siempre con el baseline de la DB si ya existe
   const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
-  if (rec && rec.puntos_baseline > 0) {
+  if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
     shiftBaselines[key] = rec.puntos_baseline;
   } else if (shiftBaselines[key] === undefined) {
     if (rec) {

@@ -10884,8 +10884,8 @@
         const pPrevBase = op[prev] != null ? Number(op[prev]) : 0;
         const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
         
-        const pPrevVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesAntStats).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-        const pCurrVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActStats).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        const pPrevVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesAntStats && Number(c.puntos || 0) <= 200).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        const pCurrVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActStats && Number(c.puntos || 0) <= 200).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
         
         if (pCurrVir > 0) {
           console.log(`[AUDITORÍA] Match Encontrado para '${op.name}': +${pCurrVir} pts (Cortes: ${cortesAll.length})`);
@@ -28126,6 +28126,26 @@ PT._logKey = function (opName) {
                  },
                  body: JSON.stringify({ ref: 'main' })
                });
+               // 🧹 PURGAR CACHE LOCAL DE CORTES INFLADOS (> 200 pts)
+               try {
+                 const kCorte = typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes';
+                 const rawC = localStorage.getItem(kCorte);
+                 if (rawC) {
+                   let cData = JSON.parse(rawC);
+                   let changed = false;
+                   Object.keys(cData).forEach(op => {
+                     if (Array.isArray(cData[op])) {
+                       const beforeLen = cData[op].length;
+                       cData[op] = cData[op].filter(c => Number(c.puntos || 0) <= 200);
+                       if (cData[op].length !== beforeLen) changed = true;
+                     }
+                   });
+                   if (changed) {
+                     localStorage.setItem(kCorte, JSON.stringify(cData));
+                     console.log('[SYNC] Purgados cortes inflados (>200 pts) de localStorage');
+                   }
+                 }
+               } catch(e) {}
                if (res.ok) {
                    alert('🚀 Extracción forzada iniciada con éxito.\nEl servidor remoto (GitHub) está leyendo los perfiles. La pantalla se actualizará automáticamente cuando termine (aprox. 2 min).');
                } else {
@@ -28555,6 +28575,27 @@ PT._logKey = function (opName) {
            console.log('[SYNC] Draft de perfiles distribuido desde Supabase');
         }
       } catch(e) { console.warn('[SYNC] Error al distribuir draft:', e); }
+
+      // 🧹 PURGAR CACHE LOCAL DE CORTES INFLADOS (> 200 pts)
+      try {
+        const kCorte = typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes';
+        const rawC = localStorage.getItem(kCorte);
+        if (rawC) {
+          let cData = JSON.parse(rawC);
+          let changed = false;
+          Object.keys(cData).forEach(op => {
+            if (Array.isArray(cData[op])) {
+              const beforeLen = cData[op].length;
+              cData[op] = cData[op].filter(c => Number(c.puntos || 0) <= 200);
+              if (cData[op].length !== beforeLen) changed = true;
+            }
+          });
+          if (changed) {
+            localStorage.setItem(kCorte, JSON.stringify(cData));
+            console.log('[SYNC] Purgados cortes inflados (>200 pts) de localStorage');
+          }
+        }
+      } catch(e) {}
 
       const tsEl = document.getElementById('dp-last-update');
       if (tsEl) tsEl.textContent = '⏳ Cargando...';

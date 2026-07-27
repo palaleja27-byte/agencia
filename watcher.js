@@ -163,19 +163,14 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // Si no tenemos baseline en memoria, buscar en Supabase (watcher se reinició)
-  if (shiftBaselines[key] === undefined) {
-    const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
-
+  // Re-sincronizar siempre con el baseline de la DB si ya existe y es mayor a 0
+  const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
+  if (rec && rec.puntos_baseline > 0) {
+    shiftBaselines[key] = rec.puntos_baseline;
+  } else if (shiftBaselines[key] === undefined) {
     if (rec) {
-      const dbBaseline = rec.puntos_baseline || 0;
-      if (dbBaseline > 0) {
-        shiftBaselines[key] = dbBaseline;
-        log(`  📥 Baseline recuperado de DB: ${modelo} [${jornada}] = ${dbBaseline.toFixed(2)} pts`);
-      } else {
-        shiftBaselines[key] = monthlyTotal;
-        log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
-      }
+      shiftBaselines[key] = monthlyTotal;
+      log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
     } else {
       // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
       // Esto cierra la "brecha temporal" si el watcher se retrasa en el cambio de turno.

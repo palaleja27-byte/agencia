@@ -28300,7 +28300,13 @@ PT._logKey = function (opName) {
             // Sanidad: El baseline no puede ser mayor que el total
             if (nuevoBase > rec.puntos_total) nuevoBase = rec.puntos_total;
 
-            const nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            let nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            // Regla de Sanidad DELTA-SHIFT™: Si el neto del turno supera los 200 pts en una sola jornada,
+            // el baseline estaba desfasado con respecto al inicio del turno. Ajustar baseline al total actual.
+            if (nuevoNeto > 200) {
+              nuevoBase = rec.puntos_total;
+              nuevoNeto = 0.0;
+            }
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
               await _sb.from('operaciones').update({ 

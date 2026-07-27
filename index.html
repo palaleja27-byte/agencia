@@ -28312,7 +28312,12 @@ PT._logKey = function (opName) {
                 .order('fecha_corte', { ascending: false })
                 .limit(1).maybeSingle();
               
-              nuevoBase = ultimo ? (ultimo.puntos_total || 0) : rec.puntos_baseline;
+              // Si el registro ya tiene un baseline no cero calibrado, preservarlo
+              if (rec.puntos_baseline > 0) {
+                nuevoBase = rec.puntos_baseline;
+              } else {
+                nuevoBase = ultimo ? (ultimo.puntos_total || 0) : rec.puntos_baseline;
+              }
             } else {
               nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
             }

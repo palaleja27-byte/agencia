@@ -31904,42 +31904,66 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
     window.generateIcebreaker = async function() {
       const themeSel = document.getElementById('ice-gen-theme');
       const resultsEl = document.getElementById('ice-gen-results');
+      const modelSel = document.getElementById('ice-gen-model');
+      const contextEl = document.getElementById('ice-gen-context');
+      
       if (!themeSel || !resultsEl) return;
 
       const themeValue = themeSel.value;
       const themeName = themeSel.options[themeSel.selectedIndex].text;
+      const selectedModelName = modelSel ? modelSel.value : '';
+      const clientContext = contextEl ? contextEl.value.trim() : '';
       
-      const motorSeleccionado = localStorage.getItem('rr_active_text_ai') || 'ollama';
+      const motorSeleccionado = (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting('rr_active_text_ai') : null) || localStorage.getItem('rr_active_text_ai') || 'gemini';
 
-      resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Razonando con motor de IA (${motorSeleccionado})...</div>`;
+      resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Generando icebreakers irresistibles con ${motorSeleccionado.toUpperCase()}...</div>`;
 
       try {
-        const promptText = `Actúa como un experto en psicología persuasiva, dating y seducción. Genera 3 frases rompehielos (icebreakers) en español para iniciar una conversación en una app de citas. 
-Temática requerida: ${themeName} (${themeValue}).
-Reglas estrictas:
-- Deben ser extremadamente creativos, con alta tensión conversacional.
-- NUNCA repetir frases cliché como "hola cómo estás".
+        let contextualPrompt = `Actúa como un experto en psicología persuasiva, dating de alto valor y seducción. Genera 3 frases rompehielos (icebreakers) en español para iniciar una conversación en una plataforma de citas.
+
+CONFIGURACIÓN DE CONTEXTO:
+- Temática requerida: ${themeName} (${themeValue}).`;
+
+        if (selectedModelName) {
+          contextualPrompt += `\n- Personalidad/Nombre de la Modelo que envía el mensaje: ${selectedModelName} (adapta el tono de voz para que parezca escrito por ella de forma auténtica, natural y atractiva).`;
+        } else {
+          contextualPrompt += `\n- Tono de voz: Femenino, intrigante, juguetón y natural.`;
+        }
+
+        if (clientContext) {
+          contextualPrompt += `\n- Contexto o intereses del Cliente chateando: "${clientContext}" (utiliza este gancho/información de forma sutil pero directa para llamar su atención inmediatamente).`;
+        }
+
+        contextualPrompt += `\n\nREGLAS ESTRICTAS DE RESPUESTA:
+- Deben ser extremadamente creativos, con alta tensión conversacional y enfocados a generar intriga (curiosity gap).
+- NUNCA usar frases cliché o saludos sosos como "hola cómo estás".
 - Máximo 120 caracteres por frase.
 - Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS. No enumeres, no pongas introducciones ni conclusiones.`;
 
-        const outputText = await window.rrFetchTextAI(promptText, 'Eres un asistente experto. Limítate a responder usando los separadores | como se solicita.');
+        const outputText = await window.rrFetchTextAI(contextualPrompt, 'Eres un asistente experto en redactar ganchos e icebreakers de dating. Responde únicamente con las frases separadas por |.');
         
         const selected = outputText.split('|').map(s => s.trim()).filter(s => s.length > 5).slice(0,3);
 
         if (selected.length === 0) throw new Error("La IA no generó el formato esperado con separadores (|).");
 
-        let html = `<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">Opciones generadas por Hub IA (${motorSeleccionado}) (${themeName.split(' ')[1] || ''}):</div>`;
+        let html = `<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+          <span>Ganchos generados con ${motorSeleccionado.toUpperCase()}:</span>
+          <span style="font-size:0.65rem; color:#34d399; font-weight:bold;">⚡ Generación Completada</span>
+        </div>`;
         selected.forEach(ice => {
           const cleanIce = ice.replace(/'/g, "\\\'").replace(/"/g, '&quot;');
-          html += `<div style="background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; border-left:3px solid #ec4899; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-            <div style="flex:1;">${ice}</div>
-            <button onclick="navigator.clipboard.writeText('${cleanIce}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'Copiado', showConfirmButton:false, timer:1500, background:'#1e293b', color:'#fff'});" style="background:#475569; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:0.7rem; cursor:pointer; flex-shrink:0; transition:background 0.2s;" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#475569'">Copiar</button>
+          html += `<div style="background:rgba(0,0,0,0.4); padding:10px 14px; border-radius:8px; border-left:3px solid #ec4899; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div style="flex:1; font-size:0.82rem; line-height:1.4; color:#f8fafc; font-weight:500;">${ice}</div>
+            <div style="display:flex; gap:6px; flex-shrink:0;">
+              <button onclick="document.getElementById('ice-val-input').value = '${cleanIce}'; window.validateIcebreaker();" style="background:rgba(14,165,233,0.2); border:1px solid rgba(14,165,233,0.4); color:#38bdf8; padding:4px 10px; border-radius:6px; font-size:0.7rem; font-weight:bold; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='#0ea5e9'; this.style.color='#fff'" onmouseout="this.style.background='rgba(14,165,233,0.2)'; this.style.color='#38bdf8'">🤖 Validar</button>
+              <button onclick="navigator.clipboard.writeText('${cleanIce}'); Swal.fire({toast:true, position:'top-end', icon:'success', title:'Copiado al Portapapeles', showConfirmButton:false, timer:1500, background:'#1e293b', color:'#fff'});" style="background:#ec4899; color:white; border:none; padding:4px 12px; border-radius:6px; font-size:0.7rem; font-weight:bold; cursor:pointer; transition:background 0.2s; box-shadow:0 2px 8px rgba(236,72,153,0.3);" onmouseover="this.style.background='#db2777'" onmouseout="this.style.background='#ec4899'">📋 Copiar</button>
+            </div>
           </div>`;
         });
         resultsEl.innerHTML = html;
       } catch (e) {
         console.error("Error en generateIcebreaker:", e);
-        resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">❌ ${e.message}</div>`;
+        resultsEl.innerHTML = `<div style="color:#ef4444; padding:8px;">❌ Error generando icebreaker: ${e.message}</div>`;
       }
     };
 

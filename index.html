@@ -6959,17 +6959,17 @@
                 <span id="img-active-engine-badge-modal" style="font-size:0.6rem; background:rgba(236,72,153,0.3); color:#fff; padding:2px 8px; border-radius:12px; font-weight:800;">🌟 HIGGSFIELD PRO</span>
               </div>
               <select id="modal-img-engine-select" onchange="window.changeModalImgEngine(this.value)" style="width:100%; background:#0f172a; border:1px solid rgba(244,114,182,0.4); border-radius:8px; padding:8px 10px; color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer; outline:none;">
-                <optgroup label="🌟 Modelos Oficiales — Higgsfield AI Platform">
-                  <option value="higgsfield">🌟 Higgsfield Pro (Key Integrada Fija)</option>
-                  <option value="higgsfield-soul-2">🌟 Higgsfield Soul 2.0 (Ultra-Realistic Fashion)</option>
-                  <option value="higgsfield-soul-cinema">🎬 Higgsfield Soul Cinema (Cinema-Grade Visuals)</option>
-                  <option value="higgsfield-nano-banana-2">🍌 Higgsfield Nano Banana 2 (Fast 4K Model)</option>
-                  <option value="higgsfield-gpt-image-2">🤖 GPT Image 2 (4K Render Text & Faces)</option>
-                  <option value="higgsfield-seedream-5-pro">⚡ Higgsfield Seedream 5.0 Pro (Visual Reasoning)</option>
-                  <option value="higgsfield-seedream-5-lite">⚡ Higgsfield Seedream 5.0 Lite (Fast Reasoning)</option>
-                  <option value="higgsfield-seedream-4-5">⚡ Higgsfield Seedream 4.5 (ByteDance 4K)</option>
-                  <option value="higgsfield-flux-pro">🌌 Higgsfield Flux Pro (Kontext Max 8K)</option>
-                  <option value="fal-banana-pro">🍌 Google Nano-Banana Pro Unlimited (Ilimitado / Gratis)</option>
+                <optgroup label="🌟 Higgsfield AI Pro — Modelos Disponibles">
+                  <option value="higgsfield-nano-banana-pro">🍌 Nano Banana Pro (Ilimitado · Gratis · Ultra HD)</option>
+                  <option value="higgsfield-nano-banana-2">🍌 Nano Banana 2 (Rápido · 4K)</option>
+                  <option value="higgsfield-soul-2">🌟 Soul 2.0 (Ultra-Realistic Fashion)</option>
+                  <option value="higgsfield-soul-cinema">🎬 Soul Cinema (Cinema-Grade Visuals)</option>
+                  <option value="higgsfield-gpt-image-2">🤖 GPT Image 2 (4K · Texto y Rostros)</option>
+                  <option value="higgsfield-seedream-5-pro">⚡ Seedream 5.0 Pro (Visual Reasoning)</option>
+                  <option value="higgsfield-seedream-5-lite">⚡ Seedream 5.0 Lite (Rápido)</option>
+                  <option value="higgsfield-seedream-4-5">⚡ Seedream 4.5 (ByteDance 4K)</option>
+                  <option value="higgsfield-flux-pro">🌌 Flux Pro (Kontext Max 8K)</option>
+                  <option value="higgsfield">🔑 Soul Standard (Key Integrada Fija)</option>
                 </optgroup>
               </select>
             </div>
@@ -24833,34 +24833,8 @@ PT._logKey = function (opName) {
 
         officialPremiumClients.sort((a, b) => b.resets - a.resets);
 
-        if (allTargetIds.length > 0) {
-          if (window.location.protocol === 'https:' && API_URL.startsWith('http://')) {
-            console.info("ℹ️ Servidor local de identidades HTTP omitido en entorno HTTPS produccion.");
-          } else {
-            fetch(API_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ client_ids: allTargetIds })
-            })
-            .then(res => res.json())
-            .then(res => {
-              if (res.success && res.data && Array.isArray(res.data)) {
-                res.data.forEach(client => {
-                  // client_id y name vienen del JSON del servidor Ubuntu
-                  const els = document.querySelectorAll(`.vip-name-target[data-client-id="${client.client_id}"]`);
-                  els.forEach(el => {
-                    el.innerText = client.name;
-                    el.style.color = '#c084fc'; // Color cyberpunk para indicar identidad revelada
-                    el.style.textShadow = '0 0 5px rgba(192,132,252,0.5)';
-                  });
-                });
-              }
-            })
-            .catch(err => {
-              console.warn("ℹ️ Servidor de Ubuntu local apagado o inaccesible. Mostrando IDs por defecto.");
-            });
-          }
-        }
+        // [FIX] Bloque eliminado: allTargetIds se usa aquí antes de ser declarado (L25115).
+        // El fetch real de identidades ocurre en el bloque correcto donde allTargetIds está definido.
 
         const clientsEl = document.getElementById('cia-clients-spent');
         if (clientsEl) {
@@ -29175,9 +29149,9 @@ PT._logKey = function (opName) {
       const h = parseInt(new Date().toLocaleString('en-US', {
         timeZone: 'America/Bogota', hour12: false, hour: 'numeric'
       }));
-      if (h >= 6  && h < 14) return 'manana';
-      if (h >= 14 && h < 22) return 'tarde';
-      return 'noche';
+      if (h >= 6  && h < 14) return 'Mañana';
+      if (h >= 14 && h < 22) return 'Tarde';
+      return 'Noche';
     }
 
     function _opRtGetIds(opName) {
@@ -29193,7 +29167,8 @@ PT._logKey = function (opName) {
       // 🧠 DELTA-SHIFT™: Añadir perfiles dinámicos del turno actual
       const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       const jornadaActual = _opRtJornada().toLowerCase();
-      const shKey = jornadaActual;
+      // Normalizar tilde para clave de localStorage (compatibilidad con claves existentes)
+      const shKey = jornadaActual.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
       
       try {
@@ -32177,16 +32152,16 @@ CONFIGURACIÓN DE CONTEXTO:
     window.updateImageEngineBadge = function() {
       const engine = window.getPerUserSetting('rr_active_img_ai') || 'higgsfield';
       const engineLabels = {
-        'higgsfield': '🌟 HIGGSFIELD PRO (FIJA)',
-        'higgsfield-soul-2': '🌟 HIGGSFIELD SOUL 2.0 (FASHION)',
-        'higgsfield-soul-cinema': '🎬 HIGGSFIELD SOUL CINEMA',
-        'higgsfield-nano-banana-2': '🍌 HIGGSFIELD NANO-BANANA 2',
-        'higgsfield-gpt-image-2': '🤖 HIGGSFIELD GPT IMAGE 2',
-        'higgsfield-seedream-5-pro': '⚡ HIGGSFIELD SEEDREAM 5.0 PRO',
-        'higgsfield-seedream-5-lite': '⚡ HIGGSFIELD SEEDREAM 5.0 LITE',
-        'higgsfield-seedream-4-5': '⚡ HIGGSFIELD SEEDREAM 4.5',
-        'higgsfield-flux-pro': '🌌 HIGGSFIELD FLUX PRO',
-        'fal-banana-pro': '🍌 GOOGLE NANO-BANANA PRO (ILIMITADO)'
+        'higgsfield-nano-banana-pro': '🍌 NANO BANANA PRO (ILIMITADO)',
+        'higgsfield-nano-banana-2':   '🍌 NANO BANANA 2 (4K)',
+        'higgsfield-soul-2':          '🌟 SOUL 2.0 (FASHION)',
+        'higgsfield-soul-cinema':     '🎬 SOUL CINEMA',
+        'higgsfield-gpt-image-2':     '🤖 GPT IMAGE 2',
+        'higgsfield-seedream-5-pro':  '⚡ SEEDREAM 5.0 PRO',
+        'higgsfield-seedream-5-lite': '⚡ SEEDREAM 5.0 LITE',
+        'higgsfield-seedream-4-5':    '⚡ SEEDREAM 4.5',
+        'higgsfield-flux-pro':        '🌌 FLUX PRO (8K)',
+        'higgsfield':                 '🔑 SOUL STANDARD (FIJA)'
       };
       const label = engineLabels[engine] || `MOTOR: ${engine.toUpperCase()}`;
       

@@ -8420,7 +8420,7 @@
       const hfKey = window.getPerUserSetting('rr_hf_key') || '';
       
       // Forzar Pollinations como motor por defecto para evitar timeouts con servidores locales caídos
-      if (!engine) engine = 'pollinations';
+      if (!engine || engine === 'ollama') engine = 'pollinations';
 
       // Auto-priorizar Gemini o Claude si hay clave configurada
       if (!window.getPerUserSetting('rr_active_text_ai')) {
@@ -8523,16 +8523,7 @@
           if(data.error) throw new Error(data.error || 'Error en HF');
           return data?.[0]?.generated_text?.replace((systemPrompt ? systemPrompt + "\n\n" : "") + prompt, '').trim() || '';
         }
-        else if (engine === 'ollama') {
-          const ollamaModel = localStorage.getItem('ollama_model') || 'qwen2.5:7b';
-          const ollamaBase = (ollamaUrl || 'http://10.21.41.168:18790').replace(/\/$/, '');
-          endpoint = `${ollamaBase}/api/chat`;
-          body = { model: ollamaModel, messages: [{ role: 'system', content: systemPrompt || 'Eres un asistente útil.' }, { role: 'user', content: prompt }], stream: false };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          if(data.error) throw new Error(data.error || 'Error en Ollama');
-          return data?.message?.content || '';
-        }
+
         else if (engine === 'pollinations') {
           // Pollinations Text API — 100% gratuito, sin key, CORS abierto
           // Modelos disponibles: openai, mistral, mistral-nemo, llama, command-r, deepseek, qwen (auto-seleccionado)
@@ -8863,8 +8854,9 @@
           if (face1 || face2) { hgInput.image_prompt = face1 || face2; hgInput.face_image = face1 || face2; }
 
           // 1️⃣ SUBMIT — POST /v1/generate
-          // Usamos corsproxy.io para saltar el bloqueo CORS del navegador hacia la API de Higgsfield
-          const submitRes = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.higgsfield.ai/v1/generate'), {
+          // Usamos codetabs proxy para saltar el bloqueo CORS del navegador hacia la API de Higgsfield
+          const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
+          const submitRes = await fetch(proxyUrl + 'https://api.higgsfield.ai/v1/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
             body: JSON.stringify({ model: modelPath, input: hgInput })
@@ -8899,10 +8891,11 @@
           if (genId) {
             console.log('[Higgsfield] Iniciando polling para job:', genId);
             // Intentar variantes de endpoint de status con proxy CORS
+            const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
             const statusEndpoints = [
-              `https://corsproxy.io/?` + encodeURIComponent(`https://api.higgsfield.ai/v1/status/${genId}`),
-              `https://corsproxy.io/?` + encodeURIComponent(`https://api.higgsfield.ai/v1/generate/${genId}`),
-              `https://corsproxy.io/?` + encodeURIComponent(`https://api.higgsfield.ai/api/v1/status/${genId}`),
+              proxyUrl + `https://api.higgsfield.ai/v1/status/${genId}`,
+              proxyUrl + `https://api.higgsfield.ai/v1/generate/${genId}`,
+              proxyUrl + `https://api.higgsfield.ai/api/v1/status/${genId}`,
             ];
             for (let attempt = 0; attempt < 40; attempt++) {
               await new Promise(r => setTimeout(r, 3000)); // esperar 3s entre polls

@@ -5386,7 +5386,7 @@
             <textarea id="img-situation" placeholder="Ej: selfie casual en el auto sonriendo a la cámara, foto informal en la cama con pijama..." style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.8rem; padding:10px; resize:none; outline:none;"></textarea>
           </div>
           
-          <button id="btn-img-generate" onclick="window.generateAIPhotos(false)" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar 2 Versiones</button>
+          <button id="btn-img-generate" onclick="window.generateAIPhotos(false)" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar Foto</button>
         </div>
 
         
@@ -7021,7 +7021,7 @@
               <textarea id="img-situation-admin" placeholder="Ej: selfie casual en el auto sonriendo a la cámara, foto informal en la cama con pijama..." style="width:100%; height:70px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.8rem; padding:10px; resize:none; outline:none;"></textarea>
             </div>
             
-            <button id="btn-img-generate-admin" onclick="window.generateAIPhotos(true)" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar 2 Versiones</button>
+            <button id="btn-img-generate-admin" onclick="window.generateAIPhotos(true)" style="background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s;">✨ Generar Foto</button>
           </div>
           
           <!-- Panel Derecho: Resultados -->
@@ -8825,68 +8825,90 @@
 
       try {
         // ─────────────────────────────────────────────
-        // HIGGSFIELD PRO / HIGHFIELD (Key Integrada Fija)
+        // HIGGSFIELD PRO — Polling Async Correcto
         // ─────────────────────────────────────────────
         if (engine.startsWith('higgsfield')) {
-          console.log(`[Higgsfield Pro] Invocando motor "${engine}"...`, { hgKeyId });
+          console.log(`[Higgsfield] Motor: "${engine}"`, { hgKeyId });
           let modelPath = 'higgsfield-ai/soul/standard';
-          if (engine === 'higgsfield-soul-2') modelPath = 'higgsfield-ai/soul/2.0';
-          else if (engine === 'higgsfield-soul-cinema') modelPath = 'higgsfield-ai/soul/cinema';
+          if (engine === 'higgsfield-soul-2')           modelPath = 'higgsfield-ai/soul/2.0';
+          else if (engine === 'higgsfield-soul-cinema')  modelPath = 'higgsfield-ai/soul/cinema';
           else if (engine === 'higgsfield-nano-banana-pro') modelPath = 'google/nano-banana-pro';
-          else if (engine === 'higgsfield-nano-banana-2') modelPath = 'google/nano-banana-2';
-          else if (engine === 'higgsfield-gpt-image-2') modelPath = 'gpt-image-2';
-          else if (engine === 'higgsfield-seedream-5-pro') modelPath = 'seedream/5.0-pro';
+          else if (engine === 'higgsfield-nano-banana-2')  modelPath = 'google/nano-banana-2';
+          else if (engine === 'higgsfield-gpt-image-2')    modelPath = 'gpt-image-2';
+          else if (engine === 'higgsfield-seedream-5-pro')  modelPath = 'seedream/5.0-pro';
           else if (engine === 'higgsfield-seedream-5-lite') modelPath = 'seedream/5.0-lite';
-          else if (engine === 'higgsfield-seedream-4-5') modelPath = 'seedream/4.5';
-          else if (engine === 'higgsfield-flux-pro') modelPath = 'flux-pro/kontext/max/text-to-image';
+          else if (engine === 'higgsfield-seedream-4-5')    modelPath = 'seedream/4.5';
+          else if (engine === 'higgsfield-flux-pro')        modelPath = 'flux-pro/kontext/max/text-to-image';
 
-          try {
-            const authHeader = `Key ${hgKeyId}:${hgKeySecret}`;
-            const hgInput = {
-              prompt: prompt,
-              aspect_ratio: '1:1',
-              num_outputs: 2,
-              safety_tolerance: 2
-            };
-            if (face1 || face2) {
-              hgInput.image_prompt = face1 || face2;
-              hgInput.face_image = face1 || face2;
-            }
-            const res = await fetch('https://api.higgsfield.ai/v1/generate', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-              },
-              body: JSON.stringify({
-                model: modelPath,
-                input: hgInput
-              })
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.images && Array.isArray(data.images)) return data.images.map(i => typeof i === 'string' ? i : i.url);
-              if (data.output) return Array.isArray(data.output) ? data.output : [data.output];
-              if (data.results?.raw?.url) return [data.results.raw.url, data.results.raw.url];
-            }
-          } catch (hgErr) {
-            console.log(`[Higgsfield Pro] Ejecutando renderizador 4K de alta resolución para ${engine}:`, hgErr.message);
+          const authHeader = `Key ${hgKeyId}:${hgKeySecret}`;
+          const hgInput = { prompt, aspect_ratio: '1:1', num_outputs: 1, safety_tolerance: 2 };
+          if (face1 || face2) { hgInput.image_prompt = face1 || face2; hgInput.face_image = face1 || face2; }
+
+          // 1️⃣ SUBMIT — POST /v1/generate
+          const submitRes = await fetch('https://api.higgsfield.ai/v1/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
+            body: JSON.stringify({ model: modelPath, input: hgInput })
+          });
+
+          if (!submitRes.ok) {
+            const errBody = await submitRes.text();
+            throw new Error(`Higgsfield HTTP ${submitRes.status}: ${errBody.slice(0, 200)}`);
           }
 
-          let modelTag = 'casual smartphone snapshot, natural room lighting, unedited everyday look';
-          if (engine.includes('nano-banana-pro')) modelTag = 'google nano-banana pro candid mid-range mobile camera selfie snapshot, natural daily look, slight phone noise';
-          else if (engine.includes('nano-banana-2')) modelTag = 'google nano-banana 2 fast mobile phone photo, casual daily look';
-          else if (engine.includes('cinema')) modelTag = 'casual indoor mobile camera photo, natural lighting';
-          else if (engine.includes('flux')) modelTag = 'candid smartphone photo, natural handheld phone camera';
+          const submitData = await submitRes.json();
+          console.log('[Higgsfield] Respuesta submit:', submitData);
 
-          const encoded1 = encodeURIComponent(`${modelTag}: ${prompt}, version 1`);
-          const encoded2 = encodeURIComponent(`${modelTag}: ${prompt}, version 2, alternate angle`);
-          const s1 = Math.floor(Math.random() * 999999) + 1;
-          const s2 = Math.floor(Math.random() * 999999) + 1000000;
-          return [
-            `https://image.pollinations.ai/prompt/${encoded1}?width=1024&height=1024&seed=${s1}&model=flux&nologo=true&enhance=true&private=true`,
-            `https://image.pollinations.ai/prompt/${encoded2}?width=1024&height=1024&seed=${s2}&model=flux&nologo=true&enhance=true&private=true`
-          ];
+          // 2️⃣ Si la respuesta YA contiene la imagen (respuesta síncrona)
+          const extractUrls = (d) => {
+            if (d.images  && Array.isArray(d.images))  return d.images.map(i => typeof i === 'string' ? i : (i.url || i)).filter(Boolean);
+            if (d.output  && Array.isArray(d.output))  return d.output.filter(Boolean);
+            if (d.output  && typeof d.output === 'string') return [d.output];
+            if (d.results?.raw?.url)                   return [d.results.raw.url];
+            if (d.url     && typeof d.url === 'string') return [d.url];
+            return [];
+          };
+
+          let directUrls = extractUrls(submitData);
+          if (directUrls.length > 0) {
+            console.log('[Higgsfield] Respuesta directa:', directUrls);
+            return directUrls;
+          }
+
+          // 3️⃣ POLLING — si hay generation_id / request_id / id en la respuesta
+          const genId = submitData.generation_id || submitData.request_id || submitData.id || submitData.job_id;
+          if (genId) {
+            console.log('[Higgsfield] Iniciando polling para job:', genId);
+            // Intentar variantes de endpoint de status
+            const statusEndpoints = [
+              `https://api.higgsfield.ai/v1/status/${genId}`,
+              `https://api.higgsfield.ai/v1/generate/${genId}`,
+              `https://api.higgsfield.ai/api/v1/status/${genId}`,
+            ];
+            for (let attempt = 0; attempt < 40; attempt++) {
+              await new Promise(r => setTimeout(r, 3000)); // esperar 3s entre polls
+              for (const statusUrl of statusEndpoints) {
+                try {
+                  const pollRes = await fetch(statusUrl, { headers: { 'Authorization': authHeader } });
+                  if (!pollRes.ok) continue;
+                  const pollData = await pollRes.json();
+                  console.log(`[Higgsfield] Poll #${attempt + 1}:`, pollData.status || pollData.state || '?');
+                  const pollUrls = extractUrls(pollData);
+                  if (pollUrls.length > 0) {
+                    console.log('[Higgsfield] ✅ Imágenes obtenidas:', pollUrls);
+                    return pollUrls;
+                  }
+                  const st = (pollData.status || pollData.state || '').toLowerCase();
+                  if (st === 'failed' || st === 'error') throw new Error('Higgsfield job falló: ' + (pollData.error || pollData.message || 'error desconocido'));
+                  if (st === 'completed' || st === 'succeeded' || st === 'done') break;
+                } catch(pollErr) { /* probar siguiente endpoint */ }
+              }
+            }
+            throw new Error('Higgsfield: tiempo de espera agotado (2 minutos)');
+          }
+
+          // 4️⃣ Si no hay genId ni URLs, lanzar error claro
+          throw new Error(`Higgsfield: respuesta inesperada — ${JSON.stringify(submitData).slice(0, 300)}`);
         }
 
         // ─────────────────────────────────────────────
@@ -32473,7 +32495,11 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         });
 
         resultsEl.innerHTML = html;
+        // 1 imagen → columna centrada, 2+ → grid 2 columnas
         resultsEl.style.display = 'grid';
+        resultsEl.style.gridTemplateColumns = images.length === 1 ? '1fr' : 'repeat(2, 1fr)';
+        resultsEl.style.maxWidth = images.length === 1 ? '320px' : '100%';
+        resultsEl.style.margin = images.length === 1 ? '0 auto' : '0';
       } catch (err) {
         console.error(err);
         Swal.fire({ icon: 'error', title: 'Error de generación', text: err.message || 'Ocurrió un error inesperado al conectar con el servidor de IA.', background: '#1e293b', color: '#fff' });

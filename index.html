@@ -8418,9 +8418,11 @@
       const togetherKey = window.getPerUserSetting('rr_together_key') || '';
       const mistralKey = window.getPerUserSetting('rr_mistral_key') || '';
       const hfKey = window.getPerUserSetting('rr_hf_key') || '';
-      const ollamaUrl = window.getPerUserSetting('ollama_url') || 'http://10.21.41.168:18790';
+      
+      // Forzar Pollinations como motor por defecto para evitar timeouts con servidores locales caídos
+      if (!engine) engine = 'pollinations';
 
-      // Auto-priorizar Gemini o Claude si hay clave configurada y no hay motor explícito
+      // Auto-priorizar Gemini o Claude si hay clave configurada
       if (!window.getPerUserSetting('rr_active_text_ai')) {
         if (gKey) engine = 'gemini';
         else if (anthropicKey) engine = 'anthropic';
@@ -9120,15 +9122,9 @@
         }
 
       } catch (err) {
-        console.warn(`[rrFetchImageAI] Motor "${engine}" no disponible temporalmente (${err.message}). Renderizando con pipeline de estilo celular casual...`);
-        const encoded1 = encodeURIComponent(`raw candid mid-range smartphone selfie photo, natural indoor lighting, unedited daily look: ${prompt}, photo 1`);
-        const encoded2 = encodeURIComponent(`raw candid mid-range smartphone selfie photo, natural indoor lighting, unedited daily look: ${prompt}, photo 2, alternate shot`);
-        const s1 = Math.floor(Math.random() * 999999) + 1;
-        const s2 = Math.floor(Math.random() * 999999) + 1000000;
-        return [
-          `https://image.pollinations.ai/prompt/${encoded1}?width=1024&height=1024&seed=${s1}&model=flux&nologo=true&enhance=true&private=true`,
-          `https://image.pollinations.ai/prompt/${encoded2}?width=1024&height=1024&seed=${s2}&model=flux&nologo=true&enhance=true&private=true`
-        ];
+        console.warn(`[rrFetchImageAI] Motor "${engine}" no disponible (${err.message}).`);
+        // Ya no hay fallback a Pollinations. Se lanza el error para que el usuario sepa que Higgsfield falló.
+        throw err;
       }
     };
 
@@ -17986,11 +17982,11 @@ function exportarDatos() {
         
         let ptsMesCalculado = 0;
         if (window._reportCompanyView === 'romero') {
-          ptsMesCalculado = Math.max(77781.24, romeroSum);
+          ptsMesCalculado = romeroSum;
         } else if (window._reportCompanyView === 'camilo') {
-          ptsMesCalculado = Math.max(2198.00, camiloSum);
+          ptsMesCalculado = camiloSum;
         } else {
-          ptsMesCalculado = Math.max(77781.24, romeroSum) + Math.max(2198.00, camiloSum);
+          ptsMesCalculado = romeroSum + camiloSum;
         }
         
         ptsMes = ptsMesCalculado;

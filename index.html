@@ -6959,17 +6959,8 @@
                 <span id="img-active-engine-badge-modal" style="font-size:0.6rem; background:rgba(236,72,153,0.3); color:#fff; padding:2px 8px; border-radius:12px; font-weight:800;">🌟 HIGGSFIELD PRO</span>
               </div>
               <select id="modal-img-engine-select" onchange="window.changeModalImgEngine(this.value)" style="width:100%; background:#0f172a; border:1px solid rgba(244,114,182,0.4); border-radius:8px; padding:8px 10px; color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer; outline:none;">
-                <optgroup label="🌟 Higgsfield AI Pro — Modelos Disponibles">
-                  <option value="higgsfield-nano-banana-pro">🍌 Nano Banana Pro (Ilimitado · Gratis · Ultra HD)</option>
-                  <option value="higgsfield-nano-banana-2">🍌 Nano Banana 2 (Rápido · 4K)</option>
-                  <option value="higgsfield-soul-2">🌟 Soul 2.0 (Ultra-Realistic Fashion)</option>
-                  <option value="higgsfield-soul-cinema">🎬 Soul Cinema (Cinema-Grade Visuals)</option>
-                  <option value="higgsfield-gpt-image-2">🤖 GPT Image 2 (4K · Texto y Rostros)</option>
-                  <option value="higgsfield-seedream-5-pro">⚡ Seedream 5.0 Pro (Visual Reasoning)</option>
-                  <option value="higgsfield-seedream-5-lite">⚡ Seedream 5.0 Lite (Rápido)</option>
-                  <option value="higgsfield-seedream-4-5">⚡ Seedream 4.5 (ByteDance 4K)</option>
-                  <option value="higgsfield-flux-pro">🌌 Flux Pro (Kontext Max 8K)</option>
-                  <option value="higgsfield">🔑 Soul Standard (Key Integrada Fija)</option>
+                <optgroup label="🌟 Higgsfield AI Pro">
+                  <option value="higgsfield" selected>🔑 Soul Standard (Key Integrada Fija)</option>
                 </optgroup>
               </select>
             </div>
@@ -8598,8 +8589,8 @@
     };
 
     window.rrFetchImageAI = async function(prompt, face1 = '', face2 = '') {
-      // Motor imagen por defecto: Higgsfield Pro (con fallback fotorrealista)
-      const engine = window.getPerUserSetting('rr_active_img_ai') || 'higgsfield';
+      // Motor imagen: SIEMPRE Higgsfield (forzado según requerimiento)
+      const engine = 'higgsfield';
       
       // Leer credenciales de Higgsfield (con keys fijas por defecto en el proyecto)
       const hgKeyId     = window.getPerUserSetting('rr_higgsfield_key_id') || 'efa9814e-5ed6-4140-ace0-e99e30d001a7';
@@ -8870,7 +8861,8 @@
           if (face1 || face2) { hgInput.image_prompt = face1 || face2; hgInput.face_image = face1 || face2; }
 
           // 1️⃣ SUBMIT — POST /v1/generate
-          const submitRes = await fetch('https://api.higgsfield.ai/v1/generate', {
+          // Usamos corsproxy.io para saltar el bloqueo CORS del navegador hacia la API de Higgsfield
+          const submitRes = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://api.higgsfield.ai/v1/generate'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
             body: JSON.stringify({ model: modelPath, input: hgInput })
@@ -8904,11 +8896,11 @@
           const genId = submitData.generation_id || submitData.request_id || submitData.id || submitData.job_id;
           if (genId) {
             console.log('[Higgsfield] Iniciando polling para job:', genId);
-            // Intentar variantes de endpoint de status
+            // Intentar variantes de endpoint de status con proxy CORS
             const statusEndpoints = [
-              `https://api.higgsfield.ai/v1/status/${genId}`,
-              `https://api.higgsfield.ai/v1/generate/${genId}`,
-              `https://api.higgsfield.ai/api/v1/status/${genId}`,
+              `https://corsproxy.io/?` + encodeURIComponent(`https://api.higgsfield.ai/v1/status/${genId}`),
+              `https://corsproxy.io/?` + encodeURIComponent(`https://api.higgsfield.ai/v1/generate/${genId}`),
+              `https://corsproxy.io/?` + encodeURIComponent(`https://api.higgsfield.ai/api/v1/status/${genId}`),
             ];
             for (let attempt = 0; attempt < 40; attempt++) {
               await new Promise(r => setTimeout(r, 3000)); // esperar 3s entre polls

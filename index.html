@@ -8568,35 +8568,6 @@
         throw new Error('Motor de IA de texto no soportado (' + engine + ')');
       } catch (err) {
         console.error(`[rrFetchTextAI] Error en motor "${engine}":`, err.message);
-        // ── FALLBACK INTELIGENTE: Si el motor principal falla y no es Pollinations, intentar con Pollinations ──
-        if (engine !== 'pollinations') {
-          console.warn(`[rrFetchTextAI] ⚡ FALLBACK → Pollinations (motor ${engine} no disponible)`);
-          try {
-            const fbBody = {
-              model: 'openai',
-              messages: [
-                { role: 'system', content: systemPrompt || 'Eres un asistente profesional y conciso.' },
-                { role: 'user', content: prompt }
-              ],
-              seed: Math.floor(Math.random() * 9999),
-              private: true
-            };
-            const fbRes = await fetch('https://text.pollinations.ai/', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(fbBody)
-            });
-            if (!fbRes.ok) throw new Error(`Pollinations fallback HTTP ${fbRes.status}`);
-            const fbText = await fbRes.text();
-            try {
-              const fbJson = JSON.parse(fbText);
-              return fbJson?.choices?.[0]?.message?.content || fbJson?.text || fbText;
-            } catch { return fbText; }
-          } catch (fbErr) {
-            console.warn('[rrFetchTextAI] Usando generador directo de prompt');
-            return prompt;
-          }
-        }
         return prompt;
       }
     };
@@ -8846,44 +8817,44 @@
         // ─────────────────────────────────────────────
         // HIGGSFIELD PRO / HIGHFIELD (Key Integrada Fija)
         // ─────────────────────────────────────────────
-        if (engine === 'higgsfield' || engine === 'higgsfield-soul') {
-          console.log("[Higgsfield Pro] Invocando motor con credenciales fijas del proyecto...", { hgKeyId });
-          const modelPath = (engine === 'higgsfield-soul') ? 'higgsfield-ai/soul/standard' : 'flux-pro/kontext/max/text-to-image';
-          try {
-            const authHeader = `Key ${hgKeyId}:${hgKeySecret}`;
-            const res = await fetch('https://api.higgsfield.ai/v1/generate', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': authHeader
-              },
-              body: JSON.stringify({
-                model: modelPath,
-                input: {
-                  prompt: prompt,
-                  aspect_ratio: '1:1',
-                  num_outputs: 2,
-                  safety_tolerance: 2
-                }
-              })
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.images && Array.isArray(data.images)) return data.images.map(i => typeof i === 'string' ? i : i.url);
-              if (data.output) return Array.isArray(data.output) ? data.output : [data.output];
-              if (data.results?.raw?.url) return [data.results.raw.url, data.results.raw.url];
-            }
-          } catch (hgErr) {
-            console.warn("API Higgsfield Pro en cola, ejecutando pipeline Flux de alta fidelidad", hgErr);
+        if (engine.startsWith('higgsfield')) {
+          console.log(`[Higgsfield Pro] Invocando motor "${engine}" con credenciales fijas del proyecto...`, { hgKeyId });
+          let modelPath = 'higgsfield-ai/soul/standard';
+          if (engine === 'higgsfield-soul-2') modelPath = 'higgsfield-ai/soul/2.0';
+          else if (engine === 'higgsfield-soul-cinema') modelPath = 'higgsfield-ai/soul/cinema';
+          else if (engine === 'higgsfield-nano-banana-pro') modelPath = 'google/nano-banana-pro';
+          else if (engine === 'higgsfield-nano-banana-2') modelPath = 'google/nano-banana-2';
+          else if (engine === 'higgsfield-gpt-image-2') modelPath = 'gpt-image-2';
+          else if (engine === 'higgsfield-seedream-5-pro') modelPath = 'seedream/5.0-pro';
+          else if (engine === 'higgsfield-seedream-5-lite') modelPath = 'seedream/5.0-lite';
+          else if (engine === 'higgsfield-seedream-4-5') modelPath = 'seedream/4.5';
+          else if (engine === 'higgsfield-flux-pro') modelPath = 'flux-pro/kontext/max/text-to-image';
+
+          const authHeader = `Key ${hgKeyId}:${hgKeySecret}`;
+          const res = await fetch('https://api.higgsfield.ai/v1/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': authHeader
+            },
+            body: JSON.stringify({
+              model: modelPath,
+              input: {
+                prompt: prompt,
+                aspect_ratio: '1:1',
+                num_outputs: 2,
+                safety_tolerance: 2
+              }
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.images && Array.isArray(data.images)) return data.images.map(i => typeof i === 'string' ? i : i.url);
+            if (data.output) return Array.isArray(data.output) ? data.output : [data.output];
+            if (data.results?.raw?.url) return [data.results.raw.url, data.results.raw.url];
           }
-          // Fallback fotorrealista automático de 2 imágenes HD
-          const encoded = encodeURIComponent(prompt + ", photorealistic 8k, crisp detail, natural mobile camera snapshot");
-          const seed1 = Math.floor(Math.random() * 999999);
-          const seed2 = Math.floor(Math.random() * 999999);
-          return [
-            `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true&private=true`,
-            `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true&private=true`
-          ];
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(`Higgsfield AI (${engine}) HTTP ${res.status}: ${errData.error || errData.message || 'Error de generación en Higgsfield'}`);
         }
 
         // ─────────────────────────────────────────────
@@ -9073,21 +9044,6 @@
         throw new Error('Motor de IA de imagen no soportado: ' + engine);
       } catch (err) {
         console.error(`[rrFetchImageAI] Error en motor "${engine}":`, err.message);
-        // ── FALLBACK A POLLINATIONS IMAGEN ──────────────────────────────────────────
-        if (engine !== 'pollinations') {
-          console.warn(`[rrFetchImageAI] ⚡ FALLBACK → Pollinations imagen`);
-          try {
-            const encoded = encodeURIComponent(prompt);
-            const s1 = Math.floor(Math.random() * 99999);
-            const s2 = Math.floor(Math.random() * 99999);
-            return [
-              `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${s1}&model=flux&nologo=true&enhance=true&private=true`,
-              `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${s2}&model=flux&nologo=true&enhance=true&private=true`
-            ];
-          } catch (fbErr) {
-            console.error('[rrFetchImageAI] Fallback Pollinations también falló:', fbErr.message);
-          }
-        }
         throw err;
       }
     };

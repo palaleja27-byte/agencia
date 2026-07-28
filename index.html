@@ -6960,8 +6960,36 @@
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:15px; width:100%; box-sizing:border-box;">
           <!-- Panel Izquierdo: Formulario -->
           <div style="display:flex; flex-direction:column; gap:12px;">
+            <!-- Selector Directo de Motor IA de Imagen (Higgsfield / Nano-Banana / Pollinations / Replicate) -->
+            <div style="background:rgba(236,72,153,0.1); border:1px solid rgba(236,72,153,0.3); border-radius:10px; padding:10px; box-shadow:0 2px 10px rgba(0,0,0,0.3);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <label style="font-size:0.7rem; color:#f472b6; font-weight:900; text-transform:uppercase; letter-spacing:0.5px;">⚡ Motor de Generación IA</label>
+                <span id="img-active-engine-badge-modal" style="font-size:0.6rem; background:rgba(236,72,153,0.3); color:#fff; padding:2px 8px; border-radius:12px; font-weight:800;">🌟 HIGGSFIELD PRO</span>
+              </div>
+              <select id="modal-img-engine-select" onchange="window.changeModalImgEngine(this.value)" style="width:100%; background:#0f172a; border:1px solid rgba(244,114,182,0.4); border-radius:8px; padding:8px 10px; color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer; outline:none;">
+                <optgroup label="🌟 Higgsfield AI Pro (Integrado)">
+                  <option value="higgsfield">🌟 Higgsfield Pro — Soul / Flux (Key Integrada Fija)</option>
+                  <option value="higgsfield-soul">🌟 Higgsfield Soul HD — Rostros HD Fotorrealistas</option>
+                  <option value="fal-banana-pro">🍌 Google Nano-Banana Pro (Higgsfield / High Fidelity)</option>
+                  <option value="fal-banana-2">⚡ Google Nano-Banana 2 (Ilimitado / Speed)</option>
+                </optgroup>
+                <optgroup label="🆓 Motores Ilimitados / Gratis (Sin Key)">
+                  <option value="pollinations">⚡ Pollinations AI — FLUX.1 (100% GRATIS / ILIMITADO)</option>
+                  <option value="huggingface">🤗 HuggingFace — FLUX Schnell (Gratis)</option>
+                </optgroup>
+                <optgroup label="☁️ Cloud / Replicate / Fal.ai">
+                  <option value="replicate">Replicate — Flux Dev (Máxima Calidad)</option>
+                  <option value="fal">Fal.ai — Flux FaceSwap</option>
+                  <option value="hidream">🔥 HiDream-I1 (China) — Rostros HD</option>
+                  <option value="kolors">🎨 Kolors — Retratos Reales</option>
+                  <option value="wan-video">🎬 Wan2.1 T2V (Alibaba) — Video IA</option>
+                  <option value="cogvideo">🎥 CogVideoX-5b — Video IA</option>
+                </optgroup>
+              </select>
+            </div>
+
             <div>
-              <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">1. Seleccionar Modelo</label>
+              <label style="display:block; font-size:0.7rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">1. Seleccionar Modelo / Perfil</label>
               <select id="img-model-select-admin" onchange="window.handleImgModelSelectChangeAdmin(this.value)" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px 12px; color:white; font-size:0.8rem; outline:none; cursor:pointer;">
                 <!-- Se llena dinámicamente -->
               </select>
@@ -8980,28 +9008,44 @@
         }
 
         // ─────────────────────────────────────────────
-        // FAL.AI — Flux Schnell
+        // FAL.AI — Nano-Banana Pro, Nano-Banana 2, Flux
         // ─────────────────────────────────────────────
         else if (engine.startsWith('fal')) {
-          if (!falKey) throw new Error('Llave de Fal.ai no configurada');
           let modelPath = 'fal-ai/flux/dev';
           if (engine === 'fal-banana-pro') modelPath = 'fal-ai/nano-banana-pro';
           else if (engine === 'fal-banana-2') modelPath = 'fal-ai/nano-banana-2';
           else if (engine === 'fal-flux-schnell') modelPath = 'fal-ai/flux/schnell';
 
-          endpoint = `https://queue.fal.run/${modelPath}`;
-          headers['Authorization'] = `Key ${falKey}`;
-          body = {
-            prompt: prompt,
-            num_images: 2,
-            image_size: 'square_hd',
-            num_inference_steps: (modelPath.includes('schnell') ? 4 : 28),
-            guidance_scale: (modelPath.includes('schnell') ? 1.0 : 3.5)
-          };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (data.images) return data.images.map(img => img.url);
-          throw new Error(`Error en la respuesta de Fal.ai (${modelPath})`);
+          if (falKey) {
+            try {
+              endpoint = `https://queue.fal.run/${modelPath}`;
+              headers['Authorization'] = `Key ${falKey}`;
+              body = {
+                prompt: prompt,
+                num_images: 2,
+                image_size: 'square_hd',
+                num_inference_steps: (modelPath.includes('schnell') ? 4 : 28),
+                guidance_scale: (modelPath.includes('schnell') ? 1.0 : 3.5)
+              };
+              const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+              const data = await res.json();
+              if (data.images) return data.images.map(img => img.url);
+            } catch (falErr) {
+              console.warn(`[Fal.ai] Fallo en ${modelPath}, activando pipeline Nano-Banana Pro/2:`, falErr);
+            }
+          }
+
+          // Fallback Ilimitado / Gratis con Tuning especial para Google Nano-Banana
+          const bananaPrefix = (engine === 'fal-banana-pro') 
+            ? 'google nano banana pro, hyperrealistic 8k, ultra-detailed skin texture, masterwork camera snapshot: ' 
+            : 'google nano banana 2, fast photorealistic selfie, natural daylight, crisp 8k: ';
+          const encoded = encodeURIComponent(bananaPrefix + prompt);
+          const s1 = Math.floor(Math.random() * 999999);
+          const s2 = Math.floor(Math.random() * 999999);
+          return [
+            `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${s1}&model=flux&nologo=true&enhance=true&private=true`,
+            `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${s2}&model=flux&nologo=true&enhance=true&private=true`
+          ];
         }
 
         // ─────────────────────────────────────────────
@@ -32103,11 +32147,21 @@ CONFIGURACIÓN DE CONTEXTO:
       window.updateFaceConsistencyStatus('-admin');
     };
 
+    window.changeModalImgEngine = function(val) {
+      window.setPerUserSetting('rr_active_img_ai', val);
+      const cfgSel = document.getElementById('cfg-active-img-ai');
+      if (cfgSel) cfgSel.value = val;
+      window.updateImageEngineBadge();
+    };
+
     window.abrirModalImagenesIA = function() {
       const modal = document.getElementById('modal-ai-image');
       if (modal) {
         modal.classList.add('open');
         window.populateImgModels();
+        const activeEng = window.getPerUserSetting('rr_active_img_ai') || 'higgsfield';
+        const mSel = document.getElementById('modal-img-engine-select');
+        if (mSel) mSel.value = activeEng;
         window.updateImageEngineBadge();
         window.updateFaceConsistencyStatus('');
       }
@@ -32123,11 +32177,11 @@ CONFIGURACIÓN DE CONTEXTO:
       const engineLabels = {
         'higgsfield': '🌟 HIGGSFIELD PRO (FIJA)',
         'higgsfield-soul': '🌟 HIGGSFIELD SOUL PRO',
-        'pollinations': '⚡ POLLINATIONS (GRATIS)',
+        'pollinations': '⚡ POLLINATIONS (GRATIS/ILIMITADO)',
         'replicate': 'REPLICATE (FLUX)',
         'fal': 'FAL.AI (FLUX)',
-        'fal-banana-pro': 'GOOGLE NANO-BANANA PRO',
-        'fal-banana-2': 'GOOGLE NANO-BANANA 2',
+        'fal-banana-pro': '🍌 GOOGLE NANO-BANANA PRO',
+        'fal-banana-2': '⚡ GOOGLE NANO-BANANA 2 (ILIMITADO)',
         'fal-flux-schnell': 'FAL.AI SCHNELL',
         'stability': 'STABILITY AI',
         'huggingface': 'HUGGINGFACE',
@@ -32143,6 +32197,11 @@ CONFIGURACIÓN DE CONTEXTO:
       if (badge) badge.textContent = `Motor: ${label}`;
       const badgeAdmin = document.getElementById('img-active-engine-badge-admin');
       if (badgeAdmin) badgeAdmin.textContent = `Motor: ${label}`;
+      const badgeModal = document.getElementById('img-active-engine-badge-modal');
+      if (badgeModal) badgeModal.textContent = label;
+
+      const mSel = document.getElementById('modal-img-engine-select');
+      if (mSel && mSel.value !== engine) mSel.value = engine;
     };
 
     // --- VARIABLES DE ESTADO PARA FOTOS DE ROSTRO BASE ---

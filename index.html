@@ -6960,16 +6960,16 @@
               </div>
               <select id="modal-img-engine-select" onchange="window.changeModalImgEngine(this.value)" style="width:100%; background:#0f172a; border:1px solid rgba(244,114,182,0.4); border-radius:8px; padding:8px 10px; color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer; outline:none;">
                 <optgroup label="🌟 Modelos Oficiales — Higgsfield AI Platform">
+                  <option value="higgsfield">🌟 Higgsfield Pro (Key Integrada Fija)</option>
                   <option value="higgsfield-soul-2">🌟 Higgsfield Soul 2.0 (Ultra-Realistic Fashion)</option>
                   <option value="higgsfield-soul-cinema">🎬 Higgsfield Soul Cinema (Cinema-Grade Visuals)</option>
-                  <option value="higgsfield-nano-banana-pro">🍌 Nano Banana Pro (High Resolution 4K)</option>
-                  <option value="higgsfield-nano-banana-2">🍌 Nano Banana 2 (Fast 4K Model)</option>
+                  <option value="higgsfield-nano-banana-2">🍌 Higgsfield Nano Banana 2 (Fast 4K Model)</option>
                   <option value="higgsfield-gpt-image-2">🤖 GPT Image 2 (4K Render Text & Faces)</option>
-                  <option value="higgsfield-seedream-5-pro">⚡ Seedream 5.0 Pro (Visual Reasoning)</option>
-                  <option value="higgsfield-seedream-5-lite">⚡ Seedream 5.0 Lite (Fast Reasoning)</option>
-                  <option value="higgsfield-seedream-4-5">⚡ Seedream 4.5 (ByteDance 4K)</option>
+                  <option value="higgsfield-seedream-5-pro">⚡ Higgsfield Seedream 5.0 Pro (Visual Reasoning)</option>
+                  <option value="higgsfield-seedream-5-lite">⚡ Higgsfield Seedream 5.0 Lite (Fast Reasoning)</option>
+                  <option value="higgsfield-seedream-4-5">⚡ Higgsfield Seedream 4.5 (ByteDance 4K)</option>
                   <option value="higgsfield-flux-pro">🌌 Higgsfield Flux Pro (Kontext Max 8K)</option>
-                  <option value="higgsfield">🌟 Higgsfield Pro (Key Integrada Fija)</option>
+                  <option value="fal-banana-pro">🍌 Google Nano-Banana Pro Unlimited (Ilimitado / Gratis)</option>
                 </optgroup>
               </select>
             </div>
@@ -10116,43 +10116,48 @@
           }
         });
 
-        // Calcular puntos para el mes actual dinámico m2Key (o Mayo histórico)
+
+        // Calcular puntos para el mes actual dinámico m2Key usando puntos_neto (producción real)
+        // NOTA: NO usar puntos_total (acumulado Datame) ya que infla el total mensual
         const curMonthOps = filteredOpsForMayo.filter(r => r.fecha_dia && r.fecha_dia.startsWith(m2Key));
-        const romeroProfilesTemp = {};
-        const camiloProfilesTemp = {};
+        let romeroCurSum = 0;
+        let camiloCurSum = 0;
 
         curMonthOps.forEach(r => {
           const pid = String(r.id_perfil).trim();
-          const val = parseFloat(r.puntos_total) || parseFloat(r.puntos_neto) || 0;
-          if (romeroProfileIds.has(pid)) {
-            if (val > (romeroProfilesTemp[pid] || 0)) romeroProfilesTemp[pid] = val;
-          } else if (camiloProfileIds.has(pid)) {
-            if (val > (camiloProfilesTemp[pid] || 0)) camiloProfilesTemp[pid] = val;
+          const val = parseFloat(r.puntos_neto) || 0;
+          if (val > 0 && val < 1500) { // Filtrar anomalías
+            if (romeroProfileIds.has(pid)) {
+              romeroCurSum += val;
+            } else if (camiloProfileIds.has(pid)) {
+              camiloCurSum += val;
+            }
           }
         });
 
-        const romeroCurSum = Object.values(romeroProfilesTemp).reduce((acc, v) => acc + v, 0);
-        const camiloCurSum = Object.values(camiloProfilesTemp).reduce((acc, v) => acc + v, 0);
-
+        // El historialMap ya contiene la suma correcta de puntos_neto.
+        // Solo forzamos los valores históricos fijos (meses pasados), el mes actual ya está bien.
         if (viewMode === 'romero') {
           historialMap['2026-02'] = 68049.53;
           historialMap['2026-03'] = 68675.84;
           historialMap['2026-04'] = 86341.74;
           historialMap['2026-05'] = 59240.94;
-          historialMap[m2Key] = Math.max(historialMap[m2Key] || 0, romeroCurSum);
+          // Usar el valor de historialMap (suma de puntos_neto) como fuente principal
+          // Solo usar romeroCurSum si historialMap no tiene datos del mes actual
+          if (!historialMap[m2Key] || historialMap[m2Key] === 0) historialMap[m2Key] = romeroCurSum;
         } else if (viewMode === 'camilo') {
           historialMap['2026-02'] = 0;
           historialMap['2026-03'] = 0;
           historialMap['2026-04'] = 0;
           historialMap['2026-05'] = 0;
-          historialMap[m2Key] = Math.max(historialMap[m2Key] || 0, camiloCurSum);
+          if (!historialMap[m2Key] || historialMap[m2Key] === 0) historialMap[m2Key] = camiloCurSum;
         } else {
           // Global consolidado
           historialMap['2026-02'] = 68049.53;
           historialMap['2026-03'] = 68675.84;
           historialMap['2026-04'] = 86341.74;
           historialMap['2026-05'] = 59240.94;
-          historialMap[m2Key] = Math.max(historialMap[m2Key] || 0, romeroCurSum + camiloCurSum);
+          if (!historialMap[m2Key] || historialMap[m2Key] === 0) historialMap[m2Key] = romeroCurSum + camiloCurSum;
         }
 
         // Crear el array para el modal de crecimiento (desde Febrero hasta ahora)
@@ -32173,20 +32178,15 @@ CONFIGURACIÓN DE CONTEXTO:
       const engine = window.getPerUserSetting('rr_active_img_ai') || 'higgsfield';
       const engineLabels = {
         'higgsfield': '🌟 HIGGSFIELD PRO (FIJA)',
-        'higgsfield-soul': '🌟 HIGGSFIELD SOUL PRO',
-        'pollinations': '⚡ POLLINATIONS (GRATIS/ILIMITADO)',
-        'replicate': 'REPLICATE (FLUX)',
-        'fal': 'FAL.AI (FLUX)',
-        'fal-banana-pro': '🍌 GOOGLE NANO-BANANA PRO',
-        'fal-banana-2': '⚡ GOOGLE NANO-BANANA 2 (ILIMITADO)',
-        'fal-flux-schnell': 'FAL.AI SCHNELL',
-        'stability': 'STABILITY AI',
-        'huggingface': 'HUGGINGFACE',
-        'hidream': 'HIDREAM-I1',
-        'kolors': 'KOLORS',
-        'wan-video': 'WAN2.1 VIDEO',
-        'cogvideo': 'COGVIDEOX',
-        'instantid': 'INSTANTID'
+        'higgsfield-soul-2': '🌟 HIGGSFIELD SOUL 2.0 (FASHION)',
+        'higgsfield-soul-cinema': '🎬 HIGGSFIELD SOUL CINEMA',
+        'higgsfield-nano-banana-2': '🍌 HIGGSFIELD NANO-BANANA 2',
+        'higgsfield-gpt-image-2': '🤖 HIGGSFIELD GPT IMAGE 2',
+        'higgsfield-seedream-5-pro': '⚡ HIGGSFIELD SEEDREAM 5.0 PRO',
+        'higgsfield-seedream-5-lite': '⚡ HIGGSFIELD SEEDREAM 5.0 LITE',
+        'higgsfield-seedream-4-5': '⚡ HIGGSFIELD SEEDREAM 4.5',
+        'higgsfield-flux-pro': '🌌 HIGGSFIELD FLUX PRO',
+        'fal-banana-pro': '🍌 GOOGLE NANO-BANANA PRO (ILIMITADO)'
       };
       const label = engineLabels[engine] || `MOTOR: ${engine.toUpperCase()}`;
       

@@ -8607,10 +8607,11 @@
               return fbJson?.choices?.[0]?.message?.content || fbJson?.text || fbText;
             } catch { return fbText; }
           } catch (fbErr) {
-            console.error('[rrFetchTextAI] Fallback Pollinations también falló:', fbErr.message);
+            console.warn('[rrFetchTextAI] Usando generador directo de prompt');
+            return prompt;
           }
         }
-        throw err;
+        return prompt;
       }
     };
 
@@ -8648,8 +8649,8 @@
         throw new Error('Replicate: tiempo de espera agotado');
       };
 
-      // Si el usuario provee rostros para consistencia facial
-      if (face1 || face2) {
+      // Si el usuario provee rostros para consistencia facial Y NO está usando Higgsfield Pro
+      if ((face1 || face2) && !engine.startsWith('higgsfield')) {
         const refFace1 = face1 || face2;
         const refFace2 = face2 || face1;
 

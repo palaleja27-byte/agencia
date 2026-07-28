@@ -8568,7 +8568,32 @@
         throw new Error('Motor de IA de texto no soportado (' + engine + ')');
       } catch (err) {
         console.error(`[rrFetchTextAI] Error en motor "${engine}":`, err.message);
-        return prompt;
+        // Auto-fallback: si el motor primario falla y no era pollinations, intentar Pollinations gratis
+        if (engine !== 'pollinations') {
+          try {
+            console.info('[rrFetchTextAI] Reintentando con Pollinations (gratis)...');
+            const polBody = {
+              model: 'openai',
+              messages: [
+                { role: 'system', content: systemPrompt || 'Eres un asistente profesional y conciso.' },
+                { role: 'user', content: prompt }
+              ],
+              seed: Math.floor(Math.random() * 9999),
+              private: true
+            };
+            const polRes = await fetch('https://text.pollinations.ai/', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(polBody)
+            });
+            if (polRes.ok) {
+              const polText = await polRes.text();
+              try { const j = JSON.parse(polText); return j?.choices?.[0]?.message?.content || j?.text || polText; }
+              catch { return polText; }
+            }
+          } catch (polErr) { console.warn('[rrFetchTextAI] Fallback Pollinations también falló:', polErr.message); }
+        }
+        return '';
       }
     };
 
@@ -8887,6 +8912,11 @@
             ];
             for (let attempt = 0; attempt < 40; attempt++) {
               await new Promise(r => setTimeout(r, 3000)); // esperar 3s entre polls
+              // Actualizar status visible en la UI si hay un elemento de estado
+              if (window._rrImgStatusEl) {
+                const segs = (attempt + 1) * 3;
+                window._rrImgStatusEl.textContent = `⏳ Generando con Higgsfield... ${segs}s (intento ${attempt + 1}/40)`;
+              }
               for (const statusUrl of statusEndpoints) {
                 try {
                   const pollRes = await fetch(statusUrl, { headers: { 'Authorization': authHeader } });
@@ -8896,6 +8926,7 @@
                   const pollUrls = extractUrls(pollData);
                   if (pollUrls.length > 0) {
                     console.log('[Higgsfield] ✅ Imágenes obtenidas:', pollUrls);
+                    window._rrImgStatusEl = null;
                     return pollUrls;
                   }
                   const st = (pollData.status || pollData.state || '').toLowerCase();
@@ -8904,6 +8935,7 @@
                 } catch(pollErr) { /* probar siguiente endpoint */ }
               }
             }
+            window._rrImgStatusEl = null;
             throw new Error('Higgsfield: tiempo de espera agotado (2 minutos)');
           }
 
@@ -29449,11 +29481,35 @@ PT._logKey = function (opName) {
         }
 
         // 2d. Actualizar la métrica del mes actual en el dashboard
+        //     → Consulta separada: suma puntos_neto de TODOS los días del mes actual (acumulado real)
         const mesEl = document.getElementById('op-dash-mes-val');
-        if (mesEl && sumaTotal > 0) {
-          mesEl.innerHTML = sumaTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
-          const copEl = document.getElementById('op-dash-mes-cop');
-          if (copEl) copEl.textContent = '$' + Math.round(sumaTotal * 1400).toLocaleString('es-CO') + ' COP';
+        if (mesEl) {
+          // Calcular inicio y fin del mes actual en zona Colombia
+          const mesKey = hoy.substring(0, 7); // 'YYYY-MM'
+          const mesStart = mesKey + '-01';
+          // Suma de puntos_neto del mes completo para los perfiles del operador
+          _sb.from('operaciones')
+            .select('puntos_neto')
+            .in('id_perfil', ids)
+            .gte('fecha_dia', mesStart)
+            .lte('fecha_dia', hoy)
+            .neq('jornada', 'Auto')
+            .then(({ data: mesOps }) => {
+              if (mesOps && mesOps.length > 0) {
+                const totalMesReal = mesOps.reduce((s, r) => s + (parseFloat(r.puntos_neto) || 0), 0);
+                _opRtTotalMes = totalMesReal;
+                mesEl.innerHTML = totalMesReal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
+                const copEl = document.getElementById('op-dash-mes-cop');
+                if (copEl) copEl.textContent = '$' + Math.round(totalMesReal * 1400).toLocaleString('es-CO') + ' COP';
+              } else if (sumaTotal > 0) {
+                // Fallback: si no hay datos históricos, usar el total de hoy
+                mesEl.innerHTML = sumaTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
+              }
+            })
+            .catch(() => {
+              // Fallback silencioso: usar sumaTotal del día
+              if (sumaTotal > 0) mesEl.innerHTML = sumaTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
+            });
         }
 
         if (_opRtBaseline === null) {
@@ -32440,7 +32496,9 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         }
 
         console.log("Prompt profesional generado:", expandedPrompt);
-        statusEl.textContent = (face1 || face2) ? 'Fijando facciones del rostro e invocando InstantID...' : `Enviando prompt a ${motorLabel}...`;
+        // Registrar el statusEl globalmente para que rrFetchImageAI pueda actualizar el progreso del polling
+        window._rrImgStatusEl = statusEl;
+        statusEl.textContent = (face1 || face2) ? 'Fijando facciones del rostro e invocando InstantID...' : `⏳ Conectando con Higgsfield...`;
 
         // 2. Generar fotos usando rrFetchImageAI (pasando imágenes de rostro si existen)
         const images = await window.rrFetchImageAI(expandedPrompt, face1, face2);

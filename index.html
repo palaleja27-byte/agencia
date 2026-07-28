@@ -10135,55 +10135,43 @@
           }
         });
 
-        // Calcular Mayo por max(puntos_total)
-        const mayoOps = filteredOpsForMayo.filter(r => r.fecha_dia && r.fecha_dia.startsWith('2026-05'));
-        
+        // Calcular puntos para el mes actual dinámico m2Key (o Mayo histórico)
+        const curMonthOps = filteredOpsForMayo.filter(r => r.fecha_dia && r.fecha_dia.startsWith(m2Key));
+        const romeroProfilesTemp = {};
+        const camiloProfilesTemp = {};
+
+        curMonthOps.forEach(r => {
+          const pid = String(r.id_perfil).trim();
+          const val = parseFloat(r.puntos_total) || parseFloat(r.puntos_neto) || 0;
+          if (romeroProfileIds.has(pid)) {
+            if (val > (romeroProfilesTemp[pid] || 0)) romeroProfilesTemp[pid] = val;
+          } else if (camiloProfileIds.has(pid)) {
+            if (val > (camiloProfilesTemp[pid] || 0)) camiloProfilesTemp[pid] = val;
+          }
+        });
+
+        const romeroCurSum = Object.values(romeroProfilesTemp).reduce((acc, v) => acc + v, 0);
+        const camiloCurSum = Object.values(camiloProfilesTemp).reduce((acc, v) => acc + v, 0);
+
         if (viewMode === 'romero') {
           historialMap['2026-02'] = 68049.53;
           historialMap['2026-03'] = 68675.84;
           historialMap['2026-04'] = 86341.74;
-          
-          const romeroProfilesTemp = {};
-          mayoOps.forEach(r => {
-            const pid = String(r.id_perfil).trim();
-            const val = parseFloat(r.puntos_total) || 0;
-            if (val > (romeroProfilesTemp[pid] || 0)) romeroProfilesTemp[pid] = val;
-          });
-          const romeroMayoSum = Object.values(romeroProfilesTemp).reduce((acc, v) => acc + v, 0);
-          historialMap['2026-05'] = Math.max(59240.94, romeroMayoSum);
+          historialMap['2026-05'] = 59240.94;
+          historialMap[m2Key] = Math.max(historialMap[m2Key] || 0, romeroCurSum);
         } else if (viewMode === 'camilo') {
           historialMap['2026-02'] = 0;
           historialMap['2026-03'] = 0;
           historialMap['2026-04'] = 0;
-          
-          const camiloProfilesTemp = {};
-          mayoOps.forEach(r => {
-            const pid = String(r.id_perfil).trim();
-            const val = parseFloat(r.puntos_total) || 0;
-            if (val > (camiloProfilesTemp[pid] || 0)) camiloProfilesTemp[pid] = val;
-          });
-          const camiloMayoSum = Object.values(camiloProfilesTemp).reduce((acc, v) => acc + v, 0);
-          historialMap['2026-05'] = camiloMayoSum;
+          historialMap['2026-05'] = 0;
+          historialMap[m2Key] = Math.max(historialMap[m2Key] || 0, camiloCurSum);
         } else {
           // Global consolidado
           historialMap['2026-02'] = 68049.53;
           historialMap['2026-03'] = 68675.84;
           historialMap['2026-04'] = 86341.74;
-          
-          const romeroProfilesTemp = {};
-          const camiloProfilesTemp = {};
-          mayoOps.forEach(r => {
-            const pid = String(r.id_perfil).trim();
-            const val = parseFloat(r.puntos_total) || 0;
-            if (romeroProfileIds.has(pid)) {
-              if (val > (romeroProfilesTemp[pid] || 0)) romeroProfilesTemp[pid] = val;
-            } else if (camiloProfileIds.has(pid)) {
-              if (val > (camiloProfilesTemp[pid] || 0)) camiloProfilesTemp[pid] = val;
-            }
-          });
-          const romeroMayoSum = Object.values(romeroProfilesTemp).reduce((acc, v) => acc + v, 0);
-          const camiloMayoSum = Object.values(camiloProfilesTemp).reduce((acc, v) => acc + v, 0);
-          historialMap['2026-05'] = Math.max(59240.94, romeroMayoSum) + camiloMayoSum;
+          historialMap['2026-05'] = 59240.94;
+          historialMap[m2Key] = Math.max(historialMap[m2Key] || 0, romeroCurSum + camiloCurSum);
         }
 
         // Crear el array para el modal de crecimiento (desde Febrero hasta ahora)
@@ -14765,7 +14753,7 @@
           const matchesProj = isCur && (c.fecha >= today && c.fecha <= fut3);
           if (matchesMonth || matchesProj) {
             const val = (Number(c.puntos) || 0);
-            total += (val > 1500 ? 0 : val); // Proteccin contra acumulado Datame
+            total += (val > 1500 ? 0 : val); // Protección contra acumulado Datame
           }
         });
       });
@@ -14793,12 +14781,26 @@
         }
       }
 
-      // 🏥 CORRECCIÓN QUIRÚRGICA: Si es un mes pasado, usar el MÁXIMO entre lo local y la base histórica.
-      // Esto evita que si hay pocos cortes en Marzo (ej. 10k) pero la base histórica dice 600k, 
-      // el sistema use los 10k y dispare un crecimiento ficticio del 5000% en Abril.
+      // 4. Sumar producción neta del turno activo de hoy (_dpTurnosData) en tiempo real
+      let liveTodayPts = 0;
+      if (isCur && typeof _dpTurnosData !== 'undefined' && _dpTurnosData) {
+        Object.values(_dpTurnosData).forEach(t => {
+          if (typeof t === 'object' && t !== null) {
+            Object.values(t).forEach(v => {
+              const num = Number(v) || 0;
+              if (num > 0 && num < 1500) liveTodayPts += num;
+            });
+          }
+        });
+      }
+
+      // 🏥 CORRECCIÓN QUIRÚRGICA REAL-TIME: Para el mes activo, consolidar base + producción viva
       const mesActualKey = localDateStr().slice(0, 7);
-      if (mesStr === mesActualKey && typeof window._rkHistorial !== 'undefined' && window._rkHistorial.m2Total > total) {
-        total = window._rkHistorial.m2Total;
+      if (mesStr === mesActualKey) {
+        const supNet = (typeof opsSupabaseCache !== 'undefined' && Array.isArray(opsSupabaseCache))
+          ? opsSupabaseCache.filter(r => r.fecha_dia && r.fecha_dia.startsWith(mesStr)).reduce((s, r) => s + (Number(r.puntos_neto) || 0), 0)
+          : 0;
+        total = Math.max(total, baseVal + liveTodayPts, baseVal + supNet);
       } else if (mesStr < mesActualKey) {
         total = Math.max(total, baseVal);
       } else if (total === 0) {

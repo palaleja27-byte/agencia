@@ -10071,7 +10071,7 @@
           const k = formatMes(tempDate);
           extHist.push({
             name: nombresMeses[tempDate.getMonth()],
-            total: (typeof getTotalMesPts === 'function' ? getTotalMesPts(k) : 0) || historialMap[k] || 0,
+            total: historialMap[k] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(k) : 0),
             esCurrent: k === m2Key
           });
           tempDate.setMonth(tempDate.getMonth() + 1);
@@ -10079,9 +10079,9 @@
         window._rkHistorialExt = extHist;
 
         // Mantener compatibilidad con el objeto h viejo — CON FALLBACK LOCAL PREMIUM INFALIBLE
-        let m0Total = (typeof getTotalMesPts === 'function' ? getTotalMesPts(m0Key) : 0) || historialMap[m0Key] || 0;
-        let m1Total = (typeof getTotalMesPts === 'function' ? getTotalMesPts(m1Key) : 0) || historialMap[m1Key] || 0;
-        let m2Total = (typeof getTotalMesPts === 'function' ? getTotalMesPts(m2Key) : 0) || historialMap[m2Key] || 0;
+        let m0Total = historialMap[m0Key] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(m0Key) : 0);
+        let m1Total = historialMap[m1Key] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(m1Key) : 0);
+        let m2Total = historialMap[m2Key] || (typeof getTotalMesPts === 'function' ? getTotalMesPts(m2Key) : 0);
 
         // Crecimiento basado en RITMO DIARIO (pace) — no en totales brutos
         // Esto evita comparar un mes proyectado vs un mes completo
@@ -14675,7 +14675,9 @@
       // Esto evita que si hay pocos cortes en Marzo (ej. 10k) pero la base histórica dice 600k, 
       // el sistema use los 10k y dispare un crecimiento ficticio del 5000% en Abril.
       const mesActualKey = localDateStr().slice(0, 7);
-      if (mesStr < mesActualKey) {
+      if (mesStr === mesActualKey && typeof window._rkHistorial !== 'undefined' && window._rkHistorial.m2Total > total) {
+        total = window._rkHistorial.m2Total;
+      } else if (mesStr < mesActualKey) {
         total = Math.max(total, baseVal);
       } else if (total === 0) {
         // Si es el mes actual o futuro y no hay cortes, usar la base como fallback
@@ -16318,48 +16320,59 @@
       const liveTotal = (window._rrLiveFeed || []).reduce((acc, r) => acc + (Number(r.pts) || 0), 0);
 
       wrap.innerHTML = `
-      <details class="action-map-accordion" ${isMapOpen ? 'open' : ''} ontoggle="localStorage.setItem('rr_action_map_open', this.open)" style="background:#0f172a;border:1px solid rgba(148,163,184,0.1);border-radius:14px;margin-bottom:25px;font-family:'Inter',sans-serif;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.4);">
-        <summary style="padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,rgba(45,212,191,0.05) 0%,transparent 100%);outline:none;border-bottom:1px solid rgba(255,255,255,0.05);list-style:none;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:32px;height:32px;background:rgba(45,212,191,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#2dd4bf;font-size:1rem;">🧠</div>
-            <div><div style="font-size:0.8rem;font-weight:900;color:#f8fafc;">ACTION MAP: AUDITORÍA EN TIEMPO REAL</div><div style="font-size:0.6rem;color:#64748b;margin-top:1px;">Diagnóstico de sensibilidad y historial de crecimiento</div></div>
+      <details class="action-map-accordion" ${isMapOpen ? 'open' : ''} ontoggle="localStorage.setItem('rr_action_map_open', this.open)" style="background:#0f172a;border:1px solid rgba(148,163,184,0.15);border-radius:16px;margin-bottom:25px;font-family:'Inter',sans-serif;overflow:hidden;box-shadow:0 12px 36px rgba(0,0,0,0.5);">
+        <summary style="padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,rgba(45,212,191,0.08) 0%,rgba(15,23,42,0.95) 100%);outline:none;border-bottom:1px solid rgba(255,255,255,0.08);list-style:none;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;background:linear-gradient(135deg,rgba(45,212,191,0.2),rgba(56,189,248,0.2));border:1px solid rgba(45,212,191,0.4);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#2dd4bf;font-size:1.1rem;box-shadow:0 0 12px rgba(45,212,191,0.2);">🧠</div>
+            <div>
+              <div style="font-size:0.85rem;font-weight:900;color:#f8fafc;letter-spacing:0.5px;display:flex;align-items:center;gap:8px;">
+                ACTION MAP: AUDITORÍA Y CONTROL EN TIEMPO REAL
+                <span style="font-size:0.55rem;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);color:#34d399;padding:2px 7px;border-radius:12px;font-weight:800;">⚡ REALTIME ACTIVE</span>
+              </div>
+              <div style="font-size:0.62rem;color:#94a3b8;margin-top:2px;">Monitoreo inteligente de jornadas 8h/12h, rotación de perfiles y decisiones tácticas al instante</div>
+            </div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;"><div style="font-size:0.55rem;color:${cS};font-weight:700;background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:12px;">${iG?'↑':'↓'} ${vel.toFixed(0)} pts/d</div><div style="font-size:0.55rem;color:#2dd4bf;font-weight:700;background:rgba(45,212,191,0.1);padding:3px 8px;border-radius:12px;">LIVE</div></div>
+          <div style="display:flex;align-items:center;gap:10px;">
+             <div style="font-size:0.6rem;color:${cS};font-weight:800;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);padding:4px 10px;border-radius:14px;display:flex;align-items:center;gap:4px;">
+               ${iG?'📈':'📉'} ${vel.toFixed(0)} pts/día
+             </div>
+             <div style="font-size:0.6rem;color:#2dd4bf;font-weight:800;background:rgba(45,212,191,0.12);border:1px solid rgba(45,212,191,0.3);padding:4px 10px;border-radius:14px;">● LIVE</div>
+          </div>
         </summary>
-        <div style="padding:14px;">
+        <div style="padding:16px;">
           <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px;margin-bottom:16px;">
              <div style="display:flex;flex-direction:column;gap:10px;">
-                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid ${cS};position:relative;">
-                   <button onclick="showSmartInfo('vp')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                   <div style="font-size:0.5rem;color:#94a3b8;font-weight:700;">VELOCIDAD PROMEDIO</div>
-                   <div style="font-size:1.4rem;font-weight:900;color:#f1f5f9;margin-top:4px;display:flex;align-items:baseline;gap:6px;">${vel.toFixed(1)} <small style="font-size:0.6rem;color:#34d399;font-weight:700;">↑ 4.2%</small></div>
-                   <div style="font-size:0.55rem;color:#64748b;margin-top:6px;background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:6px;display:inline-block;">Proyección: <b style="color:${cS}">${proy.toLocaleString()}</b> <span style="margin-left:8px;color:#475569;">META: 150K</span></div>
+                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.7),rgba(30,41,59,0.5));padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);border-left:4px solid ${cS};position:relative;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+                   <button onclick="showSmartInfo('vp')" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;width:20px;height:20px;border-radius:50%;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <div style="font-size:0.55rem;color:#94a3b8;font-weight:800;letter-spacing:0.5px;">VELOCIDAD PROMEDIO DE AGENCIA</div>
+                   <div style="font-size:1.5rem;font-weight:900;color:#f1f5f9;margin-top:4px;display:flex;align-items:baseline;gap:8px;">${vel.toFixed(1)} <small style="font-size:0.65rem;color:#34d399;font-weight:800;">↑ 4.2%</small></div>
+                   <div style="font-size:0.58rem;color:#94a3b8;margin-top:8px;background:rgba(0,0,0,0.3);padding:5px 10px;border-radius:8px;display:inline-block;border:1px solid rgba(255,255,255,0.04);">Proyección Mes: <b style="color:${cS}">${proy.toLocaleString()}</b> <span style="margin-left:8px;color:#64748b;">META: 150K</span></div>
                 </div>
-                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #f87171;position:relative;">
-                   <button onclick="showSmartInfo('impacto')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                   <div style="font-size:0.5rem;color:#fca5a5;font-weight:700;">IMPACTO RECALIBRACIÓN</div>
-                   <div style="font-size:1.4rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.55rem;color:#64748b;font-weight:400;">pts base/día</small></div>
-                   <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:6px;">Eficiencia: <b style="color:#fca5a5">${(100 - (totalPtsPrev/30 / (vel||1) * 100)).toFixed(1)}%</b> <div style="flex:1;height:3px;background:rgba(248,113,113,0.1);border-radius:2px;"><div style="width:${100 - (totalPtsPrev/30 / (vel||1) * 100)}%;height:100%;background:#f87171;border-radius:2px;"></div></div></div>
+                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.7),rgba(30,41,59,0.5));padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);border-left:4px solid #f87171;position:relative;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+                   <button onclick="showSmartInfo('impacto')" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;width:20px;height:20px;border-radius:50%;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <div style="font-size:0.55rem;color:#fca5a5;font-weight:800;letter-spacing:0.5px;">IMPACTO RECALIBRACIÓN</div>
+                   <div style="font-size:1.5rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.6rem;color:#94a3b8;font-weight:400;">pts base/día</small></div>
+                   <div style="font-size:0.58rem;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:8px;">Eficiencia: <b style="color:#fca5a5">${(100 - (totalPtsPrev/30 / (vel||1) * 100)).toFixed(1)}%</b> <div style="flex:1;height:4px;background:rgba(248,113,113,0.15);border-radius:3px;"><div style="width:${100 - (totalPtsPrev/30 / (vel||1) * 100)}%;height:100%;background:#f87171;border-radius:3px;"></div></div></div>
                 </div>
              </div>
              <div style="display:flex;flex-direction:column;gap:10px;">
-                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.6),rgba(30,41,59,0.4));padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);border-left:4px solid #38bdf8;position:relative;">
-                   <button onclick="showSmartInfo('capacidad')" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#64748b;width:18px;height:18px;border-radius:50%;font-size:0.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                   <div style="font-size:0.5rem;color:#38bdf8;font-weight:700;">CAPACIDAD ACTIVA</div>
-                   <div style="font-size:1.3rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} <small style="font-size:0.6rem;color:#64748b;">ops</small> / ${rows.length} <small style="font-size:0.6rem;color:#64748b;">perfiles</small></div>
-                   <div style="font-size:0.55rem;color:#64748b;margin-top:6px;display:flex;align-items:center;gap:8px;">Carga: <b style="color:#38bdf8">${(rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1)}x</b> <div style="flex:1;height:3px;background:rgba(56,189,248,0.1);border-radius:2px;"><div style="width:${Math.min(100, (rows.length/(new Set(rows.map(r=>r.op)).size||1))/4 * 100)}%;height:100%;background:#38bdf8;border-radius:2px;"></div></div></div>
+                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.7),rgba(30,41,59,0.5));padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);border-left:4px solid #38bdf8;position:relative;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+                   <button onclick="showSmartInfo('capacidad')" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;width:20px;height:20px;border-radius:50%;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
+                   <div style="font-size:0.55rem;color:#38bdf8;font-weight:800;letter-spacing:0.5px;">CAPACIDAD Y ROTACIÓN ACTIVA</div>
+                   <div style="font-size:1.4rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} <small style="font-size:0.65rem;color:#94a3b8;">ops en línea</small> / ${rows.length} <small style="font-size:0.65rem;color:#94a3b8;">perfiles</small></div>
+                   <div style="font-size:0.58rem;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:8px;">Carga promedio: <b style="color:#38bdf8">${(rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1)}x por op</b> <div style="flex:1;height:4px;background:rgba(56,189,248,0.15);border-radius:3px;"><div style="width:${Math.min(100, (rows.length/(new Set(rows.map(r=>r.op)).size||1))/4 * 100)}%;height:100%;background:#38bdf8;border-radius:3px;"></div></div></div>
                 </div>
-                <div id="rk-brain-panel" style="background:rgba(20,184,166,0.05);padding:12px 15px;border-radius:12px;border:1px solid rgba(20,184,166,0.15);flex:1;display:flex;flex-direction:column;justify-content:center;">
-                   <div style="font-size:0.55rem;color:#2dd4bf;font-weight:800;margin-bottom:6px;display:flex;align-items:center;gap:5px;">🧠 CEREBRO RR: AUDITORÍA</div>
-                   <div style="font-size:0.52rem;color:#94a3b8;line-height:1.4;" id="rk-brain-content">${typeof _generarInsights === 'function' ? _generarInsights(rows, vel, proy, totalPtsPrev) : 'Procesando heurísticas...'}</div>
+                <div id="rk-brain-panel" style="background:linear-gradient(135deg,rgba(20,184,166,0.08),rgba(15,23,42,0.8));padding:14px 16px;border-radius:14px;border:1px solid rgba(20,184,166,0.25);flex:1;display:flex;flex-direction:column;justify-content:center;">
+                   <div style="font-size:0.6rem;color:#2dd4bf;font-weight:900;margin-bottom:6px;display:flex;align-items:center;gap:6px;letter-spacing:0.5px;">🧠 CEREBRO RR: DECISIONES EN TIEMPO REAL</div>
+                   <div style="font-size:0.58rem;color:#cbd5e1;line-height:1.45;" id="rk-brain-content">${typeof _generarInsights === 'function' ? _generarInsights(rows, vel, proy, totalPtsPrev) : 'Procesando métricas operacionales...'}</div>
                 </div>
              </div>
-             <div style="background:rgba(0,0,0,0.3);padding:12px 15px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);height:175px;overflow-y:auto;position:relative;" class="custom-scrollbar">
-                <div style="font-size:0.5rem;color:#a78bfa;font-weight:700;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:2px 0;display:flex;justify-content:space-between;align-items:center;">
-                   <span>ACTIVIDAD EN VIVO</span>
-                   <span style="color:#34d399;font-weight:900;background:rgba(52,211,153,0.1);padding:2px 6px;border-radius:4px;">+$${(liveTotal * 1400).toLocaleString('es-CO')}</span>
+             <div style="background:rgba(0,0,0,0.4);padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);height:185px;overflow-y:auto;position:relative;" class="custom-scrollbar">
+                <div style="font-size:0.55rem;color:#c084fc;font-weight:800;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:4px 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.05);">
+                   <span>💬 PRODUCCIÓN Y ACTIVIDAD LIVE</span>
+                   <span style="color:#34d399;font-weight:900;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);padding:2px 8px;border-radius:6px;">+$${(liveTotal * 1400).toLocaleString('es-CO')} COP</span>
                 </div>
-                <div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.55rem;color:#475569;text-align:center;padding-top:20px;">Esperando actividad...</div>'}</div>
+                <div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.6rem;color:#64748b;text-align:center;padding-top:24px;">Esperando pulsos en vivo...</div>'}</div>
              </div>
           </div>
           <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
@@ -26346,60 +26359,74 @@ PT._logKey = function (opName) {
     }
 
     function asiAutoRelease() {
-      // 🛡️ SEGURIDAD DE ADMINISTRADOR:
-      // Si el usuario es Admin o Monitor, no queremos que el sistema auto-libere 
-      // y borre la asistencia que el admin está editando o registrando manualmente.
-      if (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor')) {
-        return;
-      }
-
       const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
       const now = Date.now();
       let changed = false;
       const dateStr = typeof localDateStr === 'function' ? localDateStr() : '';
       const _horaCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours();
 
-      // --- Auto-calcular salidaTS para operadores sin él pero con turno conocido ---
-      // Esto permite que el autoRelease funcione aunque el admin no haya puesto 8h/12h
-      const turnoFinMap = { 'Mañana': 14, 'Tarde': 22 }; // Noche es especial
+      // Mapeo fin de turno estándar (8h): Mañana (14h), Tarde (22h), Noche (06h)
+      const turnoFinMap = { 'Mañana': 14, 'Tarde': 22, 'Noche': 6 };
+
       if (typeof operatorsData !== 'undefined') {
         operatorsData.forEach(op => {
           if (!op.turno || op.group === 'SP' || op.group === 'N/A') return;
           const k = (typeof asiKey === 'function') ? asiKey(op.name, 'operador') : op.name + '||operador';
           const inPresente = typeof asiEstados !== 'undefined' && asiEstados[k]?.estado === 'P';
           if (!inPresente) return;
-          if (allHoras[op.name]?.salidaTS) return; // ya tiene salidaTS
-          const finH = turnoFinMap[op.turno];
-          if (finH !== undefined && _horaCol >= finH) {
-            // Este operador ya debería haber terminado → marcar salidaTS = ahora
-            if (!allHoras[op.name]) allHoras[op.name] = {};
-            allHoras[op.name].salidaTS = Date.now() - 1; // pasado por 1ms → forzar release
-            localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+
+          const infoHoras = allHoras[op.name] || {};
+          const es12h = infoHoras.horas === 12;
+
+          // Si el operador ya tiene salidaTS registrada y el tiempo expiró
+          if (!infoHoras.salidaTS) {
+            let expirado = false;
+
+            if (es12h && infoHoras.ingresoTS) {
+              // ⏱️ 12H SHIFT: Expira a las 12 horas exactas de su hora de marcación
+              if (now >= infoHoras.ingresoTS + (12 * 3600 * 1000)) expirado = true;
+            } else if (infoHoras.ingresoTS) {
+              // ⏱️ 8H CON INGRESO REGISTRADO: Expira a las 8.5 horas
+              if (now >= infoHoras.ingresoTS + (8.5 * 3600 * 1000)) expirado = true;
+            } else {
+              // ⏱️ 8H ESTÁNDAR SEGÚN HORA DE COLOMBIA
+              const finH = turnoFinMap[op.turno];
+              if (finH === 6) {
+                // Noche (22:00 -> 06:00 AM): Expirado si ya son las 06:00 AM o más (hasta antes de la Noche siguiente 21:00)
+                if (_horaCol >= 6 && _horaCol < 21) expirado = true;
+              } else if (finH !== undefined && _horaCol >= finH) {
+                expirado = true;
+              }
+            }
+
+            if (expirado) {
+              if (!allHoras[op.name]) allHoras[op.name] = {};
+              allHoras[op.name].salidaTS = Date.now() - 1; // Marcar expiración
+              localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+            }
           }
         });
       }
 
       for (const name in allHoras) {
         const info = allHoras[name];
-        // Verificar si hay una salida programada y si ya paso la hora
+        // Verificar si hay una salida programada y si ya pasó la hora
         if (info.salidaTS && now > info.salidaTS) {
-          const op = operatorsData.find(o => _normName(o.name) === _normName(name));
+          const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
           if (op && op.profiles && op.profiles.length > 0) {
-            // ✅ PERFILES FIJOS (v8.6): No se eliminan los perfiles al terminar el turno
-            // para que el siguiente operador los encuentre listos.
-            console.log(`[AutoRelease] Turno expirado para ${name}. Manteniendo perfiles.`);
+            console.log(`[AutoRelease] Turno cumplido (8h/12h) para ${name}. Perfiles liberados para el relevo.`);
           }
           
-          const isMon = loadMonitores().includes(name);
+          const isMon = typeof loadMonitores === 'function' ? loadMonitores().includes(name) : false;
           const k = (typeof asiKey === 'function') ? asiKey(name, isMon ? 'monitor' : 'operador') : name + '||' + (isMon ? 'monitor' : 'operador');
           
-          // Limpiar en memoria si existe
-          if (typeof asiEstados !== 'undefined' && asiEstados[k] && asiEstados[k].estado === 'P') {
+          // Desconectar / liberar estado en memoria
+          if (typeof asiEstados !== 'undefined' && asiEstados[k] && (asiEstados[k].estado === 'P' || asiEstados[k].estado === 'T')) {
             asiEstados[k].estado = '';
             changed = true;
           }
 
-          // Limpiar directamente en los drafts de localStorage para asegurar efecto global
+          // Limpiar directamente en los drafts de localStorage para sincronización total
           if (typeof ASI_KEY !== 'undefined' && dateStr) {
             ['manana', 'tarde', 'noche'].forEach(sh => {
               const draftKey = ASI_KEY + '_draft_' + dateStr + '_' + sh;
@@ -26412,7 +26439,7 @@ PT._logKey = function (opName) {
             });
           }
 
-          // Limpiar el timer para que no se repita
+          // Limpiar timer para no repetir ciclo
           delete info.salidaTS;
           allHoras[name] = info;
           localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
@@ -26420,13 +26447,11 @@ PT._logKey = function (opName) {
       }
 
       if (changed) {
-        saveData();
-        // Si estamos en la pestaña de Asistencia, re-renderizar para reflejar los cambios visualmente
+        if (typeof saveData === 'function') saveData();
         const asiTab = document.getElementById('tab-asistencia');
         if (asiTab && asiTab.classList.contains('active') && typeof asiRender === 'function') {
            asiRender();
         }
-        // Actualizar ranking principal también
         if (typeof renderRanking === 'function') setTimeout(renderRanking, 200);
       }
     }

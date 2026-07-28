@@ -20366,8 +20366,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
            const _horasOpStats = (typeof _horasHoyAll !== 'undefined' ? _horasHoyAll[opData.name] : null) || (opData.turno === 'Completo' ? { horas: 12, fecha: hoy } : { horas: 8, fecha: hoy });
            const _es12hStats = _horasOpStats && _horasOpStats.horas === 12 && _horasOpStats.fecha === hoy;
-           const _curJornada = typeof _opRtJornada === 'function' ? _opRtJornada() : 'Mañana';
-           const _normJ = _curJornada === 'Mañana' ? 'Mañana' : _curJornada;
+           const _curJ = (typeof _opRtJornada === 'function' ? _opRtJornada() : '').toLowerCase();
 
            if (combinedProfiles.length > 0) {
               combinedProfiles.forEach(p => {
@@ -20376,10 +20375,13 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                     if (_es12hStats) {
                        datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
                     } else {
-                       datamePtsHoy += (turnosPerfil[_normJ] || 0);
-                       if (_normJ === 'Mañana') datamePtsHoy += (turnosPerfil['manana'] || 0);
-                       if (_normJ === 'Tarde') datamePtsHoy += (turnosPerfil['tarde'] || 0);
-                       if (_normJ === 'Noche') datamePtsHoy += (turnosPerfil['noche'] || 0);
+                       if (_curJ.startsWith('man')) {
+                          datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0);
+                       } else if (_curJ.startsWith('tar')) {
+                          datamePtsHoy += (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0);
+                       } else {
+                          datamePtsHoy += (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
+                       }
                     }
                  }
               });
@@ -20387,13 +20389,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
 
-
       if (datamePtsHoy > 0) {
          ptsHoy = datamePtsHoy;
-      } else if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(name)) {
-         const _horasOpStats = (typeof _horasHoyAll !== 'undefined' ? _horasHoyAll[name] : null) || (operatorsData.find(o => _n(o.name) === _n(name))?.turno === 'Completo' ? { horas: 12, fecha: hoy } : { horas: 8, fecha: hoy });
-         const _es12hStats = _horasOpStats && _horasOpStats.horas === 12 && _horasOpStats.fecha === hoy;
-         ptsHoy = _es12hStats ? Object.values(_opRtTurnos).reduce((s,v)=>s+v,0) : ((typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion >= 0) ? _opRtPtosSesion : (_opRtTurnos[_opRtJornada()] || 0));
+      } else if (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0 && _opRtOpName && _n(_opRtOpName) === _n(name)) {
+         ptsHoy = _opRtPtosSesion;
+      } else {
+         ptsHoy = getPuntosHoy(name);
       }
       // ESTE MES: priorizar _opRtTotalMes (total mensual acumulado de Datame, mas preciso)
 
@@ -20644,11 +20645,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const _horasOpDash = (typeof _horasHoyAll !== 'undefined' ? _horasHoyAll[op.name] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: localDateStr() } : { horas: 8, fecha: localDateStr() });
       const _es12hDash = _horasOpDash && _horasOpDash.horas === 12 && _horasOpDash.fecha === localDateStr();
 
-      let _ptsDia = 0;
-      if (typeof _opRtTurnos !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(op.name)) {
-         _ptsDia = _es12hDash ? Object.values(_opRtTurnos).reduce((s, v) => s + v, 0) : ((typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion >= 0) ? _opRtPtosSesion : (_opRtTurnos[_opRtJornada()] || 0));
-      } else {
-         _ptsDia = getPuntosHoy(op.name, _es12hDash ? null : (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
+      let _ptsDia = getPuntosHoy(op.name, _es12hDash ? null : (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
+      if (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0 && _opRtOpName && _n(_opRtOpName) === _n(op.name)) {
+         _ptsDia = _opRtPtosSesion;
       }
 
       // PROM/DÍA: dias reales transcurridos en el mes actual
@@ -29601,7 +29600,7 @@ PT._logKey = function (opName) {
 
         const _horasOpRt = (typeof _horasHoyAll !== 'undefined' ? _horasHoyAll[opName] : null) || (opData && opData.turno === 'Completo' ? { horas: 12, fecha: hoy } : { horas: 8, fecha: hoy });
         const _es12hRt = _horasOpRt && _horasOpRt.horas === 12 && _horasOpRt.fecha === hoy;
-        let _hoyTotal = _es12hRt ? Object.values(_opRtTurnos).reduce((s, v) => s + v, 0) : ((typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion >= 0) ? _opRtPtosSesion : (_opRtTurnos[_opRtJornada()] || 0));
+        let _hoyTotal = (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0) ? _opRtPtosSesion : getPuntosHoy(opName, _es12hRt ? null : (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
 
         // 1. Actualizar Stats Card (Hoy + Semana)
         const _hoyEl = document.getElementById('op-dash-hoy-val');

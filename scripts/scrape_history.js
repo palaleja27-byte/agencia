@@ -179,8 +179,7 @@ async function scrapeMonthForPanel(panel, perfiles, month) {
     if (envUser && envPass) {
       return { ...p, email: envUser.trim(), password: envPass.trim() };
     }
-    return p;
-  }).filter(p => p.email && p.password && !p.email.includes('Ameliapenaloza'));
+  }).filter(p => p.email && p.password);
 
   log(`📊 ${panels.length} paneles listos para raspado histórico.`);
 

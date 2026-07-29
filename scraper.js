@@ -400,7 +400,7 @@ async function watchPanel(panel, perfiles) {
         }
         return p;
       }).filter(p => {
-        const hasCreds = p.email && p.password && !p.email.includes('Ameliapenaloza');
+        const hasCreds = p.email && p.password;
         if (!hasCreds) {
           log(`[SKIP] ${p.nombre} — Sin credenciales activas configuradas`);
         }

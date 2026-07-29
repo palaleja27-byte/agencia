@@ -21540,8 +21540,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                 </div>
 
                 <div class="pt-tasks-grid" style="display:flex; flex-direction:column; gap:6px; margin: 10px 0;">
-                   ${PT.TAREAS_MASTER.map((t, ti) => {
+                   ${PT.TAREAS_MASTER.map((tObj, ti) => {
                       let badgeHtml = '';
+                      const tTitle = typeof tObj === 'object' ? tObj.title : tObj;
+                      const tTime  = typeof tObj === 'object' ? tObj.time : '';
+                      const tDesc  = typeof tObj === 'object' ? tObj.desc : '';
+
                       if (op.tareasEstado[ti]) {
                          // Real-time audit logic:
                          let auditFailed = false;
@@ -21600,12 +21604,23 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
                          }
                       }
                       return `
-                         <div class="pt-task-item ${op.tareasEstado[ti] ? 'active' : ''}" style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:4px; padding:6px 8px; border-radius:6px; background:${op.tareasEstado[ti] ? 'rgba(255,255,255,0.03)' : 'transparent'}; border: 1px solid ${op.tareasEstado[ti] ? 'rgba(255,255,255,0.05)' : 'transparent'};">
-                            <div style="display:flex; align-items:center; gap:6px; overflow:hidden;">
-                               <span class="pt-task-icon" style="flex-shrink:0;">${op.tareasEstado[ti] ? '✅' : '⚪'}</span>
-                               <span class="pt-task-txt" style="font-size:0.68rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${t}">${t}</span>
+                         <div class="pt-task-item ${op.tareasEstado[ti] ? 'active' : ''}" style="display:flex; flex-direction:column; width:100%; gap:4px; padding:8px 10px; border-radius:8px; background:${op.tareasEstado[ti] ? 'rgba(94,234,212,0.05)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${op.tareasEstado[ti] ? 'rgba(94,234,212,0.2)' : 'rgba(255,255,255,0.06)'};">
+                            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:6px;">
+                               <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                                  <span class="pt-task-icon" style="flex-shrink:0; font-size:1rem;">${op.tareasEstado[ti] ? '✅' : '⚪'}</span>
+                                  <span class="pt-task-txt" style="font-size:0.75rem; font-weight:600; color:${op.tareasEstado[ti] ? '#5eead4' : '#e2e8f0'}; display:inline-block;" title="${tTitle}">${tTitle}</span>
+                                  ${tTime ? `<span style="font-size:0.55rem; background:rgba(99,102,241,0.2); color:#a5b4fc; padding:1px 5px; border-radius:4px; font-weight:700; white-space:nowrap;">⏱️ ${tTime}</span>` : ''}
+                               </div>
+                               ${badgeHtml}
                             </div>
-                            ${badgeHtml}
+                            ${tDesc ? `
+                            <details style="margin-top:2px; margin-left:24px;">
+                               <summary style="font-size:0.62rem; color:#818cf8; font-weight:700; cursor:pointer; user-select:none;">📖 Instrucción</summary>
+                               <div style="font-size:0.68rem; color:#cbd5e1; background:rgba(15,23,42,0.7); padding:6px 8px; border-radius:6px; border-left:3px solid #6366f1; margin-top:3px; line-height:1.35;">
+                                  ${tDesc}
+                               </div>
+                            </details>
+                            ` : ''}
                          </div>
                       `;
                    }).join('')}

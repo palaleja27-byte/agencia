@@ -72,6 +72,18 @@ async function sbUpsert(table, rows) {
   return res.json();
 }
 
+async function sbRpcUpsert(records) {
+  const url = `${SUPABASE_URL}/rest/v1/rpc/upsert_datame_perfiles_batch`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: baseHeaders,
+    body: JSON.stringify({ records })
+  });
+  if (!res.ok) throw new Error(`RPC failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+
 // ─── LISTADO MAESTRO DE PERFILES ─────────────────────────────────────────────
 // Fuente de verdad: operatorsData en index.html + perfiles_status.md
 // Todos los perfiles conocidos de la agencia, agrupados por panel Datame.
@@ -212,48 +224,59 @@ async function run() {
 
   let ok = 0, fail = 0;
 
-  // ── INSERTAR NUEVOS ────────────────────────────────────────────
-  if (toInsert.length > 0) {
-    console.log(`\n── INSERTANDO NUEVOS ─────────────────────────────────`);
-    for (const p of toInsert) {
-      try {
-        const result = await sbUpsert('datame_perfiles', p);
-        console.log(`  ✅ INSERT OK: ${p.modelo} (${p.id_datame}) → PANEL-${p.panel_id}`);
-        ok++;
-      } catch (err) {
-        console.error(`  ❌ INSERT FAIL: ${p.modelo} (${p.id_datame}): ${err.message}`);
-        fail++;
+  // Intentar sincronizar por RPC (modo CYBERPUNK bypass RLS)
+  try {
+    console.log(`\n⚡ Intentando sincronización masiva vía RPC (bypass RLS)...`);
+    await sbRpcUpsert(ALL_PROFILES);
+    console.log(`✅ Sincronización exitosa vía RPC! Todos los perfiles están registrados.`);
+    ok = ALL_PROFILES.length;
+  } catch (rpcErr) {
+    console.warn(`⚠️  RPC falló o no existe. Detalle: ${rpcErr.message}`);
+    console.warn(`   Procediendo con el fallback tradicional (puede fallar por RLS si la key es anon)...`);
+    
+    // ── FALLBACK TRADICIONAL (INSERTAR NUEVOS) ────────────────────────────────────────────
+    if (toInsert.length > 0) {
+      console.log(`\n── [FALLBACK] INSERTANDO NUEVOS ─────────────────────────────────`);
+      for (const p of toInsert) {
+        try {
+          const result = await sbUpsert('datame_perfiles', p);
+          console.log(`  ✅ INSERT OK: ${p.modelo} (${p.id_datame}) → PANEL-${p.panel_id}`);
+          ok++;
+        } catch (err) {
+          console.error(`  ❌ INSERT FAIL: ${p.modelo} (${p.id_datame}): ${err.message}`);
+          fail++;
+        }
       }
     }
-  }
 
-  // ── ACTUALIZAR EXISTENTES (panel_id + activo) ─────────────────
-  if (toUpdate.length > 0) {
-    console.log(`\n── ACTUALIZANDO EXISTENTES ────────────────────────────`);
-    for (const p of toUpdate) {
-      const existing = existingInDB.find(e => e.id_datame === p.id_datame);
-      const needsUpdate = existing && (
-        existing.panel_id !== p.panel_id ||
-        existing.activo   !== p.activo   ||
-        existing.modelo   !== p.modelo
-      );
-      if (!needsUpdate) {
-        console.log(`  ↔️  SIN CAMBIOS: ${p.modelo} (${p.id_datame})`);
-        continue;
-      }
-      try {
-        const url = `${SUPABASE_URL}/rest/v1/datame_perfiles?id_datame=eq.${p.id_datame}`;
-        const res = await fetch(url, {
-          method: 'PATCH',
-          headers: { ...baseHeaders, 'Prefer': 'return=representation' },
-          body: JSON.stringify({ panel_id: p.panel_id, activo: p.activo, modelo: p.modelo })
-        });
-        if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-        console.log(`  🔄 UPDATE OK: ${p.modelo} (${p.id_datame}) → PANEL-${p.panel_id}`);
-        ok++;
-      } catch (err) {
-        console.error(`  ❌ UPDATE FAIL: ${p.modelo}: ${err.message}`);
-        fail++;
+    // ── FALLBACK TRADICIONAL (ACTUALIZAR EXISTENTES) ─────────────────
+    if (toUpdate.length > 0) {
+      console.log(`\n── [FALLBACK] ACTUALIZANDO EXISTENTES ────────────────────────────`);
+      for (const p of toUpdate) {
+        const existing = existingInDB.find(e => e.id_datame === p.id_datame);
+        const needsUpdate = existing && (
+          existing.panel_id !== p.panel_id ||
+          existing.activo   !== p.activo   ||
+          existing.modelo   !== p.modelo
+        );
+        if (!needsUpdate) {
+          console.log(`  ↔️  SIN CAMBIOS: ${p.modelo} (${p.id_datame})`);
+          continue;
+        }
+        try {
+          const url = `${SUPABASE_URL}/rest/v1/datame_perfiles?id_datame=eq.${p.id_datame}`;
+          const res = await fetch(url, {
+            method: 'PATCH',
+            headers: { ...baseHeaders, 'Prefer': 'return=representation' },
+            body: JSON.stringify({ panel_id: p.panel_id, activo: p.activo, modelo: p.modelo })
+          });
+          if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+          console.log(`  🔄 UPDATE OK: ${p.modelo} (${p.id_datame}) → PANEL-${p.panel_id}`);
+          ok++;
+        } catch (err) {
+          console.error(`  ❌ UPDATE FAIL: ${p.modelo}: ${err.message}`);
+          fail++;
+        }
       }
     }
   }
@@ -265,7 +288,7 @@ async function run() {
   console.log(`╚══════════════════════════╝\n`);
 
   if (fail > 0) {
-    console.error(`⚠️  Hubo ${fail} errores. Verifica que SUPABASE_SERVICE_KEY sea la clave "service_role" (no "anon").`);
+    console.error(`⚠️  Hubo ${fail} errores. Si fallaron por RLS, pide al administrador ejecutar el script SQL 'setup_datame_perfiles_rpc.sql'.`);
     process.exit(1);
   }
 }

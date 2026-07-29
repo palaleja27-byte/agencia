@@ -1,9 +1,9 @@
 const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vpyzpjgctidqmhqjboxq.supabase.co';
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim() || 'https://vpyzpjgctidqmhqjboxq.supabase.co';
 // Si no hay SUPABASE_SERVICE_KEY, usamos la clave anónima para generar el reporte de perfiles, ya que SELECT es público
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
+const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim() || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 

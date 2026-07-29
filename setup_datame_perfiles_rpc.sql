@@ -1,7 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════
--- AGENCIA RR: RPC SECURITY DEFINER PARA SINCRONIZAR PERFILES
--- ─ Corrige el error 42501 (RLS violation) cuando el Action de Git
---   tiene configurada una key 'anon' en lugar de 'service_role'.
+-- AGENCIA RR: RPC SECURITY DEFINER PARA SINCRONIZAR PERFILES (CORREGIDA)
+-- ─ Remueve la columna 'created_at' que no existe en datame_perfiles.
 -- ─ Ejecutar en Supabase → SQL Editor → Run
 -- ═══════════════════════════════════════════════════════════════
 
@@ -17,19 +16,17 @@ DECLARE
 BEGIN
     FOR rec IN SELECT * FROM jsonb_array_elements(records)
     LOOP
-        INSERT INTO datame_perfiles (id_datame, modelo, panel_id, activo, created_at)
+        INSERT INTO datame_perfiles (id_datame, modelo, panel_id, activo)
         VALUES (
             rec->>'id_datame',
             rec->>'modelo',
             (rec->>'panel_id')::bigint,
-            (rec->>'activo')::boolean,
-            now()
+            (rec->>'activo')::boolean
         )
         ON CONFLICT (id_datame) DO UPDATE SET
             modelo     = EXCLUDED.modelo,
             panel_id   = EXCLUDED.panel_id,
-            activo     = EXCLUDED.activo,
-            created_at = now();
+            activo     = EXCLUDED.activo;
         counter := counter + 1;
     END LOOP;
 
@@ -41,4 +38,4 @@ $$;
 GRANT EXECUTE ON FUNCTION upsert_datame_perfiles_batch(jsonb) TO anon;
 GRANT EXECUTE ON FUNCTION upsert_datame_perfiles_batch(jsonb) TO authenticated;
 
-SELECT 'OK: Función upsert_datame_perfiles_batch creada y expuesta.' AS status;
+SELECT 'OK: Función upsert_datame_perfiles_batch corregida y expuesta.' AS status;

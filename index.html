@@ -14913,6 +14913,10 @@
                     const key2 = jornadaOp === 'Mañana' ? 'Mañana' : jornadaOp;
                     pts = (t[key2] || 0) + (key2 === 'Mañana' ? (t['manana'] || 0) : key2 === 'Tarde' ? (t['tarde'] || 0) : key2 === 'Noche' ? (t['noche'] || 0) : 0);
                   }
+                  
+                  // Sumar siempre los puntos automáticos calculados por Delta-Shift (ej. Tableau Sync)
+                  pts += (t['Auto'] || 0);
+                  
                   ptsSup += pts;
                }
             });
@@ -28521,6 +28525,36 @@ PT._logKey = function (opName) {
 
         const perfiles = {};
         ops.forEach(op => { if (!perfiles[op.id_perfil]) perfiles[op.id_perfil] = []; perfiles[op.id_perfil].push(op); });
+        
+        // PASO 2.5: Inyectar datos de Tableau (Git Action) al flujo de DELTA-SHIFT™
+        if (typeof _dpTableauData !== 'undefined') {
+          Object.entries(_dpTableauData).forEach(([tid, d]) => {
+            if (tid.includes('_')) return; // ignorar legacy
+            const tabTotal = Number(typeof d === 'object' ? d.valor : d) || 0;
+            if (tabTotal <= 0) return;
+            
+            const pId = String(tid).trim();
+            if (!perfiles[pId]) perfiles[pId] = [];
+            
+            const maxOp = perfiles[pId].reduce((m, o) => Math.max(m, o.puntos_total), 0);
+            
+            // Si el total de Tableau supera el total máximo registrado por Datame hoy,
+            // inyectar una operación "Auto" para que Delta-Shift calcule el neto y lo consolide.
+            if (tabTotal > maxOp) {
+               perfiles[pId].push({
+                 id: 'virtual_tableau_' + pId,
+                 id_perfil: pId,
+                 jornada: 'Auto',
+                 puntos_total: tabTotal,
+                 puntos_baseline: 0, // Se autocalculará en el algoritmo
+                 puntos_neto: 0,
+                 fecha_dia: hoy,
+                 fecha_corte: new Date().toISOString()
+               });
+            }
+          });
+        }
+
         let corregidos = 0;
         const jornadaOrd = { 'Mañana': 1, 'Tarde': 2, 'Noche': 3, 'Completo': 4, 'Auto': 5 };
 
@@ -28564,10 +28598,27 @@ PT._logKey = function (opName) {
             }
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
-              await _sb.from('operaciones').update({ 
-                puntos_baseline: nuevoBase, 
-                puntos_neto: nuevoNeto 
-              }).eq('id', rec.id);
+              if (String(rec.id).startsWith('virtual_tableau_')) {
+                  const { data: newRec, error } = await _sb.from('operaciones').insert({
+                     id_perfil: rec.id_perfil,
+                     jornada: rec.jornada,
+                     puntos_total: rec.puntos_total,
+                     puntos_baseline: nuevoBase,
+                     puntos_neto: nuevoNeto,
+                     fecha_dia: rec.fecha_dia,
+                     fecha_corte: rec.fecha_corte
+                  }).select().single();
+                  
+                  if (!error && typeof _dpTurnosData !== 'undefined') {
+                    if (!_dpTurnosData[rec.id_perfil]) _dpTurnosData[rec.id_perfil] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
+                    _dpTurnosData[rec.id_perfil][rec.jornada] = nuevoNeto;
+                  }
+              } else {
+                  await _sb.from('operaciones').update({ 
+                    puntos_baseline: nuevoBase, 
+                    puntos_neto: nuevoNeto 
+                  }).eq('id', rec.id);
+              }
               corregidos++;
             }
             lastTotal = rec.puntos_total;

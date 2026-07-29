@@ -15977,19 +15977,65 @@
         rows.forEach(r => {
           const c05 = (r.cortes || []).filter(c => c.ts && (nowTs - c.ts < 300000)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
           const c10 = (r.cortes || []).filter(c => c.ts && (nowTs - c.ts < 600000)).reduce((s,c)=>s+(c.puntos||0),0) * r.share;
-          r.r05 = c05 > 0 ? c05 : r.dia/288; r.r10 = c10 > 0 ? c10 : r.dia/144;
+          r.r05 = c05 > 0 ? c05 : (r.dia > 0 ? (r.dia/288)*0.5 : 0); r.r10 = c10 > 0 ? c10 : (r.dia > 0 ? (r.dia/144)*0.5 : 0);
           mx.m05=Math.max(mx.m05, r.r05); mx.m10=Math.max(mx.m10, r.r10);
           mx.dia=Math.max(mx.dia, r.dia); mx.sem=Math.max(mx.sem, r.sem); mx.mes=Math.max(mx.mes, r.mes);
         });
+        
+        const smartColor = (val, max) => {
+          if (!val || val < 0.01) return { bg: 'rgba(15,23,42,0.4)', fg: '#475569', border: 'transparent' };
+          const ratio = val / (max || 1);
+          if (ratio < 0.15) return { bg: 'rgba(239,68,68,0.15)', fg: '#f87171', border: 'rgba(239,68,68,0.3)' }; 
+          if (ratio < 0.40) return { bg: 'rgba(251,191,36,0.15)', fg: '#fbbf24', border: 'rgba(251,191,36,0.3)' };   
+          if (ratio < 0.75) return { bg: 'rgba(52,211,153,0.15)', fg: '#34d399', border: 'rgba(52,211,153,0.4)' };    
+          return { bg: 'rgba(16,185,129,0.25)', fg: '#10b981', border: '#34d399' };                
+        };
+
         const trs = rows.map(r => {
           const cs = [['r05',mx.m05],['r10',mx.m10],['dia',mx.dia],['sem',mx.sem],['mes',mx.mes]].map(([k,m]) => {
-            const val = r[k], c = hc(val, m);
-            return `<td style="padding:4px 2px;text-align:center;background:${c.b};border-bottom:1px solid rgba(255,255,255,0.02);"><span style="font-size:0.55rem;font-weight:950;color:${c.f};">${fm(val)}</span></td>`;
+            const val = r[k];
+            const c = smartColor(val, m);
+            const isLive = (k === 'r05' || k === 'r10') && val > 0;
+            const animClass = isLive ? 'live-heatmap-pulse' : '';
+            const cellHtml = val > 0.01 
+              ? `<div class="${animClass}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                   <div style="font-size:0.65rem;font-weight:900;color:${c.fg};text-shadow:0 0 10px ${c.fg}40;letter-spacing:0.5px;">$${val.toFixed(2)}</div>
+                   <div style="font-size:0.42rem;color:${c.fg};opacity:0.75;font-weight:700;margin-top:2px;">${val.toFixed(2)} pts</div>
+                 </div>`
+              : `<div style="font-size:0.5rem;color:#475569;">-</div>`;
+            return `<td style="padding:6px 2px;text-align:center;background:${c.bg};border:1px solid ${c.border};border-radius:4px;transition:all 0.3s;">${cellHtml}</td>`;
           }).join('');
-          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:6px 8px;min-width:110px;position:sticky;left:0;background:#0f172a;z-index:2;border-right:1px solid rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:top;"><div style="font-weight:900;color:#f1f5f9;font-size:0.58rem;line-height:1.1;">${r.op.split(' ').slice(0,2).join(' ')}</div><div style="font-size:0.45rem;color:#2dd4bf;font-weight:800;margin-top:2px;">$${r.tOp.toFixed(1)}</div></td>` : '';
-          return `<tr>${oc}<td style="padding:4px 6px;min-width:110px;border-bottom:1px solid rgba(255,255,255,0.02);"><div style="font-size:0.5rem;font-weight:800;color:#38bdf8;">${r.pm}</div></td>${cs}</tr>`;
+          
+          const oc = r.fi ? `<td rowspan="${r.rs}" style="padding:8px;min-width:130px;position:sticky;left:0;background:rgba(15,23,42,0.95);z-index:2;border-right:1px solid rgba(255,255,255,0.08);border-bottom:1px solid rgba(255,255,255,0.05);vertical-align:top;backdrop-filter:blur(4px);"><div style="font-weight:900;color:#f8fafc;font-size:0.6rem;letter-spacing:0.5px;">${r.op.split(' ').slice(0,2).join(' ')}</div><div style="font-size:0.48rem;color:#2dd4bf;font-weight:800;margin-top:4px;background:rgba(45,212,191,0.1);padding:2px 6px;border-radius:4px;display:inline-block;">$${r.tOp.toFixed(1)} USD</div></td>` : '';
+          return `<tr style="transition:all 0.2s;"><td style="padding:6px 8px;min-width:120px;border-bottom:1px solid rgba(255,255,255,0.02);background:rgba(255,255,255,0.01);"><div style="font-size:0.55rem;font-weight:800;color:#38bdf8;letter-spacing:0.5px;">${r.pm}</div></td>${cs}</tr>`;
         }).join('');
-        content = `<div style="max-height:400px;overflow-y:auto;overflow-x:auto;background:rgba(0,0,0,0.5);border-radius:10px;" class="custom-scrollbar"><table style="width:100%;border-collapse:collapse;min-width:700px;"><thead style="position:sticky;top:0;z-index:15;background:#1e293b;"><tr><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;left:0;top:0;background:#1e293b;z-index:20;border-bottom:1px solid rgba(255,255,255,0.05);">OPERADOR</th><th style="padding:10px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;top:0;background:#1e293b;z-index:15;border-bottom:1px solid rgba(255,255,255,0.05);">PERFIL</th><th style="padding:10px;position:sticky;top:0;background:#1e293b;color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:1px solid rgba(255,255,255,0.05);">5m<br><small>LIVE</small></th><th style="padding:10px;position:sticky;top:0;background:#1e293b;color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:1px solid rgba(255,255,255,0.05);">10m<br><small>PULSO</small></th><th style="padding:10px;position:sticky;top:0;background:#1e293b;color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:1px solid rgba(255,255,255,0.05);">DÍA<br><small>PROM</small></th><th style="padding:10px;position:sticky;top:0;background:#1e293b;color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:1px solid rgba(255,255,255,0.05);">SEM<br><small>ACUM</small></th><th style="padding:10px;position:sticky;top:0;background:#1e293b;color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:1px solid rgba(255,255,255,0.05);">MES<br><small>TOTAL</small></th></tr></thead><tbody>${trs}</tbody></table></div>`;
+        
+        content = `
+          <style>
+            @keyframes heatmapPulse {
+              0% { transform: scale(1); filter: brightness(1); }
+              50% { transform: scale(1.05); filter: brightness(1.3); }
+              100% { transform: scale(1); filter: brightness(1); }
+            }
+            .live-heatmap-pulse { animation: heatmapPulse 2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+          </style>
+          <div style="max-height:450px;overflow-y:auto;overflow-x:auto;background:linear-gradient(to bottom, rgba(15,23,42,0.8), rgba(0,0,0,0.6));border-radius:12px;border:1px solid rgba(255,255,255,0.05);box-shadow:0 10px 30px rgba(0,0,0,0.5);" class="custom-scrollbar">
+            <table style="width:100%;border-collapse:separate;border-spacing:2px;min-width:800px;padding:4px;">
+              <thead style="position:sticky;top:0;z-index:15;background:rgba(15,23,42,0.95);backdrop-filter:blur(8px);">
+                <tr>
+                  <th style="padding:12px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;left:0;top:0;background:rgba(15,23,42,0.95);z-index:20;border-bottom:2px solid rgba(255,255,255,0.1);letter-spacing:1px;">OPERADOR</th>
+                  <th style="padding:12px;text-align:left;font-size:0.55rem;color:#94a3b8;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:15;border-bottom:2px solid rgba(255,255,255,0.1);letter-spacing:1px;">PERFIL</th>
+                  <th style="padding:12px;position:sticky;top:0;background:rgba(15,23,42,0.95);color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:2px solid #2dd4bf;text-align:center;">🔴 5M LIVE<br><small style="color:#2dd4bf;">TRÁFICO REAL</small></th>
+                  <th style="padding:12px;position:sticky;top:0;background:rgba(15,23,42,0.95);color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:2px solid #38bdf8;text-align:center;">🔵 10M PULSO<br><small style="color:#38bdf8;">TENDENCIA</small></th>
+                  <th style="padding:12px;position:sticky;top:0;background:rgba(15,23,42,0.95);color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:2px solid rgba(255,255,255,0.1);text-align:center;">DÍA PROM<br><small style="color:#94a3b8;">HOY</small></th>
+                  <th style="padding:12px;position:sticky;top:0;background:rgba(15,23,42,0.95);color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:2px solid rgba(255,255,255,0.1);text-align:center;">SEM ACUM<br><small style="color:#94a3b8;">ÚLT. 7 DÍAS</small></th>
+                  <th style="padding:12px;position:sticky;top:0;background:rgba(15,23,42,0.95);color:#f1f5f9;font-size:0.55rem;z-index:15;border-bottom:2px solid rgba(255,255,255,0.1);text-align:center;">MES TOTAL<br><small style="color:#94a3b8;">MENSUAL</small></th>
+                </tr>
+              </thead>
+              <tbody>${trs}</tbody>
+            </table>
+          </div>
+        `;
       }
       else if (tab === 'productividad') {
         const svcIcons = {

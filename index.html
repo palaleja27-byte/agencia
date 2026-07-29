@@ -8582,360 +8582,126 @@
     };
 
     window.rrFetchImageAI = async function(prompt, face1 = '', face2 = '') {
-      // Motor imagen: SIEMPRE Higgsfield (forzado según requerimiento)
-      const engine = 'higgsfield';
-      
-      // Leer credenciales de Higgsfield (con keys fijas por defecto en el proyecto)
-      const hgKeyId     = window.getPerUserSetting('rr_higgsfield_key_id') || 'efa9814e-5ed6-4140-ace0-e99e30d001a7';
-      const hgKeySecret = window.getPerUserSetting('rr_higgsfield_key_secret') || '1bd6fc8492bda51c54046cd66d9e787c9054ea20b7355383eb026d1c96f371ea';
+      // Motor imagen: EXCLUSIVAMENTE HIGGSFIELD AI (Nano Banana / Soul)
+      const hgKeyId     = (window.getPerUserSetting('rr_higgsfield_key_id') || 'efa9814e-5ed6-4140-ace0-e99e30d001a7').trim();
+      const hgKeySecret = (window.getPerUserSetting('rr_higgsfield_key_secret') || '1bd6fc8492bda51c54046cd66d9e787c9054ea20b7355383eb026d1c96f371ea').trim();
 
-      // Leer tokens secundarios (configurados por el usuario en ⚙️ Config IA)
-      const repKey  = window.getPerUserSetting('rr_replicate_key') || '';
-      const falKey  = window.getPerUserSetting('rr_fal_key') || '';
-      const stabKey = window.getPerUserSetting('rr_stability_key') || '';
-      const hfKey   = window.getPerUserSetting('rr_hf_key') || '';
+      console.log(`[Higgsfield AI - Nano Banana] Iniciando solicitud de generación...`, { hgKeyId, tieneRostro: !!(face1 || face2) });
 
-      let endpoint = '';
-      let headers = { 'Content-Type': 'application/json' };
-      let body = {};
+      const authHeader = `Key ${hgKeyId}:${hgKeySecret}`;
+      const modelPath  = 'google/nano-banana-pro';
 
-      // Helper: polling Replicate hasta que el job termina
-      const replicateWait = async (predictionUrl) => {
-        const localHeaders = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${repKey}`
-        };
-        for (let i = 0; i < 60; i++) {
-          await new Promise(r => setTimeout(r, 3000));
-          const r = await fetch(predictionUrl, { headers: localHeaders });
-          const d = await r.json();
-          if (d.status === 'succeeded') return d.output;
-          if (d.status === 'failed') throw new Error('Replicate job failed: ' + (d.error || ''));
-        }
-        throw new Error('Replicate: tiempo de espera agotado');
+      const hgInput = {
+        prompt: prompt,
+        aspect_ratio: '1:1',
+        num_outputs: 2,
+        safety_tolerance: 2
       };
 
-      // Si el usuario provee rostros y NO es Higgsfield (Higgsfield maneja esto de forma nativa en su propio bloque)
-      if ((face1 || face2) && !engine.startsWith('higgsfield')) {
-        const refFace1 = face1 || face2;
-        const refFace2 = face2 || face1;
-
-        if (falKey) {
-          // Helper: subir base64 a Fal.ai y obtener URL pública
-          const uploadToFal = async (base64Data) => {
-            if (!base64Data.startsWith('data:')) return base64Data;
-            const response = await fetch(base64Data);
-            const blob = await response.blob();
-            const formData = new FormData();
-            formData.append('file', blob);
-            
-            const uploadRes = await fetch('https://queue.fal.run/upload', {
-              method: 'POST',
-              headers: { 'Authorization': `Key ${falKey}` },
-              body: formData
-            });
-            if (!uploadRes.ok) throw new Error(`Fal upload HTTP ${uploadRes.status}`);
-            const uploadData = await uploadRes.json();
-            return uploadData.file_url;
-          };
-
-          // Helper: Generar imagen base usando el modelo de Fal seleccionado (o por defecto Flux Dev)
-          const generateBaseImageFal = async (pText, seed) => {
-            let modelPath = 'fal-ai/flux/dev';
-            if (engine === 'fal-banana-pro') modelPath = 'fal-ai/nano-banana-pro';
-            else if (engine === 'fal-banana-2') modelPath = 'fal-ai/nano-banana-2';
-            else if (engine === 'fal-flux-schnell') modelPath = 'fal-ai/flux/schnell';
-
-            try {
-              const res = await fetch(`https://queue.fal.run/${modelPath}`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Key ${falKey}`
-                },
-                body: JSON.stringify({
-                  prompt: pText,
-                  image_size: 'square_hd',
-                  num_inference_steps: (modelPath.includes('schnell') ? 4 : 28),
-                  guidance_scale: (modelPath.includes('schnell') ? 1.0 : 3.5),
-                  seed: seed
-                })
-              });
-              if (res.ok) {
-                const data = await res.json();
-                if (data.images && data.images.length > 0) return data.images[0].url;
-              }
-            } catch(e) {
-              console.warn(`Error al usar ${modelPath}, cayendo a fal-ai/flux/dev`, e);
-            }
-            
-            // Fallback a flux/dev
-            const resFallback = await fetch('https://queue.fal.run/fal-ai/flux/dev', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Key ${falKey}`
-              },
-              body: JSON.stringify({
-                prompt: pText,
-                image_size: 'square_hd',
-                num_inference_steps: 28,
-                guidance_scale: 3.5,
-                seed: seed
-              })
-            });
-            if (!resFallback.ok) throw new Error(`Fal Flux Dev fallback HTTP ${resFallback.status}`);
-            const dataFallback = await resFallback.json();
-            if (dataFallback.images && dataFallback.images.length > 0) return dataFallback.images[0].url;
-            throw new Error('No se pudo generar la imagen base con Flux Dev en fallback');
-          };
-
-          // Helper: Intercambiar rostro usando Face-Swap en Fal.ai
-          const swapFaceFal = async (baseImgUrl, faceBase64) => {
-            const faceUrl = await uploadToFal(faceBase64);
-            const res = await fetch('https://queue.fal.run/fal-ai/face-swap', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Key ${falKey}`
-              },
-              body: JSON.stringify({
-                base_image_url: baseImgUrl,
-                swap_image_url: faceUrl
-              })
-            });
-            if (!res.ok) throw new Error(`Fal FaceSwap HTTP ${res.status}`);
-            const data = await res.json();
-            if (data.image && data.image.url) return data.image.url;
-            throw new Error('Fallo al realizar el intercambio de rostro (FaceSwap)');
-          };
-
-          try {
-            console.log("[Fal.ai Pipeline] Generando imágenes base con Flux Dev...");
-            const seed1 = Math.floor(Math.random() * 999999);
-            const seed2 = Math.floor(Math.random() * 999999);
-            
-            const [baseImg1, baseImg2] = await Promise.all([
-              generateBaseImageFal(prompt, seed1),
-              generateBaseImageFal(prompt + ", candid, natural pose", seed2)
-            ]);
-
-            console.log("[Fal.ai Pipeline] Realizando FaceSwap de alta precisión...");
-            const urls = await Promise.all([
-              swapFaceFal(baseImg1, refFace1),
-              swapFaceFal(baseImg2, refFace2)
-            ]);
-            return urls;
-          } catch (falErr) {
-            console.error("Fallo pipeline FaceSwap Fal.ai, intentando Replicate si está disponible", falErr);
-            if (!repKey) throw falErr;
-          }
-        }
-
-        if (repKey) {
-          // --- EJECUCIÓN EN PARALELO EN REPLICATE (InstantID) ---
-          const callReplicateInstantID = async (faceData) => {
-            const res = await fetch('https://api.replicate.com/v1/predictions', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${repKey}`,
-                'Prefer': 'wait'
-              },
-              body: JSON.stringify({
-                version: '0a9fefc7b558503d2e9ca7ff566b6c2f90a2c5a0459a930773e3146d29f041ff', // versión oficial de instant-id/instant-id
-                input: {
-                  prompt: prompt,
-                  face_image: faceData,
-                  num_inference_steps: 30,
-                  guidance_scale: 7,
-                  ip_adapter_scale: 0.95,
-                  controlnet_conditioning_scale: 1.0
-                }
-              })
-            });
-            const data = await res.json();
-            if (data.output) return Array.isArray(data.output) ? data.output[0] : data.output;
-            if (data.urls?.get) return await replicateWait(data.urls.get);
-            throw new Error(data.error || 'Fallo InstantID en Replicate');
-          };
-
-          const urls = await Promise.all([
-            callReplicateInstantID(refFace1),
-            callReplicateInstantID(refFace2)
-          ]);
-          return urls;
-        }
-
-        // Fallback inteligente: si no hay Fal ni Replicate keys, usar HuggingFace (con Kolors/PhotoMaker) o Pollinations con prompt tuning de consistencia adaptada a las fotos de referencia.
-        console.warn("Faltan Keys de Fal.ai/Replicate para InstantID. Usando fallback de modelos open-source (HuggingFace/Pollinations) manteniendo consistencia del rostro de referencia...");
-        
-        // Notificación flotante para informar al usuario de la simulación de consistencia de alta calidad
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'info',
-            title: 'Usando consistencia adaptativa local',
-            showConfirmButton: false,
-            timer: 4000,
-            background: '#1e293b',
-            color: '#fff'
-          });
-        }
-
-        // Prompt enriquecido para conservar rasgos faciales del modelo base, prohibiendo estereotipos externos
-        const consistencePrompt = prompt + ", raw photo, natural lighting, real human features, detailed skin texture, smartphone amateur photo, high fidelity";
-
-        if (hfKey) {
-          try {
-            const callHFKolors = async (pText) => {
-              const res = await fetch('https://api-inference.huggingface.co/models/Kwai-Kolors/Kolors', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${hfKey}`
-                },
-                body: JSON.stringify({ inputs: pText })
-              });
-              if (!res.ok) throw new Error(`HF Kolors HTTP ${res.status}`);
-              const blob = await res.blob();
-              return URL.createObjectURL(blob);
-            };
-
-            const urls = await Promise.all([
-              callHFKolors(consistencePrompt),
-              callHFKolors(consistencePrompt + ", different angle, candid snapshot")
-            ]);
-            return urls;
-          } catch (hfErr) {
-            console.error("Fallo HF Kolors, intentando Pollinations con prompt tuning", hfErr);
-          }
-        }
-
-        // Fallback final: Pollinations con Prompt Tuning enfocado en conservar rasgos físicos del modelo de referencia
-        const consistencePrompt2 = prompt + ", exact 100% facial similarity to reference image, identical eyes, nose, lips, jawline and ethnicity, original facial structure preserved, raw photo, natural lighting, real human skin texture";
-        const encoded1 = encodeURIComponent(consistencePrompt2);
-        const encoded2 = encodeURIComponent(consistencePrompt2 + ", alternate angle, natural candid pose");
-        const seed1 = Math.floor(Math.random() * 99999);
-        const seed2 = Math.floor(Math.random() * 99999);
-        let url1 = `https://image.pollinations.ai/prompt/${encoded1}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
-        let url2 = `https://image.pollinations.ai/prompt/${encoded2}?width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
-        if (refFace1 && typeof refFace1 === 'string' && refFace1.startsWith('http')) {
-          url1 += `&image=${encodeURIComponent(refFace1)}`;
-        }
-        if (refFace2 && typeof refFace2 === 'string' && refFace2.startsWith('http')) {
-          url2 += `&image=${encodeURIComponent(refFace2)}`;
-        } else if (refFace1 && typeof refFace1 === 'string' && refFace1.startsWith('http')) {
-          url2 += `&image=${encodeURIComponent(refFace1)}`;
-        }
-        return [url1, url2];
+      // Si el operador o admin subió imágenes de rostro para fijar facciones
+      if (face1 || face2) {
+        hgInput.image_prompt = face1 || face2;
+        hgInput.face_image   = face1 || face2;
       }
 
-      try {
-        // ─────────────────────────────────────────────
-        // HIGGSFIELD PRO — Polling Async Correcto
-        // ─────────────────────────────────────────────
-        if (engine.startsWith('higgsfield')) {
-          console.log(`[Higgsfield AI] Iniciando generación con motor: "${engine}"`, { hgKeyId });
-          
-          try {
-            let modelPath = 'higgsfield-ai/soul/standard';
-            if (engine === 'higgsfield-soul-2')           modelPath = 'higgsfield-ai/soul/2.0';
-            else if (engine === 'higgsfield-soul-cinema')  modelPath = 'higgsfield-ai/soul/cinema';
-            else if (engine === 'higgsfield-nano-banana-pro') modelPath = 'google/nano-banana-pro';
-            else if (engine === 'higgsfield-nano-banana-2')  modelPath = 'google/nano-banana-2';
-            else if (engine === 'higgsfield-gpt-image-2')    modelPath = 'gpt-image-2';
-            else if (engine === 'higgsfield-seedream-5-pro')  modelPath = 'seedream/5.0-pro';
-            else if (engine === 'higgsfield-seedream-5-lite') modelPath = 'seedream/5.0-lite';
-            else if (engine === 'higgsfield-seedream-4-5')    modelPath = 'seedream/4.5';
-            else if (engine === 'higgsfield-flux-pro')        modelPath = 'flux-pro/kontext/max/text-to-image';
+      // Endpoints directos y con proxies CORS para la API de Higgsfield AI
+      const endpoints = [
+        `https://api.higgsfield.ai/v1/generate`,
+        `https://corsproxy.io/?https://api.higgsfield.ai/v1/generate`,
+        `https://api.codetabs.com/v1/proxy?quest=https://api.higgsfield.ai/v1/generate`
+      ];
 
-            const authHeader = `Key ${hgKeyId}:${hgKeySecret}`;
-            const hgInput = { prompt, aspect_ratio: '1:1', num_outputs: 2, safety_tolerance: 2 };
-            if (face1 || face2) { hgInput.image_prompt = face1 || face2; hgInput.face_image = face1 || face2; }
+      let submitRes = null;
+      let lastError = null;
 
-            // Endpoints con proxies CORS para mayor disponibilidad
-            const endpoints = [
-              `https://api.higgsfield.ai/v1/generate`,
-              `https://corsproxy.io/?https://api.higgsfield.ai/v1/generate`,
-              `https://api.codetabs.com/v1/proxy?quest=https://api.higgsfield.ai/v1/generate`
-            ];
-
-            let submitRes = null;
-            for (const ep of endpoints) {
-              try {
-                const r = await fetch(ep, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': authHeader },
-                  body: JSON.stringify({ model: modelPath, input: hgInput })
-                });
-                if (r.ok) { submitRes = r; break; }
-              } catch (epErr) {}
-            }
-
-            if (submitRes && submitRes.ok) {
-              const submitData = await submitRes.json();
-              console.log('[Higgsfield AI] Respuesta submit:', submitData);
-
-              const extractUrls = (d) => {
-                if (d.images  && Array.isArray(d.images))  return d.images.map(i => typeof i === 'string' ? i : (i.url || i)).filter(Boolean);
-                if (d.output  && Array.isArray(d.output))  return d.output.filter(Boolean);
-                if (d.output  && typeof d.output === 'string') return [d.output];
-                if (d.results?.raw?.url)                   return [d.results.raw.url];
-                if (d.url     && typeof d.url === 'string') return [d.url];
-                return [];
-              };
-
-              let directUrls = extractUrls(submitData);
-              if (directUrls.length > 0) {
-                console.log('[Higgsfield AI] ✅ Imágenes generadas directamente:', directUrls);
-                return directUrls;
-              }
-
-              const genId = submitData.generation_id || submitData.request_id || submitData.id || submitData.job_id;
-              if (genId) {
-                console.log('[Higgsfield AI] Polling job:', genId);
-                const statusEndpoints = [
-                  `https://api.higgsfield.ai/v1/status/${genId}`,
-                  `https://corsproxy.io/?https://api.higgsfield.ai/v1/status/${genId}`,
-                  `https://api.codetabs.com/v1/proxy?quest=https://api.higgsfield.ai/v1/status/${genId}`
-                ];
-                for (let attempt = 0; attempt < 30; attempt++) {
-                  await new Promise(r => setTimeout(r, 2500));
-                  if (window._rrImgStatusEl) {
-                    window._rrImgStatusEl.textContent = `⏳ Generando con Higgsfield AI... ${attempt * 3}s`;
-                  }
-                  for (const statusUrl of statusEndpoints) {
-                    try {
-                      const pollRes = await fetch(statusUrl, { headers: { 'Authorization': authHeader } });
-                      if (!pollRes.ok) continue;
-                      const pollData = await pollRes.json();
-                      const pollUrls = extractUrls(pollData);
-                      if (pollUrls.length > 0) {
-                        console.log('[Higgsfield AI] ✅ Imágenes obtenidas vía Polling:', pollUrls);
-                        return pollUrls;
-                      }
-                    } catch(pollErr) {}
-                  }
-                }
-              }
-            }
-          } catch (hgErr) {
-            console.warn('[Higgsfield AI] Excepción en llamada a API, activando modo alta fidelidad FLUX...', hgErr);
+      for (const ep of endpoints) {
+        try {
+          const r = await fetch(ep, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json', 
+              'Authorization': authHeader 
+            },
+            body: JSON.stringify({ model: modelPath, input: hgInput })
+          });
+          if (r.ok) { submitRes = r; break; }
+          else {
+            const errTxt = await r.text();
+            lastError = `HTTP ${r.status}: ${errTxt.slice(0, 150)}`;
           }
-
-          // FALLBACK GARANTIZADO DE ALTA CALIDAD FOTORREALISTA (FLUX 8K)
-          console.info('[Higgsfield AI] 🚀 Generando 2 fotos profesionales fotorrealistas...');
-          const encPrompt = encodeURIComponent(prompt + ", ultra realistic portrait, 8k resolution, raw photo, realistic lighting, detailed skin texture, masterpiece");
-          const seed1 = Math.floor(Math.random() * 999999);
-          const seed2 = Math.floor(Math.random() * 999999);
-          
-          const img1 = `https://image.pollinations.ai/prompt/${encPrompt}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
-          const img2 = `https://image.pollinations.ai/prompt/${encPrompt}%20candid%20shot?width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
-          
-          return [img1, img2];
+        } catch (epErr) {
+          lastError = epErr.message;
         }
+      }
+
+      const extractUrls = (d) => {
+        if (!d) return [];
+        if (d.images  && Array.isArray(d.images))  return d.images.map(i => typeof i === 'string' ? i : (i.url || i)).filter(Boolean);
+        if (d.output  && Array.isArray(d.output))  return d.output.filter(Boolean);
+        if (d.output  && typeof d.output === 'string') return [d.output];
+        if (d.results?.raw?.url)                   return [d.results.raw.url];
+        if (d.url     && typeof d.url === 'string') return [d.url];
+        return [];
+      };
+
+      if (submitRes && submitRes.ok) {
+        const submitData = await submitRes.json();
+        console.log('[Higgsfield AI] Respuesta de la API:', submitData);
+
+        let directUrls = extractUrls(submitData);
+        if (directUrls.length > 0) {
+          console.log('[Higgsfield AI] ✅ Imágenes obtenidas directamente:', directUrls);
+          return directUrls;
+        }
+
+        const genId = submitData.generation_id || submitData.request_id || submitData.id || submitData.job_id;
+        if (genId) {
+          console.log('[Higgsfield AI] Iniciando polling para el job:', genId);
+          const statusEndpoints = [
+            `https://api.higgsfield.ai/v1/status/${genId}`,
+            `https://corsproxy.io/?https://api.higgsfield.ai/v1/status/${genId}`,
+            `https://api.codetabs.com/v1/proxy?quest=https://api.higgsfield.ai/v1/status/${genId}`
+          ];
+          for (let attempt = 0; attempt < 40; attempt++) {
+            await new Promise(r => setTimeout(r, 2500));
+            if (window._rrImgStatusEl) {
+              window._rrImgStatusEl.textContent = `⏳ Generando con Higgsfield AI (Nano Banana)... ${(attempt + 1) * 3}s`;
+            }
+            for (const statusUrl of statusEndpoints) {
+              try {
+                const pollRes = await fetch(statusUrl, { headers: { 'Authorization': authHeader } });
+                if (!pollRes.ok) continue;
+                const pollData = await pollRes.json();
+                const pollUrls = extractUrls(pollData);
+                if (pollUrls.length > 0) {
+                  console.log('[Higgsfield AI] ✅ Imágenes obtenidas vía Polling:', pollUrls);
+                  return pollUrls;
+                }
+              } catch(pollErr) {}
+            }
+          }
+        }
+      }
+
+      // Si el usuario configuró una Fal Key secundaria, intentar como canal de respaldo Nano-Banana
+      const falKey = (window.getPerUserSetting('rr_fal_key') || '').trim();
+      if (falKey) {
+        try {
+          console.log('[Higgsfield AI] Intentando canal secundario Nano Banana...');
+          const falRes = await fetch('https://queue.fal.run/fal-ai/nano-banana-pro', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${falKey}` },
+            body: JSON.stringify({ prompt, num_images: 2, image_size: 'square_hd' })
+          });
+          if (falRes.ok) {
+            const falData = await falRes.json();
+            if (falData.images) return falData.images.map(i => i.url);
+          }
+        } catch(e) {}
+      }
+
+      throw new Error(`Higgsfield AI (Nano Banana): La API no respondió a la solicitud (${lastError || 'Servidor inalcanzable'}). Verifica tus credenciales en ⚙️ Config IA.`);
+    };
 
         // ─────────────────────────────────────────────
         // REPLICATE — FLUX-Dev (máxima calidad real)
@@ -32569,7 +32335,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         console.log("Prompt profesional generado:", expandedPrompt);
         // Registrar el statusEl globalmente para que rrFetchImageAI pueda actualizar el progreso del polling
         window._rrImgStatusEl = statusEl;
-        statusEl.textContent = (face1 || face2) ? 'Fijando facciones del rostro e invocando InstantID...' : `⏳ Conectando con Higgsfield...`;
+        statusEl.textContent = `⏳ Procesando rostro y generando con Higgsfield AI (Nano Banana)...`;
 
         // 2. Generar fotos usando rrFetchImageAI (pasando imágenes de rostro si existen)
         const images = await window.rrFetchImageAI(expandedPrompt, face1, face2);
@@ -32607,8 +32373,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
                            setTimeout(()=>{ this.src = '${imgUrl}&t=' + Date.now(); }, 1200);
                          } else if(this.dataset.retried === '1'){
                            this.dataset.retried = '2';
-                           const altPrompt = encodeURIComponent('candid mid-range mobile phone selfie photo of ${modelName.replace(/'/g, "")}, ${situation.replace(/'/g, "")}');
-                           this.src = 'https://image.pollinations.ai/prompt/' + altPrompt + '?width=1024&height=1024&seed=${Math.floor(Math.random()*800000)+100000}&model=flux&nologo=true';
+                           setTimeout(()=>{ this.src = '${imgUrl}&retry=' + Date.now(); }, 1500);
                          }
                        "
                        style="width:100%; height:100%; object-fit:cover; aspect-ratio:1/1; display:block; position:relative; z-index:2;"

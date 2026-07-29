@@ -19745,7 +19745,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           const { data, error } = await _sb.from('kv_store')
             .select('value').eq('key', 'rr_prime_op_pins').single();
           if (!error && data?.value) {
-            _origSetItem('rr_prime_op_pins', data.value);
+            const strVal = typeof data.value === 'object' ? JSON.stringify(data.value) : data.value;
+            _origSetItem('rr_prime_op_pins', strVal);
           }
         } catch (e) { /* sin conexión — usa cache local */ }
       }
@@ -20096,7 +20097,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         ? btoa(role + ':' + (opName || '') + ':' + Date.now())
         : btoa(role + ':' + Date.now());
       sessionStorage.setItem(SESSION_KEY, sessionData);
-      localStorage.setItem(SESSION_KEY, sessionData);
+      if (role === 'operador') {
+        localStorage.setItem(SESSION_KEY, sessionData);
+      } else {
+        // Prevent admin/monitor sessions from persisting in localStorage across operators
+        localStorage.removeItem(SESSION_KEY);
+      }
 
       if (role === 'operador' && opName && typeof registrarAutoAsistencia === 'function') {
         // La auto-asistencia ahora se registra exclusivamente en finalizarLoginOperador para evitar condiciones de carrera.
@@ -21098,14 +21104,28 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     // Check existing session on load
+    // Check existing session on load
     (function checkSession() {
-      const s = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+      let s = sessionStorage.getItem(SESSION_KEY);
+      let fromLocal = false;
+      if (!s) {
+        s = localStorage.getItem(SESSION_KEY);
+        fromLocal = true;
+      }
+      
       if (s) {
         try {
           const decoded = atob(s).split(':');
           const role = decoded[0];
           const ts = parseInt(decoded[decoded.length - 1]);
           const age = Date.now() - ts;
+          
+          if (fromLocal && (role === 'admin' || role === 'monitor')) {
+            // Security: Never auto-login admin or monitor from localStorage on shared PCs
+            localStorage.removeItem(SESSION_KEY);
+            return;
+          }
+
           if (age < 8 * 60 * 60 * 1000) {
             if (role === 'operador') {
               const opName = decoded.slice(1, -1).join(':');

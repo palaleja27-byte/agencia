@@ -16,13 +16,11 @@ require('dotenv').config({ path: '.env.local' });
 require('dotenv').config({ path: '.env' });
 require('dotenv').config({ path: '../supabase/docker/.env' });
 
-const SUPABASE_URL         = process.env.SUPABASE_URL         || 'http://localhost:8080';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
+const PROD_SUPABASE_URL    = 'https://vpyzpjgctidqmhqjboxq.supabase.co';
+const SUPABASE_URL         = (process.env.SUPABASE_URL || PROD_SUPABASE_URL).trim();
+const HARDCODED_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZweXpwamdjdGlkcW1ocWpib3hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTk3MDcsImV4cCI6MjA4ODMzNTcwN30.84hij4AgUD_ughF-xocWVFisq4niL2YsSI9yPfbFPj0';
+const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || HARDCODED_ANON_KEY).trim();
 
-if (!SUPABASE_SERVICE_KEY) {
-  console.error('❌ FATAL: SUPABASE_SERVICE_KEY is not set. Aborting.');
-  process.exit(1);
-}
 
 // ─── VERIFICAR ROL DE LA CLAVE ────────────────────────────────────────────────
 function decodeJwtPayload(token) {

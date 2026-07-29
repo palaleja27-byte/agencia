@@ -28463,6 +28463,16 @@ PT._logKey = function (opName) {
       const hoy = localDateStr();
       console.log(`🔧 [DELTA-SHIFT] Iniciando Reconstrucción para ${hoy}...`);
       
+      // ─── PASO -1: Forzar descarga de la última data del Action de Git (Tableau Sync)
+      if (typeof loadTableauData === 'function') {
+        try {
+          console.log(`📡 [DELTA-SHIFT] Refrescando datos desde Tableau Sync...`);
+          await loadTableauData();
+        } catch (e) {
+          console.warn('⚠️ [DELTA-SHIFT] Error refrescando Tableau Data:', e);
+        }
+      }
+      
       // ─── PASO 0: CONGELAR REALTIME para evitar que los propios updates
       // del Fix disparen actualizaciones duplicadas en la UI ────────────
       let _rtFrozen = false;

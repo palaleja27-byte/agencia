@@ -8703,198 +8703,6 @@
       throw new Error(`Higgsfield AI (Nano Banana): La API no respondió a la solicitud (${lastError || 'Servidor inalcanzable'}). Verifica tus credenciales en ⚙️ Config IA.`);
     };
 
-        // ─────────────────────────────────────────────
-        // REPLICATE — FLUX-Dev (máxima calidad real)
-        // ─────────────────────────────────────────────
-        else if (engine === 'replicate') {
-          endpoint = 'https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions';
-          headers['Authorization'] = `Bearer ${repKey}`;
-          headers['Prefer'] = 'wait';
-          body = { input: { prompt, num_outputs: 2, aspect_ratio: '1:1', output_format: 'webp', output_quality: 92, guidance: 3.5 } };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (data.output) return data.output;
-          if (data.urls?.get) return await replicateWait(data.urls.get);
-          if (data.error) throw new Error(data.error);
-          throw new Error('Sin respuesta de Replicate');
-        }
-
-        // ─────────────────────────────────────────────
-        // HIDREAM-I1 — China, Rostros HD fotorrealistas
-        // ─────────────────────────────────────────────
-        else if (engine === 'hidream') {
-          endpoint = 'https://api.replicate.com/v1/models/prunaai/hidream-i1-full/predictions';
-          headers['Authorization'] = `Bearer ${repKey}`;
-          headers['Prefer'] = 'wait';
-          body = { input: { prompt: prompt + ', ultra realistic, 8k, hyper detailed skin, cinematic', num_outputs: 2, output_format: 'webp' } };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (data.output) return data.output;
-          if (data.urls?.get) return await replicateWait(data.urls.get);
-          throw new Error(data.error || 'Error HiDream');
-        }
-
-        // ─────────────────────────────────────────────
-        // KOLORS — Kuaishou, Retratos humanos realistas
-        // ─────────────────────────────────────────────
-        else if (engine === 'kolors') {
-          endpoint = 'https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions';
-          // Kolors usa prompt engineering específico para retratos sin forzar rasgos asiáticos
-          const kolorsPrompt = prompt + ', portrait photography, photorealistic face, keep exact facial structure of the reference model, natural skin texture, realistic look';
-          headers['Authorization'] = `Bearer ${repKey}`;
-          headers['Prefer'] = 'wait';
-          body = { input: { prompt: kolorsPrompt, num_outputs: 2, output_format: 'webp', output_quality: 95, guidance: 4 } };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (data.output) return data.output;
-          if (data.urls?.get) return await replicateWait(data.urls.get);
-          throw new Error(data.error || 'Error Kolors');
-        }
-
-        // ─────────────────────────────────────────────
-        // WAN 2.1 — Alibaba, Texto a Video
-        // ─────────────────────────────────────────────
-        else if (engine === 'wan-video') {
-          endpoint = 'https://api.replicate.com/v1/models/wavespeedai/wan-2.1-t2v-480p/predictions';
-          headers['Authorization'] = `Bearer ${repKey}`;
-          body = { input: { prompt, negative_prompt: 'blurry, low quality, distorted', num_frames: 81, fps: 16 } };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          let videoUrl = null;
-          if (data.output) videoUrl = data.output;
-          else if (data.urls?.get) { const out = await replicateWait(data.urls.get); videoUrl = Array.isArray(out) ? out[0] : out; }
-          if (!videoUrl) throw new Error(data.error || 'Error Wan2.1');
-          // Para video, retornamos URL envuelta para que el renderer muestre <video>
-          return [{ type: 'video', url: videoUrl }];
-        }
-
-        // ─────────────────────────────────────────────
-        // COGVIDEOX-5b — Zhipu AI, Video 6s
-        // ─────────────────────────────────────────────
-        else if (engine === 'cogvideo') {
-          endpoint = 'https://api.replicate.com/v1/models/zsxkib/cogvideox-5b/predictions';
-          headers['Authorization'] = `Bearer ${repKey}`;
-          body = { input: { prompt, num_inference_steps: 50 } };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          let videoUrl = null;
-          if (data.output) videoUrl = Array.isArray(data.output) ? data.output[0] : data.output;
-          else if (data.urls?.get) { const out = await replicateWait(data.urls.get); videoUrl = Array.isArray(out) ? out[0] : out; }
-          if (!videoUrl) throw new Error(data.error || 'Error CogVideoX');
-          return [{ type: 'video', url: videoUrl }];
-        }
-
-        // ─────────────────────────────────────────────
-        // INSTANTID — Fal.ai, Consistencia Facial
-        // ─────────────────────────────────────────────
-        else if (engine === 'instantid') {
-          if (!falKey) throw new Error('Fal.ai Key requerida para InstantID');
-          endpoint = 'https://queue.fal.run/fal-ai/flux/dev';
-          headers['Authorization'] = `Key ${falKey}`;
-          body = { prompt: prompt + ', consistent facial features, photorealistic', num_images: 2, image_size: 'square_hd' };
-          const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-          const data = await res.json();
-          if (data.images) return data.images.map(img => img.url);
-          throw new Error(data.detail || 'Error InstantID Fal.ai');
-        }
-
-        // ─────────────────────────────────────────────
-        // POLLINATIONS — GRATIS, sin key, FLUX.1
-        // ─────────────────────────────────────────────
-        else if (engine === 'pollinations') {
-          const encoded = encodeURIComponent(prompt);
-          const seed1 = Math.floor(Math.random() * 99999);
-          const seed2 = Math.floor(Math.random() * 99999);
-          const url1 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed1}&model=flux&nologo=true&enhance=true`;
-          const url2 = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${seed2}&model=flux&nologo=true&enhance=true`;
-          // Pollinations devuelve la imagen directamente como URL
-          return [url1, url2];
-        }
-
-        // ─────────────────────────────────────────────
-        // FAL.AI — Nano-Banana Pro, Nano-Banana 2, Flux
-        // ─────────────────────────────────────────────
-        else if (engine.startsWith('fal')) {
-          let modelPath = 'fal-ai/flux/dev';
-          if (engine === 'fal-banana-pro') modelPath = 'fal-ai/nano-banana-pro';
-          else if (engine === 'fal-banana-2') modelPath = 'fal-ai/nano-banana-2';
-          else if (engine === 'fal-flux-schnell') modelPath = 'fal-ai/flux/schnell';
-
-          if (falKey) {
-            try {
-              endpoint = `https://queue.fal.run/${modelPath}`;
-              headers['Authorization'] = `Key ${falKey}`;
-              body = {
-                prompt: prompt,
-                num_images: 2,
-                image_size: 'square_hd',
-                num_inference_steps: (modelPath.includes('schnell') ? 4 : 28),
-                guidance_scale: (modelPath.includes('schnell') ? 1.0 : 3.5)
-              };
-              const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
-              const data = await res.json();
-              if (data.images) return data.images.map(img => img.url);
-            } catch (falErr) {
-              console.warn(`[Fal.ai] Fallo en ${modelPath}, activando pipeline Nano-Banana Pro/2:`, falErr);
-            }
-          }
-
-          // Fallback Ilimitado / Gratis con Tuning especial para Google Nano-Banana
-          const bananaPrefix = (engine === 'fal-banana-pro') 
-            ? 'google nano banana pro, hyperrealistic 8k, ultra-detailed skin texture, masterwork camera snapshot: ' 
-            : 'google nano banana 2, fast photorealistic selfie, natural daylight, crisp 8k: ';
-          const encoded = encodeURIComponent(bananaPrefix + prompt);
-          const s1 = Math.floor(Math.random() * 999999);
-          const s2 = Math.floor(Math.random() * 999999);
-          return [
-            `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${s1}&model=flux&nologo=true&enhance=true&private=true`,
-            `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&seed=${s2}&model=flux&nologo=true&enhance=true&private=true`
-          ];
-        }
-
-        // ─────────────────────────────────────────────
-        // STABILITY AI
-        // ─────────────────────────────────────────────
-        else if (engine === 'stability') {
-          if (!stabKey) throw new Error('Llave de Stability AI no configurada');
-          endpoint = 'https://api.stability.ai/v2beta/stable-image/generate/core';
-          const genImage = async () => {
-             const formData = new FormData();
-             formData.append('prompt', prompt);
-             formData.append('output_format', 'webp');
-             formData.append('seed', Math.floor(Math.random() * 1000000));
-             const res = await fetch(endpoint, { method: 'POST', headers: { 'Authorization': `Bearer ${stabKey}`, 'Accept': 'image/*' }, body: formData });
-             if (!res.ok) throw new Error('Error Stability');
-             const blob = await res.blob();
-             return URL.createObjectURL(blob);
-          };
-          return await Promise.all([genImage(), genImage()]);
-        }
-
-        // ─────────────────────────────────────────────
-        // HUGGINGFACE — FLUX.1 Schnell
-        // ─────────────────────────────────────────────
-        else if (engine === 'huggingface') {
-          if (!hfKey) throw new Error('Token de HuggingFace no configurado');
-          endpoint = 'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell';
-          headers['Authorization'] = `Bearer ${hfKey}`;
-          const genImage = async (modifier) => {
-             const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ inputs: prompt + modifier }) });
-             if (!res.ok) throw new Error('Error HF');
-             const blob = await res.blob();
-             return URL.createObjectURL(blob);
-          };
-          return await Promise.all([genImage(''), genImage(', hyper detailed')]);
-        }
-
-      } catch (err) {
-        console.warn(`[rrFetchImageAI] Motor "${engine}" no disponible (${err.message}).`);
-        // Ya no hay fallback a Pollinations. Se lanza el error para que el usuario sepa que Higgsfield falló.
-        throw err;
-      }
-    };
-
-
     // 🎛️ SINTETIZADOR DE SONIDOS DE MONEDAS - WEB AUDIO API (Fase 8)
     window.playMoneySound = function(serviceType = '') {
       try {
@@ -32130,7 +31938,8 @@ CONFIGURACIÓN DE CONTEXTO:
     };
 
     window.updateImageEngineBadge = function() {
-      const engine = window.getPerUserSetting('rr_active_img_ai') || 'higgsfield';
+      const getSetting = (k, d) => (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting(k) : localStorage.getItem(k)) || d;
+      const engine = getSetting('rr_active_img_ai', 'higgsfield');
       const engineLabels = {
         'higgsfield-nano-banana-pro': '🍌 NANO BANANA PRO (ILIMITADO)',
         'higgsfield-nano-banana-2':   '🍌 NANO BANANA 2 (4K)',
@@ -32350,8 +32159,9 @@ CONFIGURACIÓN DE CONTEXTO:
       const face1 = isAdmin ? window.selectedFace1Admin : window.selectedFace1;
       const face2 = isAdmin ? window.selectedFace2Admin : window.selectedFace2;
 
-      const motorImg = window.getPerUserSetting('rr_active_img_ai') || 'pollinations';
-      const motorTxt = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
+      const getSetting = (k, d) => (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting(k) : localStorage.getItem(k)) || d;
+      const motorImg = getSetting('rr_active_img_ai', 'higgsfield');
+      const motorTxt = getSetting('rr_active_text_ai', 'gemini');
       const motorLabel = {
         pollinations: '⚡ Pollinations (gratis)',
         replicate: 'Replicate (Flux)',

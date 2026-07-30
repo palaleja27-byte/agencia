@@ -1015,7 +1015,7 @@
         grid-template-columns: 1fr 1fr 1fr 1fr !important;
       }
       .op-dash-hero    { grid-column: 1 / -1; width: 100%; }
-      #op-tasks-section    { grid-column: span 1; }
+      #op-tasks-section    { grid-column: 1 / -1; }
       #op-stats-section    { grid-column: span 2; }
       #op-openclaw-section { grid-column: span 1; }
       #op-rank-section     { grid-column: 1 / -1; }
@@ -5176,7 +5176,7 @@
     
     <!-- REPORTE DIARIO DE EMPALME -->
     <div class="op-section" id="op-handover-section" style="grid-column: 1 / -1; background: linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(168, 85, 247, 0.04)); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 20px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); width: 100%; box-sizing: border-box;">
-      <div class="op-section-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px; margin-bottom:15px;">
+      <div class="op-section-title" onclick="document.getElementById('handover-container-wrapper').style.display = document.getElementById('handover-container-wrapper').style.display === 'none' ? 'block' : 'none'; document.getElementById('handover-chevron').textContent = document.getElementById('handover-container-wrapper').style.display === 'none' ? '▼' : '▲';" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px; margin-bottom:15px; cursor:pointer;">
         <div style="display:flex; align-items:center; gap:10px;">
           <span style="font-size:1.4rem;">📋</span>
           <div>
@@ -5186,61 +5186,14 @@
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <span id="handover-status-badge" style="font-size:0.55rem; font-weight:800; background:rgba(94,234,212,0.1); color:#5eead4; border:1px solid rgba(94,234,212,0.2); padding:2px 8px; border-radius:6px; text-transform:uppercase;">Listo</span>
+          <span id="handover-chevron" style="color:#64748b; font-size:0.8rem; margin-left:5px;">▼</span>
         </div>
       </div>
       
-      <div id="handover-container" style="width:100%; box-sizing:border-box;">
-        <!-- Se renderiza vía JS -->
-      </div>
-    </div>
-
-    <!-- STATS DIARIO / SEMANAL / MENSUAL -->
-    <div class="op-section" id="op-stats-section">
-      <div class="op-section-title">📊 Tu rendimiento completo</div>
-      <div id="op-stats-content"></div>
-    </div>
-
-    <!-- OPENCLAW AI AGENT PANEL - junto a stats en desktop -->
-    <div class="op-section" id="op-openclaw-section" style="background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05)); border: 1px solid rgba(99,102,241,0.2); border-radius: 20px; padding: 20px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <div style="width:38px; height:38px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🤖</div>
-          <div>
-            <div style="font-size:0.85rem; font-weight:900; color:white; letter-spacing:1px;">AGENTE OPENCLAW</div>
-            <div id="openclaw-status-badge" style="font-size:0.55rem; color:#64748b; font-weight:700;">⚫ Sin conectar</div>
-          </div>
+      <div id="handover-container-wrapper" style="display:none; width:100%; box-sizing:border-box;">
+        <div id="handover-container" style="width:100%; box-sizing:border-box;">
+          <!-- Se renderiza vía JS -->
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <div id="openclaw-pulse" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
-          <button onclick="ocToggleConfig()" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; font-size:0.65rem; font-weight:800; padding:5px 12px; border-radius:8px; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.3)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">⚙️ Config</button>
-          <button onclick="ocConnect()" id="openclaw-connect-btn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; font-size:0.65rem; font-weight:800; padding:5px 14px; border-radius:8px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.3); transition:0.2s;">🔗 Conectar</button>
-        </div>
-      </div>
-
-      <!-- Config panel (hidden by default) -->
-      <div id="openclaw-config-panel" style="display:none; background:rgba(0,0,0,0.3); border-radius:14px; padding:15px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.05);">
-        <div style="font-size:0.6rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">🔧 Configuración OpenClaw</div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <input id="oc-api-url" type="text" placeholder="URL de tu API Node.js (ej: https://api.tuagencia.com)" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
-          <input id="oc-api-key" type="password" placeholder="API Key de OpenClaw" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
-          <input id="oc-agent-id" type="text" placeholder="Agent ID / Workspace ID" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
-          <button onclick="ocSaveConfig()" style="background:rgba(52,211,153,0.15); border:1px solid #34d399; color:#34d399; padding:8px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">💾 Guardar configuración</button>
-        </div>
-      </div>
-
-      <!-- Alerts feed -->
-      <div id="op-openclaw-alerts" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto; padding-right:4px;">
-        <div style="text-align:center; padding:30px 20px; color:#334155;">
-          <div style="font-size:2rem; margin-bottom:8px;">🤖</div>
-          <div style="font-size:0.75rem; font-weight:700; color:#475569;">Agente no conectado</div>
-          <div style="font-size:0.6rem; color:#334155; margin-top:4px;">Configura tu API Key de OpenClaw para recibir alertas, insights y mensajes del agente en tiempo real.</div>
-        </div>
-      </div>
-
-      <!-- Input para enviar mensajes al agente -->
-      <div style="display:flex; gap:8px; margin-top:14px; border-top:1px solid rgba(255,255,255,0.05); padding-top:14px;">
-        <input id="oc-msg-input" type="text" placeholder="Escribe al agente..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:white; padding:8px 12px; border-radius:10px; font-size:0.75rem; outline:none;" onkeydown="if(event.key==='Enter') ocSendMessage()">
-        <button onclick="ocSendMessage()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; padding:8px 14px; border-radius:10px; cursor:pointer; font-size:0.8rem;">➤</button>
       </div>
     </div>
 
@@ -5429,6 +5382,56 @@
 
       </div>
     </div>
+    <!-- STATS DIARIO / SEMANAL / MENSUAL -->
+    <div class="op-section" id="op-stats-section">
+      <div class="op-section-title">📊 Tu rendimiento completo</div>
+      <div id="op-stats-content"></div>
+    </div>
+
+    <!-- OPENCLAW AI AGENT PANEL - junto a stats en desktop -->
+    <div class="op-section" id="op-openclaw-section" style="background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.05)); border: 1px solid rgba(99,102,241,0.2); border-radius: 20px; padding: 20px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:38px; height:38px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; box-shadow:0 4px 15px rgba(99,102,241,0.4);">🤖</div>
+          <div>
+            <div style="font-size:0.85rem; font-weight:900; color:white; letter-spacing:1px;">AGENTE OPENCLAW</div>
+            <div id="openclaw-status-badge" style="font-size:0.55rem; color:#64748b; font-weight:700;">⚫ Sin conectar</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div id="openclaw-pulse" style="width:8px; height:8px; border-radius:50%; background:#ef4444;"></div>
+          <button onclick="ocToggleConfig()" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; font-size:0.65rem; font-weight:800; padding:5px 12px; border-radius:8px; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.3)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">⚙️ Config</button>
+          <button onclick="ocConnect()" id="openclaw-connect-btn" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; font-size:0.65rem; font-weight:800; padding:5px 14px; border-radius:8px; cursor:pointer; box-shadow:0 4px 15px rgba(99,102,241,0.3); transition:0.2s;">🔗 Conectar</button>
+        </div>
+      </div>
+
+      <!-- Config panel (hidden by default) -->
+      <div id="openclaw-config-panel" style="display:none; background:rgba(0,0,0,0.3); border-radius:14px; padding:15px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:0.6rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px;">🔧 Configuración OpenClaw</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <input id="oc-api-url" type="text" placeholder="URL de tu API Node.js (ej: https://api.tuagencia.com)" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <input id="oc-api-key" type="password" placeholder="API Key de OpenClaw" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <input id="oc-agent-id" type="text" placeholder="Agent ID / Workspace ID" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.72rem; outline:none; width:100%; box-sizing:border-box;">
+          <button onclick="ocSaveConfig()" style="background:rgba(52,211,153,0.15); border:1px solid #34d399; color:#34d399; padding:8px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">💾 Guardar configuración</button>
+        </div>
+      </div>
+
+      <!-- Alerts feed -->
+      <div id="op-openclaw-alerts" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto; padding-right:4px;">
+        <div style="text-align:center; padding:30px 20px; color:#334155;">
+          <div style="font-size:2rem; margin-bottom:8px;">🤖</div>
+          <div style="font-size:0.75rem; font-weight:700; color:#475569;">Agente no conectado</div>
+          <div style="font-size:0.6rem; color:#334155; margin-top:4px;">Configura tu API Key de OpenClaw para recibir alertas, insights y mensajes del agente en tiempo real.</div>
+        </div>
+      </div>
+
+      <!-- Input para enviar mensajes al agente -->
+      <div style="display:flex; gap:8px; margin-top:14px; border-top:1px solid rgba(255,255,255,0.05); padding-top:14px;">
+        <input id="oc-msg-input" type="text" placeholder="Escribe al agente..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:white; padding:8px 12px; border-radius:10px; font-size:0.75rem; outline:none;" onkeydown="if(event.key==='Enter') ocSendMessage()">
+        <button onclick="ocSendMessage()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; color:white; padding:8px 14px; border-radius:10px; cursor:pointer; font-size:0.8rem;">➤</button>
+      </div>
+    </div>
+
   </div>
 
   <div class="tab-bar">

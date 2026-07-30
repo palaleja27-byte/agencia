@@ -9313,23 +9313,58 @@
       return localDateStr(logical);
     }
 
+    function getDeletedOperators() {
+      try {
+        const raw = localStorage.getItem('rr_deleted_operators_v1');
+        return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      } catch(e) { return []; }
+    }
+
+    function addDeletedOperator(name) {
+      if (!name) return;
+      const list = getDeletedOperators();
+      const normN = (typeof _normName === 'function') ? _normName(name) : String(name).toUpperCase().trim();
+      if (!list.some(d => ((typeof _normName === 'function') ? _normName(d) : String(d).toUpperCase().trim()) === normN)) {
+        list.push(name);
+        const jsonVal = JSON.stringify(list);
+        localStorage.setItem('rr_deleted_operators_v1', jsonVal);
+        if (typeof _localSaveTs !== 'undefined') _localSaveTs['rr_deleted_operators_v1'] = Date.now();
+        if (typeof _sb !== 'undefined' && _sb) {
+          _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: jsonVal }, { onConflict: 'key' }).then(()=>{});
+        }
+      }
+    }
+
     function loadData() {
       const saved = localStorage.getItem(STORAGE_KEY);
       const n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
 
+      const safeN = (s) => {
+         if (!s) return '';
+         try { return n(s); } catch(e) { return String(s).toUpperCase().trim(); }
+      };
+
+      const deletedOpsList = getDeletedOperators();
+      const deletedNorms = deletedOpsList.map(d => safeN(d)).filter(Boolean);
+
+      const sourceFiltered = OPERATORS_SOURCE.filter(srcOp => {
+        const sn = safeN(srcOp.name);
+        return sn && !deletedNorms.includes(sn);
+      });
+
       if (saved) {
         try {
-          const savedArr = JSON.parse(saved);
+          const rawArr = JSON.parse(saved);
+          const savedArr = Array.isArray(rawArr) ? rawArr.filter(s => {
+            const sn = safeN(s.name);
+            return sn && !deletedNorms.includes(sn);
+          }) : [];
+
           const editableFields = ['group', 'profiles', 'plataforma', 'turno', 'turno_horas', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
           const historicalMonths = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-          
-          const safeN = (s) => {
-             if (!s) return '';
-             try { return n(s); } catch(e) { return String(s).toUpperCase().trim(); }
-          };
 
-          // 1. Empezamos con los operadores del CÓDIGO (Source)
-          const mergedList = OPERATORS_SOURCE.map(srcOp => {
+          // 1. Empezamos con los operadores del CÓDIGO (Source) filtrados por eliminaciones
+          const mergedList = sourceFiltered.map(srcOp => {
             const sn = safeN(srcOp.name);
             const savedOp = savedArr.find(s => safeN(s.name) === sn && sn !== '');
             if (savedOp) {
@@ -9350,11 +9385,11 @@
             return { ...srcOp };
           });
 
-          // 2. Añadimos operadores que están en STORAGE pero NO en el CÓDIGO (Manuales/Nuevos)
+          // 2. Añadimos operadores manuales en STORAGE (que no hayan sido eliminados)
           if (Array.isArray(savedArr)) {
              savedArr.forEach(savedOp => {
                const sn = safeN(savedOp.name);
-               if (sn && !mergedList.some(m => safeN(m.name) === sn)) {
+               if (sn && !deletedNorms.includes(sn) && !mergedList.some(m => safeN(m.name) === sn)) {
                  mergedList.push({ ...savedOp });
                }
              });
@@ -9363,15 +9398,15 @@
           operatorsData = mergedList;
         } catch (e) {
           console.warn('[loadData] Error al fusionar. Conservando datos de KV_STORE para evitar perdida de operadores manuales:', e.message);
-          // Si falla, usar savedArr si es válido, si no, OPERATORS_SOURCE
           try {
-             operatorsData = Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : OPERATORS_SOURCE.map(o => ({ ...o }));
+             const rawArr = JSON.parse(saved);
+             operatorsData = Array.isArray(rawArr) ? rawArr.filter(s => !deletedNorms.includes(safeN(s.name))) : sourceFiltered.map(o => ({ ...o }));
           } catch(e2) {
-             operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
+             operatorsData = sourceFiltered.map(o => ({ ...o }));
           }
         }
       } else {
-        operatorsData = OPERATORS_SOURCE.map(o => ({ ...o }));
+        operatorsData = sourceFiltered.map(o => ({ ...o }));
       }
       recalcGrowth();
     }
@@ -13676,6 +13711,7 @@
     // para las claves de negocio más importantes
     const _CRITICAL_KEYS = [
       'primeOperatorsData2026',
+      'rr_deleted_operators_v1',
       'rr_prime_cortes',
       'rr_prime_asistencia',
       'rr_puntos_sin_asignar',
@@ -14983,38 +15019,77 @@
     }
 
     // ── Delete operator ──
+    // ── Delete operator ──
     async function eliminarOperadorTotal(name) {
       if (!name) return;
-      const idx = operatorsData.findIndex(o => o.name === name);
+      const _nFn = typeof _normName === 'function' ? _normName : s => String(s).toUpperCase().trim();
+      const normTarget = _nFn(name);
+      const idx = operatorsData.findIndex(o => _nFn(o.name) === normTarget);
       if (idx === -1) {
         alert('❌ Operador no encontrado.');
-        cerrarDetalle();
+        if (typeof cerrarDetalle === 'function') cerrarDetalle();
         return;
       }
       const op = operatorsData[idx];
       if (!confirm(`¿Eliminar permanentemente a "${op.name}"?\nEsta acción no se puede deshacer.`)) return;
 
-      // Eliminar del array y guardar
+      // 1. Agregar a la lista negra permanente de eliminados en localStorage y Supabase
+      if (typeof addDeletedOperator === 'function') {
+        addDeletedOperator(op.name);
+        addDeletedOperator(name);
+      }
+
+      // 2. Eliminar del array global
       operatorsData.splice(idx, 1);
       const newValue = JSON.stringify(operatorsData);
+      const tsVal = String(Date.now());
 
-      // 1. Guardar en localStorage inmediatamente (usando el wrapper para actualizar timestamps y Supabase)
+      // 3. Guardar en localStorage inmediatamente con nuevo timestamp
       localStorage.setItem('primeOperatorsData2026', newValue);
-      _localSaveTs['primeOperatorsData2026'] = Date.now();
+      localStorage.setItem('primeOperatorsData2026_ts', tsVal);
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
 
-      // Limpiar cortes del operador eliminado
+      // 4. FORZAR sincronización e inserción directa en Supabase kv_store
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const deletedListJson = JSON.stringify(typeof getDeletedOperators === 'function' ? getDeletedOperators() : [op.name]);
+          await Promise.all([
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: deletedListJson }, { onConflict: 'key' })
+          ]);
+          console.info('✅ [BORRADO BD] Operador eliminado correctamente de la base de datos Supabase:', op.name);
+        } catch(e) { console.warn('⚠️ Error al eliminar operador en Supabase:', e.message); }
+      }
+
+      // 5. Limpiar cortes del operador eliminado
       const allCortes = JSON.parse(localStorage.getItem(CORTE_KEY) || '{}');
       delete allCortes[name];
+      delete allCortes[op.name];
       localStorage.setItem(CORTE_KEY, JSON.stringify(allCortes));
 
-      // Limpiar perfiles del operador eliminado
+      // 6. Limpiar métricas de perfiles
       const allPerfiles = getPerfilMetrics();
       Object.keys(allPerfiles).forEach(k => {
-        if (k.startsWith(name + '::')) delete allPerfiles[k];
+        if (k.startsWith(name + '::') || k.startsWith(op.name + '::')) delete allPerfiles[k];
       });
       localStorage.setItem(PERFIL_KEY, JSON.stringify(allPerfiles));
 
-      if (typeof detOpName !== 'undefined' && detOpName === name) cerrarDetalle();
+      // 7. Limpiar de las listas de turno si aplican
+      ['rr_prime_v15_manana', 'rr_prime_v15_tarde', 'rr_prime_v15_noche'].forEach(sk => {
+        try {
+          let sData = JSON.parse(localStorage.getItem(sk) || '[]');
+          if (Array.isArray(sData)) {
+            const sIdx = sData.findIndex(o => _nFn(o.name) === normTarget);
+            if (sIdx !== -1) {
+              sData.splice(sIdx, 1);
+              localStorage.setItem(sk, JSON.stringify(sData));
+            }
+          }
+        } catch(e){}
+      });
+
+      if (typeof detOpName !== 'undefined' && (detOpName === name || detOpName === op.name)) cerrarDetalle();
       
       renderRanking();
       if (typeof asiRender === 'function') asiRender();

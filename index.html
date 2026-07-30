@@ -28973,23 +28973,23 @@ PT._logKey = function (opName) {
       if (!el) return;
 
       const opName       = window._opRtOpName || '';
-      const op           = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => o.name === opName);
-      let combinedProfiles = [];
-      if (op) {
-        combinedProfiles = [...(op.profiles || [])];
-        const hoy = localDateStr();
-        const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
-        const shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
-        const draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + shKey) || '{}');
-        const draftEntry = draftFull[op.name + '||operador'] || Object.values(draftFull).find(d => d.autoMarcado && _n(d.name || '') === _n(op.name));
-        if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
-          draftEntry.perfiles.forEach(dp => {
-            if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
-              combinedProfiles.push(dp);
-            }
-          });
-        }
-      }
+      const idsForWidget = _opRtGetIds(opName);
+      const combinedProfiles = idsForWidget.map(id => {
+          let pName = id;
+          if (typeof opName === 'string') {
+              const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => String(o.name).toLowerCase().trim() === opName.toLowerCase().trim());
+              if (op && op.profiles) {
+                  const f = op.profiles.find(px => String(px.id) === String(id));
+                  if (f && f.model) pName = f.model;
+              }
+          }
+          if (pName === id && typeof _dpTurnosData !== 'undefined') {
+              // Intenta recuperar nombre de los drafts/tableau
+              const fromTab = (typeof _dpTableauData !== 'undefined' && _dpTableauData[id]) ? _dpTableauData[id].modelo : null;
+              if (fromTab) pName = fromTab;
+          }
+          return { id: id, model: pName };
+      });
 
       const jornada      = _opRtJornada();
       const jornadaEmoji = { 'Mañana':'🌅','Tarde':'🌇','Noche':'🌙' };
@@ -29165,7 +29165,8 @@ PT._logKey = function (opName) {
              neto = Math.max(0, v.total - _opRtBaselineMap[id]);
           }
           
-          const nombrePerfil = opData?.profiles?.find(p => String(p.id) === String(id))?.name || v.agencia || id;
+          const matchedProfile = opData?.profiles?.find(p => String(p.id) === String(id));
+          const nombrePerfil = (matchedProfile ? matchedProfile.model : null) || v.agencia || id;
           return { id, nombre: nombrePerfil, total: v.total, baseline: _opRtBaselineMap[id], neto };
         }).sort((a, b) => b.neto - a.neto);
 

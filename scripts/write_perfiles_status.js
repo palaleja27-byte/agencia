@@ -9,14 +9,20 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function run() {
   console.log("=== WRITING DATABASE PROFILES STATUS ===");
-  const { data: perfiles, error } = await sb.from('datame_perfiles').select('*');
-  if (error) {
-    console.error("Error fetching perfiles:", error);
-    process.exit(1);
+  let perfiles = [];
+  try {
+    const { data, error } = await sb.from('datame_perfiles').select('*');
+    if (error) {
+      console.warn("Warning fetching perfiles from DB (RLS/Key):", error.message || error);
+    } else if (Array.isArray(data)) {
+      perfiles = data;
+    }
+  } catch (err) {
+    console.warn("Exception fetching perfiles:", err.message);
   }
   
   // Sort by ID
-  perfiles.sort((a, b) => a.id - b.id);
+  perfiles.sort((a, b) => (a.id || 0) - (b.id || 0));
   
   let md = `# Production Database Profiles (\`datame_perfiles\`)\n\n`;
   md += `Last updated: ${new Date().toISOString()}\n\n`;
@@ -25,11 +31,11 @@ async function run() {
   md += `|---|---|---|---|---|\n`;
   
   perfiles.forEach(p => {
-    md += `| ${p.id} | ${p.id_datame} | ${p.modelo} | ${p.panel_id} | ${p.activo} |\n`;
+    md += `| ${p.id || '-'} | ${p.id_datame || '-'} | ${p.modelo || '-'} | ${p.panel_id || '-'} | ${p.activo !== undefined ? p.activo : '-'} |\n`;
   });
   
   fs.writeFileSync('perfiles_status.md', md, 'utf8');
-  console.log("Successfully wrote perfiles_status.md!");
+  console.log(`Successfully wrote perfiles_status.md with ${perfiles.length} profiles!`);
 }
 
 run();

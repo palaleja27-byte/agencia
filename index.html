@@ -5276,7 +5276,7 @@
             <div style="font-size:0.65rem; color:#94a3b8;">Envía las instrucciones exactas de las fotos/videos que necesitas a la administración</div>
           </div>
         </div>
-        <button onclick="abrirModalPedirContenido()" style="background: linear-gradient(135deg, #10b981, #059669); color: #022c22; font-family: 'Outfit', sans-serif; font-size: 1.05rem; font-weight: 900; letter-spacing: 1px; padding: 14px 28px; border: 2px solid #34d399; border-radius: 14px; cursor: pointer; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 0 22px rgba(16, 185, 129, 0.6), 0 4px 15px rgba(0, 0, 0, 0.4); transition: all 0.25s ease;" onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 0 32px rgba(16, 185, 129, 0.8)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 0 22px rgba(16, 185, 129, 0.6)'">
+        <button onclick="if(typeof window.abrirModalPedirContenido==='function') window.abrirModalPedirContenido(); else if(typeof abrirModalPedirContenido==='function') abrirModalPedirContenido();" style="background: linear-gradient(135deg, #10b981, #059669); color: #022c22; font-family: 'Outfit', sans-serif; font-size: 1.05rem; font-weight: 900; letter-spacing: 1px; padding: 14px 28px; border: 2px solid #34d399; border-radius: 14px; cursor: pointer; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 0 22px rgba(16, 185, 129, 0.6), 0 4px 15px rgba(0, 0, 0, 0.4); transition: all 0.25s ease;" onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 0 32px rgba(16, 185, 129, 0.8)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 0 22px rgba(16, 185, 129, 0.6)'">
           📸 PEDIR CONTENIDO
         </button>
       </div>
@@ -11151,6 +11151,8 @@
         .replace(/\s+/g, ' '); 
     }
     const _n = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+    window._normName = _normName;
+    window._n = _n;
 
     function getCortesOp(name) {
       if (!name) return [];
@@ -28921,51 +28923,48 @@ PT._logKey = function (opName) {
 
     function _opRtGetIds(opName) {
       if (!opName) return [];
-      // 🛡️ FIX: usar _normName para tolerar tildes, espacios y capitalización
+      const _nFn = typeof window._normName === 'function' ? window._normName : (s => String(s || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
+      const targetNorm = _nFn(opName);
 
       const op = (typeof operatorsData !== 'undefined' ? operatorsData : [])
-        .find(o => _n(o.name) === _n(opName));
+        .find(o => _nFn(o.name) === targetNorm);
       
       let combinedProfiles = op ? [...(op.profiles || [])] : [];
       const realName = op ? op.name : opName;
       
-      // 🧠 DELTA-SHIFT™: Añadir perfiles dinámicos del turno actual
+      // 🧠 DELTA-SHIFT™: Añadir perfiles dinámicos de TODOS los turnos/drafts
       const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      const jornadaActual = _opRtJornada().toLowerCase();
-      // Normalizar tilde para clave de localStorage (compatibilidad con claves existentes)
-      const shKey = jornadaActual.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
-      
-      try {
-        const draftFull = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
-        const draftEntry = draftFull[realName + '||operador'] || draftFull[realName.toUpperCase() + '||operador'];
-        if (draftEntry && Array.isArray(draftEntry.perfiles)) {
-          draftEntry.perfiles.forEach(dp => {
-            if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
-              combinedProfiles.push(dp);
+      ['manana', 'tarde', 'noche'].forEach(shKey => {
+        const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
+        try {
+          const draftFull = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
+          Object.values(draftFull).forEach(draftEntry => {
+            if (draftEntry && _nFn(draftEntry.name || draftEntry.operador || '') === targetNorm && Array.isArray(draftEntry.perfiles)) {
+              draftEntry.perfiles.forEach(dp => {
+                if (dp && dp.id && !combinedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
+                  combinedProfiles.push(dp);
+                }
+              });
             }
           });
-        }
-      } catch (e) {}
+        } catch (e) {}
+      });
 
       // 🧠 AUTO-ASIGNACIÓN TEMPORAL DE PERFILES AUTO-CREADOS:
-      // Si hay perfiles nuevos (NUEVO_xxxx) creados en el panel de este operador, los inyectamos dinámicamente
-      // para que el operador logueado reclame sus puntos temporalmente hasta que el admin los asocie formalmente.
       if (typeof _dpPuntosData !== 'undefined') {
         const panelIdsDelOp = new Set(combinedProfiles.map(p => Number(p.panel) || 2));
         Object.keys(_dpPuntosData).forEach(id => {
           if (id.startsWith('NUEVO_') || id.includes('NUEVO')) {
             const perfilEncontrado = _dpTableauData && _dpTableauData[id];
             const pIdPanel = perfilEncontrado ? (Number(perfilEncontrado.panel_id) || 2) : 2;
-            if (panelIdsDelOp.has(pIdPanel) && !combinedProfiles.some(p => String(p.id) === String(id))) {
-              console.log(`[Auto-Asignación] Vinculando perfil nuevo ${id} temporalmente al operador ${realName}`);
+            if (panelIdsDelOp.has(pIdPanel) && !combinedProfiles.some(p => String(p.id).trim() === String(id).trim())) {
               combinedProfiles.push({ id: id, name: id, model: id, panel: pIdPanel });
             }
           }
         });
       }
 
-      return combinedProfiles.map(p => String(p.id)).filter(Boolean);
+      return combinedProfiles.map(p => String(p.id).trim()).filter(Boolean);
     }
 
     // ── Renderiza el widget en la vista del operador ──────────────
@@ -30438,7 +30437,7 @@ PT._logKey = function (opName) {
     <!-- Icono de burbuja flotante (solo visible minimizado) -->
     <div id="chat-bubble-icon" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 1.8rem; position: absolute; inset: 0; cursor: pointer; transition: 0.2s; background: rgba(99,102,241,0.15);" onclick="document.getElementById('rr-urgent-chat').classList.add('open'); if(typeof cargarHistorialChatSeleccionado === 'function') cargarHistorialChatSeleccionado(); event.stopPropagation();">
       💬
-      <span id="chat-bubble-badge" style="position: absolute; top: -4px; right: -4px; background: #ef4444; color: white; border-radius: 12px; min-width: 18px; height: 18px; padding: 0 5px; font-size: 0.65rem; font-weight: 900; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); display: none; align-items: center; justify-content: center; border: 2px solid #0f172a;">0</span>
+      <span id="chat-bubble-badge" style="position: absolute; top: -2px; right: -2px; background: #ef4444; color: #ffffff; border-radius: 12px; min-width: 22px; height: 22px; padding: 0 5px; font-size: 0.72rem; font-weight: 900; box-shadow: 0 0 14px rgba(239, 68, 68, 0.9); display: none; align-items: center; justify-content: center; border: 2px solid #ffffff; z-index: 100000; box-sizing: border-box;">0</span>
     </div>
     
     <!-- Cabecera -->
@@ -30607,6 +30606,7 @@ PT._logKey = function (opName) {
       border: 2px solid rgba(99, 102, 241, 0.5) !important;
       background: rgba(15, 23, 42, 0.95) !important;
       transform: translateY(0) !important;
+      overflow: visible !important;
     }
     #rr-urgent-chat:not(.open):hover {
       transform: scale(1.1) !important;
@@ -30827,6 +30827,25 @@ PT._logKey = function (opName) {
         }
       } catch (e) {
         console.error("Error cargando historial de chat:", e);
+      }
+
+      // Si el chat está abierto, marcar inmediatamente los mensajes locales como leídos
+      const chatPanelEl = document.getElementById('rr-urgent-chat');
+      const isChatOpenLocal = chatPanelEl && chatPanelEl.classList.contains('open');
+      if (isChatOpenLocal && Array.isArray(history)) {
+        let locUpdated = false;
+        history.forEach(msg => {
+          if (!msg) return;
+          const isFromMe = (currentRole === 'operador' && (msg.sender === 'operador' || msg.sender === currentOpName)) ||
+                           ((currentRole === 'monitor' || currentRole === 'admin') && msg.sender === 'monitor');
+          if (!isFromMe && !msg.seen) {
+            msg.seen = true;
+            locUpdated = true;
+          }
+        });
+        if (locUpdated) {
+          localStorage.setItem(key, JSON.stringify(history));
+        }
       }
 
       // Renderizado inicial local
@@ -31061,43 +31080,112 @@ PT._logKey = function (opName) {
 
     function procesarMensajeChatRealtime(row) {
       if (!row || !row.key || !row.value) return;
-      if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+      if (!row.key.startsWith('rr_chat_')) return;
       
       const opNameReal = row.key.replace('rr_chat_', '');
-      const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && document.getElementById('rr-urgent-chat').classList.contains('open'));
+      const isOperator = (typeof currentRole !== 'undefined' && currentRole === 'operador');
+      const myOpName = (typeof currentOpName !== 'undefined' && currentOpName) ? currentOpName.toLowerCase() : '';
       
-      if (isViewingCurrent) {
-        // Si el monitor ya tiene abierto el chat de este operador, la vista se actualiza automáticamente.
-        return;
-      }
+      // Si el operador está en sesión, solo procesa su propia sala de chat
+      if (isOperator && myOpName && opNameReal.toLowerCase() !== myOpName) return;
       
       let remoteHistory = [];
       try {
         remoteHistory = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
       } catch(e) { remoteHistory = row.value; }
       
-      if (Array.isArray(remoteHistory) && remoteHistory.length > 0) {
+      if (!Array.isArray(remoteHistory)) return;
+
+      // Guardar inmediatamente en localStorage
+      localStorage.setItem(row.key, JSON.stringify(remoteHistory));
+
+      const chatPanel = document.getElementById('rr-urgent-chat');
+      const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && chatPanel && chatPanel.classList.contains('open'));
+
+      if (remoteHistory.length > 0) {
         const lastMsg = remoteHistory[remoteHistory.length - 1];
-        if (lastMsg.sender === 'operador') {
+        const isFromOther = isOperator ? (lastMsg.sender === 'monitor') : (lastMsg.sender === 'operador');
+
+        if (isFromOther) {
           const toastKey = `${opNameReal.toLowerCase()}_${lastMsg.ts}`;
           window._toastedMessages = window._toastedMessages || new Set();
           
-          const isRecent = Math.abs(Date.now() - lastMsg.ts) < 25000;
-          if (isRecent && !window._toastedMessages.has(toastKey)) {
+          const isRecent = Math.abs(Date.now() - lastMsg.ts) < 30000;
+          if (isRecent && !window._toastedMessages.has(toastKey) && !isViewingCurrent) {
             window._toastedMessages.add(toastKey);
             if (typeof crearNotificacionToastChat === 'function') {
-              crearNotificacionToastChat(opNameReal.toUpperCase(), lastMsg);
+              crearNotificacionToastChat(isOperator ? "MONITOR CENTRAL" : opNameReal.toUpperCase(), lastMsg);
             }
           }
-          
-          // Guardar en el almacenamiento local para que coincida con el estado de sincronía
-          localStorage.setItem(row.key, JSON.stringify(remoteHistory));
-          
-          const badge = document.getElementById('chat-bubble-badge');
-          if (badge) badge.style.display = 'block';
+        }
+      }
+
+      if (isViewingCurrent && typeof cargarHistorialChatSeleccionado === 'function') {
+        cargarHistorialChatSeleccionado();
+      } else {
+        if (typeof window.actualizarBadgeMensajesNoLeidos === 'function') {
+          window.actualizarBadgeMensajesNoLeidos();
         }
       }
     }
+
+    window.actualizarBadgeMensajesNoLeidos = function() {
+      try {
+        let unreadTotal = 0;
+        const role = (typeof currentRole !== 'undefined') ? currentRole : '';
+        const normStr = s => String(s || '').toLowerCase().replace(/[\s_]+/g, '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        const currentOpNorm = (typeof currentOpName !== 'undefined' && currentOpName) ? normStr(currentOpName) : '';
+        
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('rr_chat_')) {
+            const chatOp = key.replace('rr_chat_', '');
+            
+            // Para operador, filtrar solo su propio chat (normalizando guiones bajos y espacios)
+            if (role === 'operador' && currentOpNorm && normStr(chatOp) !== currentOpNorm) {
+              continue;
+            }
+            
+            try {
+              const history = JSON.parse(localStorage.getItem(key));
+              if (Array.isArray(history)) {
+                history.forEach(msg => {
+                  if (!msg) return;
+                  const isFromMe = (role === 'operador' && (msg.sender === 'operador' || (currentOpNorm && normStr(msg.sender) === currentOpNorm))) ||
+                                   ((role === 'monitor' || role === 'admin') && msg.sender === 'monitor');
+                  
+                  if (!isFromMe && (msg.seen === false || msg.seen === undefined || msg.seen === 0 || msg.seen === 'false')) {
+                    unreadTotal++;
+                  }
+                });
+              }
+            } catch(e){}
+          }
+        }
+        
+        const badge = document.getElementById('chat-bubble-badge');
+        if (badge) {
+          if (unreadTotal > 0) {
+            badge.innerText = unreadTotal > 99 ? '99+' : String(unreadTotal);
+            badge.style.display = 'flex';
+            badge.style.alignItems = 'center';
+            badge.style.justifyContent = 'center';
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+      } catch(e){}
+    };
+
+    if (!window._badgeIntervalSet) {
+      window._badgeIntervalSet = true;
+      setInterval(() => {
+        if (typeof window.actualizarBadgeMensajesNoLeidos === 'function') {
+          window.actualizarBadgeMensajesNoLeidos();
+        }
+      }, 3000);
+    }
+
 
     function renderChatHTML(history, opName) {
       const box = document.getElementById('rr-chat-msgs');
@@ -32775,12 +32863,33 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
     // ════════════════════════════════════════════════════════════════════════════════
     window._solFiltroAdmin = 'PENDIENTE';
 
+    async function syncSolicitudesContenidoSupabase() {
+      try {
+        if (typeof _sb !== 'undefined' && _sb) {
+          const { data, error } = await _sb.from('kv_store').select('value').eq('key', 'rr_solicitudes_contenido').maybeSingle();
+          if (!error && data && data.value) {
+            let remoteList = [];
+            try {
+              remoteList = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            } catch(e) { remoteList = data.value; }
+            if (Array.isArray(remoteList) && remoteList.length > 0) {
+              localStorage.setItem('rr_solicitudes_contenido', JSON.stringify(remoteList));
+              if (typeof renderOpSolicitudesHistorial === 'function') renderOpSolicitudesHistorial();
+              if (typeof renderAdminSolicitudes === 'function') renderAdminSolicitudes();
+            }
+          }
+        }
+      } catch(e) { console.warn('[SOL-SYNC] Sync error:', e); }
+    }
+    window.syncSolicitudesContenidoSupabase = syncSolicitudesContenidoSupabase;
+
     function getSolicitudesContenido() {
       try {
         const stored = localStorage.getItem('rr_solicitudes_contenido');
         return stored ? JSON.parse(stored) : [];
       } catch(e) { return []; }
     }
+    window.getSolicitudesContenido = getSolicitudesContenido;
 
     function guardarSolicitudesContenido(lista) {
       const jsonStr = JSON.stringify(lista);
@@ -32791,16 +32900,77 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
           .catch(err => console.warn('[SOL-SYNC] Error guardando solicitudes:', err));
       }
     }
+    window.guardarSolicitudesContenido = guardarSolicitudesContenido;
 
     function abrirModalPedirContenido() {
-      const modal = document.getElementById('modal-pedir-contenido');
-      if (modal) modal.style.display = 'flex';
+      syncSolicitudesContenidoSupabase();
+      let modal = document.getElementById('modal-pedir-contenido');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-pedir-contenido';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:99999; background:rgba(15,23,42,0.85); backdrop-filter:blur(10px); align-items:center; justify-content:center; padding:20px; box-sizing:border-box;';
+        modal.innerHTML = `
+          <div style="background:linear-gradient(145deg, #0f172a, #1e293b); border:2px solid #10b981; border-radius:24px; max-width:540px; width:100%; padding:28px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.8); position:relative; font-family:'Outfit', sans-serif; box-sizing:border-box;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(16,185,129,0.3); padding-bottom:12px;">
+              <div style="font-size:1.15rem; font-weight:900; color:#34d399; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:10px;">
+                <span>📸</span> Solicitar Contenido a Administración
+              </div>
+              <button onclick="window.cerrarModalPedirContenido()" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; border-radius:8px; width:32px; height:32px; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div>
+                <label style="display:block; font-size:0.75rem; color:#94a3b8; font-weight:bold; margin-bottom:6px;">Modelo / ID Perfil:</label>
+                <input type="text" id="sol-id-modelo" placeholder="Ej: Camila / ID 1045" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px 14px; color:#fff; font-size:0.85rem; outline:none; box-sizing:border-box;">
+              </div>
+
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div>
+                  <label style="display:block; font-size:0.75rem; color:#94a3b8; font-weight:bold; margin-bottom:6px;">Tipo de Contenido:</label>
+                  <select id="sol-tipo-contenido" style="width:100%; background:rgba(15,23,42,0.9); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px; color:#fff; font-size:0.85rem; outline:none; box-sizing:border-box; cursor:pointer;">
+                    <option value="FOTO">📸 Foto Específica</option>
+                    <option value="VIDEO">🎥 Video Personalizado</option>
+                    <option value="PAQUETE">📦 Paquete Completo</option>
+                    <option value="AUDIO">🎤 Nota de Voz</option>
+                    <option value="OTRO">❓ Otro Material</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style="display:block; font-size:0.75rem; color:#94a3b8; font-weight:bold; margin-bottom:6px;">Urgencia del Cliente:</label>
+                  <select id="sol-urgencia" style="width:100%; background:rgba(15,23,42,0.9); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px; color:#fff; font-size:0.85rem; outline:none; box-sizing:border-box; cursor:pointer;">
+                    <option value="NORMAL">🟢 Normal (Próximas horas)</option>
+                    <option value="ALTA">🟡 Alta (En 1 hora)</option>
+                    <option value="URGENTE">🔴 Urgente (Cliente pagando en vivo)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style="display:block; font-size:0.75rem; color:#94a3b8; font-weight:bold; margin-bottom:6px;">Detalle de lo que pide el cliente:</label>
+                <textarea id="sol-detalle" rows="4" placeholder="Describe exactamente qué ropa, pose, saludo o temática pidió el cliente..." style="width:100%; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px 14px; color:#fff; font-size:0.85rem; outline:none; box-sizing:border-box; resize:vertical;"></textarea>
+              </div>
+
+              <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+                <button onclick="window.cerrarModalPedirContenido()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; padding:10px 20px; border-radius:12px; font-weight:bold; cursor:pointer;">Cancelar</button>
+                <button onclick="window.enviarSolicitudContenido()" style="background:linear-gradient(135deg, #10b981, #059669); border:none; color:#022c22; padding:10px 24px; border-radius:12px; font-weight:900; font-size:0.9rem; cursor:pointer; box-shadow:0 0 15px rgba(16,185,129,0.5);">🚀 ENVIAR SOLICITUD</button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+      }
+      modal.style.display = 'flex';
       const inputMod = document.getElementById('sol-id-modelo');
       if (inputMod) {
+        let defVal = '';
         const activeSel = document.getElementById('op-modelo-select');
-        if (activeSel && activeSel.value) inputMod.value = activeSel.value;
+        if (activeSel && activeSel.value) defVal = activeSel.value;
+        else if (typeof currentOpName !== 'undefined' && currentOpName) defVal = currentOpName;
+        if (defVal && !inputMod.value) inputMod.value = defVal;
       }
     }
+    window.abrirModalPedirContenido = abrirModalPedirContenido;
 
     function autoLlenarIdModeloContenido(val) {
       const modal = document.getElementById('modal-pedir-contenido');
@@ -32808,11 +32978,13 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
       const inputMod = document.getElementById('sol-id-modelo');
       if (inputMod) inputMod.value = val;
     }
+    window.autoLlenarIdModeloContenido = autoLlenarIdModeloContenido;
 
     function cerrarModalPedirContenido() {
       const modal = document.getElementById('modal-pedir-contenido');
       if (modal) modal.style.display = 'none';
     }
+    window.cerrarModalPedirContenido = cerrarModalPedirContenido;
 
     function enviarSolicitudContenido() {
       const idModelo = document.getElementById('sol-id-modelo')?.value.trim();
@@ -32859,6 +33031,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
       renderOpSolicitudesHistorial();
       if (typeof renderAdminSolicitudes === 'function') renderAdminSolicitudes();
     }
+    window.enviarSolicitudContenido = enviarSolicitudContenido;
 
     function renderOpSolicitudesHistorial() {
       const container = document.getElementById('op-solicitudes-historial');

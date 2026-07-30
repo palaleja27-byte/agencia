@@ -28948,11 +28948,21 @@ PT._logKey = function (opName) {
         .map(([t, v]) => `<div style="font-size:.62rem;color:#64748b;">${jornadaEmoji[t]} ${t}: <b style="color:#94a3b8;">${v.toFixed(1)} pts</b></div>`)
         .join('');
 
+      // Mapear TODOS los perfiles asignados (tengan puntos en la BD o no)
+      const perfilesParaMostrar = combinedProfiles.map(p => {
+         const dbInfo = _opRtPerfilesNeto.find(r => String(r.id) === String(p.id));
+         return {
+            id: p.id,
+            nombre: dbInfo ? dbInfo.nombre : p.model,
+            neto: dbInfo ? dbInfo.neto : 0
+         };
+      }).sort((a, b) => b.neto - a.neto);
+
       // Desglose por perfil — NUEVO
-      const perfilesHtml = _opRtPerfilesNeto.length > 1 ? `
+      const perfilesHtml = perfilesParaMostrar.length > 1 ? `
         <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">
           <div style="font-size:.58rem;color:#334155;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">📊 Por perfil</div>
-          ${_opRtPerfilesNeto.map(p => {
+          ${perfilesParaMostrar.map(p => {
             const pct = pts > 0 ? Math.round((p.neto / pts) * 100) : 0;
             return `<div style="display:flex;justify-content:space-between;align-items:center;
               padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:.65rem;">

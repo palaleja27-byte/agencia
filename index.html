@@ -30436,18 +30436,22 @@ PT._logKey = function (opName) {
   <div id="rr-urgent-chat">
     
     <!-- Icono de burbuja flotante (solo visible minimizado) -->
-    <div id="chat-bubble-icon" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 1.8rem; position: absolute; inset: 0; cursor: pointer; transition: 0.2s; background: rgba(99,102,241,0.15);" onclick="document.getElementById('rr-urgent-chat').classList.add('open'); event.stopPropagation();">
+    <div id="chat-bubble-icon" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 1.8rem; position: absolute; inset: 0; cursor: pointer; transition: 0.2s; background: rgba(99,102,241,0.15);" onclick="document.getElementById('rr-urgent-chat').classList.add('open'); if(typeof cargarHistorialChatSeleccionado === 'function') cargarHistorialChatSeleccionado(); event.stopPropagation();">
       💬
-      <span id="chat-bubble-badge" style="position: absolute; top: 12px; right: 12px; width: 10px; height: 10px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981;"></span>
+      <span id="chat-bubble-badge" style="position: absolute; top: -4px; right: -4px; background: #ef4444; color: white; border-radius: 12px; min-width: 18px; height: 18px; padding: 0 5px; font-size: 0.65rem; font-weight: 900; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); display: none; align-items: center; justify-content: center; border: 2px solid #0f172a;">0</span>
     </div>
     
     <!-- Cabecera -->
-    <div id="chat-header" style="background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); padding:12px 16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleChatCollapse()">
-      <div style="display:flex; align-items:center; gap:10px;">
+    <div id="chat-header" style="background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.1); padding:10px 14px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleChatCollapse()">
+      <div style="display:flex; align-items:center; gap:8px;">
         <span id="chat-status-dot" style="width:8px; height:8px; background:#10b981; border-radius:50%; box-shadow:0 0 8px #10b981; transition:0.3s;"></span>
-        <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:1px;" id="rr-chat-header-title">MONITOR CENTRAL</span>
+        <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:0.5px;" id="rr-chat-header-title">MONITOR CENTRAL</span>
       </div>
-      <button onclick="document.getElementById('rr-urgent-chat').classList.remove('open'); event.stopPropagation();" style="background:transparent; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#94a3b8'">✖</button>
+      <div style="display:flex; align-items:center; gap:8px;" onclick="event.stopPropagation()">
+        <!-- Botón para Activar/Desactivar Alertas de Voz -->
+        <button class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#34d399; font-size:0.65rem; padding:3px 8px; border-radius:8px; font-weight:800; cursor:pointer; transition:0.2s;" title="Permite apagar o encender la voz de las alertas">🔊 Alertas Voz: ON</button>
+        <button onclick="document.getElementById('rr-urgent-chat').classList.remove('open'); event.stopPropagation();" style="background:transparent; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#94a3b8'">✖</button>
+      </div>
     </div>
 
     <!-- Controles de Monitor (Solo visible para monitor/admin) -->
@@ -30489,22 +30493,81 @@ PT._logKey = function (opName) {
        </div>
     </div>
 
-    
-    <!-- Quick Replies (Respuestas Rápidas) -->
-    <div style="padding:6px 12px; background:rgba(0,0,0,0.4); border-top:1px solid rgba(255,255,255,0.02); display:flex; gap:6px; overflow-x:auto;" class="custom-scrollbar">
-      <button onclick="document.getElementById('rr-chat-input').value='¡Excelente ritmo, sigue así! 🔥'; enviarMensajeChat()" style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#10b981; font-size:0.6rem; padding:4px 8px; border-radius:12px; cursor:pointer; white-space:nowrap; transition:0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.25)'" onmouseout="this.style.background='rgba(16,185,129,0.15)'">🔥 Excelente ritmo</button>
-      <button onclick="document.getElementById('rr-chat-input').value='¿Todo bien por ahí? 👀'; enviarMensajeChat()" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); color:#818cf8; font-size:0.6rem; padding:4px 8px; border-radius:12px; cursor:pointer; white-space:nowrap; transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.25)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'">👀 ¿Todo bien?</button>
-      <button onclick="document.getElementById('rr-chat-input').value='Acelera, estás perdiendo tiempo ⚠️'; enviarMensajeChat()" style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); color:#f59e0b; font-size:0.6rem; padding:4px 8px; border-radius:12px; cursor:pointer; white-space:nowrap; transition:0.2s;" onmouseover="this.style.background='rgba(245,158,11,0.25)'" onmouseout="this.style.background='rgba(245,158,11,0.15)'">⚠️ Acelera</button>
-      <button onclick="document.getElementById('rr-chat-input').value='Cuidado con las reglas 🚨'; enviarMensajeChat()" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#ef4444; font-size:0.6rem; padding:4px 8px; border-radius:12px; cursor:pointer; white-space:nowrap; transition:0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.25)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">🚨 Cuidado</button>
+    <!-- POP-OVER DE EMOTES Y STICKERS ESTILO WHATSAPP -->
+    <div id="chat-sticker-drawer" style="display:none; background:rgba(15,23,42,0.98); border-top:1px solid rgba(99,102,241,0.3); padding:10px; max-height:220px; overflow-y:auto;" class="custom-scrollbar">
+      <div style="display:flex; gap:6px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px; margin-bottom:8px;">
+        <button onclick="switchStickerTab('emotes')" id="tab-btn-emotes" style="flex:1; background:rgba(99,102,241,0.3); border:none; color:white; font-size:0.7rem; font-weight:bold; padding:4px 8px; border-radius:6px; cursor:pointer;">😀 Emotes</button>
+        <button onclick="switchStickerTab('stickers')" id="tab-btn-stickers" style="flex:1; background:rgba(255,255,255,0.05); border:none; color:#94a3b8; font-size:0.7rem; font-weight:bold; padding:4px 8px; border-radius:6px; cursor:pointer;">🏷️ Stickers</button>
+        <button onclick="switchStickerTab('crear')" id="tab-btn-crear" style="flex:1; background:rgba(255,255,255,0.05); border:none; color:#94a3b8; font-size:0.7rem; font-weight:bold; padding:4px 8px; border-radius:6px; cursor:pointer;">🎨 Crear Sticker</button>
+      </div>
+
+      <!-- Tab Emotes -->
+      <div id="tab-panel-emotes" style="display:flex; flex-wrap:wrap; gap:8px; font-size:1.3rem;">
+        <span onclick="insertEmoteToChat('🔥')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🔥</span>
+        <span onclick="insertEmoteToChat('🚀')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🚀</span>
+        <span onclick="insertEmoteToChat('👑')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">👑</span>
+        <span onclick="insertEmoteToChat('💰')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">💰</span>
+        <span onclick="insertEmoteToChat('🚨')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🚨</span>
+        <span onclick="insertEmoteToChat('👏')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">👏</span>
+        <span onclick="insertEmoteToChat('💯')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">💯</span>
+        <span onclick="insertEmoteToChat('❤️')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">❤️</span>
+        <span onclick="insertEmoteToChat('😎')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">😎</span>
+        <span onclick="insertEmoteToChat('⚡')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">⚡</span>
+        <span onclick="insertEmoteToChat('🌟')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🌟</span>
+        <span onclick="insertEmoteToChat('🏆')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🏆</span>
+        <span onclick="insertEmoteToChat('💎')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">💎</span>
+        <span onclick="insertEmoteToChat('🤩')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🤩</span>
+        <span onclick="insertEmoteToChat('🎉')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🎉</span>
+        <span onclick="insertEmoteToChat('📈')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">📈</span>
+        <span onclick="insertEmoteToChat('👀')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">👀</span>
+        <span onclick="insertEmoteToChat('⚠️')" style="cursor:pointer; padding:4px; border-radius:6px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">⚠️</span>
+      </div>
+
+      <!-- Tab Stickers Predeterminados -->
+      <div id="tab-panel-stickers" style="display:none; flex-wrap:wrap; gap:8px;">
+        <button onclick="enviarStickerPreset('fuego')" style="background:linear-gradient(135deg, #f59e0b, #ef4444); border:none; color:white; padding:6px 12px; border-radius:12px; font-weight:900; font-size:0.7rem; cursor:pointer; box-shadow:0 4px 10px rgba(245,158,11,0.3);">🔥 RITMO FUEGO</button>
+        <button onclick="enviarStickerPreset('meta')" style="background:linear-gradient(135deg, #10b981, #059669); border:none; color:white; padding:6px 12px; border-radius:12px; font-weight:900; font-size:0.7rem; cursor:pointer; box-shadow:0 4px 10px rgba(16,185,129,0.3);">💰 META CUMPLIDA</button>
+        <button onclick="enviarStickerPreset('cohete')" style="background:linear-gradient(135deg, #6366f1, #4f46e5); border:none; color:white; padding:6px 12px; border-radius:12px; font-weight:900; font-size:0.7rem; cursor:pointer; box-shadow:0 4px 10px rgba(99,102,241,0.3);">🚀 MÁXIMA VELOCIDAD</button>
+        <button onclick="enviarStickerPreset('corona')" style="background:linear-gradient(135deg, #ec4899, #8b5cf6); border:none; color:white; padding:6px 12px; border-radius:12px; font-weight:900; font-size:0.7rem; cursor:pointer; box-shadow:0 4px 10px rgba(236,72,153,0.3);">👑 OPERADOR TOP</button>
+        <button onclick="enviarStickerPreset('enfocado')" style="background:linear-gradient(135deg, #0ea5e9, #0284c7); border:none; color:white; padding:6px 12px; border-radius:12px; font-weight:900; font-size:0.7rem; cursor:pointer; box-shadow:0 4px 10px rgba(14,165,233,0.3);">⚡ ENFOCADO EN CHAT</button>
+        <button onclick="enviarStickerPreset('100')" style="background:linear-gradient(135deg, #84cc16, #65a30d); border:none; color:white; padding:6px 12px; border-radius:12px; font-weight:900; font-size:0.7rem; cursor:pointer; box-shadow:0 4px 10px rgba(132,204,22,0.3);">💯 100% EFECTIVO</button>
+      </div>
+
+      <!-- Tab Crear Sticker WhatsApp -->
+      <div id="tab-panel-crear" style="display:none; flex-direction:column; gap:8px;">
+        <div style="font-size:0.65rem; color:#94a3b8;">Selecciona cualquier imagen para convertirla en Sticker estilo WhatsApp con borde y sombra:</div>
+        <input type="file" id="sticker-file-input" accept="image/*" style="display:none;" onchange="procesarCrearStickerWhatsApp(this)">
+        <button onclick="document.getElementById('sticker-file-input').click()" style="background:rgba(99,102,241,0.2); border:1px dashed #6366f1; color:#a5b4fc; padding:8px; border-radius:8px; font-size:0.75rem; font-weight:bold; cursor:pointer; text-align:center;">
+          📷 Seleccionar Imagen para Sticker
+        </button>
+      </div>
     </div>
 
-    <!-- Input -->
-    <div style="padding:12px; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.05); display:flex; gap:8px; align-items:center;">
-      <button onclick="document.getElementById('chat-file-upload').click()" title="Adjuntar foto/archivo" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.2rem; transition:0.2s;">📎</button>
-      <input type="file" id="chat-file-upload" style="display:none" multiple onchange="manejadorSubidaArchivoChat(this)">
-      
-      <input type="text" id="rr-chat-input" placeholder="Responder..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
-      <button onclick="enviarMensajeChat()" style="background:#6366f1; border:none; color:white; font-weight:bold; padding:8px 14px; border-radius:8px; cursor:pointer; transition:0.2s; box-shadow:0 0 10px rgba(99,102,241,0.3);">Enviar</button>
+    <!-- Input Bar -->
+    <div style="padding:10px 12px; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.05); display:flex; gap:6px; align-items:center; position:relative;">
+      <!-- Panel Grabando Audio (Oculto por defecto) -->
+      <div id="chat-voice-rec-bar" style="display:none; flex:1; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:4px 10px; align-items:center; justify-content:space-between;">
+        <span style="font-size:0.7rem; color:#f87171; font-weight:bold; display:inline-flex; align-items:center; gap:6px;">
+          <span style="width:8px; height:8px; background:#ef4444; border-radius:50%; animation:pulseRed 1s infinite;"></span>
+          Grabando Audio: <span id="chat-voice-timer">00:00</span>
+        </span>
+        <div style="display:flex; gap:6px;">
+          <button onclick="cancelarGrabacionAudio()" style="background:rgba(255,255,255,0.1); border:none; color:#cbd5e1; padding:3px 8px; border-radius:6px; font-size:0.65rem; cursor:pointer;">✕ Cancelar</button>
+          <button onclick="detenerYEnviarAudio()" style="background:#10b981; border:none; color:white; padding:3px 10px; border-radius:6px; font-size:0.65rem; font-weight:bold; cursor:pointer;">✓ Enviar</button>
+        </div>
+      </div>
+
+      <div id="chat-input-controls" style="display:flex; flex:1; gap:6px; align-items:center;">
+        <button onclick="document.getElementById('chat-file-upload').click()" title="Adjuntar foto/archivo" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.1rem; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">📎</button>
+        <input type="file" id="chat-file-upload" style="display:none" multiple onchange="manejadorSubidaArchivoChat(this)">
+        
+        <button onclick="toggleStickerDrawer()" title="Stickers y Emotes" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.1rem; transition:0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#94a3b8'">😀</button>
+
+        <button onclick="iniciarGrabacionAudio()" title="Enviar nota de voz por audio" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.1rem; transition:0.2s;" onmouseover="this.style.color='#f43f5e'" onmouseout="this.style.color='#94a3b8'">🎤</button>
+
+        <input type="text" id="rr-chat-input" placeholder="Responder..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
+        <button onclick="enviarMensajeChat()" style="background:#6366f1; border:none; color:white; font-weight:bold; padding:8px 14px; border-radius:8px; cursor:pointer; transition:0.2s; box-shadow:0 0 10px rgba(99,102,241,0.3);">Enviar</button>
+      </div>
     </div>
   </div>
 
@@ -30583,19 +30646,19 @@ PT._logKey = function (opName) {
         gain.connect(audioCtx.destination);
         
         if(type === 'alarm') {
-          osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.3);
-          gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          // Sonido de alerta suavizado y volumen bajo (0.08 en lugar de 0.5)
+          osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
           osc.start(); osc.stop(audioCtx.currentTime + 0.3);
         } else if (type === 'bell') {
-          osc.type = 'sine'; osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
-          gain.gain.setValueAtTime(0.7, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
-          osc.start(); osc.stop(audioCtx.currentTime + 1);
+          osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.8);
         } else if (type === 'coin') {
-          // B5 (987.77 Hz) for 0.08s -> E6 (1318.51 Hz) for 0.37s
           osc.type = 'sine';
           osc.frequency.setValueAtTime(987.77, audioCtx.currentTime);
-          gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
           osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.08);
 
           const osc2 = audioCtx.createOscillator();
@@ -30604,12 +30667,12 @@ PT._logKey = function (opName) {
           gain2.connect(audioCtx.destination);
           osc2.type = 'sine';
           osc2.frequency.setValueAtTime(1318.51, audioCtx.currentTime + 0.08);
-          gain2.gain.setValueAtTime(0.4, audioCtx.currentTime + 0.08);
-          gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.45);
+          gain2.gain.setValueAtTime(0.08, audioCtx.currentTime + 0.08);
+          gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
           osc2.start(audioCtx.currentTime + 0.08); osc2.stop(audioCtx.currentTime + 0.45);
         } else {
-          osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-          gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+          osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+          gain.gain.setValueAtTime(0.04, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
           osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
       } catch (e) {
@@ -30683,6 +30746,62 @@ PT._logKey = function (opName) {
       cargarHistorialChatSeleccionado();
     }
 
+    window.toggleChatCollapse = function() {
+      const chatPanel = document.getElementById('rr-urgent-chat');
+      if (!chatPanel) return;
+      if (chatPanel.classList.contains('open')) {
+        chatPanel.classList.remove('open');
+      } else {
+        chatPanel.classList.add('open');
+        cargarHistorialChatSeleccionado();
+      }
+    };
+
+    window.actualizarBadgeMensajesNoLeidos = function() {
+      const badge = document.getElementById('chat-bubble-badge');
+      if (!badge) return;
+
+      let totalUnread = 0;
+
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+        const opName = typeof currentOpName !== 'undefined' ? currentOpName : '';
+        if (opName) {
+          const key = `rr_chat_${opName.toLowerCase()}`;
+          try {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+              const history = JSON.parse(stored);
+              if (Array.isArray(history)) {
+                totalUnread = history.filter(m => m.sender === 'monitor' && !m.seen).length;
+              }
+            }
+          } catch(e){}
+        }
+      } else if (typeof currentRole !== 'undefined' && (currentRole === 'monitor' || currentRole === 'admin')) {
+        if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+          operatorsData.forEach(op => {
+            const key = `rr_chat_${op.name.toLowerCase()}`;
+            try {
+              const stored = localStorage.getItem(key);
+              if (stored) {
+                const history = JSON.parse(stored);
+                if (Array.isArray(history)) {
+                  totalUnread += history.filter(m => m.sender === 'operador' && !m.seen).length;
+                }
+              }
+            } catch(e){}
+          });
+        }
+      }
+
+      if (totalUnread > 0) {
+        badge.innerText = totalUnread > 99 ? '99+' : String(totalUnread);
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    };
+
     function cargarHistorialChatSeleccionado() {
       const box = document.getElementById('rr-chat-msgs');
       if (!box) return;
@@ -30712,6 +30831,7 @@ PT._logKey = function (opName) {
 
       // Renderizado inicial local
       renderChatHTML(history, opName);
+      actualizarBadgeMensajesNoLeidos();
 
       // Sincronizar asíncronamente desde Supabase (kv_store)
       if (typeof _sb !== 'undefined' && _sb) {
@@ -30722,33 +30842,39 @@ PT._logKey = function (opName) {
               remoteHistory = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
             } catch(e) { remoteHistory = data.value; }
             if (Array.isArray(remoteHistory)) {
-              // Update seen state dynamically
+              // Actualizar estado 'seen' SOLO si la ventana de chat está ABIERTA
+              const chatPanel = document.getElementById('rr-urgent-chat');
+              const isChatOpen = chatPanel && chatPanel.classList.contains('open');
+
               let updatedSeen = false;
-              remoteHistory.forEach(msg => {
-                if (currentRole === 'monitor' || currentRole === 'admin') {
-                  if (msg.sender === 'operador' && !msg.seen) {
-                    msg.seen = true;
-                    updatedSeen = true;
+              if (isChatOpen) {
+                remoteHistory.forEach(msg => {
+                  if (currentRole === 'monitor' || currentRole === 'admin') {
+                    if (msg.sender === 'operador' && !msg.seen) {
+                      msg.seen = true;
+                      updatedSeen = true;
+                    }
+                  } else if (currentRole === 'operador') {
+                    if (msg.sender === 'monitor' && !msg.seen) {
+                      msg.seen = true;
+                      updatedSeen = true;
+                    }
                   }
-                } else if (currentRole === 'operador') {
-                  if (msg.sender === 'monitor' && !msg.seen) {
-                    msg.seen = true;
-                    updatedSeen = true;
-                  }
-                }
-              });
+                });
+              }
 
               if (updatedSeen) {
                 _sb.from('kv_store').upsert({ key: key, value: JSON.stringify(remoteHistory) }, { onConflict: 'key' })
                   .then(() => {
                     localStorage.setItem(key, JSON.stringify(remoteHistory));
+                    actualizarBadgeMensajesNoLeidos();
                   }).catch(e => console.warn('[CHAT-SEEN-SYNC] Seen update failed:', e));
               }
 
               const lastRemoteTs = remoteHistory.length > 0 ? remoteHistory[remoteHistory.length - 1].ts : 0;
               const lastLocalTs = history.length > 0 ? history[history.length - 1].ts : 0;
               if (lastRemoteTs !== lastLocalTs || updatedSeen || !window._lastRenderedChatKey || window._lastRenderedChatKey !== key) {
-                // Alerta sonora al recibir un mensaje nuevo del otro extremo
+                // Alerta sonora y toast al recibir un mensaje nuevo del otro extremo
                 const hasNewMessage = remoteHistory.length > history.length;
                 if (hasNewMessage && remoteHistory.length > 0) {
                   const lastMsg = remoteHistory[remoteHistory.length - 1];
@@ -30757,14 +30883,12 @@ PT._logKey = function (opName) {
                   if (!currentIsMe) {
                     if (currentRole === 'operador') {
                       playBeep('alarm');
-                      // Poner en primer plano inmediatamente (abrir chat automáticamente)
-                      const chatPanel = document.getElementById('rr-urgent-chat');
+                      // Poner en primer plano e inmediatamente abrir chat automáticamente
                       if (chatPanel) {
                         chatPanel.classList.add('open');
                         const header = document.getElementById('chat-header');
                         if (header) {
                           header.classList.add('status-critico');
-                          // Remover status-critico al enfocar el input para responder
                           const inputField = document.getElementById('rr-chat-input');
                           if (inputField) {
                             inputField.addEventListener('focus', () => {
@@ -30773,13 +30897,17 @@ PT._logKey = function (opName) {
                           }
                         }
                       }
+                      // NOTIFICACIÓN SUPERPUESTA EN PANTALLA PARA EL OPERADOR
+                      const toastKey = `op_${lastMsg.ts}`;
+                      window._toastedMessages = window._toastedMessages || new Set();
+                      if (!window._toastedMessages.has(toastKey)) {
+                        window._toastedMessages.add(toastKey);
+                        if (typeof crearNotificacionToastChat === 'function') {
+                          crearNotificacionToastChat("MONITOR CENTRAL", lastMsg);
+                        }
+                      }
                     } else {
                       playBeep('pulse');
-                      const chatOpen = document.getElementById('rr-urgent-chat').classList.contains('open');
-                      if (!chatOpen) {
-                        const badge = document.getElementById('chat-bubble-badge');
-                        if (badge) badge.style.display = 'block';
-                      }
                     }
                   }
                 }
@@ -30787,12 +30915,52 @@ PT._logKey = function (opName) {
                 window._lastRenderedChatKey = key;
                 localStorage.setItem(key, JSON.stringify(remoteHistory));
                 renderChatHTML(remoteHistory, opName);
+                actualizarBadgeMensajesNoLeidos();
               }
             }
           }
         }).catch(e => console.warn('[CHAT-SYNC] Fetch error:', e));
       }
     }
+
+    window.voiceAlertsEnabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+
+    window.toggleVoiceAlerts = function() {
+      window.voiceAlertsEnabled = !window.voiceAlertsEnabled;
+      localStorage.setItem('rr_voice_alerts_enabled', window.voiceAlertsEnabled ? 'true' : 'false');
+      
+      const btns = document.querySelectorAll('.rr-voice-toggle-btn');
+      btns.forEach(b => {
+        if (window.voiceAlertsEnabled) {
+          b.innerHTML = '🔊 Alertas Voz: ON';
+          b.style.background = 'rgba(16,185,129,0.2)';
+          b.style.borderColor = '#10b981';
+          b.style.color = '#34d399';
+        } else {
+          b.innerHTML = '🔇 Alertas Voz: OFF';
+          b.style.background = 'rgba(239,68,68,0.2)';
+          b.style.borderColor = '#ef4444';
+          b.style.color = '#f87171';
+        }
+      });
+
+      if (window.voiceAlertsEnabled) {
+        speakAlertVoice("Alertas de voz activadas");
+      }
+    };
+
+    window.speakAlertVoice = function(text) {
+      if (!window.voiceAlertsEnabled) return;
+      if (!('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-ES';
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+      } catch(e) {}
+    };
 
     function descargarArchivoBase64(base64Data, fileName) {
       try {
@@ -30874,6 +31042,9 @@ PT._logKey = function (opName) {
       }, 50);
 
       playBeep('coin');
+      if (lastMsg && lastMsg.text) {
+        speakAlertVoice(`Nuevo mensaje de ${opNameReal}: ${lastMsg.text}`);
+      }
 
       setTimeout(() => {
         if (toast.parentNode) {
@@ -30952,8 +31123,28 @@ PT._logKey = function (opName) {
           const radius = isMe ? '12px 12px 2px 12px' : '12px 12px 12px 2px';
 
           let attachmentHTML = '';
-          if (msg.file) {
-            if (msg.file.type.startsWith('image/')) {
+          if (msg.audio) {
+            attachmentHTML = `
+              <div style="margin-top:6px; background:rgba(0,0,0,0.4); padding:6px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); width:220px;">
+                <div style="font-size:0.6rem; color:#a78bfa; font-weight:bold; margin-bottom:4px;">🎤 Nota de Voz</div>
+                <audio controls src="${msg.audio}" style="width:100%; height:32px; outline:none;"></audio>
+              </div>
+            `;
+          } else if (msg.sticker) {
+            attachmentHTML = `
+              <div style="margin-top:6px; display:inline-block;">
+                <img src="${msg.sticker}" style="max-width:140px; max-height:140px; border-radius:14px; filter:drop-shadow(0 6px 14px rgba(0,0,0,0.6)); display:block;">
+              </div>
+            `;
+          } else if (msg.file) {
+            if (msg.file.type && msg.file.type.startsWith('audio/')) {
+              attachmentHTML = `
+                <div style="margin-top:6px; background:rgba(0,0,0,0.4); padding:6px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); width:220px;">
+                  <div style="font-size:0.6rem; color:#a78bfa; font-weight:bold; margin-bottom:4px;">🎤 Mensaje de Audio</div>
+                  <audio controls src="${msg.file.data}" style="width:100%; height:32px; outline:none;"></audio>
+                </div>
+              `;
+            } else if (msg.file.type && msg.file.type.startsWith('image/')) {
               const safeData = msg.file.data.replace(/'/g, "\\'");
               const safeName = msg.file.name.replace(/'/g, "\\'");
               attachmentHTML = `
@@ -30975,7 +31166,7 @@ PT._logKey = function (opName) {
             }
           }
 
-          const checkmarkHTML = isMe ? (msg.seen ? '<span style="color:#5eead4; margin-left:4px; font-weight:900; font-size:0.65rem; text-shadow:0 0 4px rgba(94, 234, 212, 0.4);" title="Leído">✓✓</span>' : '<span style="color:#64748b; margin-left:4px; font-weight:900; font-size:0.65rem;" title="Entregado">✓</span>') : '';
+          const checkmarkHTML = isMe ? (msg.seen ? '<span style="color:#38bdf8; margin-left:4px; font-weight:900; font-size:0.7rem; text-shadow:0 0 6px rgba(56, 189, 248, 0.6);" title="Visto / Leído">✓✓</span>' : '<span style="color:#94a3b8; margin-left:4px; font-weight:900; font-size:0.7rem;" title="Enviado / No visto">✓</span>') : '';
 
           box.innerHTML += `
             <div style="align-self:${align}; background:${bubbleBg}; border:1px solid ${bubbleBorder}; padding:8px 12px; border-radius:${radius}; max-width:85%; margin-bottom:2px;">
@@ -31146,6 +31337,286 @@ PT._logKey = function (opName) {
         reader.readAsDataURL(file);
       });
       input.value = '';
+    }
+
+    // --- FUNCIONES DE EMOTES Y STICKERS ESTILO WHATSAPP ---
+    window.toggleStickerDrawer = function() {
+      const drawer = document.getElementById('chat-sticker-drawer');
+      if (!drawer) return;
+      drawer.style.display = (drawer.style.display === 'none' || !drawer.style.display) ? 'block' : 'none';
+    };
+
+    window.switchStickerTab = function(tabName) {
+      ['emotes', 'stickers', 'crear'].forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        const panel = document.getElementById(`tab-panel-${t}`);
+        if (btn && panel) {
+          if (t === tabName) {
+            btn.style.background = 'rgba(99,102,241,0.3)';
+            btn.style.color = 'white';
+            panel.style.display = (t === 'emotes' ? 'flex' : (t === 'stickers' ? 'flex' : 'flex'));
+          } else {
+            btn.style.background = 'rgba(255,255,255,0.05)';
+            btn.style.color = '#94a3b8';
+            panel.style.display = 'none';
+          }
+        }
+      });
+    };
+
+    window.insertEmoteToChat = function(emote) {
+      const input = document.getElementById('rr-chat-input');
+      if (input) {
+        input.value += emote;
+        input.focus();
+      }
+    };
+
+    window.enviarStickerPreset = function(preset) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const ctx = canvas.getContext('2d');
+
+      let text = '';
+      let gradStart = '#f59e0b', gradEnd = '#ef4444';
+      if (preset === 'fuego') { text = '🔥 RITMO FUEGO'; gradStart = '#f59e0b'; gradEnd = '#ef4444'; }
+      else if (preset === 'meta') { text = '💰 META CUMPLIDA'; gradStart = '#10b981'; gradEnd = '#059669'; }
+      else if (preset === 'cohete') { text = '🚀 MÁXIMA VELOCIDAD'; gradStart = '#6366f1'; gradEnd = '#4f46e5'; }
+      else if (preset === 'corona') { text = '👑 OPERADOR TOP'; gradStart = '#ec4899'; gradEnd = '#8b5cf6'; }
+      else if (preset === 'enfocado') { text = '⚡ ENFOCADO EN CHAT'; gradStart = '#0ea5e9'; gradEnd = '#0284c7'; }
+      else if (preset === '100') { text = '💯 100% EFECTIVO'; gradStart = '#84cc16'; gradEnd = '#65a30d'; }
+
+      // Borde blanco estilo WhatsApp sticker
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(10, 10, 220, 60, 18);
+      ctx.fill();
+
+      // Gradiente interno
+      const grad = ctx.createLinearGradient(14, 14, 226, 66);
+      grad.addColorStop(0, gradStart);
+      grad.addColorStop(1, gradEnd);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(14, 14, 212, 52, 14);
+      ctx.fill();
+
+      // Texto
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '900 13px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 120, 40);
+
+      const dataUrl = canvas.toDataURL('image/png');
+      enviarStickerChat(dataUrl);
+      toggleStickerDrawer();
+    };
+
+    window.procesarCrearStickerWhatsApp = function(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const maxDim = 200;
+          let w = img.width, h = img.height;
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+          canvas.width = w + 20;
+          canvas.height = h + 20;
+          const ctx = canvas.getContext('2d');
+
+          // Borde blanco WhatsApp sticker
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.roundRect(4, 4, w + 12, h + 12, 16);
+          ctx.fill();
+
+          // Dibujar imagen redondeada
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(10, 10, w, h, 12);
+          ctx.clip();
+          ctx.drawImage(img, 10, 10, w, h);
+          ctx.restore();
+
+          const stickerDataUrl = canvas.toDataURL('image/png');
+          enviarStickerChat(stickerDataUrl);
+          toggleStickerDrawer();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      input.value = '';
+    };
+
+    function enviarStickerChat(stickerDataUrl) {
+      let opName = '';
+      let sender = 'monitor';
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+        opName = typeof currentOpName !== 'undefined' ? currentOpName : '';
+        sender = 'operador';
+      } else {
+        opName = window.chatSelectedOp;
+        sender = 'monitor';
+      }
+      if (!opName) { alert("Por favor selecciona un operador primero."); return; }
+
+      const chatKey = `rr_chat_${opName.toLowerCase()}`;
+      const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const newMsg = {
+        sender: sender,
+        text: `🏷️ Sticker`,
+        sticker: stickerDataUrl,
+        time: timeStr,
+        ts: Date.now(),
+        seen: false
+      };
+      playBeep('pulse');
+
+      let history = [];
+      try {
+        const stored = localStorage.getItem(chatKey);
+        if (stored) history = JSON.parse(stored);
+      } catch(e) {}
+      if (!Array.isArray(history)) history = [];
+      history.push(newMsg);
+      if (history.length > 50) history.shift();
+
+      localStorage.setItem(chatKey, JSON.stringify(history));
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[chatKey] = Date.now();
+      renderChatHTML(history, opName);
+
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' })
+          .catch(err => console.warn('[CHAT-STICKER-SYNC] Error:', err));
+      }
+    }
+
+    // --- FUNCIONES DE GRABACIÓN DE NOTAS DE VOZ ---
+    let _audioRecorder = null;
+    let _audioChunks = [];
+    let _audioTimerInterval = null;
+    let _audioStartTime = 0;
+
+    window.iniciarGrabacionAudio = async function() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("Tu navegador no soporta grabación de audio desde el micrófono.");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _audioChunks = [];
+        _audioRecorder = new MediaRecorder(stream);
+        
+        _audioRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) _audioChunks.push(e.data);
+        };
+
+        _audioRecorder.start();
+        _audioStartTime = Date.now();
+
+        document.getElementById('chat-input-controls').style.display = 'none';
+        document.getElementById('chat-voice-rec-bar').style.display = 'flex';
+
+        _audioTimerInterval = setInterval(() => {
+          const elapsedSec = Math.floor((Date.now() - _audioStartTime) / 1000);
+          const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+          const secs = String(elapsedSec % 60).padStart(2, '0');
+          const timerEl = document.getElementById('chat-voice-timer');
+          if (timerEl) timerEl.innerText = `${mins}:${secs}`;
+        }, 500);
+
+      } catch (err) {
+        console.error("Error al acceder al micrófono:", err);
+        alert("No se pudo acceder al micrófono. Por favor otorga los permisos correspondientes.");
+      }
+    };
+
+    window.cancelarGrabacionAudio = function() {
+      if (_audioRecorder && _audioRecorder.state !== 'inactive') {
+        _audioRecorder.onstop = null;
+        _audioRecorder.stop();
+        if (_audioRecorder.stream) {
+          _audioRecorder.stream.getTracks().forEach(track => track.stop());
+        }
+      }
+      clearInterval(_audioTimerInterval);
+      document.getElementById('chat-voice-rec-bar').style.display = 'none';
+      document.getElementById('chat-input-controls').style.display = 'flex';
+    };
+
+    window.detenerYEnviarAudio = function() {
+      if (!_audioRecorder || _audioRecorder.state === 'inactive') return;
+
+      _audioRecorder.onstop = function() {
+        if (_audioRecorder.stream) {
+          _audioRecorder.stream.getTracks().forEach(track => track.stop());
+        }
+        const audioBlob = new Blob(_audioChunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          enviarAudioChat(e.target.result);
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      _audioRecorder.stop();
+      clearInterval(_audioTimerInterval);
+      document.getElementById('chat-voice-rec-bar').style.display = 'none';
+      document.getElementById('chat-input-controls').style.display = 'flex';
+    };
+
+    function enviarAudioChat(audioDataUrl) {
+      let opName = '';
+      let sender = 'monitor';
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
+        opName = typeof currentOpName !== 'undefined' ? currentOpName : '';
+        sender = 'operador';
+      } else {
+        opName = window.chatSelectedOp;
+        sender = 'monitor';
+      }
+      if (!opName) { alert("Por favor selecciona un operador primero."); return; }
+
+      const chatKey = `rr_chat_${opName.toLowerCase()}`;
+      const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const newMsg = {
+        sender: sender,
+        text: `🎤 Nota de Voz`,
+        audio: audioDataUrl,
+        time: timeStr,
+        ts: Date.now(),
+        seen: false
+      };
+      playBeep('pulse');
+
+      let history = [];
+      try {
+        const stored = localStorage.getItem(chatKey);
+        if (stored) history = JSON.parse(stored);
+      } catch(e) {}
+      if (!Array.isArray(history)) history = [];
+      history.push(newMsg);
+      if (history.length > 50) history.shift();
+
+      localStorage.setItem(chatKey, JSON.stringify(history));
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[chatKey] = Date.now();
+      renderChatHTML(history, opName);
+
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: chatKey, value: JSON.stringify(history) }, { onConflict: 'key' })
+          .catch(err => console.warn('[CHAT-AUDIO-SYNC] Error:', err));
+      }
     }
 
     function enviarPredefinida(opName, type) {
@@ -31338,9 +31809,34 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
+    window.toggleVoiceAlerts = function() {
+      const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      const next = !current;
+      localStorage.setItem('rr_voice_alerts_enabled', next ? 'true' : 'false');
+      window._enableVoiceAlerts = next;
+      window.updateVoiceAlertBtnUI();
+      if (next) {
+        speakText("Alertas de voz activadas");
+      } else {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+      }
+    };
+
+    window.updateVoiceAlertBtnUI = function() {
+      const enabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      window._enableVoiceAlerts = enabled;
+      const btns = document.querySelectorAll('.rr-voice-toggle-btn');
+      btns.forEach(btn => {
+        btn.innerHTML = enabled ? '🔊 Alertas Voz: ON' : '🔇 Alertas Voz: OFF';
+        btn.style.background = enabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+        btn.style.borderColor = enabled ? '#10b981' : '#ef4444';
+        btn.style.color = enabled ? '#34d399' : '#f87171';
+      });
+    };
+
     function speakText(text) {
       if (!window.speechSynthesis) return;
-      if (!window._enableVoiceAlerts) return;
+      if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
       
       try {
         const utterance = new SpeechSynthesisUtterance(text);

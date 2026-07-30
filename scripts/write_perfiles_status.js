@@ -42,5 +42,4 @@ async function run() {
   }
 }
 
-run().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(0); });
-
+run().then(() => setTimeout(() => process.exit(0), 200)).catch(e => { console.error(e); setTimeout(() => process.exit(1), 200); });

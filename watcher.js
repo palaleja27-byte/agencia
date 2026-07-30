@@ -287,10 +287,10 @@ async function watchPanel(panel, perfiles) {
           const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
           if (pts <= 0 || pts > 1000000) continue;
 
-          // Extraer ID del perfil de la URL o del cuerpo del JSON
-          let id = (response.url().match(/\d{7,10}/) || [])[0];
-          if (!id) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
-          if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
+          // Extraer ID del perfil con prioridad a campos específicos
+          let id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
+          if (!id || id.length < 7) id = (response.url().match(/\d{7,10}/) || [])[0];
+          if (!id || id.length < 7) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
           if (!id || id.length < 7) continue;
 
           const perfil = perfiles.find(p => p.id_datame === id);
@@ -345,10 +345,11 @@ async function watchPanel(panel, perfiles) {
         try {
           await page.evaluate((v) => {
             const ins = Array.from(document.querySelectorAll('input'));
-            let t = ins.find(i =>
-              (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
-              (i.placeholder || '').toLowerCase().includes('profile')
-            );
+            let t = ins.find(i => {
+              const label = (i.getAttribute('aria-label') || '').toLowerCase();
+              const p = (i.placeholder || '').toLowerCase();
+              return label.includes('profile') || p.includes('profile') || label.includes('perfil') || p.includes('perfil') || label.includes('search') || p.includes('search');
+            });
             if (!t && ins.length >= 3) t = ins[2];
             if (t) {
               t.value = v;

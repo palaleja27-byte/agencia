@@ -30485,7 +30485,11 @@ PT._logKey = function (opName) {
               if (updatedSeen) {
                 _sb.from('kv_store').upsert({ key: key, value: JSON.stringify(remoteHistory) }, { onConflict: 'key' })
                   .then(() => {
-                    localStorage.setItem(key, JSON.stringify(remoteHistory));
+                    if (typeof _origSetItem === 'function') {
+                      _origSetItem(key, JSON.stringify(remoteHistory));
+                    } else {
+                      localStorage.setItem(key, JSON.stringify(remoteHistory));
+                    }
                     actualizarBadgeMensajesNoLeidos();
                   }).catch(e => console.warn('[CHAT-SEEN-SYNC] Seen update failed:', e));
               }
@@ -30696,8 +30700,12 @@ PT._logKey = function (opName) {
       
       if (!Array.isArray(remoteHistory)) return;
 
-      // Guardar inmediatamente en localStorage
-      localStorage.setItem(row.key, JSON.stringify(remoteHistory));
+      // Guardar inmediatamente en localStorage (sin disparar upsert en loop)
+      if (typeof _origSetItem === 'function') {
+        _origSetItem(row.key, JSON.stringify(remoteHistory));
+      } else {
+        localStorage.setItem(row.key, JSON.stringify(remoteHistory));
+      }
 
       const chatPanel = document.getElementById('rr-urgent-chat');
       const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && chatPanel && chatPanel.classList.contains('open'));

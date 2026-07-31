@@ -10336,6 +10336,7 @@
           };
         });
         _rrPintarLiveFeed();
+        if (typeof renderAlertas === 'function') renderAlertas();
       } catch(e) { console.warn('[LIVE-INIT]', e); }
     }, 1500);
 
@@ -14970,16 +14971,6 @@
       Object.values(dayData).forEach(snap => { Object.keys(snap.data || {}).forEach(op => opsSet.add(op)); });
       const ops = [...opsSet].sort();
       if (allSlots.length === 0 || ops.length === 0) {
-        
-      // SAVE EXISTING PULSES BEFORE WIPE
-      const existingPulses = {};
-      if (tab === 'resumen') {
-         document.querySelectorAll('.swimlane-track').forEach(t => {
-            if (t.children.length > 0) {
-               existingPulses[t.id] = Array.from(t.children).map(c => c.cloneNode(true));
-            }
-         });
-      }
 
       wrap.innerHTML = `<div style="color:#475569;font-size:0.65rem;text-align:center;padding:20px;">Sin datos registrados hoy aún.</div>`;
         return;
@@ -15467,14 +15458,27 @@
 
       if (tab === 'resumen') {
         const lanesHtml = rows.map((r, i) => {
-          const tId = 'track-' + r.op.replace(/[^a-zA-Z0-9]/g, '') + '-' + r.pm.replace(/[^a-zA-Z0-9]/g, '');
-          return `<div style="display:flex;height:45px;background:linear-gradient(90deg, rgba(15,23,42,0.9), rgba(15,23,42,0.4));border-radius:10px;border:1px solid rgba(255,255,255,0.05);position:relative;overflow:hidden;margin-bottom:6px;box-shadow:0 4px 15px rgba(0,0,0,0.3);">
-            <div style="width:160px;min-width:160px;padding:8px 12px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(255,255,255,0.05);z-index:2;display:flex;flex-direction:column;justify-content:center;">
+          const safeOp = String(r.op).toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const safePm = String(r.pm).toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const tId = 'track-' + safeOp + '-' + safePm;
+          
+          // Inyectar historial reciente estático para que el mapa no empiece vacío
+          const historicalCaps = (window._rrLiveFeed || []).filter(e => 
+             (String(e.op).toUpperCase().replace(/[^A-Z0-9]/g, '') === safeOp) &&
+             (String(e.modelo).toUpperCase().replace(/[^A-Z0-9]/g, '') === safePm)
+          ).map((e, idx) => {
+             const leftOffset = Math.min(80, 20 + (idx * 15)); 
+             return `<div class="pulse-capsule" style="animation:none; left:${leftOffset}%; right:auto; opacity:0.4; filter:brightness(0.7); transform:scale(0.85); box-shadow:none;">+$${(e.pts||0).toFixed(2)}</div>`;
+          }).join('');
+
+          return `<div style="display:flex;min-height:48px;background:linear-gradient(90deg, rgba(15,23,42,0.9), rgba(15,23,42,0.4));border-radius:10px;border:1px solid rgba(255,255,255,0.05);position:relative;overflow:hidden;margin-bottom:6px;box-shadow:0 4px 15px rgba(0,0,0,0.3);">
+            <div style="width:160px;min-width:160px;padding:6px 10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(255,255,255,0.05);z-index:2;display:flex;flex-direction:column;justify-content:center;">
                <div style="font-size:0.65rem;font-weight:900;color:#f8fafc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.op.split(' ').slice(0,2).join(' ')}</div>
                <div style="font-size:0.5rem;color:#38bdf8;font-weight:800;margin-top:2px;">${r.pm}</div>
-               <div style="font-size:0.5rem;color:#34d399;font-weight:800;margin-top:2px;">${r.dia.toFixed(1)} Hoy</div>
+               <div id="score-${tId}" style="font-size:0.5rem;color:#34d399;font-weight:800;margin-top:2px;transition:0.2s;">${r.dia.toFixed(1)} Hoy</div>
             </div>
-            <div id="${tId}" class="swimlane-track" style="flex:1;position:relative;background:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik0wIDEwaDQwdjFIMHoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMikiLz4KPHBhdGggZD0iTTEwIDB2NDBoLTFWMHoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMikiLz4KPC9zdmc+');overflow:hidden;">
+            <div id="${tId}" data-op="${safeOp}" class="swimlane-track" style="flex:1;position:relative;background:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik0wIDEwaDQwdjFIMHoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMikiLz4KPHBhdGggZD0iTTEwIDB2NDBoLTFWMHoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMikiLz4KPC9zdmc+');overflow:hidden;">
+               ${historicalCaps}
             </div>
           </div>`;
         }).join('');
@@ -15482,10 +15486,10 @@
         content = `
           <style>
             @keyframes swimlaneSlide {
-              0% { transform: translateX(100px) scale(1.3); opacity: 1; filter: brightness(1.5); }
-              5% { transform: translateX(0px) scale(1); opacity: 1; filter: brightness(1.2); }
-              90% { transform: translateX(calc(-100vw + 300px)) scale(1); opacity: 0.8; filter: brightness(1); }
-              100% { transform: translateX(calc(-100vw + 250px)) scale(0.8); opacity: 0; filter: brightness(0.8); }
+              0% { right: -50px; transform: scale(1.3); opacity: 1; filter: brightness(1.5); }
+              10% { right: 20px; transform: scale(1.1); opacity: 1; filter: brightness(1.2); }
+              80% { right: calc(100vw - 400px); transform: scale(1); opacity: 0.9; filter: brightness(1); }
+              100% { right: calc(100vw - 350px); transform: scale(0.8); opacity: 0; filter: brightness(0.8); }
             }
             .pulse-capsule {
               position: absolute;
@@ -15500,7 +15504,7 @@
               border-radius: 12px;
               box-shadow: 0 0 15px rgba(52,211,153,0.6);
               white-space: nowrap;
-              animation: swimlaneSlide 30s linear forwards;
+              animation: swimlaneSlide 4.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
               z-index: 1;
             }
           </style>
@@ -15518,6 +15522,16 @@
       if (tab === 'mapa') { content = `<div id="heatmap10m-mount" style="min-height:120px;"></div>`; }
       const recentFeed = (window._rrLiveFeed || []).map(entry => `<div style="font-size:0.52rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;color:#94a3b8;"><span>${entry.op.split(' ')[0]} <small style="color:#475569;">(${entry.modelo})</small></span><b style="color:#2dd4bf">+$${(entry.pts||0).toFixed(2)}</b></div>`).join('');
       const liveTotal = (window._rrLiveFeed || []).reduce((acc, r) => acc + (Number(r.pts) || 0), 0);
+      
+      // SAVE EXISTING PULSES BEFORE WIPE
+      const existingPulses = {};
+      if (tab === 'resumen') {
+         document.querySelectorAll('.swimlane-track').forEach(t => {
+            if (t.children.length > 0) {
+               existingPulses[t.id] = Array.from(t.children).map(c => c.cloneNode(true));
+            }
+         });
+      }
 
       wrap.innerHTML = `
       <details class="action-map-accordion" ${isMapOpen ? 'open' : ''} ontoggle="localStorage.setItem('rr_action_map_open', this.open)" style="background:#0f172a;border:1px solid rgba(148,163,184,0.15);border-radius:16px;margin-bottom:25px;font-family:'Inter',sans-serif;overflow:hidden;box-shadow:0 12px 36px rgba(0,0,0,0.5);">
@@ -15606,6 +15620,17 @@
         .op-prod-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .op-prod-card:hover { transform: translateY(-4px) scale(1.01); border-color: rgba(99, 102, 241, 0.4) !important; background: rgba(30, 41, 59, 0.9) !important; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
       </style>`;
+      
+      // RESTORE PULSES
+      if (tab === 'resumen') {
+         for (const [id, pulses] of Object.entries(existingPulses)) {
+            const track = document.getElementById(id);
+            if (track) {
+               pulses.forEach(p => track.appendChild(p));
+            }
+         }
+      }
+
       if (tab === 'mapa') {
         requestAnimationFrame(() => {
           // Soporte dual: renderHeatmap10m puede aceptar el mount o buscarlo internamente
@@ -28305,11 +28330,17 @@ PT._logKey = function (opName) {
       );
       if (!op) return;
 
+      let exactPm = row.modelo || 'Perfil';
+      if (op.profiles) {
+         const pMatch = op.profiles.find(p => String(p.id) === pId);
+         if (pMatch) exactPm = pMatch.model || pMatch.modelo || pMatch.nombre || ('ID ' + pMatch.id);
+      }
+
       const entry = {
         op: op.name,
         pts: pts,
         ts: Date.now(),
-        modelo: row.modelo || 'Perfil',
+        modelo: exactPm,
         perfil: pId,
         time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
         turno: typeof _opRtJornada === 'function' ? _opRtJornada() : '...'
@@ -28322,24 +28353,49 @@ PT._logKey = function (opName) {
       
       // SWIMLANE SPAWNER
       if (typeof window.activeAlertaTab === 'undefined' || window.activeAlertaTab === 'resumen') {
-         const tId = 'track-' + entry.op.replace(/[^a-zA-Z0-9]/g, '') + '-' + entry.modelo.replace(/[^a-zA-Z0-9]/g, '');
-         const track = document.getElementById(tId);
+         const safeOp = String(entry.op).toUpperCase().replace(/[^A-Z0-9]/g, '');
+         const safePm = String(entry.modelo).toUpperCase().replace(/[^A-Z0-9]/g, '');
+         const exactTId = 'track-' + safeOp + '-' + safePm;
+         
+         let track = document.getElementById(exactTId);
+         let targetTId = exactTId;
+         
+         if (!track) {
+            track = document.querySelector(\`.swimlane-track[data-op="\${safeOp}"]\`);
+            if (track) targetTId = track.id;
+         }
+         if (!track) {
+            track = document.querySelector('.swimlane-track');
+            if (track) targetTId = track.id;
+         }
+
          if (track) {
             const cap = document.createElement('div');
             cap.className = 'pulse-capsule';
             cap.innerHTML = '+$' + entry.pts.toFixed(2);
             track.appendChild(cap);
             setTimeout(() => { if (cap.parentNode) cap.parentNode.removeChild(cap); }, 30000); // Clean after 30s
+            
+            // Dynamic score tick (update the score where the pulse actually landed)
+            const scoreEl = document.getElementById('score-' + targetTId);
+            if (scoreEl) {
+               let currentVal = parseFloat(scoreEl.innerText) || 0;
+               currentVal += entry.pts;
+               scoreEl.innerHTML = currentVal.toFixed(1) + ' Hoy';
+               scoreEl.style.transform = 'scale(1.2)';
+               scoreEl.style.color = '#fff';
+               setTimeout(() => { 
+                 if (scoreEl) { scoreEl.style.transform = 'scale(1)'; scoreEl.style.color = '#34d399'; }
+               }, 300);
+            }
          }
       }
       if (typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
       if (typeof guardarHeatmapSnap10m === 'function') guardarHeatmapSnap10m();
       if (typeof guardarHeatmapSnap5m === 'function') guardarHeatmapSnap5m();
 
-      // 2. Actualizar feed si el Action Map está abierto
-      if (localStorage.getItem('rr_action_map_open') === 'true') {
-        renderAlertas(); 
-      }
+      // NOTA: Se eliminó el llamado a renderAlertas() aquí para evitar que se destruya el DOM 
+      // y se reinicien las animaciones CSS de los swimlanes con cada pulso.
     }
 
     function dpIniciarRealtime() {
@@ -30047,7 +30103,7 @@ PT._logKey = function (opName) {
     </div>
 
     <!-- Input Bar -->
-    <div style="padding:10px 12px; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.05); display:flex; gap:6px; align-items:center; position:relative;">
+    <div style="padding:10px 12px; box-sizing:border-box; background:rgba(0,0,0,0.6); border-top:1px solid rgba(255,255,255,0.05); display:flex; gap:6px; align-items:center; position:relative; width:100%;">
       <!-- Panel Grabando Audio (Oculto por defecto) -->
       <div id="chat-voice-rec-bar" style="display:none; flex:1; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); border-radius:8px; padding:4px 10px; align-items:center; justify-content:space-between;">
         <span style="font-size:0.7rem; color:#f87171; font-weight:bold; display:inline-flex; align-items:center; gap:6px;">
@@ -30068,7 +30124,7 @@ PT._logKey = function (opName) {
 
         <button onclick="iniciarGrabacionAudio()" title="Enviar nota de voz por audio" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:1.1rem; transition:0.2s;" onmouseover="this.style.color='#f43f5e'" onmouseout="this.style.color='#94a3b8'">🎤</button>
 
-        <input type="text" id="rr-chat-input" placeholder="Responder..." style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
+        <input type="text" id="rr-chat-input" placeholder="Responder..." style="flex:1; min-width:0; box-sizing:border-box; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 12px; border-radius:8px; font-size:0.8rem; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'" onkeypress="if(event.key==='Enter') enviarMensajeChat()">
         <button onclick="enviarMensajeChat()" style="background:#6366f1; border:none; color:white; font-weight:bold; padding:8px 14px; border-radius:8px; cursor:pointer; transition:0.2s; box-shadow:0 0 10px rgba(99,102,241,0.3);">Enviar</button>
       </div>
     </div>
@@ -30318,7 +30374,47 @@ PT._logKey = function (opName) {
       }
 
       if (!opName) {
-        box.innerHTML = '<div style="text-align:center; font-size:0.6rem; color:#475569; margin-top:20px;">Selecciona un operador en la parte superior para ver el chat.</div>';
+        if (typeof currentRole !== 'undefined' && (currentRole === 'monitor' || currentRole === 'admin')) {
+          let inboxHtml = '<div style="padding:10px; font-size:0.7rem; color:#94a3b8; font-weight:800; border-bottom:1px solid rgba(255,255,255,0.05); text-align:center;">BANDEJA DE ENTRADA</div>';
+          let chats = [];
+          if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+            operatorsData.forEach(op => {
+              const k = `rr_chat_${op.name.toLowerCase()}`;
+              try {
+                const st = localStorage.getItem(k);
+                if (st) {
+                  const hist = JSON.parse(st);
+                  if (Array.isArray(hist) && hist.length > 0) {
+                    const unread = hist.filter(m => m.sender === 'operador' && !m.seen).length;
+                    const lastMsg = hist[hist.length - 1];
+                    chats.push({ name: op.name, unread, lastMsg });
+                  }
+                }
+              } catch(e){}
+            });
+          }
+          if (chats.length === 0) {
+            inboxHtml += '<div style="text-align:center; font-size:0.6rem; color:#475569; margin-top:20px;">No hay mensajes recientes.</div>';
+          } else {
+            chats.sort((a, b) => b.unread - a.unread);
+            chats.forEach(c => {
+               const unreadBadge = c.unread > 0 ? `<span style="background:#ef4444; color:white; padding:2px 6px; border-radius:10px; font-size:0.6rem; font-weight:bold; box-shadow:0 0 8px rgba(239,68,68,0.5);">${c.unread}</span>` : '';
+               const snippet = (c.lastMsg.text || (c.lastMsg.type==='audio'?'🎤 Audio':'🖼️ Imagen')).substring(0,35) + '...';
+               inboxHtml += `
+                 <div onclick="document.getElementById('rr-chat-op-select').value='${c.name}'; seleccionarOperadorChat('${c.name}')" style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; background:${c.unread > 0 ? 'rgba(99,102,241,0.15)' : 'transparent'};" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='${c.unread > 0 ? 'rgba(99,102,241,0.15)' : 'transparent'}'">
+                   <div style="display:flex; flex-direction:column; gap:4px; max-width:80%;">
+                     <span style="color:#f8fafc; font-weight:800; font-size:0.75rem;">${c.name.toUpperCase()}</span>
+                     <span style="color:#94a3b8; font-size:0.65rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${snippet}</span>
+                   </div>
+                   ${unreadBadge}
+                 </div>
+               `;
+            });
+          }
+          box.innerHTML = inboxHtml;
+        } else {
+          box.innerHTML = '<div style="text-align:center; font-size:0.6rem; color:#475569; margin-top:20px;">Selecciona un operador en la parte superior para ver el chat.</div>';
+        }
         return;
       }
 
@@ -30627,6 +30723,10 @@ PT._logKey = function (opName) {
       if (isViewingCurrent && typeof cargarHistorialChatSeleccionado === 'function') {
         cargarHistorialChatSeleccionado();
       } else {
+        const isViewingInbox = (chatPanel && chatPanel.classList.contains('open') && !window.chatSelectedOp);
+        if (isViewingInbox && typeof cargarHistorialChatSeleccionado === 'function') {
+          cargarHistorialChatSeleccionado();
+        }
         if (typeof window.actualizarBadgeMensajesNoLeidos === 'function') {
           window.actualizarBadgeMensajesNoLeidos();
         }
@@ -30694,7 +30794,12 @@ PT._logKey = function (opName) {
     function renderChatHTML(history, opName) {
       const box = document.getElementById('rr-chat-msgs');
       if (!box) return;
-      box.innerHTML = `<div style="text-align:center; font-size:0.6rem; color:#475569; margin-bottom:10px;">Chat Sincronizado: ${opName.toUpperCase()}</div>`;
+      
+      let backBtn = '';
+      if (typeof currentRole !== 'undefined' && (currentRole === 'monitor' || currentRole === 'admin')) {
+        backBtn = `<button onclick="document.getElementById('rr-chat-op-select').value=''; seleccionarOperadorChat('')" style="position:absolute; top:4px; left:8px; background:rgba(255,255,255,0.1); border:none; color:#cbd5e1; font-size:0.65rem; padding:4px 8px; border-radius:6px; cursor:pointer;">← Bandeja</button>`;
+      }
+      box.innerHTML = `<div style="text-align:center; font-size:0.6rem; color:#475569; margin-bottom:10px; position:relative; padding-top:10px;">${backBtn}Chat: ${opName.toUpperCase()}</div>`;
       
       if (history.length === 0) {
         box.innerHTML += `

@@ -51,9 +51,12 @@ function fechaHoyColombia() {
 }
 
 function rangoMesActual() {
-    const end = process.env.END_DATE || new Date().toISOString().split('T')[0];
+    const dt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+    const logical = new Date(dt.getTime() - (6 * 3600000));
+    const fallbackEnd = logical.toLocaleDateString('en-CA');
+    const end = process.env.END_DATE || fallbackEnd;
     return { start: process.env.START_DATE || '2026-02-01', end };
-  }
+}
 
 function log(msg) {
   const ts = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
@@ -323,9 +326,27 @@ async function watchPanel(panel, perfiles) {
 
       // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
       await page.evaluate(({ s, e }) => {
-        const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
-        if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
-        if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
+        const ins = Array.from(document.querySelectorAll('input[type="text"],input.q-field__native'));
+        // Buscar inputs que ya contengan una fecha con formato YYYY-MM-DD
+        let dateInputs = ins.filter(i => i.value && /^\\d{4}-\\d{2}-\\d{2}$/.test(i.value.trim()));
+        
+        // Si encontramos al menos 2, asumimos que son start y end
+        if (dateInputs.length >= 2) {
+          dateInputs[0].value = s;
+          dateInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+          dateInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+          dateInputs[1].value = e;
+          dateInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+          dateInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (ins.length >= 2) {
+          // Fallback legacy a los primeros 2 inputs
+          ins[0].value = s;
+          ins[0].dispatchEvent(new Event('input', { bubbles: true }));
+          ins[0].dispatchEvent(new Event('change', { bubbles: true }));
+          ins[1].value = e;
+          ins[1].dispatchEvent(new Event('input', { bubbles: true }));
+          ins[1].dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }, { s: start, e: end });
       await page.waitForTimeout(1200);
 

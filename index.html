@@ -10247,7 +10247,7 @@
       '<div id="rk-val-cop" style="font-size:.65rem;color:#34d399;margin-top:1px; font-weight: 600;">' + dCopDisp + '</div>' +
       '<button onclick="showSmartInfo(\'rk-total\')" style="position:absolute;top:5px;right:5px;width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.05);border:1px solid rgba(94,234,212,.3);color:#5eead4;font-size:8px;font-weight:700;cursor:pointer;line-height:1;" title="Info del modulo">ℹ</button>' +
     '</div>' +
-    '<div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px; position:relative;">' +
+    '<div class="rk-stat-card" style="border: 1px solid rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.03); min-width: 140px; position:relative; cursor:pointer;" onclick="_rrOpenLiveFeedModal()">' +
       '<div id="rk-header-live-feed" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">' +
          '<div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">' +
             '<span class="dp-live-dot"></span>' +
@@ -10256,7 +10256,7 @@
          '<div id="rk-header-live-msg" style="font-size: 0.65rem; color: #e2e8f0; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Cargando...</div>' +
          '<div id="rk-header-live-time" style="font-size: 0.5rem; color: #475569; margin-top: 2px;">—</div>' +
       '</div>' +
-      '<button onclick="showSmartInfo(\'rk-live\')" style="position:absolute;top:5px;right:5px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:14px;height:14px;border-radius:50%;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;line-height:1;" title="Info del modulo">ℹ</button>' +
+      '<button onclick="event.stopPropagation(); showSmartInfo(\'rk-live\')" style="position:absolute;top:5px;right:5px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.3);color:#818cf8;width:14px;height:14px;border-radius:50%;font-size:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;line-height:1;" title="Info del modulo">ℹ</button>' +
     '</div>' +
     '<div class="rk-stat-card" style="position:relative;">' +
       '<div class="stat-val" id="rk-val-growth" style="color:' + dCrecColor + '; font-size: 16px;">' + dCrecIcon + ' ' + dCrecStr + '</div>' +
@@ -10309,8 +10309,89 @@
         '<span style="color:#2dd4bf;font-size:0.55rem;font-weight:600">🪪 ' + last.modelo + '</span>';
       if (timeEl) timeEl.innerText = last.time + ' · ID ' + last.perfil;
     }
+    window._rrOpenLiveFeedModal = function() {
+      if (typeof Swal === 'undefined') return;
+      
+      const renderList = (filterText = '') => {
+        const query = filterText.toLowerCase().trim();
+        const filtered = (window._rrLiveFeed || []).filter(item => {
+          if (!query) return true;
+          return (
+            (item.op || '').toLowerCase().includes(query) ||
+            (item.modelo || '').toLowerCase().includes(query) ||
+            (item.perfil || '').toLowerCase().includes(query) ||
+            (item.turno || '').toLowerCase().includes(query)
+          );
+        });
 
-    // 1. Carga inicial desde Supabase (ultimos 20 eventos del dia)
+        if (filtered.length === 0) {
+          return '<div style="text-align:center; padding: 30px; color: #64748b; font-size: 0.85rem;">Ningún registro coincide con la búsqueda</div>';
+        }
+
+        return filtered.map(item => {
+          const ptsColor = item.pts >= 30 ? '#10b981' : item.pts >= 10 ? '#2dd4bf' : '#818cf8';
+          return `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(30, 41, 59, 0.5); padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; border: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.2s;">
+              <div style="display: flex; flex-direction: column; gap: 2px; text-align: left;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-weight: 700; color: #f8fafc; font-size: 0.85rem;">👤 ${item.op}</span>
+                  <span style="font-size: 0.7rem; color: #94a3b8; background: rgba(148, 163, 184, 0.1); padding: 1px 6px; border-radius: 4px; font-weight: 600;">🪪 ${item.modelo}</span>
+                </div>
+                <div style="font-size: 0.7rem; color: #475569;">
+                  <span>Turno: ${item.turno}</span> &middot; <span>Hora: ${item.time}</span> &middot; <span style="font-family: monospace;">ID: ${item.perfil}</span>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <span style="font-weight: 900; color: ${ptsColor}; font-size: 0.95rem;">+${Number(item.pts).toFixed(1)}</span>
+                <span style="font-size: 0.65rem; color: #64748b; display: block;">pts</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      };
+
+      const totalOps = (window._rrLiveFeed || []).reduce((sum, item) => sum + (Number(item.pts) || 0), 0);
+      const countOps = (window._rrLiveFeed || []).length;
+
+      Swal.fire({
+        title: '📡 Actividad en Vivo (Hoy)',
+        html: `
+          <div style="margin-bottom: 12px; display: flex; gap: 8px; justify-content: space-between; font-size: 0.75rem;">
+            <div style="flex: 1; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); padding: 8px; border-radius: 6px; text-align: center;">
+              <div style="color: #818cf8; font-weight: 700;">Eventos Recientes</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 2px;">${countOps}</div>
+            </div>
+            <div style="flex: 1; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 8px; border-radius: 6px; text-align: center;">
+              <div style="color: #34d399; font-weight: 700;">Total Puntos Feed</div>
+              <div style="font-size: 1.1rem; font-weight: 800; color: #f8fafc; margin-top: 2px;">+${totalOps.toFixed(1)}</div>
+            </div>
+          </div>
+          <div style="position: relative; margin-bottom: 10px;">
+            <input type="text" id="rr-live-search" placeholder="🔍 Buscar por operador, modelo, ID o turno..." 
+                   style="width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid #1e293b; color: #fff; padding: 10px 12px; border-radius: 6px; font-size: 0.8rem; outline: none; margin: 0;">
+          </div>
+          <div id="rr-live-list-container" style="max-height: 280px; overflow-y: auto; padding-right: 4px;">
+            ${renderList()}
+          </div>
+        `,
+        background: '#070a13',
+        color: '#f8fafc',
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: '450px',
+        didOpen: () => {
+          const searchInput = document.getElementById('rr-live-search');
+          const listContainer = document.getElementById('rr-live-list-container');
+          if (searchInput && listContainer) {
+            searchInput.focus();
+            searchInput.addEventListener('input', (e) => {
+              listContainer.innerHTML = renderList(e.target.value);
+            });
+          }
+        }
+      });
+    }
+    // 1. Carga inicial desde Supabase (ultimos 150 eventos del dia)
     setTimeout(async () => {
       try {
         if (typeof _sb === 'undefined') return;
@@ -10321,7 +10402,7 @@
           .eq('fecha_dia', hoy)
           .gt('puntos_neto', 0)
           .order('id', { ascending: false })
-          .limit(20);
+          .limit(150);
         if (!rows || !rows.length) return;
         window._rrLiveFeed = rows.map(r => {
           const resolved = _rrResolveName(r.id_perfil, r.agencia);
@@ -10387,8 +10468,8 @@
               turno: r.jornada || '—',
               time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
             };
-            // Insertar al inicio del feed, mantener max 20
-            window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 20);
+            // Insertar al inicio del feed, mantener max 150
+            window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 150);
             _rrPintarLiveFeed();
             // Debounce ranking re-render on realtime events
             clearTimeout(window._rkLiveRenderTimer);
@@ -10437,24 +10518,20 @@
         const pos = i + 1;
         
         // --- CÁLCULO DINÁMICO DE PUNTOS (Base + Virtuales) ---
-        const cortesAll = getCortesOp(op.name);
+        const pHoy = _ptsHoyMap[op.name] || 0;
         const pPrevBase = op[prev] != null ? Number(op[prev]) : 0;
         const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
         
-        const pPrevVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesAntStats && Number(c.puntos || 0) <= 200).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-        const pCurrVir = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActStats && Number(c.puntos || 0) <= 200).reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-        
-        if (pCurrVir > 0) {
-          console.log(`[AUDITORÍA] Match Encontrado para '${op.name}': +${pCurrVir} pts (Cortes: ${cortesAll.length})`);
+        if (pHoy > 0) {
+          console.log(`[AUDITORÍA] Match Encontrado para '${op.name}': +${pHoy} pts hoy (Base Mes: ${pCurrBase})`);
         }
         
-        const pPrev = pPrevBase + pPrevVir;
-        const pCurr = pCurrBase + pCurrVir;
+        const pPrev = pPrevBase;
+        const pCurr = pCurrBase + pHoy;
         
         // Recalcular crecimiento para la tarjeta
         const growthReal = pPrev > 0 ? ((pCurr - pPrev) / pPrev * 100) : (pCurr > 0 ? 100 : 0);
         op.growth = growthReal; // Actualizar para que la clase CSS sea correcta
-        const pHoy = _ptsHoyMap[op.name] || 0;
         const hora = _horaMap[op.name];
 
         // 🧠 DELTA-SHIFT™ COMBINED PROFILES FOR CARD SERVICES (Fase 8)
@@ -19446,12 +19523,20 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         if (ids.length) {
           const { data: ops } = await _sb
             .from('operaciones')
-            .select('fecha_dia, puntos_neto')
+            .select('id_perfil, fecha_dia, puntos_neto, jornada')
             .in('id_perfil', ids)
             .gte('fecha_dia', INICIO)
             .neq('jornada', 'Auto');
           if (ops && ops.length) {
+            // Deduplicar: mantener solo el registro con mayor puntos_neto por (id_perfil, fecha_dia, jornada)
+            const seen = {};
             ops.forEach(r => {
+              const key = `${r.id_perfil}_${r.fecha_dia}_${r.jornada}`;
+              if (!seen[key] || (r.puntos_neto || 0) > (seen[key].puntos_neto || 0)) {
+                seen[key] = r;
+              }
+            });
+            Object.values(seen).forEach(r => {
               const f = r.fecha_dia;
               porDia[f] = (porDia[f] || 0) + (r.puntos_neto || 0);
             });
@@ -19459,72 +19544,21 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       } catch(e) { console.warn('[OP-STATS]', e); }
 
-      ptsHoy       = porDia[hoy]  || 0;
+      ptsHoy       = getPuntosHoy(name);
       ptsAyer      = porDia[ayer] || 0;
       ptsSemana    = Object.entries(porDia).filter(([d]) => d >= hace7  && d <= hoy ).reduce((s,[,v])=>s+v,0);
       ptsSemPasada = Object.entries(porDia).filter(([d]) => d >= hace14 && d <  hace7).reduce((s,[,v])=>s+v,0);
-      ptsMes       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === mesActual).reduce((s,[,v])=>s+v,0);
-      ptsMesPrev1  = Object.entries(porDia).filter(([d]) => d.slice(0,7) === _m1Key).reduce((s,[,v])=>s+v,0);
-      ptsMesPrev2  = Object.entries(porDia).filter(([d]) => d.slice(0,7) === _m0Key).reduce((s,[,v])=>s+v,0);
-
-      // HOY: priorizar Datame Sync (igual que el Dashboard Admin)
-      let datamePtsHoy = 0;
-      if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined') {
-        const opData = operatorsData.find(o => _n(o.name) === _n(name));
-        if (opData) {
-           let combinedProfiles = [...(opData.profiles || [])];
-           
-           // DELTA-SHIFT™: Agregar perfiles del draft de asistencia si existen
-           const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : '';
-           const _shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
-           const _draftFull = JSON.parse(localStorage.getItem((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + _shKey) || '{}');
-           const draftEntry = _draftFull[opData.name + '||operador'];
-           
-           if (draftEntry && Array.isArray(draftEntry.perfiles)) {
-              draftEntry.perfiles.forEach(dp => {
-                if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) combinedProfiles.push(dp);
-              });
-           }
-
-           const _horasOpStats = (typeof _horasHoyAll !== 'undefined' ? _horasHoyAll[opData.name] : null) || (opData.turno === 'Completo' ? { horas: 12, fecha: hoy } : { horas: 8, fecha: hoy });
-           const _es12hStats = _horasOpStats && _horasOpStats.horas === 12 && _horasOpStats.fecha === hoy;
-           const _curJ = (typeof _opRtJornada === 'function' ? _opRtJornada() : '').toLowerCase();
-
-           if (combinedProfiles.length > 0) {
-              combinedProfiles.forEach(p => {
-                 const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
-                 if (turnosPerfil) {
-                    if (_es12hStats) {
-                       datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
-                    } else {
-                       if (_curJ.startsWith('man')) {
-                          datamePtsHoy += (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0);
-                       } else if (_curJ.startsWith('tar')) {
-                          datamePtsHoy += (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0);
-                       } else {
-                          datamePtsHoy += (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0);
-                       }
-                    }
-                    datamePtsHoy += (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
-                 }
-              });
-           }
-        }
-      }
-
-      if (datamePtsHoy > 0) {
-         ptsHoy = datamePtsHoy;
-      } else if (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0 && _opRtOpName && _n(_opRtOpName) === _n(name)) {
-         ptsHoy = _opRtPtosSesion;
+      
+      const { prev, curr } = getActivePair();
+      const opData = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => _n(o.name) === _n(name));
+      if (opData) {
+        ptsMes       = (opData[curr] || 0) + ptsHoy;
+        ptsMesPrev1  = opData[prev] || 0;
       } else {
-         ptsHoy = getPuntosHoy(name);
+        ptsMes       = Object.entries(porDia).filter(([d]) => d.slice(0,7) === mesActual).reduce((s,[,v])=>s+v,0);
+        ptsMesPrev1  = Object.entries(porDia).filter(([d]) => d.slice(0,7) === _m1Key).reduce((s,[,v])=>s+v,0);
       }
-      // ESTE MES: priorizar _opRtTotalMes (total mensual acumulado de Datame, mas preciso)
-
-      if (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&
-          _opRtOpName && _n(_opRtOpName) === _n(name)) {
-        ptsMes = _opRtTotalMes;
-      }
+      ptsMesPrev2  = Object.entries(porDia).filter(([d]) => d.slice(0,7) === _m0Key).reduce((s,[,v])=>s+v,0);
 
       // Metricas derivadas
       const _d1 = new Date(mesActual + '-01').getTime();
@@ -19675,18 +19709,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const prevLabel = MONTH_LABELS[MONTH_KEYS.indexOf(prev)];
       const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)];
       const pPrev = op[prev] || 0;
-      // pCurr: PRIORIDAD → datos reales de Supabase (_opRtTotalMes)
-      //        FALLBACK  → cortes del mes en localStorage (puede tener datos inflados)
-      const _mesActDash = localDateStr().slice(0, 7);
-      const _cortesTotDash = getCortesOp(op.name)
-        .filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActDash && (c.puntos || 0) < 50000)
-        .reduce((s, c) => s + (c.puntos || 0), 0);
-      // _opRtTotalMes = total mensual real de Datame (Supabase), se actualiza cada sync
-      const _pCurrSupabase = (typeof _opRtTotalMes !== 'undefined' && _opRtTotalMes > 0 &&
-        _opRtOpName?.toUpperCase() === name?.toUpperCase()) ? _opRtTotalMes : 0;
-      const pCurr = _pCurrSupabase > 0 ? _pCurrSupabase
-                  : _cortesTotDash > 0  ? _cortesTotDash
-                  : (op[curr] || 0);
+      
+      // pCurr: base mensual recalculada de Supabase (excluyendo hoy) + puntos de hoy en tiempo real
+      const pHoy = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
+      const pCurr = (op[curr] || 0) + pHoy;
       const growthSign = op.growth > 0 ? '+' : '';
       const growthColor = op.growth > 0 ? '#34d399' : '#f87171';
 
@@ -28306,6 +28332,56 @@ PT._logKey = function (opName) {
         _dpPuntosData    = nuevosDatos;
         _dpTurnosData    = turnosHoy;
         _dpHistorialData = historialMap;
+
+        // --- RECALCULO DINÁMICO DE ACUMULADOS MENSUALES DESDE SUPABASE ---
+        try {
+          const { prev: prevMonthKey, curr: currMonthKey } = getActivePair();
+          const currYM = getMesActualStr(); // e.g. "2026-07"
+          const prevYM = getMesAnteriorStr(); // e.g. "2026-06"
+          const hoy = localDateStr();
+
+          // Inicializar en 0 para evitar acumulaciones duplicadas en memoria
+          operatorsData.forEach(op => {
+            op[currMonthKey] = 0;
+            op[prevMonthKey] = 0;
+          });
+
+          (ops || []).forEach(r => {
+            if (!r.fecha_dia || !r.id_perfil) return;
+            const pts = Number(r.puntos_neto) || 0;
+            if (pts <= 0 || pts > 400) return; // Omitir datos corruptos
+
+            // Encontrar todos los operadores que tengan este perfil o agencia
+            const opsMatching = operatorsData.filter(o => 
+              (o.profiles || []).some(p => String(p.id) === String(r.id_perfil)) ||
+              (r.agencia && o.name.toUpperCase().startsWith(r.agencia.trim().toUpperCase()))
+            );
+
+            opsMatching.forEach(op => {
+              const mesKey = r.fecha_dia.slice(0, 7);
+              if (mesKey === currYM) {
+                // Excluir hoy para evitar dobles conteos con las cortes de hoy en tiempo real
+                if (r.fecha_dia !== hoy) {
+                  op[currMonthKey] += pts;
+                }
+              } else if (mesKey === prevYM) {
+                op[prevMonthKey] += pts;
+              }
+            });
+          });
+
+          // Redondear a 1 decimal
+          operatorsData.forEach(op => {
+            op[currMonthKey] = Math.round(op[currMonthKey] * 10) / 10;
+            op[prevMonthKey] = Math.round(op[prevMonthKey] * 10) / 10;
+          });
+
+          // Persistir en localStorage
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(operatorsData));
+          console.log(`[SYNC-TOTALS] Acumulados mensuales recalculados: ${currMonthKey} y ${prevMonthKey}`, 'info');
+        } catch (errTotals) {
+          console.error('[SYNC-TOTALS] Error al calcular acumulados mensuales:', errTotals);
+        }
         
         const count = Object.keys(nuevosDatos).length;
         console.log(`Procesados ${count} perfiles. Hoy: ${Object.keys(turnosHoy).length} activos.`, 'info');
@@ -28765,38 +28841,6 @@ PT._logKey = function (opName) {
           });
         }
 
-        // 2d. Actualizar la métrica del mes actual en el dashboard
-        //     → Consulta separada: suma puntos_neto de TODOS los días del mes actual (acumulado real)
-        const mesEl = document.getElementById('op-dash-mes-val');
-        if (mesEl) {
-          // Calcular inicio y fin del mes actual en zona Colombia
-          const mesKey = hoy.substring(0, 7); // 'YYYY-MM'
-          const mesStart = mesKey + '-01';
-          // Suma de puntos_neto del mes completo para los perfiles del operador
-          _sb.from('operaciones')
-            .select('puntos_neto')
-            .in('id_perfil', ids)
-            .gte('fecha_dia', mesStart)
-            .lte('fecha_dia', hoy)
-            .neq('jornada', 'Auto')
-            .then(({ data: mesOps }) => {
-              if (mesOps && mesOps.length > 0) {
-                const totalMesReal = mesOps.reduce((s, r) => s + (parseFloat(r.puntos_neto) || 0), 0);
-                _opRtTotalMes = totalMesReal;
-                mesEl.innerHTML = totalMesReal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
-                const copEl = document.getElementById('op-dash-mes-cop');
-                if (copEl) copEl.textContent = '$' + Math.round(totalMesReal * 1400).toLocaleString('es-CO') + ' COP';
-              } else if (sumaTotal > 0) {
-                // Fallback: si no hay datos históricos, usar el total de hoy
-                mesEl.innerHTML = sumaTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
-              }
-            })
-            .catch(() => {
-              // Fallback silencioso: usar sumaTotal del día
-              if (sumaTotal > 0) mesEl.innerHTML = sumaTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
-            });
-        }
-
         if (_opRtBaseline === null) {
           // DELTA-SHIFT™: usar el baseline del TURNO (6am del watcher), no el total al login
           // Esto garantiza que el operador ve sus pts acumulados desde el inicio del turno
@@ -28939,10 +28983,10 @@ PT._logKey = function (opName) {
         const _es12hRt = _horasOpRt && _horasOpRt.horas === 12 && _horasOpRt.fecha === hoy;
         let _hoyTotal = (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0) ? _opRtPtosSesion : getPuntosHoy(opName, _es12hRt ? null : (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
 
-        // 1. Actualizar Stats Card (Hoy + Semana)
+        // 1. Actualizar Stats Card (Hoy + Semana + Mes)
         const _hoyEl = document.getElementById('op-dash-hoy-val');
         const _hoyCopEl = document.getElementById('op-dash-hoy-cop');
-        if (_hoyEl && _hoyTotal > 0) {
+        if (_hoyEl && _hoyTotal >= 0) {
           _hoyEl.innerHTML = _hoyTotal.toFixed(1) + ' <small style="font-size:.6rem;color:#475569;">pts</small>';
           
           // Actualizar Semana en tiempo real
@@ -28952,6 +28996,18 @@ PT._logKey = function (opName) {
             const _semTotal = window._opRtSemanaPrevia + _hoyTotal;
             _semEl.innerHTML = _semTotal.toFixed(1) + ' <small style="font-size:.6rem;color:#475569;">pts</small>';
             if (_semCopEl) _semCopEl.textContent = '$' + Math.round(_semTotal * 1400).toLocaleString('es-CO');
+          }
+
+          // Actualizar Mes en tiempo real (op[curr] + hoyTotal)
+          const _mesEl = document.getElementById('op-dash-mes-val');
+          const _mesCopEl = document.getElementById('op-dash-mes-cop');
+          if (_mesEl && opData) {
+            const { curr } = getActivePair();
+            const pCurrBase = opData[curr] != null ? Number(opData[curr]) : 0;
+            const _mesTotal = pCurrBase + _hoyTotal;
+            _opRtTotalMes = _mesTotal;
+            _mesEl.innerHTML = _mesTotal.toFixed(1) + ' <small style="font-size:.7rem;color:#475569;">pts</small>';
+            if (_mesCopEl) _mesCopEl.textContent = '$' + Math.round(_mesTotal * 1400).toLocaleString('es-CO') + ' COP';
           }
         }
 

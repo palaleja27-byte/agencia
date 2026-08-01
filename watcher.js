@@ -58,17 +58,20 @@ function fechaHoyColombia() {
 }
 
 function rangoMesActual() {
-  // Rango: inicio del mes → hoy + 2 días al futuro
+  // Rango: inicio del mes → hoy + 2 días al futuro (Basado en la hora lógica de Colombia)
   // Los 2 días extra garantizan que Datame incluya TODOS los datos actuales
-  // (algunos paneles tienen lag de 24-48h en su cierre contable)
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const endDate = new Date(d);
+  const dt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+  const logical = new Date(dt.getTime() - (6 * 3600000)); // Ajuste de turno de noche
+  
+  const y = logical.getFullYear();
+  const m = String(logical.getMonth() + 1).padStart(2, '0');
+  
+  const endDate = new Date(logical);
   endDate.setDate(endDate.getDate() + 2);  // ← +2 días al futuro
   const eY = endDate.getFullYear();
   const eM = String(endDate.getMonth() + 1).padStart(2, '0');
   const eD = String(endDate.getDate()).padStart(2, '0');
+  
   return { start: `${y}-${m}-01`, end: `${eY}-${eM}-${eD}` };
 }
 
@@ -335,9 +338,27 @@ async function watchPanel(panel, perfiles) {
 
       // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
       await page.evaluate(({ s, e }) => {
-        const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
-        if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); }
-        if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); }
+        const ins = Array.from(document.querySelectorAll('input[type="text"],input.q-field__native'));
+        // Buscar inputs que ya contengan una fecha con formato YYYY-MM-DD
+        let dateInputs = ins.filter(i => i.value && /^\\d{4}-\\d{2}-\\d{2}$/.test(i.value.trim()));
+        
+        // Si encontramos al menos 2, asumimos que son start y end
+        if (dateInputs.length >= 2) {
+          dateInputs[0].value = s;
+          dateInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+          dateInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+          dateInputs[1].value = e;
+          dateInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+          dateInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (ins.length >= 2) {
+          // Fallback legacy a los primeros 2 inputs
+          ins[0].value = s;
+          ins[0].dispatchEvent(new Event('input', { bubbles: true }));
+          ins[0].dispatchEvent(new Event('change', { bubbles: true }));
+          ins[1].value = e;
+          ins[1].dispatchEvent(new Event('input', { bubbles: true }));
+          ins[1].dispatchEvent(new Event('change', { bubbles: true }));
+        }
       }, { s: start, e: end });
       await page.waitForTimeout(1200);
 

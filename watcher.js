@@ -169,14 +169,20 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // Re-sincronizar siempre con el baseline de la DB si ya existe
   const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
   if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
-    shiftBaselines[key] = rec.puntos_baseline;
+    // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0
+    if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || new Date().getDate() === 1)) {
+      log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
+      shiftBaselines[key] = 0;
+      await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);
+    } else {
+      shiftBaselines[key] = rec.puntos_baseline;
+    }
   } else if (shiftBaselines[key] === undefined) {
     if (rec) {
       shiftBaselines[key] = monthlyTotal;
       log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
     } else {
       // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
-      // Esto cierra la "brecha temporal" si el watcher se retrasa en el cambio de turno.
       let inheritedBaseline = monthlyTotal;
       if (jornada === 'Tarde' || jornada === 'Noche') {
         const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
@@ -202,10 +208,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
   // ── SANIDAD: Control de picos irracionales ──
-  // Si netoTurno > 1500, significa que el baseline en BD se perdió o es corrupto
-  // (un operador no puede generar >1500 pts en una sola jornada).
   if (netoTurno > 1500) {
-    // Estimación conservadora basada en horas trabajadas (aprox 15 pts/hr)
     const h = Math.max(1, new Date().getHours() % 8);
     const netoEstimado = h * 15;
     
@@ -231,6 +234,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
       log(`  🔄 RECONCILIACIÓN MES ${modelo}: Datame reinició mes (${monthlyTotal.toFixed(1)} < baseline ${baseline.toFixed(1)}) → Fijando baseline a 0.0 pts`);
       shiftBaselines[key] = 0;
       netoTurno = monthlyTotal;
+      await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, netoTurno);
     } else {
       log(`  ⚠️ ${modelo}: total_mes (${monthlyTotal.toFixed(1)}) < baseline (${baseline.toFixed(1)}), ignorando`);
       return;

@@ -152,37 +152,41 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // Si no tenemos baseline en memoria, buscar en Supabase (watcher se reinició)
   if (shiftBaselines[key] === undefined) {
     const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
-
-    if (rec) {
-      const dbBaseline = rec.puntos_baseline || 0;
-      if (dbBaseline > 0) {
-        shiftBaselines[key] = dbBaseline;
-        log(`  📥 Baseline recuperado de DB: ${modelo} [${jornada}] = ${dbBaseline.toFixed(2)} pts`);
+    if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
+      // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0
+      if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || new Date().getDate() === 1)) {
+        log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
+        shiftBaselines[key] = 0;
+        await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);
       } else {
+        shiftBaselines[key] = rec.puntos_baseline;
+      }
+    } else if (shiftBaselines[key] === undefined) {
+      if (rec) {
         shiftBaselines[key] = monthlyTotal;
         log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
-      }
-    } else {
-      // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
-      // Esto cierra la "brecha temporal" si el watcher se retrasa en el cambio de turno.
-      let inheritedBaseline = monthlyTotal;
-      if (jornada === 'Tarde' || jornada === 'Noche') {
-        const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
-        const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
-        // Solo heredar si el total anterior NO supera al actual (es decir, no hubo reset de mes en Datame)
-        if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
-          inheritedBaseline = prevRec.puntos_total;
-          log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
-        } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
-          inheritedBaseline = 0;
-          log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
-        } else {
-          log(`  📍 Baseline fijado (sin herencia): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
-        }
       } else {
-        log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+        // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
+        // Esto cierra la "brecha temporal" si el watcher se retrasa en el cambio de turno.
+        let inheritedBaseline = monthlyTotal;
+        if (jornada === 'Tarde' || jornada === 'Noche') {
+          const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
+          const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
+          // Solo heredar si el total anterior NO supera al actual (es decir, no hubo reset de mes en Datame)
+          if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
+            inheritedBaseline = prevRec.puntos_total;
+            log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
+          } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
+            inheritedBaseline = 0;
+            log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
+          } else {
+            log(`  📍 Baseline fijado (sin herencia): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+          }
+        } else {
+          log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+        }
+        shiftBaselines[key] = inheritedBaseline;
       }
-      shiftBaselines[key] = inheritedBaseline;
     }
   }
 

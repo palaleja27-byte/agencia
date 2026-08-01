@@ -438,10 +438,9 @@ async function watchPanel(panel, perfiles) {
       log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
 
       await Promise.all(panels.map(panel => {
-        // Solo perfiles asignados explícitamente a este panel
-        const perfiles = (allPerfiles || []).filter(p => p.panel_id === panel.id && p.activo);
+        const perfiles = (allPerfiles || []).filter(p => p.activo);
         if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles registrados para este panel`); return Promise.resolve(); }
-        log(`  📋 ${panel.nombre}: ${perfiles.length} perfiles asignados`);
+        log(`  📋 ${panel.nombre}: Escaneando ${perfiles.length} perfiles activos`);
         return watchPanel(panel, perfiles);
       }));
 

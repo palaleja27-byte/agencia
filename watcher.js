@@ -183,22 +183,34 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
       log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
     } else {
       // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
-      let inheritedBaseline = monthlyTotal;
-      if (jornada === 'Tarde' || jornada === 'Noche') {
-        const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
+      let inheritedBaseline = 0;
+      const prevJornada = jornada === 'Noche' ? 'Tarde' : (jornada === 'Tarde' ? 'Mañana' : null);
+      if (prevJornada) {
         const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
-        // Solo heredar si el total anterior NO supera al actual (es decir, no hubo reset de mes en Datame)
         if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
           inheritedBaseline = prevRec.puntos_total;
           log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
         } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
           inheritedBaseline = 0;
           log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
-        } else {
-          log(`  📍 Baseline fijado (sin herencia): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
         }
       } else {
-        log(`  📍 Baseline fijado: ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
+        const { data: ultimo } = await supabase.from('operaciones')
+          .select('puntos_total, fecha_dia')
+          .eq('id_perfil', idPerfil)
+          .lt('fecha_dia', fechaDia)
+          .order('fecha_dia', { ascending: false })
+          .order('fecha_corte', { ascending: false })
+          .limit(1).maybeSingle();
+
+        const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== fechaDia.substring(0, 7));
+        if (!esNuevoMes && ultimo && ultimo.puntos_total > 0 && ultimo.puntos_total <= monthlyTotal) {
+          inheritedBaseline = ultimo.puntos_total;
+          log(`  🔗 Baseline heredado de día anterior (${ultimo.fecha_dia}): ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
+        } else {
+          inheritedBaseline = 0;
+          log(`  📍 Inicio de Mes o turno sin herencia: ${modelo} [${jornada}] = 0.00 pts`);
+        }
       }
       shiftBaselines[key] = inheritedBaseline;
     }
@@ -459,15 +471,15 @@ async function watchPanel(panel, perfiles) {
       // 4. Asignar cada perfil a su respectivo watcher/navegador
       log(`🔘 Preparando Watchers...`);
       const panelsPromise = Promise.all(panels.map(panel => {
-        // Perfiles asignados explícitamente a este panel, O perfiles nuevos sin panel asignado (panel_id = null)
-        const perfiles = (allPerfiles || []).filter(p => (p.panel_id === panel.id || p.panel_id == null) && p.activo);
+        // Pasar todos los perfiles activos para garantizar extracción multiplataforma
+        const perfiles = (allPerfiles || []).filter(p => p.activo);
       
         if (perfiles.length === 0) {
           log(`📋 PANEL-${panel.id}: 0 perfiles (Omitiendo)`);
           return Promise.resolve();
         }
-        log(`📋 PANEL-${panel.id}: ${perfiles.length} perfiles asignados (incluyendo huerfanos)`);
-          return watchPanel(panel, perfiles);
+        log(`📋 PANEL-${panel.id}: Escaneando ${perfiles.length} perfiles activos`);
+        return watchPanel(panel, perfiles);
         }));
 
     } else {

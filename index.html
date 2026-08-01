@@ -27711,33 +27711,30 @@ PT._logKey = function (opName) {
             if (i === 0) {
               // Buscar el último cierre conocido de este perfil (ayer o el último día activo)
               const { data: ultimo } = await _sb.from('operaciones')
-                .select('puntos_total')
+                .select('puntos_total, fecha_dia')
                 .eq('id_perfil', id)
                 .lt('fecha_dia', hoy)
                 .order('fecha_dia', { ascending: false })
                 .order('fecha_corte', { ascending: false })
                 .limit(1).maybeSingle();
               
-              // Si el registro ya tiene un baseline no cero calibrado, preservarlo
-              if (rec.puntos_baseline > 0) {
+              const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
+
+              if (esNuevoMes) {
+                nuevoBase = 0; // En inicio de mes Datame reinicia el total mensual a 0
+              } else if (rec.puntos_baseline > 0) {
                 nuevoBase = rec.puntos_baseline;
               } else {
-                nuevoBase = ultimo ? (ultimo.puntos_total || 0) : rec.puntos_baseline;
+                nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
               }
             } else {
               nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
             }
             
-            // Sanidad: El baseline no puede ser mayor que el total
-            if (nuevoBase > rec.puntos_total) nuevoBase = rec.puntos_total;
+            // Sanidad: El baseline no puede ser mayor que el total (si bajó, es reinicio)
+            if (nuevoBase > rec.puntos_total) nuevoBase = 0;
 
             let nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-            // Regla de Sanidad DELTA-SHIFT™: Si el neto del turno supera los 200 pts en una sola jornada,
-            // el baseline estaba desfasado con respecto al inicio del turno. Ajustar baseline al total actual.
-            if (nuevoNeto > 200) {
-              nuevoBase = rec.puntos_total;
-              nuevoNeto = 0.0;
-            }
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
               if (String(rec.id).startsWith('virtual_tableau_')) {

@@ -324,31 +324,31 @@ async function watchPanel(panel, perfiles) {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
 
-      // Inyectar rango del mes (Datame devuelve el total acumulado del mes)
-      await page.evaluate(({ s, e }) => {
+      // Inyectar rango del mes de forma nativa para actualizar el v-model de Quasar
+      const dateInputsIds = await page.evaluate(() => {
         const ins = Array.from(document.querySelectorAll('input[type="text"],input.q-field__native'));
-        // Buscar inputs que ya contengan una fecha con formato YYYY-MM-DD
         let dateInputs = ins.filter(i => i.value && /^\\d{4}-\\d{2}-\\d{2}$/.test(i.value.trim()));
+        if (dateInputs.length < 2) dateInputs = ins.slice(0, 2);
         
-        // Si encontramos al menos 2, asumimos que son start y end
         if (dateInputs.length >= 2) {
-          dateInputs[0].value = s;
-          dateInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-          dateInputs[0].dispatchEvent(new Event('change', { bubbles: true }));
-          dateInputs[1].value = e;
-          dateInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
-          dateInputs[1].dispatchEvent(new Event('change', { bubbles: true }));
-        } else if (ins.length >= 2) {
-          // Fallback legacy a los primeros 2 inputs
-          ins[0].value = s;
-          ins[0].dispatchEvent(new Event('input', { bubbles: true }));
-          ins[0].dispatchEvent(new Event('change', { bubbles: true }));
-          ins[1].value = e;
-          ins[1].dispatchEvent(new Event('input', { bubbles: true }));
-          ins[1].dispatchEvent(new Event('change', { bubbles: true }));
+          dateInputs[0].id = dateInputs[0].id || 'temp-start-date';
+          dateInputs[1].id = dateInputs[1].id || 'temp-end-date';
+          return ['#' + dateInputs[0].id, '#' + dateInputs[1].id];
         }
-      }, { s: start, e: end });
-      await page.waitForTimeout(1200);
+        return [];
+      });
+
+      if (dateInputsIds.length === 2) {
+        await page.fill(dateInputsIds[0], ''); // Limpiar
+        await page.type(dateInputsIds[0], start, { delay: 50 });
+        await page.press(dateInputsIds[0], 'Enter');
+        await page.waitForTimeout(300);
+        
+        await page.fill(dateInputsIds[1], ''); // Limpiar
+        await page.type(dateInputsIds[1], end, { delay: 50 });
+        await page.press(dateInputsIds[1], 'Enter');
+        await page.waitForTimeout(800);
+      }
 
       for (const perfil of perfiles) {
         try {

@@ -169,10 +169,13 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
       if (jornada === 'Tarde' || jornada === 'Noche') {
         const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
         const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
-        // Si el turno anterior tiene puntos, usamos SU CIERRE como nuestro INICIO.
-        if (prevRec && prevRec.puntos_total > 0) {
+        // Solo heredar si el total anterior NO supera al actual (es decir, no hubo reset de mes en Datame)
+        if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
           inheritedBaseline = prevRec.puntos_total;
           log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
+        } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
+          inheritedBaseline = 0;
+          log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
         } else {
           log(`  📍 Baseline fijado (sin herencia): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
         }

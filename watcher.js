@@ -181,10 +181,13 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
       if (jornada === 'Tarde' || jornada === 'Noche') {
         const prevJornada = jornada === 'Tarde' ? 'Mañana' : 'Tarde';
         const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
-        // Si el turno anterior tiene puntos, usamos SU CIERRE como nuestro INICIO.
-        if (prevRec && prevRec.puntos_total > 0) {
+        // Solo heredar si el total anterior NO supera al actual (es decir, no hubo reset de mes en Datame)
+        if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
           inheritedBaseline = prevRec.puntos_total;
           log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
+        } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
+          inheritedBaseline = 0;
+          log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
         } else {
           log(`  📍 Baseline fijado (sin herencia): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
         }
@@ -222,10 +225,16 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     }
   }
 
-  // Ignorar si el total bajó (lag de Datame)
+  // Ignorar si el total bajó (lag de Datame), A MENOS que sea un Reset de Mes en Datame
   if (monthlyTotal < baseline) {
-    log(`  ⚠️ ${modelo}: total_mes (${monthlyTotal.toFixed(1)}) < baseline (${baseline.toFixed(1)}), ignorando`);
-    return;
+    if (monthlyTotal < baseline * 0.5 || new Date().getDate() === 1) {
+      log(`  🔄 RECONCILIACIÓN MES ${modelo}: Datame reinició mes (${monthlyTotal.toFixed(1)} < baseline ${baseline.toFixed(1)}) → Fijando baseline a 0.0 pts`);
+      shiftBaselines[key] = 0;
+      netoTurno = monthlyTotal;
+    } else {
+      log(`  ⚠️ ${modelo}: total_mes (${monthlyTotal.toFixed(1)}) < baseline (${baseline.toFixed(1)}), ignorando`);
+      return;
+    }
   }
 
   // FIX CUOTA: Ignorar si los puntos no han cambiado desde el último upsert

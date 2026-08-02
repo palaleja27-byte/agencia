@@ -9969,13 +9969,19 @@
         // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
         let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
 
-        // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar AMBAS jornadas
+        // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar las 2 jornadas de su turno
         const _normOpNameForHoras = _n(op.name);
         const _foundHorasKey = Object.keys(_horasHoyAll).find(k => _n(k) === _normOpNameForHoras);
         const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === _hoy;
-        if (_es12h) {
-          jornadaALeer = 'Completo'; // Suma Mañana + Tarde para operadores de 12h
+        
+        let turnosLeer = [jornadaALeer];
+        if (op.turno === 'Completo') {
+          turnosLeer = ['Mañana', 'Tarde', 'Noche'];
+        } else if (_es12h) {
+          if (op.turno === 'Mañana') turnosLeer = ['Mañana', 'Tarde'];
+          else if (op.turno === 'Tarde') turnosLeer = ['Mañana', 'Tarde'];
+          else if (op.turno === 'Noche') turnosLeer = ['Tarde', 'Noche'];
         }
 
         // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA
@@ -9983,37 +9989,29 @@
         const draftEntry = _draftFull[op.name + '||operador'] || Object.values(_draftFull).find(d => d.autoMarcado && _n(d.name || '') === _n(op.name));
         
         if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
-          // 🔥 Si tiene perfiles asignados dinámicamente en ESTA jornada, asumimos que está trabajando en ella
-          // 🛡️ EXCEPCIÓN 12H: Si es 12h, mantenemos 'Completo' para que no pierda los puntos de la mañana
-          if (!_es12h) jornadaALeer = jornadaActual; 
+          if (!_es12h && op.turno !== 'Completo') turnosLeer = [jornadaActual]; 
           
           draftEntry.perfiles.forEach(dp => {
             if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
               combinedProfiles.push(dp);
-              if (op.name.includes('GUILLERMO')) console.log(`🔍 Guillermo tiene perfil en asistencia: ID ${dp.id}`, 'info');
             }
           });
         }
 
          if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
-            // Resolver qué jornada leer: si no tiene turno asignado, usar la jornada actual
-            const jornadaLeer = jornadaALeer && jornadaALeer !== 'Completo' ? jornadaALeer : jornadaActual;
-
             combinedProfiles.forEach(p => {
                const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                if (turnosPerfil) {
-                  // DELTA-SHIFT™: sumar la producción correspondiente al turno del operador
+                  // DELTA-SHIFT™: sumar únicamente los turnos correspondientes a la jornada/12h del operador
                   let pts = 0;
-                  if (jornadaALeer === 'Completo') {
-                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0) + (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
-                  } else {
-                    const key = jornadaLeer === 'Mañana' ? 'Mañana' : (jornadaLeer === 'Tarde' ? 'Tarde' : 'Noche');
-                    pts = (turnosPerfil[key] || 0);
+                  turnosLeer.forEach(tKey => {
+                    const key = tKey === 'Mañana' ? 'Mañana' : (tKey === 'Tarde' ? 'Tarde' : 'Noche');
+                    pts += (turnosPerfil[key] || 0);
                     if (key === 'Mañana') pts += (turnosPerfil['manana'] || 0);
                     if (key === 'Tarde') pts += (turnosPerfil['tarde'] || 0);
                     if (key === 'Noche') pts += (turnosPerfil['noche'] || 0);
-                    pts += (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
-                  }
+                  });
+                  pts += (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
                   if (pts > 5000) pts = 0; // 🛡️ SANIDAD DELTA-SHIFT™: ignora totales mensuales corruptos
                   datamePts += pts;
                }
@@ -10635,7 +10633,7 @@
         const _horasOpCard = _horasHoyAll[op.name] || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12hCard = _horasOpCard && _horasOpCard.horas === 12 && _horasOpCard.fecha === _hoy;
         const _jornadasVisibles = _es12hCard
-          ? ['Mañana', 'Tarde', 'Noche']      // 12h: mostrar todas las jornadas que tengan puntos
+          ? (op.turno === 'Mañana' || op.turno === 'Tarde' ? ['Mañana', 'Tarde'] : ['Tarde', 'Noche'])
           : [];                               // 8h: NO MOSTRAR PILLS (diferenciador visual)
         const _ptsHoyManana = hoyCortes.filter(c => c.jornada === 'Mañana').reduce((s,c) => s+(c.puntos||0), 0);
         const _ptsHoyTarde  = hoyCortes.filter(c => c.jornada === 'Tarde').reduce((s,c) => s+(c.puntos||0), 0);

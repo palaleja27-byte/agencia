@@ -13562,12 +13562,18 @@
           });
           return; // Detener el flujo para evitar el upsert directo redundante
         } else {
-          // Admin o Monitor: upsert directo del timestamp
+          // Admin o Monitor: upsert directo del valor y timestamp
+          _origSetItem('primeOperatorsData2026', value);
+          _sbMemCache['primeOperatorsData2026'] = value;
           _origSetItem('primeOperatorsData2026_ts', tsVal);
           _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
           if (_sb) {
-            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }).then(()=>{});
+            Promise.all([
+              _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: value }, { onConflict: 'key' }),
+              _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
+            ]).then(()=>{});
           }
+          return;
         }
       }
 
@@ -18415,7 +18421,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (typeof _sb !== 'undefined' && _sb) {
         try {
           const val = JSON.stringify(operatorsData);
-          await _sb.from('datame_perfiles').upsert({ id_datame: String(idVal).trim(), modelo: String(modVal).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(e=>console.warn(e)); await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+          const nowTs = String(Date.now());
+          await _sb.from('datame_perfiles').upsert({ id_datame: String(idVal).trim(), modelo: String(modVal).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(e=>console.warn(e));
+          await Promise.all([
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
+          ]);
         } catch(e) {
           console.warn('[asiPerfilAdd] Supabase error:', e.message);
         }
@@ -18451,7 +18462,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (typeof _sb !== 'undefined' && _sb) {
         try {
           const val = JSON.stringify(operatorsData);
-          if (removed && removed.id) { await _sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()).catch(e=>console.warn(e)); } await _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' });
+          const nowTs = String(Date.now());
+          if (removed && removed.id) { await _sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()).catch(e=>console.warn(e)); }
+          await Promise.all([
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
+          ]);
         } catch(e) {
           console.warn('[asiPerfilRemove] Supabase error:', e.message);
         }
@@ -18515,29 +18531,38 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const tipoSel = document.getElementById(`new-tipo-${globalIndex}`);
       const cubreSel = document.getElementById(`new-cubre-${globalIndex}`);
 
-      if (!idInput.value.trim() || !modelInput.value.trim()) return alert("Completa ID y Nombre del modelo");
+      const idVal = idInput?.value?.trim();
+      const modelVal = modelInput?.value?.trim();
+
+      if (!idVal || !modelVal) return alert("Completa ID y Nombre del modelo");
       const tipo = tipoSel?.value || 'propio';
       const cubreA = tipo === 'cobertura' ? (cubreSel?.value || '') : '';
       if (tipo === 'cobertura' && !cubreA) return alert("Selecciona a quién está cubriendo");
 
       operatorsData[globalIndex].profiles.push({
-        id: idInput.value.trim(),
-        model: modelInput.value.trim(),
+        id: idVal,
+        model: modelVal,
         tipo,
         cubreA
       });
-      idInput.value = '';
-      modelInput.value = '';
+      if (idInput) idInput.value = '';
+      if (modelInput) modelInput.value = '';
       if (tipoSel) tipoSel.value = 'propio';
       if (cubreSel) { cubreSel.value = ''; cubreSel.style.display = 'none'; }
-      document.getElementById(`add-form-${globalIndex}`).style.display = 'none';
+      const addForm = document.getElementById(`add-form-${globalIndex}`);
+      if (addForm) addForm.style.display = 'none';
       saveData();
       if (typeof _localSaveTs !== 'undefined') {
         _localSaveTs['primeOperatorsData2026'] = Date.now();
       }
       if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-          .catch(e => console.warn('[addProfile] Supabase sync error:', e)); _sb.from('datame_perfiles').upsert({ id_datame: String(idInput.value).trim(), modelo: String(modelInput.value).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(e => console.warn('[addProfile] Supabase profile sync error:', e));
+        const val = JSON.stringify(operatorsData);
+        const nowTs = String(Date.now());
+        Promise.all([
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }),
+          _sb.from('datame_perfiles').upsert({ id_datame: String(idVal).trim(), modelo: String(modelVal).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' })
+        ]).catch(e => console.warn('[addProfile] Supabase sync error:', e));
       }
       renderOperators();
     };
@@ -18550,8 +18575,16 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           _localSaveTs['primeOperatorsData2026'] = Date.now();
         }
         if (typeof _sb !== 'undefined' && _sb) {
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-            .catch(e => console.warn('[removeProfile] Supabase sync error:', e)); if (removed && removed.id) { _sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()).catch(e => console.warn('[removeProfile] Supabase profile delete error:', e)); }
+          const val = JSON.stringify(operatorsData);
+          const nowTs = String(Date.now());
+          const promises = [
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
+          ];
+          if (removed && removed.id) {
+            promises.push(_sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()));
+          }
+          Promise.all(promises).catch(e => console.warn('[removeProfile] Supabase sync error:', e));
         }
         renderOperators();
       }

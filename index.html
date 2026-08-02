@@ -9043,6 +9043,10 @@
       { name: "YARELIS ESTHER SEVILLA PADILLA", group: "9", plataforma: "Prime", ene: 549.29, feb: 594.58, mar: 0, abr: 0, profiles: [{"id":"98389135","model":"RAUL","tipo":"propio","cubreA":"","ptsBase":0},{"id":"156881990","model":"RALPH","tipo":"propio","cubreA":"","ptsBase":0},{"id":"139245989","model":"ALFREDO","tipo":"propio","cubreA":"","ptsBase":0}], turno: "Mañana", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-12-24" },
       { name: "YENDER JOSE BENITEZ TEJADA", group: "", plataforma: "AmoLatina", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-01-20" },
       { name: "YHONGERVIS JESUS AVILA JIMENEZ", group: "5", plataforma: "Prime", ene: 3214.86, feb: 2447.85, mar: 0, abr: 0, profiles: [{"id":"143017065","model":"MARIO","tipo":"propio","cubreA":"","ptsBase":0},{"id":"156716207","model":"AGNALDO","tipo":"propio","cubreA":"","ptsBase":0},{"id":"151070498","model":"VALQUIMAR","tipo":"propio","cubreA":"","ptsBase":0}], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2025-10-16" },
+      { name: "KHLOE ALEMAN HERRERA", group: "13", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [{"id":"95955130","model":"HECTOR"},{"id":"145211163","model":"FERMIN"},{"id":"120275229","model":"GERMAN"}], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-07-28" },
+      { name: "DOUGLAS ESCORIHUELA", group: "14", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [{"id":"109551682","model":"RENATO"},{"id":"98540781","model":"LEANDRO"},{"id":"153039388","model":"AGUSTIN FERNANDO"}], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-07-28" },
+      { name: "KEVIN JHOSNEIVER RAMIREZ VELAZQUEZ", group: "15", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [{"id":"143017065","model":"MARIO"},{"id":"137163229","model":"SEBASTIAN"},{"id":"138130329","model":"AGUSTIN"}], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-07-28" },
+      { name: "MIGUEL HERNANDEZ", group: "13", plataforma: "Prime", ene: 0, feb: 0, mar: 0, abr: 0, profiles: [{"id":"170740935","model":"ROBERTO"},{"id":"145844971","model":"RODRIGO"}], turno: "Noche", cargo: "Operador", area: "Operativa", fecha_ingreso: "2026-07-28" },
     ];
 
     // ==================== SISTEMA DE MESES ====================
@@ -19681,9 +19685,55 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     function renderOpDashboard(name) {
-      const op = operatorsData.find(o => _n(o.name) === _n(name));
+      if (!name) return;
+      const normN = (s) => (typeof _normName === 'function' ? _normName(s) : (typeof _n === 'function' ? _n(s) : String(s || '').toUpperCase().trim()));
+      const targetNorm = normN(name);
+
+      let op = (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData))
+        ? operatorsData.find(o => normN(o.name) === targetNorm)
+        : null;
+
+      // Fallback 1: Buscar en localStorage (primeOperatorsData2026) si operatorsData aún no tiene a este operador
       if (!op) {
-        document.getElementById('op-dashboard').innerHTML = '<p style="color:#f87171;text-align:center;padding:40px;">Operador no encontrado en el sistema.</p>';
+        try {
+          const raw = localStorage.getItem('primeOperatorsData2026');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              op = parsed.find(o => normN(o.name) === targetNorm);
+              if (op && typeof operatorsData !== 'undefined' && Array.isArray(operatorsData) && !operatorsData.some(x => normN(x.name) === targetNorm)) {
+                operatorsData.push(op);
+              }
+            }
+          }
+        } catch(e) {}
+      }
+
+      // Fallback 2: Buscar por coincidencia parcial de nombre
+      if (!op && typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+        op = operatorsData.find(o => {
+          const oNorm = normN(o.name);
+          return oNorm.includes(targetNorm) || targetNorm.includes(oNorm);
+        });
+      }
+
+      if (!op) {
+        const container = document.getElementById('op-dashboard');
+        if (container) {
+          container.innerHTML = '<div style="color:var(--primary);text-align:center;padding:40px;"><span style="font-size:1.5rem;">⏳</span><br>Cargando sesión del operador...</div>';
+        }
+        setTimeout(() => {
+          if (typeof currentOpName !== 'undefined' && normN(currentOpName) === targetNorm) {
+            const recheck = (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData))
+              ? operatorsData.find(o => normN(o.name) === targetNorm)
+              : null;
+            if (recheck) {
+              renderOpDashboard(name);
+            } else if (container) {
+              container.innerHTML = '<p style="color:#f87171;text-align:center;padding:40px;">Operador no encontrado en el sistema.</p>';
+            }
+          }
+        }, 1200);
         return;
       }
 
@@ -28565,9 +28615,19 @@ PT._logKey = function (opName) {
       const _nFn = typeof window._normName === 'function' ? window._normName : (s => String(s || '').toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim());
       const targetNorm = _nFn(opName);
 
-      const op = (typeof operatorsData !== 'undefined' ? operatorsData : [])
+      let op = (typeof operatorsData !== 'undefined' ? operatorsData : [])
         .find(o => _nFn(o.name) === targetNorm);
       
+      if (!op) {
+        try {
+          const raw = localStorage.getItem('primeOperatorsData2026');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) op = parsed.find(o => _nFn(o.name) === targetNorm);
+          }
+        } catch(e) {}
+      }
+
       let combinedProfiles = op ? [...(op.profiles || [])] : [];
       const realName = op ? op.name : opName;
       
@@ -29155,6 +29215,9 @@ PT._logKey = function (opName) {
       }, 5 * 60 * 1000);
 
       console.log('[OP-SESSION] ✅ Activo para', opName, '| IDs:', ids, '| Polling 5min ON');
+      if (typeof currentOpName !== 'undefined' && currentOpName && typeof renderOpDashboard === 'function') {
+        setTimeout(() => renderOpDashboard(opName), 50);
+      }
     }
 
     // ── Cerrar sesión del operador ────────────────────────────────

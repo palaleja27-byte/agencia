@@ -18724,15 +18724,19 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       return _legacyDecode(enc);
     }
 
-    // Compara pin ingresado vs valor almacenado (soporta SHA-256 y legacy)
+    // Compara pin ingresado vs valor almacenado (soporta SHA-256, plain text y legacy)
     async function verifyPin(entered, stored) {
-      if (!stored) return false;
-      if (stored.startsWith('sha256:')) {
+      if (stored === null || stored === undefined || stored === '') return false;
+      const strStored = String(stored).trim();
+      const strEntered = String(entered).trim();
+      if (strStored === strEntered) return true;
+      if (strStored.startsWith('sha256:')) {
         const h = await safePinHash(entered);
-        return h === stored;
+        return h === strStored;
       }
-      // Legacy: comparación directa
-      return _legacyDecode(stored) === entered;
+      // Legacy o texto plano
+      const decoded = _legacyDecode(strStored);
+      return (decoded && decoded === strEntered) || strStored === strEntered;
     }
 
     // Migra PINs legacy a SHA-256 en background (silencioso)
@@ -18877,16 +18881,14 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       else if (loginRole === 'monitor') storedHash = pins.monitor;
       else if (loginRole === 'operador') {
         const opPins = loginGetOpPins();
+        const normOp = typeof _n === 'function' ? _n(currentOpName) : (currentOpName || '').toUpperCase();
         const matchKey = Object.keys(opPins).find(k =>
-          k.toUpperCase() === currentOpName?.toUpperCase()
+          (typeof _n === 'function' ? _n(k) : (k || '').toUpperCase()) === normOp
         );
         storedHash = matchKey ? opPins[matchKey] : null;
-        if (storedHash === null || storedHash === undefined) {
-          loginBuffer = '';
-          loginUpdateDots(true);
-          document.getElementById('login-error').textContent = '❌ Operador sin PIN asignado. Pide al admin que lo configure.';
-          setTimeout(() => { loginUpdateDots(); document.getElementById('login-error').textContent = ''; }, 2500);
-          return;
+        // 🔑 Fallback a PIN por defecto ("1234") si el operador aún no tiene un PIN personalizado
+        if (!storedHash) {
+          storedHash = '1234';
         }
       }
 
@@ -19423,10 +19425,10 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
            }
         }
       }
-      if (typeof _opRtOpName !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(name) && typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0) {
+      if (typeof _opRtOpName !== 'undefined' && _opRtOpName && _n(_opRtOpName) === _n(name) && typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion >= 0) {
         return _opRtPtosSesion;
       }
-      return datamePtsHoy > 0 ? datamePtsHoy : (ptsHoy > 150 ? 0 : ptsHoy);
+      return datamePtsHoy > 0 ? datamePtsHoy : ptsHoy;
     }
 
     function renderCompetitiveBar() {
@@ -19855,10 +19857,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const _horasOpDash = (typeof _horasHoyAll !== 'undefined' ? _horasHoyAll[op.name] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: localDateStr() } : { horas: 8, fecha: localDateStr() });
       const _es12hDash = _horasOpDash && _horasOpDash.horas === 12 && _horasOpDash.fecha === localDateStr();
 
-      let _ptsDia = getPuntosHoy(op.name, _es12hDash ? null : (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
-      if (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion > 0 && _opRtOpName && _n(_opRtOpName) === _n(op.name)) {
-         _ptsDia = _opRtPtosSesion;
-      }
+      let _ptsDia = (typeof _opRtPtosSesion !== 'undefined' && _opRtPtosSesion >= 0 && _opRtOpName && _n(_opRtOpName) === _n(op.name))
+        ? _opRtPtosSesion
+        : getPuntosHoy(op.name, _es12hDash ? null : (typeof _opRtJornada === 'function' ? _opRtJornada() : null));
 
       // PROM/DÍA: dias reales transcurridos en el mes actual
       const _mesStr = localDateStr().slice(0, 7);

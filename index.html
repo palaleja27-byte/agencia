@@ -29111,6 +29111,10 @@ PT._logKey = function (opName) {
     // ── Activar realtime cuando el operador hace login ────────────
     function opRtActivar(opName) {
       if (!opName || typeof _sb === 'undefined') return;
+      if (_opRtOpName && typeof _n === 'function' && _n(_opRtOpName) === _n(opName) && _opRtSub) {
+        // 🛡️ PREVENIR BUCLE INFINITO: Si ya hay una sesión Realtime activa para este operador, no reiniciar
+        return;
+      }
 
       // Limpiar sesión anterior (canal RT + polling de respaldo)
       if (_opRtSub) { _sb.removeChannel(_opRtSub); _opRtSub = null; }
@@ -29200,9 +29204,6 @@ PT._logKey = function (opName) {
       }, 5 * 60 * 1000);
 
       console.log('[OP-SESSION] ✅ Activo para', opName, '| IDs:', ids, '| Polling 5min ON');
-      if (typeof currentOpName !== 'undefined' && currentOpName && typeof renderOpDashboard === 'function') {
-        setTimeout(() => renderOpDashboard(opName), 50);
-      }
     }
 
     // ── Cerrar sesión del operador ────────────────────────────────

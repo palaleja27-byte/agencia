@@ -10002,8 +10002,18 @@
             combinedProfiles.forEach(p => {
                const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                if (turnosPerfil) {
-                  // DELTA-SHIFT™: sumar la producción de todos los turnos del perfil asignado
-                  let pts = Object.values(turnosPerfil).reduce((s, v) => s + (Number(v) || 0), 0);
+                  // DELTA-SHIFT™: sumar la producción correspondiente al turno del operador
+                  let pts = 0;
+                  if (jornadaALeer === 'Completo') {
+                    pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0) + (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
+                  } else {
+                    const key = jornadaLeer === 'Mañana' ? 'Mañana' : (jornadaLeer === 'Tarde' ? 'Tarde' : 'Noche');
+                    pts = (turnosPerfil[key] || 0);
+                    if (key === 'Mañana') pts += (turnosPerfil['manana'] || 0);
+                    if (key === 'Tarde') pts += (turnosPerfil['tarde'] || 0);
+                    if (key === 'Noche') pts += (turnosPerfil['noche'] || 0);
+                    pts += (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
+                  }
                   if (pts > 5000) pts = 0; // 🛡️ SANIDAD DELTA-SHIFT™: ignora totales mensuales corruptos
                   datamePts += pts;
                }

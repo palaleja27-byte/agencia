@@ -26283,6 +26283,11 @@ PT._logKey = function (opName) {
         let changed = false;
         Object.entries(statsCortes).forEach(([f, ops]) => {
           Object.entries(ops).forEach(([name, pts]) => {
+            // Si el operador tiene producción Datame activa hoy, omitir inyección de cortes legacy Laser Sync
+            const hasDatameActive = typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined' &&
+              operatorsData.some(o => _n(o.name) === _n(name) && (o.profiles || []).some(p => (_dpTurnosData[p.id]?.['Mañana'] || 0) + (_dpTurnosData[p.id]?.['Tarde'] || 0) + (_dpTurnosData[p.id]?.['Noche'] || 0) > 0));
+            if (hasDatameActive) return;
+
             const ya = (cortesObj[name] || []).filter(c => c.fecha === f && c.novedades?.includes('Laser')).reduce((s,c)=>s+(Number(c.puntos)||0),0);
             if (pts - ya > 0.1) {
               if(!cortesObj[name]) cortesObj[name]=[];
@@ -28283,9 +28288,8 @@ PT._logKey = function (opName) {
                 netoReal = pt - pb;
               }
 
-              // 🛡️ SANIDAD DELTA-SHIFT™ CRÍTICA:
-              // Solo anular si netoReal es corrupto (>400 pts) o si es un total mensual sin baseline (pt > 400 y pb <= 0)
-              if (netoReal > 400 || (pb <= 0 && pt > 400) || (pt > 400 && netoReal > pt * 0.60)) {
+              // 🛡️ SANIDAD DELTA-SHIFT™: solo ignorar si netoReal es ridículamente corrupto (>5000 pts)
+              if (netoReal > 5000) {
                 netoReal = 0;
               }
 
@@ -28899,15 +28903,12 @@ PT._logKey = function (opName) {
             _opRtBaselineMap[id] = v.total;
           }
           
-          // DELTA-SHIFT™: Usar puntos_neto calibrado de la BD, pero sanitizarlo contra baselines corruptos/vacíos
+          // DELTA-SHIFT™: Usar puntos_neto calibrado de la BD
           let neto = Math.max(0, v.neto);
-          if ((v.baseline <= 0 && v.total > 100) || (v.total > 100 && neto > v.total * 0.60)) {
-             // Forzar recálculo seguro usando la memoria de login local para evitar puntos inflados
-             if (_opRtBaselineMap[id] === undefined || _opRtBaselineMap[id] === 0) {
-                _opRtBaselineMap[id] = v.total;
-             }
-             neto = Math.max(0, v.total - _opRtBaselineMap[id]);
+          if (v.baseline > 0 && v.total >= v.baseline) {
+            neto = Math.max(neto, v.total - v.baseline);
           }
+          if (neto > 5000) neto = 0;
           
           const matchedProfile = opData?.profiles?.find(p => String(p.id) === String(id));
           const nombrePerfil = (matchedProfile ? matchedProfile.model : null) || v.agencia || id;

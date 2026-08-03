@@ -184,16 +184,27 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     } else {
       // DATA SCIENCE FIX: Heredar puntos_total de la jornada anterior como baseline.
       let inheritedBaseline = 0;
-      const prevJornada = jornada === 'Noche' ? 'Tarde' : (jornada === 'Tarde' ? 'Mañana' : null);
-      if (prevJornada) {
-        const { data: prevRec } = await dbSelectBaseline(idPerfil, fechaDia, prevJornada);
-        if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
-          inheritedBaseline = prevRec.puntos_total;
-          log(`  🔗 Baseline heredado de ${prevJornada}: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
-        } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
-          inheritedBaseline = 0;
-          log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
+      
+      let prevRec = null;
+      if (jornada === 'Noche') {
+        const { data: tardeRec } = await dbSelectBaseline(idPerfil, fechaDia, 'Tarde');
+        if (tardeRec) {
+          prevRec = tardeRec;
+        } else {
+          const { data: mananaRec } = await dbSelectBaseline(idPerfil, fechaDia, 'Mañana');
+          if (mananaRec) prevRec = mananaRec;
         }
+      } else if (jornada === 'Tarde') {
+        const { data: mananaRec } = await dbSelectBaseline(idPerfil, fechaDia, 'Mañana');
+        if (mananaRec) prevRec = mananaRec;
+      }
+      
+      if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
+        inheritedBaseline = prevRec.puntos_total;
+        log(`  🔗 Baseline heredado de turno previo hoy: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
+      } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
+        inheritedBaseline = 0;
+        log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
       } else {
         const { data: ultimo } = await supabase.from('operaciones')
           .select('puntos_total, fecha_dia')
@@ -218,6 +229,17 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
 
   const baseline  = shiftBaselines[key];
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
+
+  // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
+  // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
+  // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
+  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 10 && baseline === 0) {
+    const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
+    const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
+    log(`  🔴 SANITY ${modelo}: baseline corrupto (0.0 pts y neto ${netoTurno.toFixed(1)} > 60% de total ${monthlyTotal.toFixed(1)}) → Estableciendo baseline del 97% (${baselineCorr})`);
+    shiftBaselines[key] = baselineCorr;
+    netoTurno = netoCorr;
+  }
 
   // ── SANIDAD: Control de picos irracionales ──
   if (netoTurno > 1500) {

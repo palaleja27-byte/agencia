@@ -28666,7 +28666,7 @@ PT._logKey = function (opName) {
       };
 
       window._rrLiveFeed.unshift(entry);
-      if (window._rrLiveFeed.length > 20) window._rrLiveFeed.pop();
+      if (window._rrLiveFeed.length > 150) window._rrLiveFeed.pop();
 
       // 1. Actualizar cabecera global
       
@@ -28691,9 +28691,28 @@ PT._logKey = function (opName) {
          if (track) {
             const cap = document.createElement('div');
             cap.className = 'pulse-capsule';
+            cap.style.animation = 'none';
+            cap.style.transition = 'left 3.5s cubic-bezier(0.1, 0.8, 0.3, 1), opacity 1s, transform 1s';
+            cap.style.left = '100%';
+            cap.style.right = 'auto';
             cap.innerHTML = '+$' + entry.pts.toFixed(2);
             track.appendChild(cap);
-            setTimeout(() => { if (cap.parentNode) cap.parentNode.removeChild(cap); }, 30000); // Clean after 30s
+            
+            const count = track.querySelectorAll('.pulse-capsule').length;
+            const targetLeft = Math.min(80, 20 + ((count - 1) * 15));
+            
+            requestAnimationFrame(() => {
+               requestAnimationFrame(() => {
+                  cap.style.left = targetLeft + '%';
+               });
+            });
+            
+            setTimeout(() => {
+               cap.style.opacity = '0.4';
+               cap.style.transform = 'scale(0.85)';
+               cap.style.filter = 'brightness(0.7)';
+               cap.style.boxShadow = 'none';
+            }, 3500);
             
             // Dynamic score tick (update the score where the pulse actually landed)
             const scoreEl = document.getElementById('score-' + targetTId);

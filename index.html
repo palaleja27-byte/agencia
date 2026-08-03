@@ -10032,8 +10032,9 @@
         // --- 1. Lógica Datame Realtime (Supabase) ---
         let datamePts = 0;
         const estaLogueado = Array.from(opsEnTurnoDraft).some(n => _n(n) === _n(op.name));
-        // Regla: si está logueado toma la jornada actual (cambio de turno), si no, su turno oficial
-        let jornadaALeer = estaLogueado ? jornadaActual : op.turno;
+        // 🔬 DELTA-SHIFT™ PRO FIX: Usar SIEMPRE el turno oficial del operador para evitar
+        // robar puntos de turnos anteriores si el operador se loguea temprano.
+        let jornadaALeer = op.turno || jornadaActual;
 
         // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar las 2 jornadas de su turno
         const _normOpNameForHoras = _n(op.name);
@@ -14531,17 +14532,13 @@
             const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op?.turno === 'Completo' ? { horas: 12, fecha: hoyStr } : { horas: 8, fecha: hoyStr });
             const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoyStr;
 
-            let jornadaOp = shiftFilter ? shiftFilter : (_es12h ? 'Completo' : (estaLogueado2 ? jornadaActual : (op?.turno || jornadaActual)));
+            // 🔬 PRO FIX: Respetar su turno oficial. No forzar a jornadaActual solo por estar logueado,
+            // ya que si entra temprano robará los puntos del turno actual de sus compañeros.
+            let jornadaOp = shiftFilter ? shiftFilter : (_es12h ? 'Completo' : (op?.turno || jornadaActual));
 
-            // Perfiles dinámicos del draft → forzar jornada actual
-            if (!_es12h && !estaLogueado2) {
-              try {
-                const df2 = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
-                const de2 = df2[realName + '||operador'] || df2[realName.toUpperCase() + '||operador'];
-                if (de2 && Array.isArray(de2.perfiles) && de2.perfiles.length > 0) jornadaOp = jornadaActual;
-              } catch (e) {}
-            }
-
+            // Perfiles dinámicos del draft → NO forzar jornada actual aquí, para que los puntos
+            // caigan en su turno oficial de Noche, o al menos no contaminen.
+            
             let ptsSup = 0;
             combinedProfiles.forEach(p => {
                const t = _dpTurnosData[p.id];
@@ -27950,7 +27947,14 @@ PT._logKey = function (opName) {
                   const pn = Number(r.puntos_neto) || 0;
                   const pt = Number(r.puntos_total) || 0;
                   const pb = Number(r.puntos_baseline) || 0;
-                  _dpTurnosData[r.id_perfil][r.jornada] = (pt > 0 && pt > pb) ? Math.max(pn, pt - pb) : pn;
+                  
+                  // 🔬 DELTA-SHIFT™ PRO FIX: Exigir pb > 0 para evitar que el total (pt) se coma al neto (pn)
+                  let netoReal = pn;
+                  if (pt > 0 && pb > 0 && pt >= pb) {
+                     netoReal = Math.max(pn, pt - pb);
+                  }
+                  
+                  _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
                 }
                 clearTimeout(window._rkLiveRenderTimer);
                 window._rkLiveRenderTimer = setTimeout(() => { if (typeof renderRanking === 'function') renderRanking(); }, 1500);

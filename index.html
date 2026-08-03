@@ -25474,20 +25474,40 @@ PT._logKey = function (opName) {
       if (!date && typeof localDateStr === 'function') date = localDateStr();
       if (asiShift === 'todos') {
         // En modo todos: separar estados por turno y guardar en cada clave
+        const m = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_manana') || '{}');
+        const t = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_tarde') || '{}');
+        const n = JSON.parse(localStorage.getItem(ASI_KEY + '_draft_' + date + '_noche') || '{}');
+        
         const byShift = { manana: {}, tarde: {}, noche: {} };
         Object.entries(asiEstados).forEach(([k, v]) => {
-          const opName = k.split('||')[0];
-          const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
-          const turno = (op?.turno || 'Mañana').toLowerCase();
-          const shiftKey = turno === 'mañana' ? 'manana' : turno === 'tarde' ? 'tarde' : 'noche';
-          byShift[shiftKey][k] = v;
+          let found = false;
+          if (m[k] !== undefined) { byShift.manana[k] = v; found = true; }
+          if (t[k] !== undefined) { byShift.tarde[k] = v; found = true; }
+          if (n[k] !== undefined) { byShift.noche[k] = v; found = true; }
+          
+          if (!found) {
+            const opName = k.split('||')[0];
+            const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
+            const turno = (op?.turno || 'Mañana').toLowerCase();
+            const shiftKey = turno === 'mañana' ? 'manana' : turno === 'tarde' ? 'tarde' : 'noche';
+            byShift[shiftKey][k] = v;
+          }
         });
+
         ['manana', 'tarde', 'noche'].forEach(sh => {
           const key = ASI_KEY + '_draft_' + date + '_' + sh;
           // Merge con lo existente para no borrar auto-marcados de otros
           const existing = JSON.parse(localStorage.getItem(key) || '{}');
+          const updates = byShift[sh];
+          Object.entries(updates).forEach(([k, v]) => {
+            if (v && (v.estado === 'P' || v.estado === 'T')) {
+              existing[k] = v;
+            } else {
+              delete existing[k];
+            }
+          });
           try {
-            localStorage.setItem(key, JSON.stringify({ ...existing, ...byShift[sh] }));
+            localStorage.setItem(key, JSON.stringify(existing));
           } catch (e) {
             console.error('[asiSaveDraft] Error saving:', e);
             if (e.name === 'QuotaExceededError') _forceClearSpace();
@@ -26128,19 +26148,23 @@ PT._logKey = function (opName) {
           
           ops.forEach(o => {
             const k = o.name + '||operador';
-            const oTurno = (o.turno || 'Mañana').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            
-            // Si estamos en modo filter de turno específico, o si el turno del op coincide con el shKey
-            const isMatch = (asiShift !== 'todos') || (oTurno === shKey) || (oTurno === 'completo') || (shKey === 'noche' && oTurno === 'noche');
-            if (!isMatch) return;
-            
             const est = asiEstados[asiKey(o.name, 'operador')]?.estado || '';
+            
             if (est === 'P' || est === 'T') {
-               if (!draft[k]) draft[k] = {};
-               draft[k].estado = est;
-               if (asiEstados[asiKey(o.name, 'operador')]?.horaIngreso) draft[k].horaIngreso = asiEstados[asiKey(o.name, 'operador')].horaIngreso;
-            } else if (draft[k]) {
-               delete draft[k]; // Quitar del draft si le quitaron la asistencia o la marcaron diferente
+               const oTurno = (o.turno || 'Mañana').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+               const isDefaultShift = (oTurno === shKey) || (oTurno === 'completo') || (shKey === 'noche' && oTurno === 'noche');
+               
+               if (draft[k] !== undefined || isDefaultShift) {
+                  if (!draft[k]) draft[k] = {};
+                  draft[k].estado = est;
+                  if (asiEstados[asiKey(o.name, 'operador')]?.horaIngreso) {
+                    draft[k].horaIngreso = asiEstados[asiKey(o.name, 'operador')].horaIngreso;
+                  }
+               }
+            } else {
+               if (draft[k]) {
+                  delete draft[k];
+               }
             }
           });
           localStorage.setItem(draftKey, JSON.stringify(draft));

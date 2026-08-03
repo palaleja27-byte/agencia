@@ -10056,7 +10056,9 @@
         const draftEntry = _draftFull[op.name + '||operador'] || Object.values(_draftFull).find(d => d.autoMarcado && _n(d.name || '') === _n(op.name));
         
         if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
-          if (!_es12h && op.turno !== 'Completo') turnosLeer = [jornadaActual]; 
+          // 🔬 PRO FIX: Eliminada la regla turnosLeer = [jornadaActual] porque si el operador
+          // entraba temprano y tenía perfiles dinámicos, esto redirigía erróneamente todos
+          // los puntos de sus perfiles estáticos al turno actual en lugar de su turno oficial.
           
           draftEntry.perfiles.forEach(dp => {
             if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
@@ -27871,7 +27873,13 @@ PT._logKey = function (opName) {
             // Sanidad: El baseline no puede ser mayor que el total (si bajó, es reinicio)
             if (nuevoBase > rec.puntos_total) nuevoBase = 0;
 
-            let nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            // 🔬 DELTA-SHIFT™ PRO FIX: Si es Tarde o Noche y el baseline es 0, hacer (Total - 0) inflará 
+            // los puntos dándole toda la producción del día. En ese caso confiamos en el neto actual,
+            // a menos que sea Mañana (donde arrancar en 0 sí es legítimo).
+            let nuevoNeto = rec.puntos_neto;
+            if (nuevoBase > 0 || rec.jornada === 'Mañana') {
+              nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            }
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
               if (String(rec.id).startsWith('virtual_tableau_')) {

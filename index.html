@@ -25649,10 +25649,11 @@ PT._logKey = function (opName) {
       const k = asiKey(name, role);
       
       // 1. Quitar "Presente"
-      if (asiEstados[k]) {
-        asiEstados[k].estado = ''; 
-        asiEstados[k].salidaManual = true; // Flag para que el dispositivo del op sepa que debe cerrar
+      if (!asiEstados[k]) {
+        asiEstados[k] = { estado: '', nota: '', horaIngreso: '' };
       }
+      asiEstados[k].estado = ''; 
+      asiEstados[k].salidaManual = true; // Flag para que el dispositivo del op sepa que debe cerrar
       
       // 2. Registrar salida en horas
       const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
@@ -26119,22 +26120,32 @@ PT._logKey = function (opName) {
       // Sincronizar el draft (Operadores Conectados en tiempo real) con esta asistencia manual
       try {
         const hoyStr = date || localDateStr();
-        const shKeyAct = asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKeyAct;
-        const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+        const targetShifts = asiShift === 'todos' ? ['manana', 'tarde', 'noche'] : [asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];
         
-        ops.forEach(o => {
-          const k = o.name + '||operador';
-          const est = asiEstados[asiKey(o.name, 'operador')]?.estado || '';
-          if (est === 'P' || est === 'T') {
-             if (!draft[k]) draft[k] = {};
-             draft[k].estado = est;
-             if (asiEstados[asiKey(o.name, 'operador')]?.horaIngreso) draft[k].horaIngreso = asiEstados[asiKey(o.name, 'operador')].horaIngreso;
-          } else if (draft[k]) {
-             delete draft[k]; // Quitar del draft si le quitaron la asistencia o la marcaron diferente
-          }
+        targetShifts.forEach(shKey => {
+          const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
+          const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
+          
+          ops.forEach(o => {
+            const k = o.name + '||operador';
+            const oTurno = (o.turno || 'Mañana').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            
+            // Si estamos en modo filter de turno específico, o si el turno del op coincide con el shKey
+            const isMatch = (asiShift !== 'todos') || (oTurno === shKey) || (oTurno === 'completo') || (shKey === 'noche' && oTurno === 'noche');
+            if (!isMatch) return;
+            
+            const est = asiEstados[asiKey(o.name, 'operador')]?.estado || '';
+            if (est === 'P' || est === 'T') {
+               if (!draft[k]) draft[k] = {};
+               draft[k].estado = est;
+               if (asiEstados[asiKey(o.name, 'operador')]?.horaIngreso) draft[k].horaIngreso = asiEstados[asiKey(o.name, 'operador')].horaIngreso;
+            } else if (draft[k]) {
+               delete draft[k]; // Quitar del draft si le quitaron la asistencia o la marcaron diferente
+            }
+          });
+          localStorage.setItem(draftKey, JSON.stringify(draft));
         });
-        localStorage.setItem(draftKey, JSON.stringify(draft));
+
         if (typeof renderConnectedOps === 'function') renderConnectedOps();
       } catch(e) { console.warn('Error sincronizando draft:', e); }
 
@@ -26146,15 +26157,20 @@ PT._logKey = function (opName) {
 
       if (typeof _sb !== 'undefined' && _sb) {
         const hoyStr = date || localDateStr();
-        const shKeyAct = asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKeyAct;
-        const draftStr = localStorage.getItem(draftKey) || '{}';
-
-        Promise.all([
+        const promises = [
           _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: draftKey, value: draftStr }, { onConflict: 'key' })
-        ]).then(() => {
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+        ];
+
+        const targetShifts = asiShift === 'todos' ? ['manana', 'tarde', 'noche'] : [asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];
+        
+        targetShifts.forEach(shKey => {
+          const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
+          const draftStr = localStorage.getItem(draftKey) || '{}';
+          promises.push(_sb.from('kv_store').upsert({ key: draftKey, value: draftStr }, { onConflict: 'key' }));
+        });
+
+        Promise.all(promises).then(() => {
           console.info('[Asistencia] Guardado en Supabase ✅');
           
           // 🔥 DIAGNÓSTICO DE PERFILES EN DATAME_PERFILES 🔥
@@ -27847,38 +27863,69 @@ PT._logKey = function (opName) {
             const rec = regs[i];
             let nuevoBase = rec.puntos_baseline;
             
-            if (i === 0) {
-              // Buscar el último cierre conocido de este perfil (ayer o el último día activo)
-              const { data: ultimo } = await _sb.from('operaciones')
-                .select('puntos_total, fecha_dia')
-                .eq('id_perfil', id)
-                .lt('fecha_dia', hoy)
-                .order('fecha_dia', { ascending: false })
-                .order('fecha_corte', { ascending: false })
-                .limit(1).maybeSingle();
-              
-              const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
+            if (rec.jornada === 'Mañana') {
+              if (i === 0) {
+                const { data: ultimo } = await _sb.from('operaciones')
+                  .select('puntos_total, fecha_dia')
+                  .eq('id_perfil', id)
+                  .lt('fecha_dia', hoy)
+                  .order('fecha_dia', { ascending: false })
+                  .order('fecha_corte', { ascending: false })
+                  .limit(1).maybeSingle();
+                
+                const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
 
-              if (esNuevoMes) {
-                nuevoBase = 0; // En inicio de mes Datame reinicia el total mensual a 0
-              } else if (rec.puntos_baseline > 0) {
-                nuevoBase = rec.puntos_baseline;
-              } else {
-                nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
+                if (esNuevoMes) {
+                  nuevoBase = 0; // En inicio de mes Datame reinicia el total mensual a 0
+                } else if (rec.puntos_baseline > 0) {
+                  nuevoBase = rec.puntos_baseline;
+                } else {
+                  nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
+                }
               }
             } else {
-              nuevoBase = lastTotal !== null ? lastTotal : rec.puntos_baseline;
+              // Si no es Mañana (Tarde, Noche, Auto, etc.)
+              if (lastTotal !== null) {
+                nuevoBase = lastTotal;
+              } else {
+                // Es el primer registro de hoy para este perfil (no se trabajó en Mañana/Tarde)
+                // Si la base actual es 0, intentamos caer de vuelta en el último total de ayer (siempre que no sea inicio de mes)
+                let fallbackBase = rec.puntos_baseline;
+                if (fallbackBase === 0) {
+                  const { data: ultimo } = await _sb.from('operaciones')
+                    .select('puntos_total, fecha_dia')
+                    .eq('id_perfil', id)
+                    .lt('fecha_dia', hoy)
+                    .order('fecha_dia', { ascending: false })
+                    .order('fecha_corte', { ascending: false })
+                    .limit(1).maybeSingle();
+                  
+                  const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
+                  if (ultimo && !esNuevoMes) {
+                    fallbackBase = ultimo.puntos_total || 0;
+                  }
+                }
+                nuevoBase = fallbackBase;
+              }
             }
             
             // Sanidad: El baseline no puede ser mayor que el total (si bajó, es reinicio)
             if (nuevoBase > rec.puntos_total) nuevoBase = 0;
 
-            // 🔬 DELTA-SHIFT™ PRO FIX: Si es Tarde o Noche y el baseline es 0, hacer (Total - 0) inflará 
-            // los puntos dándole toda la producción del día. En ese caso confiamos en el neto actual,
-            // a menos que sea Mañana (donde arrancar en 0 sí es legítimo).
+            // Calcular el neto tentativo
             let nuevoNeto = rec.puntos_neto;
             if (nuevoBase > 0 || rec.jornada === 'Mañana') {
               nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            }
+
+            // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
+            // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
+            // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
+            if (nuevoNeto > rec.puntos_total * 0.60 && rec.puntos_total > 10 && nuevoBase === 0) {
+              // Establecer baseline al 97% del total (3% neto asumido) según la especificación técnica
+              nuevoBase = Number((rec.puntos_total * 0.97).toFixed(2));
+              nuevoNeto = Number((rec.puntos_total - nuevoBase).toFixed(2));
+              console.warn(`[DELTA-SHIFT™ SANITY] Corregido baseline corrupto para perfil ${rec.id_perfil}. Nuevo base: ${nuevoBase}, Neto: ${nuevoNeto}`);
             }
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {

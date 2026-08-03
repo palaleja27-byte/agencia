@@ -9217,7 +9217,35 @@
       } else {
         operatorsData = sourceFiltered.map(o => ({ ...o }));
       }
+      
+      // 3. Forzar perfiles manuales si existen en localStorage (aislados de colisiones en primeOperatorsData2026)
+      _applyManualProfiles();
+      
       recalcGrowth();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // _applyManualProfiles(): Lee TODOS los rr_profile_* del localStorage e inyecta
+    // los profiles guardados manualmente en operatorsData. FUNCION GLOBAL.
+    // Llamar despues de cualquier merge/carga de operatorsData para asegurar que
+    // las asignaciones manuales de perfiles siempre tienen prioridad sobre los datos
+    // que llegan de Supabase (primeOperatorsData2026).
+    // ────────────────────────────────────────────────────────────────────────────
+    function _applyManualProfiles() {
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      if (!Array.isArray(operatorsData)) return;
+      operatorsData.forEach(op => {
+        const normN = _safeN(op.name);
+        if (!normN) return;
+        const key = 'rr_profile_' + normN;
+        const savedProf = localStorage.getItem(key);
+        if (savedProf) {
+          try {
+            const parsed = JSON.parse(savedProf);
+            if (Array.isArray(parsed)) op.profiles = parsed;
+          } catch(e) {}
+        }
+      });
     }
 
     function recalcGrowth() {
@@ -9231,7 +9259,45 @@
 
     function saveData() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(operatorsData));
+      // FIX: Asegurar que el timestamp local siempre se actualice al modificar operatorsData
+      // Esto evita que eventos Realtime tardíos o sin TS sobreescriban los cambios manuales de perfiles
+      const nowTs = String(Date.now());
+      localStorage.setItem('primeOperatorsData2026_ts', nowTs);
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
     }
+
+    window.forceSaveProfile = function(opName) {
+      if (!opName) return;
+      const _fspSafe = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+      const normN = _fspSafe(opName);
+      if (!normN) return;
+      const op = operatorsData.find(o => _fspSafe(o.name) === normN);
+      if (!op) return;
+      
+      const key = 'rr_profile_' + normN;
+      const val = JSON.stringify(op.profiles || []);
+      
+      // 1. Guardar en localStorage inmediatamente (sincrónico)
+      localStorage.setItem(key, val);
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[key] = Date.now();
+      
+      // 2. Actualizar también primeOperatorsData2026 en localStorage con el nuevo perfil
+      //    y un timestamp fresco para que el merge remoto nunca sobreescriba este cambio
+      const nowTs = String(Date.now());
+      localStorage.setItem('primeOperatorsData2026_ts', nowTs);
+      localStorage.setItem('primeOperatorsData2026', JSON.stringify(operatorsData));
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
+      
+      // 3. Subir ambas claves a Supabase asincrónicamente
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: key, value: val }, { onConflict: 'key' })
+          .catch(e => console.warn('[forceSaveProfile] Error rr_profile_*:', e));
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+          .catch(e => console.warn('[forceSaveProfile] Error primeOperatorsData2026:', e));
+        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
+          .catch(e => console.warn('[forceSaveProfile] Error ts:', e));
+      }
+    };
 
     function resetData() {
       if (confirm("¿Borrar todos los cambios y volver a los datos originales?")) {
@@ -13028,6 +13094,10 @@
         _origSetItem('primeOperatorsData2026_ts', String(remoteTs));
         _sbMemCache['primeOperatorsData2026_ts'] = String(remoteTs);
         if (typeof loadData === 'function') loadData();
+        // 🔒 CRITICAL: Siempre re-aplicar perfiles manuales despues del merge remoto
+        // Esto garantiza que las asignaciones manuales nunca se borren por datos de Supabase
+        if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
+        if (typeof recalcGrowth === 'function') recalcGrowth();
       }
     }
 
@@ -13088,15 +13158,25 @@
 
         data.forEach(({ key, value }) => {
           if (_sbShouldExclude(key)) return;
+          // Cargar rr_profile_* PRIMERO para que loadData() los encuentre al arrancar
           if (key === 'primeOperatorsData2026') {
-            syncMergeOperatorsData(value, remoteTsVal);
+            // omitir por ahora, procesar despues de cargar todos los rr_profile_*
           } else if (key === 'primeOperatorsData2026_ts') {
             // Se procesa implícitamente en syncMergeOperatorsData
+          } else if (key.startsWith('rr_profile_')) {
+            const _pVal = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+            _origSetItem(key, _pVal);
+            _sbMemCache[key] = _pVal;
           } else {
             _origSetItem(key, value);
             _sbMemCache[key] = value;
           }
         });
+        // Procesar primeOperatorsData2026 DESPUES de haber cargado todos los rr_profile_*
+        const opsRow = data.find(d => d.key === 'primeOperatorsData2026');
+        if (opsRow) {
+          syncMergeOperatorsData(opsRow.value, remoteTsVal);
+        }
 
         // 🟢 Cargar asistencia draft de HOY para mostrar los operadores conectados al iniciar
         try {
@@ -13287,6 +13367,18 @@
                       if (typeof renderOperators === 'function') renderOperators();
                     }
                   });
+              } else if (row.key.startsWith('rr_profile_')) {
+                // Si nosotros mismos acabamos de guardar este rr_profile_*, ignorar el eco de Supabase.
+                // Sin este check, el Realtime re-renderiza la pagina mientras el usuario
+                // tiene un dropdown abierto, y puede traer valores viejos de otros clientes.
+                const _msProfile = Date.now() - (_localSaveTs[row.key] || 0);
+                if (_msProfile < 10000) return; // Ignorar ecos de nuestros propios cambios por 10s
+                // Solo actualizar localStorage/cache en memoria — NO re-renderizar
+                const _rtVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
+                _origSetItem(row.key, _rtVal);
+                _sbMemCache[row.key] = _rtVal;
+                // Aplicar silenciosamente en operatorsData sin re-renderizar UI
+                if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
               } else {
                 // FIX: Supabase realtime may deliver value as an object (jsonb) or string.
                 // localStorage.setItem requires a string — always stringify objects.
@@ -13507,7 +13599,28 @@
       // Capturar cambios en operadores y actualizar timestamp de sincronización
       if (key === 'primeOperatorsData2026') {
         const tsVal = String(Date.now());
-        
+
+        // ─────────────────────────────────────────────────────────────────────
+        // REGLA DE ORO: Los perfiles manuales viven ÚNICAMENTE en rr_profile_*
+        // Antes de subir primeOperatorsData2026 a Supabase, eliminamos el campo
+        // "profiles" de cada operador para que nunca pueda sobreescribir los
+        // perfiles manuales que el admin ha asignado via forceSaveProfile.
+        // ─────────────────────────────────────────────────────────────────────
+        let opsWithoutProfiles = value;
+        try {
+          const arr = JSON.parse(value);
+          if (Array.isArray(arr)) {
+            // Quitar profiles del JSON que va a Supabase (primeOperatorsData2026)
+            // Los perfiles solo se leen de rr_profile_* al cargar
+            const stripped = arr.map(op => {
+              const c = { ...op };
+              delete c.profiles;
+              return c;
+            });
+            opsWithoutProfiles = JSON.stringify(stripped);
+          }
+        } catch(e) { /* usar value original si falla */ }
+
         // Si el rol es operador, realizar una fusión (merge) segura para no machacar a otros
         if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName && _sb) {
           _sb.from('kv_store').select('value').eq('key', 'primeOperatorsData2026').single().then(({ data, error }) => {
@@ -13523,47 +13636,50 @@
                 // Encontrar el operador en la lista remota
                 const idx = remoteOps.findIndex(o => o.name.toLowerCase() === currentOpName.toLowerCase());
                 if (idx !== -1) {
-                  // Actualizar SOLO los perfiles, plataforma y turno del operador actual
-                  remoteOps[idx].profiles = myLocalOp.profiles || [];
+                  // Actualizar SOLO turno y plataforma del operador actual — NUNCA profiles
+                  // Los profiles son territorio exclusivo del admin y se guardan en rr_profile_*
                   remoteOps[idx].turno = myLocalOp.turno || remoteOps[idx].turno;
                   remoteOps[idx].plataforma = myLocalOp.plataforma || remoteOps[idx].plataforma;
                 } else {
-                  // Si no existe remotamente, lo añadimos
-                  remoteOps.push(myLocalOp);
+                  // Si no existe remotamente, lo añadimos (sin profiles)
+                  const opCopy = { ...myLocalOp };
+                  delete opCopy.profiles;
+                  remoteOps.push(opCopy);
                 }
-                const mergedValue = JSON.stringify(remoteOps);
-                
-                // Actualizar localmente con la lista remota fusionada (para no perder operadores nuevos)
-                _origSetItem('primeOperatorsData2026', mergedValue);
-                _sbMemCache['primeOperatorsData2026'] = mergedValue;
+                // Quitar profiles antes de subir a Supabase
+                const mergedStripped = JSON.stringify(remoteOps.map(op => { const c = { ...op }; delete c.profiles; return c; }));
+
+                // Actualizar localmente con la lista remota fusionada
+                _origSetItem('primeOperatorsData2026', mergedStripped);
+                _sbMemCache['primeOperatorsData2026'] = mergedStripped;
                 _origSetItem('primeOperatorsData2026_ts', tsVal);
                 _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
-                
+
                 // Upsert a Supabase
-                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedValue }, { onConflict: 'key' }).then(() => {
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedStripped }, { onConflict: 'key' }).then(() => {
                   _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }).then(()=>{});
                 });
               }
             } else {
-              // Si no hay remoto o da error, upsert directo
+              // Si no hay remoto o da error, upsert directo (sin profiles)
               _origSetItem('primeOperatorsData2026_ts', tsVal);
               _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
               Promise.all([
-                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: value }, { onConflict: 'key' }),
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
                 _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
               ]);
             }
           });
           return; // Detener el flujo para evitar el upsert directo redundante
         } else {
-          // Admin o Monitor: upsert directo del valor y timestamp
-          _origSetItem('primeOperatorsData2026', value);
-          _sbMemCache['primeOperatorsData2026'] = value;
+          // Admin o Monitor: upsert directo del valor (sin profiles) y timestamp
+          _origSetItem('primeOperatorsData2026', opsWithoutProfiles);
+          _sbMemCache['primeOperatorsData2026'] = opsWithoutProfiles;
           _origSetItem('primeOperatorsData2026_ts', tsVal);
           _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
           if (_sb) {
             Promise.all([
-              _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: value }, { onConflict: 'key' }),
+              _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
               _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
             ]).then(()=>{});
           }
@@ -18406,6 +18522,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
       // ──────────────────────────────────────────────────────────
+      if (window.forceSaveProfile) window.forceSaveProfile(opName);
       saveData();
       // Marcar timestamp (evita que Realtime revierta el cambio)
       if (typeof _localSaveTs !== 'undefined') {
@@ -18447,6 +18564,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Eliminar el perfil del array en memoria
       const removed = op.profiles.splice(pIdx, 1)[0];
       // Guardar en localStorage inmediatamente
+      if (window.forceSaveProfile) window.forceSaveProfile(opName);
       saveData();
       // Marcar timestamp para que el Realtime listener ignore esta actualización
       if (typeof _localSaveTs !== 'undefined') {
@@ -18495,6 +18613,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // toggle: si ya es ese tipo, volver a 'propio'
       op.profiles[pIdx].tipo = op.profiles[pIdx].tipo === tipo ? 'propio' : tipo;
       if (op.profiles[pIdx].tipo !== 'cobertura') op.profiles[pIdx].cubreA = '';
+      if (window.forceSaveProfile) window.forceSaveProfile(opName);
       saveData();
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
@@ -18506,6 +18625,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
       if (!op?.profiles?.[pIdx]) return;
       op.profiles[pIdx].cubreA = cubreA;
+      if (window.forceSaveProfile) window.forceSaveProfile(opName);
       saveData();
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
@@ -18545,6 +18665,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (cubreSel) { cubreSel.value = ''; cubreSel.style.display = 'none'; }
       const addForm = document.getElementById(`add-form-${globalIndex}`);
       if (addForm) addForm.style.display = 'none';
+      if (window.forceSaveProfile) window.forceSaveProfile(operatorsData[globalIndex].name);
       saveData();
       if (typeof _localSaveTs !== 'undefined') {
         _localSaveTs['primeOperatorsData2026'] = Date.now();
@@ -18564,6 +18685,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     window.removeProfile = function (globalIndex, profileIndex) {
       if (confirm("¿Eliminar este perfil?")) {
         const removed = operatorsData[globalIndex].profiles.splice(profileIndex, 1)[0];
+        if (window.forceSaveProfile) window.forceSaveProfile(operatorsData[globalIndex].name);
         saveData();
         if (typeof _localSaveTs !== 'undefined') {
           _localSaveTs['primeOperatorsData2026'] = Date.now();
@@ -19183,6 +19305,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           if (!op.profiles.some(p => p.id === idVal)) {
             op.profiles.push({ id: idVal, name: idVal });
             // Guardar en localStorage con nueva marca de tiempo
+            if (window.forceSaveProfile) window.forceSaveProfile(opName);
             const nowTs = Date.now();
             localStorage.setItem('primeOperatorsData2026', JSON.stringify(operatorsData));
             localStorage.setItem('primeOperatorsData2026_ts', String(nowTs));
@@ -28464,8 +28587,15 @@ PT._logKey = function (opName) {
             op[prevMonthKey] = Math.round(op[prevMonthKey] * 10) / 10;
           });
 
-          // Persistir en localStorage
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(operatorsData));
+          // Persistir en localStorage — re-aplicar profiles manuales antes de guardar
+          // para no sobreescribir las asignaciones manuales con los perfiles "viejos"
+          if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
+          const _opsStr = JSON.stringify(operatorsData);
+          localStorage.setItem(STORAGE_KEY, _opsStr);
+          // CRITICAL: Actualizar timestamp para que el siguiente sync remoto no gane
+          const _nowTs = String(Date.now());
+          localStorage.setItem('primeOperatorsData2026_ts', _nowTs);
+          if (typeof _localSaveTs !== 'undefined') _localSaveTs[STORAGE_KEY] = Date.now();
           console.log(`[SYNC-TOTALS] Acumulados mensuales recalculados: ${currMonthKey} y ${prevMonthKey}`, 'info');
         } catch (errTotals) {
           console.error('[SYNC-TOTALS] Error al calcular acumulados mensuales:', errTotals);

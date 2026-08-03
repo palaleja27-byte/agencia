@@ -10075,9 +10075,13 @@
                     pts += (turnosPerfil[key] || 0);
                     if (key === 'Mañana') pts += (turnosPerfil['manana'] || 0);
                     if (key === 'Tarde') pts += (turnosPerfil['tarde'] || 0);
-                    if (key === 'Noche') pts += (turnosPerfil['noche'] || 0);
                   });
-                  pts += (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
+                  // 🔬 PRO FIX: Solo sumar 'Auto' si la jornada es Completo (día completo). 
+                  // Esto evita que puntos sin turno definido inflen turnos específicos y se dupliquen.
+                  if (turnosLeer.length === 3 || op.turno === 'Completo') {
+                    pts += (turnosPerfil['Auto'] || 0);
+                  }
+                  pts += (turnosPerfil['LocalFallback'] || 0);
                   if (pts > 5000) pts = 0; // 🛡️ SANIDAD DELTA-SHIFT™: ignora totales mensuales corruptos
                   datamePts += pts;
                }
@@ -14551,8 +14555,14 @@
                     pts = (t[key2] || 0) + (key2 === 'Mañana' ? (t['manana'] || 0) : key2 === 'Tarde' ? (t['tarde'] || 0) : key2 === 'Noche' ? (t['noche'] || 0) : 0);
                   }
                   
-                  // Sumar siempre los puntos automáticos calculados por Delta-Shift (ej. Tableau Sync)
-                  pts += (t['Auto'] || 0);
+                  // 🔬 PRO FIX: Solo sumar puntos 'Auto' si el operador cubre el día completo (Completo)
+                  // para no contaminar su turno específico con puntos no identificados de otros turnos.
+                  if (jornadaOp === 'Completo') {
+                    pts += (t['Auto'] || 0);
+                  }
+                  
+                  // LocalFallback sí lo sumamos porque es manual del dispositivo
+                  pts += (t['LocalFallback'] || 0);
                   
                   ptsSup += pts;
                }

@@ -16863,7 +16863,32 @@ function exportarDatos() {
       // 1. Guardar en localStorage de inmediato (usando el wrapper para actualizar timestamps y Supabase)
       const newValue = JSON.stringify(operatorsData);
       localStorage.setItem('primeOperatorsData2026', newValue);
+      const tsVal = String(Date.now());
+      localStorage.setItem('primeOperatorsData2026_ts', tsVal);
       _localSaveTs['primeOperatorsData2026'] = Date.now();
+
+      // 2. FORZAR inserción directa en Supabase kv_store (evitando race conditions de red de la redefinición)
+      if (typeof _sb !== 'undefined' && _sb) {
+        let opsWithoutProfiles = newValue;
+        try {
+          const arr = JSON.parse(newValue);
+          if (Array.isArray(arr)) {
+            const stripped = arr.map(op => {
+              const c = { ...op };
+              delete c.profiles;
+              return c;
+            });
+            opsWithoutProfiles = JSON.stringify(stripped);
+          }
+        } catch(e) {}
+
+        Promise.all([
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
+        ]).then(() => {
+          console.info('✅ [NUEVO OPERADOR BD] Guardado y sincronizado correctamente en Supabase.');
+        }).catch(e => console.warn('⚠️ Error al subir nuevo operador a Supabase:', e.message));
+      }
 
       document.getElementById('modal-add-op').classList.remove('open');
         renderRanking();
@@ -28601,10 +28626,19 @@ PT._logKey = function (opName) {
           // para no sobreescribir las asignaciones manuales con los perfiles "viejos"
           if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
           const _opsStr = JSON.stringify(operatorsData);
-          localStorage.setItem(STORAGE_KEY, _opsStr);
-          // CRITICAL: Actualizar timestamp para que el siguiente sync remoto no gane
-          const _nowTs = String(Date.now());
-          localStorage.setItem('primeOperatorsData2026_ts', _nowTs);
+          // Guardar localmente usando el método original para evitar que este recálculo automático
+          // de acumulados de puntos suba la lista completa de operadores a Supabase
+          if (typeof _origSetItem === 'function') {
+            _origSetItem(STORAGE_KEY, _opsStr);
+            const _nowTs = String(Date.now());
+            _origSetItem('primeOperatorsData2026_ts', _nowTs);
+            _sbMemCache[STORAGE_KEY] = _opsStr;
+            _sbMemCache['primeOperatorsData2026_ts'] = _nowTs;
+          } else {
+            localStorage.setItem(STORAGE_KEY, _opsStr);
+            const _nowTs = String(Date.now());
+            localStorage.setItem('primeOperatorsData2026_ts', _nowTs);
+          }
           if (typeof _localSaveTs !== 'undefined') _localSaveTs[STORAGE_KEY] = Date.now();
           console.log(`[SYNC-TOTALS] Acumulados mensuales recalculados: ${currMonthKey} y ${prevMonthKey}`, 'info');
         } catch (errTotals) {

@@ -6389,6 +6389,9 @@
                 <button id="dp-corte-save-btn" onclick="saveCorteTurnoBitacora()" style="background:#0f766e; border:1px solid #14b8a6; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#115e59'" onmouseout="this.style.background='#0f766e'">
                   💾 Guardar Corte
                 </button>
+                <button id="dp-corte-retrasado-btn" onclick="preguntarCorteRetrasado()" style="background:#3f3f46; border:1px solid #52525b; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#52525b'" onmouseout="this.style.background='#3f3f46'">
+                  ⏱️ Corte del Pasado
+                </button>
                 <button id="dp-corte-view-btn" onclick="abrirBitacoraCortes()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
                   📖 Ver Bitácora
                 </button>
@@ -27540,7 +27543,20 @@ PT._logKey = function (opName) {
       });
     }
 
-    async function saveCorteTurnoBitacora(isAuto = false) {
+    function preguntarCorteRetrasado() {
+      const resp = prompt("⏱️ Ingresa la hora del corte que deseas registrar (Ejemplo: 02:00, 14:00, 22:00):");
+      if (resp && resp.trim() !== '') {
+        // Basic validation for HH:MM format
+        if (/^([01]\d|2[0-3]):?([0-5]\d)$/.test(resp.trim())) {
+          const formatted = resp.trim().replace(/^(\d{2})(\d{2})$/, "$1:$2");
+          saveCorteTurnoBitacora(false, formatted);
+        } else {
+          alert('❌ Formato inválido. Usa formato 24h como 02:00 o 14:00.');
+        }
+      }
+    }
+
+    async function saveCorteTurnoBitacora(isAuto = false, customTime = null) {
       if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
         if (!isAuto) alert('⚠️ No hay operaciones cargadas para el turno activo. Espera a que se complete la sincronización.');
         return;
@@ -27556,14 +27572,14 @@ PT._logKey = function (opName) {
       try {
         const now = new Date();
         const fecha = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const hora = customTime ? customTime : now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
         
         const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
           ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
           : new Date().getHours();
         const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
         
-        const labelStr = isAuto ? `Auto ${hora}` : `Manual ${hora}`;
+        const labelStr = isAuto ? `Auto ${hora}` : (customTime ? `Retrasado ${hora}` : `Manual ${hora}`);
         
         const perfilToOp = {};
         if (typeof operatorsData !== 'undefined') {

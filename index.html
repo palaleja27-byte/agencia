@@ -27557,8 +27557,101 @@ PT._logKey = function (opName) {
     }
 
     async function saveCorteTurnoBitacora(isAuto = false, customTime = null) {
+      const now = new Date();
+      const fecha = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+      const hora = customTime ? customTime : now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+      
+      const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
+        ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
+        : new Date().getHours();
+      const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
+
+      // --- FALLBACK 1: Query Supabase directly if _lastCorteRows is missing ---
       if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
-        if (!isAuto) alert('⚠️ No hay operaciones cargadas para el turno activo. Espera a que se complete la sincronización.');
+        if (typeof _sb !== 'undefined' && _sbBootReady) {
+          try {
+            const { data: rows } = await _sb
+              .from('operaciones')
+              .select('id_perfil, puntos_neto, jornada, agencia, puntos, puntos_baseline, puntos_total, fecha_dia')
+              .eq('fecha_dia', fecha);
+            if (rows && rows.length > 0) {
+              window._lastCorteRows = rows.map(r => {
+                let neto = r.puntos_neto || 0;
+                const pt = r.puntos_total || r.puntos || 0;
+                const pb = r.puntos_baseline || 0;
+                if (pt > 0 && pb > 0 && pt >= pb) {
+                  neto = pt - pb;
+                }
+                return {
+                  id_perfil: r.id_perfil,
+                  puntos_neto: neto,
+                  jornada: r.jornada,
+                  agencia: r.agencia,
+                  puntos: r.puntos
+                };
+              });
+            }
+          } catch(e) {
+            console.error('Fallback query failed', e);
+          }
+        }
+      }
+
+      // --- FALLBACK 2: Build from local _dpTurnosData / _dpPuntosData cache ---
+      if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
+        const virtualRows = [];
+        if (typeof operatorsData !== 'undefined') {
+          const jVariants = [tAct, tAct.toLowerCase(), tAct.toUpperCase()];
+          operatorsData.forEach(op => {
+            (op.profiles || []).forEach(pf => {
+              const turnosPerfil = typeof _dpTurnosData !== 'undefined' ? (_dpTurnosData[pf.id] || _dpTurnosData[String(pf.id)]) : null;
+              let ptsNeto = 0;
+              if (turnosPerfil) {
+                jVariants.forEach(v => { ptsNeto += Number(turnosPerfil[v] || 0); });
+              } else {
+                const d = typeof _dpPuntosData !== 'undefined' ? (_dpPuntosData[pf.id] || _dpPuntosData[String(pf.id)]) : null;
+                if (d) { ptsNeto = Number(d.puntos_neto || 0); }
+              }
+              if (ptsNeto > 0) {
+                virtualRows.push({
+                  id_perfil: pf.id,
+                  puntos_neto: ptsNeto,
+                  jornada: tAct,
+                  agencia: op.name
+                });
+              }
+            });
+          });
+        }
+        if (virtualRows.length > 0) {
+          window._lastCorteRows = virtualRows;
+        }
+      }
+
+      // --- FALLBACK 3: Build from getPuntosHoy() directly ---
+      if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
+        const virtualRows = [];
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            const pHoy = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
+            if (pHoy > 0) {
+              const pfId = op.profiles && op.profiles[0] ? op.profiles[0].id : 'virtual_' + op.name;
+              virtualRows.push({
+                id_perfil: pfId,
+                puntos_neto: pHoy,
+                jornada: tAct,
+                agencia: op.name
+              });
+            }
+          });
+        }
+        if (virtualRows.length > 0) {
+          window._lastCorteRows = virtualRows;
+        }
+      }
+
+      if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
+        if (!isAuto) alert('⚠️ No hay operaciones cargadas ni puntos registrados para el turno activo. Espera a que se complete la sincronización.');
         return;
       }
       
@@ -27570,15 +27663,6 @@ PT._logKey = function (opName) {
       }
       
       try {
-        const now = new Date();
-        const fecha = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const hora = customTime ? customTime : now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-        
-        const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
-          ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
-          : new Date().getHours();
-        const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
-        
         const labelStr = isAuto ? `Auto ${hora}` : (customTime ? `Retrasado ${hora}` : `Manual ${hora}`);
         
         const perfilToOp = {};

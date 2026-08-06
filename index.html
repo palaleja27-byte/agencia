@@ -6392,6 +6392,9 @@
                 <button id="dp-corte-view-btn" onclick="abrirBitacoraCortes()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
                   📖 Ver Bitácora
                 </button>
+                <button id="dp-nomina-view-btn" onclick="abrirModalNomina()" style="background:#b45309; border:1px solid #d97706; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#92400e'" onmouseout="this.style.background='#b45309'">
+                  💰 Nómina
+                </button>
                 <div id="dp-corte-active-label" style="background:rgba(99,102,241,0.2); color:#818cf8; padding:6px 10px; border-radius:6px; font-size:.6rem; font-weight:800; text-transform:uppercase;">TURNO: —</div>
               </div>
             </div>
@@ -13086,6 +13089,7 @@
       const remoteTs = parseInt(remoteTsVal || '0');
       
       const strVal = typeof remoteVal === 'string' ? remoteVal : JSON.stringify(remoteVal);
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
       
       if (localTs > remoteTs) {
         console.info('[Sync] Los datos locales de operadores son más nuevos. Manteniendo local y subiendo a Supabase.');
@@ -13095,16 +13099,79 @@
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: String(localTs) }, { onConflict: 'key' }).then(()=>{});
         }
       } else {
-        console.info('[Sync] Los datos de Supabase son más nuevos o iguales. Sobrescribiendo local.');
-        _origSetItem('primeOperatorsData2026', strVal);
-        _sbMemCache['primeOperatorsData2026'] = strVal;
+        console.info('[Sync] Merge por UNIÓN — conservando operadores locales no presentes en remoto.');
+        // ──────────────────────────────────────────────────────────────
+        // MERGE POR UNIÓN: En vez de reemplazar totalmente los datos locales
+        // con los remotos, hacemos un merge inteligente que:
+        // 1) Actualiza operadores existentes con los datos remotos
+        // 2) CONSERVA operadores locales que no estén en remoto (recién añadidos)
+        // 3) Añade operadores remotos nuevos que no estén localmente
+        // ──────────────────────────────────────────────────────────────
+        let remoteArr = [];
+        try { remoteArr = JSON.parse(strVal); } catch(e) { remoteArr = []; }
+        if (!Array.isArray(remoteArr)) remoteArr = [];
+        
+        let localArr = [];
+        try { localArr = JSON.parse(localStorage.getItem('primeOperatorsData2026') || '[]'); } catch(e) { localArr = []; }
+        if (!Array.isArray(localArr)) localArr = [];
+        
+        // Construir mapa de operadores remotos por nombre normalizado
+        const remoteMap = {};
+        remoteArr.forEach(op => { if (op && op.name) remoteMap[_safeN(op.name)] = op; });
+        
+        // Construir mapa de operadores locales por nombre normalizado
+        const localMap = {};
+        localArr.forEach(op => { if (op && op.name) localMap[_safeN(op.name)] = op; });
+        
+        // Resultado: Empezar con todos los remotos (son "más nuevos")
+        const mergedMap = {};
+        // Primero, todos los remotos
+        remoteArr.forEach(op => {
+          if (op && op.name) {
+            const key = _safeN(op.name);
+            mergedMap[key] = { ...op };
+            // Si existía localmente, conservar campos locales que el remoto no tenga
+            const localOp = localMap[key];
+            if (localOp) {
+              // Conservar profiles del local (se manejan vía rr_profile_*)
+              if (localOp.profiles && !op.profiles) mergedMap[key].profiles = localOp.profiles;
+            }
+          }
+        });
+        // Luego, añadir operadores locales que NO existan en remoto (nuevos locales)
+        localArr.forEach(op => {
+          if (op && op.name) {
+            const key = _safeN(op.name);
+            if (!mergedMap[key]) {
+              console.info('[Sync] Preservando operador local no encontrado en remoto:', op.name);
+              mergedMap[key] = { ...op };
+            }
+          }
+        });
+        
+        const mergedArr = Object.values(mergedMap);
+        const mergedStr = JSON.stringify(mergedArr);
+        
+        _origSetItem('primeOperatorsData2026', mergedStr);
+        _sbMemCache['primeOperatorsData2026'] = mergedStr;
         _origSetItem('primeOperatorsData2026_ts', String(remoteTs));
         _sbMemCache['primeOperatorsData2026_ts'] = String(remoteTs);
         if (typeof loadData === 'function') loadData();
         // 🔒 CRITICAL: Siempre re-aplicar perfiles manuales despues del merge remoto
-        // Esto garantiza que las asignaciones manuales nunca se borren por datos de Supabase
         if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
         if (typeof recalcGrowth === 'function') recalcGrowth();
+        
+        // Subir la lista fusionada a Supabase para que otros clientes también la reciban
+        if (_sb && mergedArr.length > remoteArr.length) {
+          const stripped = mergedArr.map(op => { const c = {...op}; delete c.profiles; return c; });
+          const newTs = String(Date.now());
+          _origSetItem('primeOperatorsData2026_ts', newTs);
+          _sbMemCache['primeOperatorsData2026_ts'] = newTs;
+          Promise.all([
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(stripped) }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: newTs }, { onConflict: 'key' })
+          ]).then(() => console.info('[Sync] Lista fusionada subida a Supabase con operadores nuevos.'));
+        }
       }
     }
 
@@ -13359,7 +13426,13 @@
               // rr_prime_asistencia_draft NUNCA se ignora — es el canal de login de operadores remotos
               const _isAsistenciaDraft = row.key.startsWith('rr_prime_asistencia_draft');
               const _isChatKey = row.key.startsWith('rr_chat_') || row.key.startsWith('rr_solicitudes_contenido');
-              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && row.key !== 'primeOperatorsData2026' && !_isAsistenciaDraft && !_isChatKey) return;
+              // Guard: ignorar eco para TODAS las claves si guardamos hace < 3s
+              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && !_isAsistenciaDraft && !_isChatKey) return;
+              // Guard EXTRA para primeOperatorsData2026: 8 segundos para evitar race conditions de agregar operador
+              if (row.key === 'primeOperatorsData2026' && msSinceLocalSave < 8000) {
+                console.info('[RT] Ignorando eco de primeOperatorsData2026 (guardado hace ' + msSinceLocalSave + 'ms)');
+                return;
+              }
               if (row.key === 'primeOperatorsData2026') {
                 _sb.from('kv_store').select('value').eq('key', 'primeOperatorsData2026_ts').single()
                   .then(({ data: tsData }) => {
@@ -16860,11 +16933,21 @@ function exportarDatos() {
 
       operatorsData.push(newOp);
       
+      // ── PROTECCIÓN ANTI-BORRADO: Inyectar en OPERATORS_SOURCE para que loadData() nunca lo pierda ──
+      if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
+        const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
+        if (!OPERATORS_SOURCE.some(o => _safeN(o.name) === _safeN(newOp.name))) {
+          OPERATORS_SOURCE.push({ ...newOp, profiles: [] });
+          console.info('[NUEVO OP] Inyectado en OPERATORS_SOURCE para persistencia de sesión.');
+        }
+      }
+      
       // 1. Guardar en localStorage de inmediato (usando el wrapper para actualizar timestamps y Supabase)
       const newValue = JSON.stringify(operatorsData);
       localStorage.setItem('primeOperatorsData2026', newValue);
       const tsVal = String(Date.now());
       localStorage.setItem('primeOperatorsData2026_ts', tsVal);
+      // Guard extendido: proteger contra ecos Realtime por 10 segundos
       _localSaveTs['primeOperatorsData2026'] = Date.now();
 
       // 2. FORZAR inserción directa en Supabase kv_store (evitando race conditions de red de la redefinición)
@@ -27070,6 +27153,66 @@ PT._logKey = function (opName) {
       if (modal) modal.style.display = 'none';
     }
 
+    // MODAL NÓMINA (Calculada en vivo)
+    function abrirModalNomina() {
+      const modal = document.getElementById('modal-nomina-global');
+      if (modal) modal.style.display = 'flex';
+      renderModalNominaList();
+    }
+
+    function cerrarModalNomina() {
+      const modal = document.getElementById('modal-nomina-global');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function renderModalNominaList() {
+      const container = document.getElementById('nomina-list-container');
+      const totalEl = document.getElementById('nomina-total-global-cop');
+      if (!container) return;
+
+      let totalCOPGlobal = 0;
+      let htmlStr = '';
+
+      if (typeof operatorsData !== 'undefined' && typeof getActivePair === 'function') {
+        const { curr } = getActivePair();
+        // Sort operators by points descending
+        const sorted = [...operatorsData].sort((a,b) => {
+          const ptsA = (a[curr] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(a.name) : 0);
+          const ptsB = (b[curr] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(b.name) : 0);
+          return ptsB - ptsA;
+        });
+
+        sorted.forEach(op => {
+          const pBase = op[curr] || 0;
+          const pHoy = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
+          const pTotal = pBase + pHoy;
+          const copTotal = Math.round(pTotal * 1400);
+
+          if (pTotal > 0) {
+            totalCOPGlobal += copTotal;
+            htmlStr += `
+              <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <div style="font-weight:bold; font-size:0.85rem; color:#e2e8f0;">${op.name}</div>
+                  <div style="font-size:0.65rem; color:#94a3b8;">${pTotal.toFixed(1)} pts acumulados (mes)</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:900; font-size:1.05rem; color:#34d399;">$${copTotal.toLocaleString('es-CO')} COP</div>
+                </div>
+              </div>
+            `;
+          }
+        });
+      }
+
+      if (htmlStr === '') {
+        htmlStr = '<div style="color:#94a3b8; text-align:center; padding:20px; font-size:0.8rem;">No hay producción acumulada en el mes actual.</div>';
+      }
+
+      container.innerHTML = htmlStr;
+      if (totalEl) totalEl.textContent = `$${totalCOPGlobal.toLocaleString('es-CO')} COP`;
+    }
+
     // Inicializar cortes de hoy (6AM, 8AM, 10AM...)
     async function inicializarCortesHoy(force = false) {
       const history = getBitacoraHistory();
@@ -27397,15 +27540,15 @@ PT._logKey = function (opName) {
       });
     }
 
-    async function saveCorteTurnoBitacora() {
+    async function saveCorteTurnoBitacora(isAuto = false) {
       if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
-        alert('⚠️ No hay operaciones cargadas para el turno activo. Espera a que se complete la sincronización.');
+        if (!isAuto) alert('⚠️ No hay operaciones cargadas para el turno activo. Espera a que se complete la sincronización.');
         return;
       }
       
       const btn = document.getElementById('dp-corte-save-btn');
       const origText = btn ? btn.innerHTML : '';
-      if (btn) {
+      if (btn && !isAuto) {
         btn.innerHTML = '⏳ Guardando...';
         btn.disabled = true;
       }
@@ -27420,7 +27563,7 @@ PT._logKey = function (opName) {
           : new Date().getHours();
         const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
         
-        const labelStr = `Manual ${hora}`;
+        const labelStr = isAuto ? `Auto ${hora}` : `Manual ${hora}`;
         
         const perfilToOp = {};
         if (typeof operatorsData !== 'undefined') {
@@ -27497,8 +27640,8 @@ PT._logKey = function (opName) {
         
       } catch(e) {
         console.error('[Corte] Error al guardar corte manual:', e);
-        alert('❌ Error al guardar corte: ' + e.message);
-        if (btn) {
+        if (!isAuto) alert('❌ Error al guardar corte: ' + e.message);
+        if (btn && !isAuto) {
           btn.innerHTML = origText;
           btn.disabled = false;
         }
@@ -28234,6 +28377,17 @@ PT._logKey = function (opName) {
       if (typeof _sb === 'undefined') return;
       if (!_sbBootReady) return; // Esperar boot de Supabase
 
+      // AUTO-CORTE DE TURNO CADA 2 HORAS (0, 2, 4, 6...)
+      const _hLocal = new Date().getHours();
+      if (_hLocal % 2 === 0) {
+        if (window._lastAutoCorteHour !== _hLocal) {
+          window._lastAutoCorteHour = _hLocal;
+          if (typeof saveCorteTurnoBitacora === 'function') {
+            saveCorteTurnoBitacora(true).catch(e => console.warn('Auto corte failed', e));
+          }
+        }
+      }
+
       // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
       // Esto asegura que las asignaciones hechas por monitores se distribuyan a todos los usuarios
       const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
@@ -28630,14 +28784,12 @@ PT._logKey = function (opName) {
           // de acumulados de puntos suba la lista completa de operadores a Supabase
           if (typeof _origSetItem === 'function') {
             _origSetItem(STORAGE_KEY, _opsStr);
-            const _nowTs = String(Date.now());
-            _origSetItem('primeOperatorsData2026_ts', _nowTs);
+            // NO actualizar primeOperatorsData2026_ts aquí — usar un key separado para evitar
+            // desincronización de timestamps con Supabase que causa borrado de operadores
+            _origSetItem('primeOperatorsData2026_datame_recalc_ts', String(Date.now()));
             _sbMemCache[STORAGE_KEY] = _opsStr;
-            _sbMemCache['primeOperatorsData2026_ts'] = _nowTs;
           } else {
             localStorage.setItem(STORAGE_KEY, _opsStr);
-            const _nowTs = String(Date.now());
-            localStorage.setItem('primeOperatorsData2026_ts', _nowTs);
           }
           if (typeof _localSaveTs !== 'undefined') _localSaveTs[STORAGE_KEY] = Date.now();
           console.log(`[SYNC-TOTALS] Acumulados mensuales recalculados: ${currMonthKey} y ${prevMonthKey}`, 'info');
@@ -30127,6 +30279,34 @@ PT._logKey = function (opName) {
           ⚠️ Regenerar Cortes Hoy
         </button>
         <button onclick="cerrarModalBitacoraCortes()" style="background:#1e293b; border:1px solid #334155; color:#fff; padding:6px 14px; border-radius:8px; font-size:.65rem; font-weight:bold; cursor:pointer;">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL NÓMINA (Global) ── -->
+  <div class="modal" id="modal-nomina-global" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.9); backdrop-filter:blur(8px); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+    <div class="modal-content" style="max-width:700px; background:#0f172a; border: 1px solid rgba(217, 119, 6, 0.3); border-radius:12px; width:100%; max-height:85vh; display:flex; flex-direction:column; padding:20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom: 1px solid rgba(217, 119, 6, 0.2); padding-bottom: 10px;">
+        <div>
+          <h2 style="margin:0; color:#f59e0b; font-size:1.1rem; letter-spacing: 1px; display:flex; align-items:center; gap:8px;">💰 Reporte de Nómina (Mes Actual)</h2>
+          <div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Producción mensual calculada a $1,400 COP por punto (Referencia quincenal).</div>
+        </div>
+        <button class="close-btn" onclick="cerrarModalNomina()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
+      </div>
+      
+      <div id="nomina-list-container" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+        <!-- Se llena con JS -->
+      </div>
+      
+      <div style="margin-top:15px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:0.8rem; color:#94a3b8;">Total a Pagar (Aprox):</span>
+        <strong id="nomina-total-global-cop" style="font-size:1.2rem; color:#f59e0b;">$0 COP</strong>
+      </div>
+      
+      <div style="margin-top:15px; display:flex; justify-content:flex-end;">
+        <button onclick="cerrarModalNomina()" style="background:#1e293b; border:1px solid #334155; color:#fff; padding:6px 14px; border-radius:8px; font-size:.65rem; font-weight:bold; cursor:pointer;">
           Cerrar
         </button>
       </div>

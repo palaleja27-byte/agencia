@@ -6392,6 +6392,9 @@
                 <button id="dp-corte-retrasado-btn" onclick="preguntarCorteRetrasado()" style="background:#3f3f46; border:1px solid #52525b; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#52525b'" onmouseout="this.style.background='#3f3f46'">
                   ⏱️ Corte del Pasado
                 </button>
+                <button id="dp-corte-calibrar-btn" onclick="promptCalibrarInicioGeneral()" style="background:#5b21b6; border:1px solid #7c3aed; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#5b21b6'">
+                  🔧 Calibrar Inicio
+                </button>
                 <button id="dp-corte-view-btn" onclick="abrirBitacoraCortes()" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
                   📖 Ver Bitácora
                 </button>
@@ -27543,6 +27546,75 @@ PT._logKey = function (opName) {
       });
     }
 
+    async function promptCalibrarInicioGeneral() {
+      if (typeof operatorsData === 'undefined' || operatorsData.length === 0) {
+        alert("⚠️ No hay operadores cargados en el sistema.");
+        return;
+      }
+      
+      // Construir lista numerada para que el monitor elija fácilmente
+      const opsSorted = [...operatorsData].sort((a,b) => a.name.localeCompare(b.name));
+      let listaStr = "Escribe el número del operador a calibrar:\n\n";
+      opsSorted.forEach((op, idx) => {
+        listaStr += `${idx + 1}. ${op.name}\n`;
+      });
+      
+      const seleccion = prompt(listaStr);
+      if (seleccion === null || seleccion.trim() === '') return;
+      
+      const idxSel = parseInt(seleccion) - 1;
+      if (isNaN(idxSel) || idxSel < 0 || idxSel >= opsSorted.length) {
+        alert("❌ Selección inválida.");
+        return;
+      }
+      
+      const op = opsSorted[idxSel];
+      const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
+        ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
+        : new Date().getHours();
+      const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
+      
+      const baseInput = prompt(`📊 Ingresa los puntos (baseline) con los que comenzó el turno ${tAct} para ${op.name}:`);
+      if (baseInput === null || baseInput.trim() === '') return;
+      const baseVal = parseFloat(baseInput);
+      if (isNaN(baseVal) || baseVal < 0) {
+        alert("❌ Valor de puntos inválido.");
+        return;
+      }
+      
+      const jornadaInput = prompt("⏱️ Ingresa la jornada (Mañana, Tarde, Noche) o deja vacío para la jornada actual (" + tAct + "):", tAct);
+      const jornada = (jornadaInput && jornadaInput.trim() !== '') ? jornadaInput.trim() : tAct;
+      
+      if (typeof window.calibrarBaseline === 'function') {
+        await window.calibrarBaseline(op.name, baseVal, jornada);
+        alert(`✅ Puntos iniciales calibrados a ${baseVal} para ${op.name} en la jornada ${jornada}.`);
+      } else {
+        alert("❌ Error: Función calibrarBaseline no encontrada.");
+      }
+    }
+
+    async function promptCalibrarParaCorte(opName) {
+      const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
+        ? parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }))
+        : new Date().getHours();
+      const tAct = _hCol >= 6 && _hCol < 14 ? 'Mañana' : _hCol >= 14 && _hCol < 22 ? 'Tarde' : 'Noche';
+      
+      const resp = prompt(`🔧 Calibrar puntos iniciales (comienzo) para ${opName} en el turno ${tAct} de hoy:`);
+      if (resp !== null && resp.trim() !== '') {
+        const val = parseFloat(resp);
+        if (!isNaN(val) && val >= 0) {
+          if (typeof window.calibrarBaseline === 'function') {
+            await window.calibrarBaseline(opName, val, tAct);
+            alert(`✅ Calibrado correctamente a ${val} puntos.`);
+          } else {
+            alert("❌ Función calibrarBaseline no encontrada.");
+          }
+        } else {
+          alert("❌ Valor inválido.");
+        }
+      }
+    }
+
     function preguntarCorteRetrasado() {
       const resp = prompt("⏱️ Ingresa la hora del corte que deseas registrar (Ejemplo: 02:00, 14:00, 22:00):");
       if (resp && resp.trim() !== '') {
@@ -27897,7 +27969,7 @@ PT._logKey = function (opName) {
           .sort((a,b) => b.pts - a.pts)
           .map(p => `${p.modelo}: ${p.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}`)
           .join(' · ');
-        return `<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center;border:1px solid ${idx===0?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)'};margin-bottom:4px;">
+        return `<div onclick="promptCalibrarParaCorte('${opName}')" title="Hacer clic para calibrar puntos iniciales (baseline) de este turno" style="cursor:pointer; background:rgba(255,255,255,0.03);border-radius:8px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center;border:1px solid ${idx===0?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)'};margin-bottom:4px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
           <div style="min-width:0;flex:1;padding-right:10px;">
             <div style="font-size:0.78rem;font-weight:700;color:${idx===0?'#fbbf24':idx<3?'#e2e8f0':'#94a3b8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${medal} ${opName}</div>
             <div style="font-size:0.52rem;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${perfsStr}</div>

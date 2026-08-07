@@ -13084,6 +13084,9 @@
         if (typeof _autoCorteScheduler === 'function') {
           _autoCorteScheduler();
         }
+        if (typeof window.logSyncConsole === 'function') {
+          window.logSyncConsole('🚀 Sistema AgenciaRR iniciado. Conexión a Supabase lista.', 'success');
+        }
       } catch (e) {
         console.error('[CyberUI] Error al inicializar:', e);
       }
@@ -28058,37 +28061,62 @@ PT._logKey = function (opName) {
 
     function _renderCorteRows(rows, corteWrap, totalEl, tAct) {
       window._lastCorteRows = rows; // Cache de corte para bitacora
-      // Construir mapa inverso id_perfil → operador
+      
       const perfilToOp = {};
+      const opTurnoMap = {};
+
       if (typeof operatorsData !== 'undefined') {
         operatorsData.forEach(op => {
+          const tName = op.turno || op.shift || op.jornada || 'Noche';
+          opTurnoMap[op.name] = tName;
           (op.profiles || []).forEach(p => {
             perfilToOp[String(p.id).trim()] = {
-              operador: op.name, grupo: op.group,
-              modelo: p.model || p.modelo || ('ID ' + p.id)
+              operador: op.name,
+              grupo: op.group,
+              modelo: p.model || p.modelo || ('ID ' + p.id),
+              turnoOp: tName
             };
           });
         });
       }
-      // Fallback con DP_PERFILES_MAP
+
       if (typeof DP_PERFILES_MAP !== 'undefined') {
         Object.values(DP_PERFILES_MAP).flat().forEach(p => {
           const k = String(p.id).trim();
-          if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', grupo: '', modelo: p.modelo || ('ID ' + p.id) };
+          if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', grupo: '', modelo: p.modelo || ('ID ' + p.id), turnoOp: '' };
         });
       }
 
-      // Agrupar por operador (acumular netos)
       const opMap = {};
       let globalPts = 0;
+      let unassignedPts = 0;
+
       rows.forEach(r => {
         const pts = r.puntos_neto || 0;
         if (pts <= 0 || pts > 800) return; // sanidad
         globalPts += pts;
-        const info = perfilToOp[String(r.id_perfil).trim()] || { operador: 'ID: ' + r.id_perfil, grupo: '', modelo: 'Perfil ' + r.id_perfil };
-        if (!opMap[info.operador]) opMap[info.operador] = { pts: 0, perfiles: [], grupo: info.grupo };
-        opMap[info.operador].pts += pts;
-        opMap[info.operador].perfiles.push({ modelo: info.modelo, id: r.id_perfil, pts });
+
+        const info = perfilToOp[String(r.id_perfil).trim()] || { operador: '—', grupo: '', modelo: 'Perfil ' + r.id_perfil, turnoOp: '' };
+        
+        // Determinar si el operador pertenece a la jornada activa
+        const isOperatorInShift = info.operador !== '—' && (!info.turnoOp || info.turnoOp.toUpperCase() === tAct.toUpperCase() || info.turnoOp === 'Completo');
+        
+        let finalOpKey = info.operador;
+        if (!isOperatorInShift) {
+          finalOpKey = info.operador === '—' ? '⚠️ Sin Asignar (ID: ' + r.id_perfil + ')' : '⚠️ ' + info.operador + ' (Perfil ' + info.modelo + ')';
+          unassignedPts += pts;
+        }
+
+        if (!opMap[finalOpKey]) {
+          opMap[finalOpKey] = {
+            pts: 0,
+            perfiles: [],
+            grupo: info.grupo,
+            isUnassigned: !isOperatorInShift
+          };
+        }
+        opMap[finalOpKey].pts += pts;
+        opMap[finalOpKey].perfiles.push({ modelo: info.modelo, id: r.id_perfil, pts });
       });
 
       const sorted = Object.entries(opMap).sort((a, b) => b[1].pts - a[1].pts);
@@ -28096,29 +28124,54 @@ PT._logKey = function (opName) {
       if (sorted.length === 0) {
         corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin producción > 0 en turno ' + tAct + ' hoy.</div>';
         if (totalEl) totalEl.textContent = '0,0 pts';
+        if (typeof window.logSyncConsole === 'function') {
+          window.logSyncConsole(`Información de turno ${tAct} cargada: 0,0 pts`, 'info');
+        }
         return;
       }
 
+      let bannerHtml = '';
+      if (unassignedPts > 0) {
+        bannerHtml = `
+          <div style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35); color:#fbbf24; padding:8px 12px; border-radius:8px; margin-bottom:8px; font-size:0.68rem; display:flex; justify-content:space-between; align-items:center;">
+            <span>⚠️ <b>Alerta Monitor:</b> Hay ${unassignedPts.toFixed(1)} pts de perfiles sin operador asignado en este turno.</span>
+            <button onclick="promptCalibrarInicioGeneral()" style="background:#d97706; border:none; color:#fff; font-size:0.6rem; font-weight:800; padding:4px 8px; border-radius:5px; cursor:pointer;">🔧 Asignar / Calibrar</button>
+          </div>
+        `;
+      }
+
       const medals = ['🥇','🥈','🥉'];
-      corteWrap.innerHTML = sorted.map(([opName, data], idx) => {
-        const medal = idx < 3 ? medals[idx] : '#' + (idx + 1);
+      const cardsHtml = sorted.map(([opName, data], idx) => {
+        const isUn = data.isUnassigned;
+        const medal = isUn ? '⚠️' : (idx < 3 ? medals[idx] : '#' + (idx + 1));
         const perfsStr = data.perfiles
           .sort((a,b) => b.pts - a.pts)
           .map(p => `${p.modelo}: ${p.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}`)
           .join(' · ');
-        return `<div onclick="promptCalibrarParaCorte('${opName}')" title="Hacer clic para calibrar puntos iniciales (baseline) de este turno" style="cursor:pointer; background:rgba(255,255,255,0.03);border-radius:8px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center;border:1px solid ${idx===0?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)'};margin-bottom:4px;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+
+        const cardBg = isUn ? 'rgba(239,68,68,0.06)' : (idx===0?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.03)');
+        const cardBorder = isUn ? 'rgba(239,68,68,0.3)' : (idx===0?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)');
+        const nameColor = isUn ? '#fca5a5' : (idx===0?'#fbbf24':idx<3?'#e2e8f0':'#94a3b8');
+
+        return `<div onclick="promptCalibrarParaCorte('${opName.replace('⚠️ ', '')}')" title="${isUn ? 'Haz clic para asignar a un operador' : 'Haz clic para calibrar baseline de este turno'}" style="cursor:pointer; background:${cardBg}; border-radius:8px; padding:9px 13px; display:flex; justify-content:space-between; align-items:center; border:1px solid ${cardBorder}; margin-bottom:4px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='${cardBg}'">
           <div style="min-width:0;flex:1;padding-right:10px;">
-            <div style="font-size:0.78rem;font-weight:700;color:${idx===0?'#fbbf24':idx<3?'#e2e8f0':'#94a3b8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${medal} ${opName}</div>
-            <div style="font-size:0.52rem;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${perfsStr}</div>
+            <div style="font-size:0.78rem;font-weight:700;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${medal} ${opName}</div>
+            <div style="font-size:0.52rem;color:${isUn ? '#f87171' : '#475569'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${perfsStr}</div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
-            <div style="font-size:1rem;font-weight:800;color:${idx===0?'#fbbf24':'#5eead4'};">${data.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}</div>
+            <div style="font-size:1rem;font-weight:800;color:${isUn ? '#f87171' : (idx===0?'#fbbf24':'#5eead4')};">${data.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}</div>
             <div style="font-size:0.48rem;color:#475569;text-transform:uppercase;">pts ${tAct}</div>
           </div>
         </div>`;
       }).join('');
 
+      corteWrap.innerHTML = bannerHtml + cardsHtml;
+
       if (totalEl) totalEl.textContent = globalPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
+
+      if (typeof window.logSyncConsole === 'function') {
+        window.logSyncConsole(`Corte live cargado: ${globalPts.toFixed(1)} pts acumulados en ${sorted.length} registros (${unassignedPts > 0 ? unassignedPts.toFixed(1) + ' pts sin asignar' : 'todos asignados'}).`, unassignedPts > 0 ? 'warning' : 'success');
+      }
     }
 
     async function dpSyncConFeedback() {
@@ -33609,6 +33662,35 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
       if (typeof renderOpSolicitudesHistorial === 'function') renderOpSolicitudesHistorial();
     }
 
+    window.logSyncConsole = function(msg, type = 'info') {
+      const consoleEl = document.getElementById('dp-logs-console');
+      if (!consoleEl) return;
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      let color = '#38bdf8'; // info (blue)
+      if (type === 'success') color = '#34d399';
+      else if (type === 'warning') color = '#fbbf24';
+      else if (type === 'error') color = '#f87171';
+
+      if (consoleEl.innerHTML.includes('Esperando sincronización...')) {
+        consoleEl.innerHTML = '';
+      }
+
+      const logRow = document.createElement('div');
+      logRow.style.marginBottom = '2px';
+      logRow.style.color = color;
+      logRow.innerHTML = `<span style="color:#475569;">[${timeStr}]</span> ${msg}`;
+
+      consoleEl.appendChild(logRow);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+
+      while (consoleEl.childNodes.length > 50) {
+        consoleEl.removeChild(consoleEl.firstChild);
+      }
+    };
+
     window.abrirModalPedirContenido = abrirModalPedirContenido;
     window.cerrarModalPedirContenido = cerrarModalPedirContenido;
     window.enviarSolicitudContenido = enviarSolicitudContenido;
@@ -33620,6 +33702,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
     window.eliminarSolicitud = eliminarSolicitud;
     window.abrirModalNomina = abrirModalNomina;
     window.cerrarModalNomina = cerrarModalNomina;
+    window.renderModalNominaList = renderModalNominaList;
     window.abrirBitacoraCortes = abrirBitacoraCortes;
     window.cerrarModalBitacoraCortes = cerrarModalBitacoraCortes;
 

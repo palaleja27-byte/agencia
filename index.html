@@ -27181,43 +27181,88 @@ PT._logKey = function (opName) {
 
       if (typeof operatorsData !== 'undefined' && typeof getActivePair === 'function') {
         const { curr } = getActivePair();
-        // Sort operators by points descending
+
+        // Sort operators by total points descending
         const sorted = [...operatorsData].sort((a,b) => {
           const ptsA = (a[curr] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(a.name) : 0);
           const ptsB = (b[curr] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(b.name) : 0);
           return ptsB - ptsA;
         });
 
-        sorted.forEach(op => {
+        sorted.forEach((op, idx) => {
           const pBase = op[curr] || 0;
-          const pHoy = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
+          const pHoy  = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
           const pTotal = pBase + pHoy;
           const copTotal = Math.round(pTotal * 1400);
 
-          if (pTotal > 0) {
-            totalCOPGlobal += copTotal;
-            htmlStr += `
-              <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); padding:10px 14px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <div style="font-weight:bold; font-size:0.85rem; color:#e2e8f0;">${op.name}</div>
-                  <div style="font-size:0.65rem; color:#94a3b8;">${pTotal.toFixed(1)} pts acumulados (mes)</div>
+          if (pTotal <= 0) return;
+
+          totalCOPGlobal += copTotal;
+
+          // --- Desglose por perfil (puntos live del turno) ---
+          const jornadaOp = op.turno || 'Noche';
+          let perfilRows = '';
+          let pHoyPerfiles = 0;
+
+          if (typeof _dpTurnosData !== 'undefined' && Array.isArray(op.profiles) && op.profiles.length > 0) {
+            op.profiles.forEach(p => {
+              const t = _dpTurnosData[p.id];
+              if (!t) return;
+              let pts = 0;
+              if (jornadaOp === 'Completo') {
+                pts = (t['Mañana']||0)+(t['manana']||0)+(t['Tarde']||0)+(t['tarde']||0)+(t['Noche']||0)+(t['noche']||0)+(t['Auto']||0);
+              } else {
+                const k = jornadaOp;
+                pts = (t[k]||0)+(k==='Mañana'?(t['manana']||0):k==='Tarde'?(t['tarde']||0):k==='Noche'?(t['noche']||0):0);
+              }
+              if (pts <= 0) return;
+              pHoyPerfiles += pts;
+              const modelo = p.model || p.modelo || ('ID:' + p.id);
+              const cop = Math.round(pts * 1400);
+              perfilRows += `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 12px;border-left:2px solid rgba(94,234,212,0.25);margin:2px 0 2px 4px;">
+                  <div style="font-size:0.60rem;color:#94a3b8;">└ ${modelo}</div>
+                  <div style="font-size:0.60rem;color:#5eead4;font-weight:700;">${pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts · $${cop.toLocaleString('es-CO')} COP</div>
+                </div>`;
+            });
+          }
+
+          const hasPerfils = perfilRows !== '';
+
+          htmlStr += `
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);padding:10px 14px;border-radius:10px;margin-bottom:6px;">
+              <!-- Header fila operador -->
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="min-width:0;flex:1;">
+                  <div style="font-weight:800;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${idx < 3 ? ['🥇','🥈','🥉'][idx] : ''} ${op.name}</div>
+                  <div style="font-size:0.60rem;color:#64748b;margin-top:2px;">
+                    <span style="color:#94a3b8;">Base mes: <b style="color:#cbd5e1;">${pBase.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>
+                    ${pHoy > 0 ? `&nbsp;·&nbsp;<span style="color:#5eead4;">Hoy: <b>${pHoy.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>` : ''}
+                  </div>
                 </div>
-                <div style="text-align:right;">
-                  <div style="font-weight:900; font-size:1.05rem; color:#34d399;">$${copTotal.toLocaleString('es-CO')} COP</div>
+                <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+                  <div style="font-weight:900;font-size:1.05rem;color:#34d399;">$${copTotal.toLocaleString('es-CO')}</div>
+                  <div style="font-size:0.55rem;color:#475569;text-transform:uppercase;">COP · ${pTotal.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</div>
                 </div>
               </div>
-            `;
-          }
+              ${hasPerfils ? `
+              <!-- Desglose perfiles -->
+              <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);">
+                <div style="font-size:0.58rem;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Desglose perfiles (turno live)</div>
+                ${perfilRows}
+              </div>` : ''}
+            </div>`;
         });
       }
 
       if (htmlStr === '') {
-        htmlStr = '<div style="color:#94a3b8; text-align:center; padding:20px; font-size:0.8rem;">No hay producción acumulada en el mes actual.</div>';
+        htmlStr = '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:0.8rem;">No hay producción acumulada en el mes actual.</div>';
       }
 
       container.innerHTML = htmlStr;
       if (totalEl) totalEl.textContent = `$${totalCOPGlobal.toLocaleString('es-CO')} COP`;
     }
+
 
     // Inicializar cortes de hoy (6AM, 8AM, 10AM...)
     async function inicializarCortesHoy(force = false) {

@@ -27169,8 +27169,15 @@ PT._logKey = function (opName) {
     // MODAL NÓMINA (Calculada en vivo)
     function abrirModalNomina() {
       const modal = document.getElementById('modal-nomina-global');
-      if (modal) modal.style.display = 'flex';
-      renderModalNominaList();
+      if (modal) {
+        modal.style.display = 'flex';
+        modal.style.zIndex = '99999';
+      }
+      try {
+        renderModalNominaList();
+      } catch(e) {
+        console.error('Error al renderizar nómina:', e);
+      }
     }
 
     function cerrarModalNomina() {
@@ -27186,80 +27193,90 @@ PT._logKey = function (opName) {
       let totalCOPGlobal = 0;
       let htmlStr = '';
 
-      if (typeof operatorsData !== 'undefined' && typeof getActivePair === 'function') {
-        const { curr } = getActivePair();
-
-        // Sort operators by total points descending
-        const sorted = [...operatorsData].sort((a,b) => {
-          const ptsA = (a[curr] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(a.name) : 0);
-          const ptsB = (b[curr] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(b.name) : 0);
-          return ptsB - ptsA;
-        });
-
-        sorted.forEach((op, idx) => {
-          const pBase = op[curr] || 0;
-          const pHoy  = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
-          const pTotal = pBase + pHoy;
-          const copTotal = Math.round(pTotal * 1400);
-
-          if (pTotal <= 0) return;
-
-          totalCOPGlobal += copTotal;
-
-          // --- Desglose por perfil (puntos live del turno) ---
-          const jornadaOp = op.turno || 'Noche';
-          let perfilRows = '';
-          let pHoyPerfiles = 0;
-
-          if (typeof _dpTurnosData !== 'undefined' && Array.isArray(op.profiles) && op.profiles.length > 0) {
-            op.profiles.forEach(p => {
-              const t = _dpTurnosData[p.id];
-              if (!t) return;
-              let pts = 0;
-              if (jornadaOp === 'Completo') {
-                pts = (t['Mañana']||0)+(t['manana']||0)+(t['Tarde']||0)+(t['tarde']||0)+(t['Noche']||0)+(t['noche']||0)+(t['Auto']||0);
-              } else {
-                const k = jornadaOp;
-                pts = (t[k]||0)+(k==='Mañana'?(t['manana']||0):k==='Tarde'?(t['tarde']||0):k==='Noche'?(t['noche']||0):0);
-              }
-              if (pts <= 0) return;
-              pHoyPerfiles += pts;
-              const modelo = p.model || p.modelo || ('ID:' + p.id);
-              const cop = Math.round(pts * 1400);
-              perfilRows += `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 12px;border-left:2px solid rgba(94,234,212,0.25);margin:2px 0 2px 4px;">
-                  <div style="font-size:0.60rem;color:#94a3b8;">└ ${modelo}</div>
-                  <div style="font-size:0.60rem;color:#5eead4;font-weight:700;">${pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts · $${cop.toLocaleString('es-CO')} COP</div>
-                </div>`;
-            });
+      try {
+        if (typeof operatorsData !== 'undefined') {
+          let currKey = 'mar';
+          if (typeof getActivePair === 'function') {
+            try {
+              const pair = getActivePair();
+              if (pair && pair.curr) currKey = pair.curr;
+            } catch(e) {
+              console.warn('getActivePair fallback:', e);
+            }
           }
 
-          const hasPerfils = perfilRows !== '';
+          // Sort operators by total points descending
+          const sorted = [...operatorsData].sort((a,b) => {
+            const ptsA = (a[currKey] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(a.name) : 0);
+            const ptsB = (b[currKey] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(b.name) : 0);
+            return ptsB - ptsA;
+          });
 
-          htmlStr += `
-            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);padding:10px 14px;border-radius:10px;margin-bottom:6px;">
-              <!-- Header fila operador -->
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                <div style="min-width:0;flex:1;">
-                  <div style="font-weight:800;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${idx < 3 ? ['🥇','🥈','🥉'][idx] : ''} ${op.name}</div>
-                  <div style="font-size:0.60rem;color:#64748b;margin-top:2px;">
-                    <span style="color:#94a3b8;">Base mes: <b style="color:#cbd5e1;">${pBase.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>
-                    ${pHoy > 0 ? `&nbsp;·&nbsp;<span style="color:#5eead4;">Hoy: <b>${pHoy.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>` : ''}
+          sorted.forEach((op, idx) => {
+            const pBase = op[currKey] || 0;
+            const pHoy  = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
+            const pTotal = pBase + pHoy;
+            const copTotal = Math.round(pTotal * 1400);
+
+            if (pTotal <= 0) return;
+
+            totalCOPGlobal += copTotal;
+
+            // --- Desglose por perfil (puntos live del turno) ---
+            const jornadaOp = op.turno || op.shift || 'Noche';
+            let perfilRows = '';
+            let pHoyPerfiles = 0;
+
+            if (typeof _dpTurnosData !== 'undefined' && Array.isArray(op.profiles) && op.profiles.length > 0) {
+              op.profiles.forEach(p => {
+                const t = _dpTurnosData[p.id];
+                if (!t) return;
+                let pts = 0;
+                if (jornadaOp === 'Completo') {
+                  pts = (t['Mañana']||0)+(t['manana']||0)+(t['Tarde']||0)+(t['tarde']||0)+(t['Noche']||0)+(t['noche']||0)+(t['Auto']||0);
+                } else {
+                  const k = jornadaOp;
+                  pts = (t[k]||0)+(k==='Mañana'?(t['manana']||0):k==='Tarde'?(t['tarde']||0):k==='Noche'?(t['noche']||0):0);
+                }
+                if (pts <= 0) return;
+                pHoyPerfiles += pts;
+                const modelo = p.model || p.modelo || ('ID:' + p.id);
+                const cop = Math.round(pts * 1400);
+                perfilRows += `
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 12px;border-left:2px solid rgba(94,234,212,0.25);margin:2px 0 2px 4px;">
+                    <div style="font-size:0.60rem;color:#94a3b8;">└ ${modelo}</div>
+                    <div style="font-size:0.60rem;color:#5eead4;font-weight:700;">${pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts · $${cop.toLocaleString('es-CO')} COP</div>
+                  </div>`;
+              });
+            }
+
+            const hasPerfils = perfilRows !== '';
+
+            htmlStr += `
+              <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);padding:10px 14px;border-radius:10px;margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-weight:800;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${idx < 3 ? ['🥇','🥈','🥉'][idx] : ''} ${op.name}</div>
+                    <div style="font-size:0.60rem;color:#64748b;margin-top:2px;">
+                      <span style="color:#94a3b8;">Base mes: <b style="color:#cbd5e1;">${pBase.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>
+                      ${pHoy > 0 ? `&nbsp;·&nbsp;<span style="color:#5eead4;">Hoy: <b>${pHoy.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>` : ''}
+                    </div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+                    <div style="font-weight:900;font-size:1.05rem;color:#34d399;">$${copTotal.toLocaleString('es-CO')} COP</div>
+                    <div style="font-size:0.55rem;color:#475569;text-transform:uppercase;">${pTotal.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts acumulados</div>
                   </div>
                 </div>
-                <div style="text-align:right;flex-shrink:0;margin-left:12px;">
-                  <div style="font-weight:900;font-size:1.05rem;color:#34d399;">$${copTotal.toLocaleString('es-CO')}</div>
-                  <div style="font-size:0.55rem;color:#475569;text-transform:uppercase;">COP · ${pTotal.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</div>
-                </div>
-              </div>
-              ${hasPerfils ? `
-              <!-- Desglose perfiles -->
-              <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);">
-                <div style="font-size:0.58rem;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Desglose perfiles (turno live)</div>
-                ${perfilRows}
-              </div>` : ''}
-            </div>`;
-        });
+                ${hasPerfils ? `
+                <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);">
+                  <div style="font-size:0.58rem;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Desglose perfiles (turno live)</div>
+                  ${perfilRows}
+                </div>` : ''}
+              </div>`;
+          });
+        }
+      } catch(e) {
+        console.error('Error calculando datos de nómina:', e);
       }
 
       if (htmlStr === '') {
@@ -28098,12 +28115,13 @@ PT._logKey = function (opName) {
 
         const info = perfilToOp[String(r.id_perfil).trim()] || { operador: '—', grupo: '', modelo: 'Perfil ' + r.id_perfil, turnoOp: '' };
         
-        // Determinar si el operador pertenece a la jornada activa
+        // Determinar si el operador pertenece al turno activo
         const isOperatorInShift = info.operador !== '—' && (!info.turnoOp || info.turnoOp.toUpperCase() === tAct.toUpperCase() || info.turnoOp === 'Completo');
         
         let finalOpKey = info.operador;
         if (!isOperatorInShift) {
-          finalOpKey = info.operador === '—' ? '⚠️ Sin Asignar (ID: ' + r.id_perfil + ')' : '⚠️ ' + info.operador + ' (Perfil ' + info.modelo + ')';
+          // Ocultar nombres de otros turnos; agruparlos limpia e higiénicamente bajo "Perfiles por Asignar"
+          finalOpKey = '⚠️ Perfiles Pendientes de Asignar';
           unassignedPts += pts;
         }
 
@@ -28116,10 +28134,22 @@ PT._logKey = function (opName) {
           };
         }
         opMap[finalOpKey].pts += pts;
-        opMap[finalOpKey].perfiles.push({ modelo: info.modelo, id: r.id_perfil, pts });
+        
+        // Acumular modelo
+        const existingP = opMap[finalOpKey].perfiles.find(p => String(p.id) === String(r.id_perfil));
+        if (existingP) {
+          existingP.pts += pts;
+        } else {
+          opMap[finalOpKey].perfiles.push({ modelo: info.modelo, id: r.id_perfil, pts });
+        }
       });
 
-      const sorted = Object.entries(opMap).sort((a, b) => b[1].pts - a[1].pts);
+      const sorted = Object.entries(opMap).sort((a, b) => {
+        // La tarjeta de perfiles pendientes va arriba o al final según preferencia, la dejamos primera si hay unassigned para alertar al monitor
+        if (a[1].isUnassigned) return -1;
+        if (b[1].isUnassigned) return 1;
+        return b[1].pts - a[1].pts;
+      });
 
       if (sorted.length === 0) {
         corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin producción > 0 en turno ' + tAct + ' hoy.</div>';
@@ -28134,32 +28164,41 @@ PT._logKey = function (opName) {
       if (unassignedPts > 0) {
         bannerHtml = `
           <div style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.35); color:#fbbf24; padding:8px 12px; border-radius:8px; margin-bottom:8px; font-size:0.68rem; display:flex; justify-content:space-between; align-items:center;">
-            <span>⚠️ <b>Alerta Monitor:</b> Hay ${unassignedPts.toFixed(1)} pts de perfiles sin operador asignado en este turno.</span>
+            <span>⚠️ <b>Alerta Monitor:</b> Hay ${unassignedPts.toFixed(1)} pts en perfiles sin operador asignado para el turno ${tAct}.</span>
             <button onclick="promptCalibrarInicioGeneral()" style="background:#d97706; border:none; color:#fff; font-size:0.6rem; font-weight:800; padding:4px 8px; border-radius:5px; cursor:pointer;">🔧 Asignar / Calibrar</button>
           </div>
         `;
       }
 
       const medals = ['🥇','🥈','🥉'];
-      const cardsHtml = sorted.map(([opName, data], idx) => {
+      let operatorIndex = 0;
+
+      const cardsHtml = sorted.map(([opName, data]) => {
         const isUn = data.isUnassigned;
-        const medal = isUn ? '⚠️' : (idx < 3 ? medals[idx] : '#' + (idx + 1));
+        let medal = '';
+        if (isUn) {
+          medal = '⚠️';
+        } else {
+          medal = operatorIndex < 3 ? medals[operatorIndex] : '#' + (operatorIndex + 1);
+          operatorIndex++;
+        }
+
         const perfsStr = data.perfiles
           .sort((a,b) => b.pts - a.pts)
           .map(p => `${p.modelo}: ${p.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}`)
           .join(' · ');
 
-        const cardBg = isUn ? 'rgba(239,68,68,0.06)' : (idx===0?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.03)');
-        const cardBorder = isUn ? 'rgba(239,68,68,0.3)' : (idx===0?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)');
-        const nameColor = isUn ? '#fca5a5' : (idx===0?'#fbbf24':idx<3?'#e2e8f0':'#94a3b8');
+        const cardBg = isUn ? 'rgba(245,158,11,0.1)' : (operatorIndex===1?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.03)');
+        const cardBorder = isUn ? 'rgba(245,158,11,0.4)' : (operatorIndex===1?'rgba(251,191,36,.2)':'rgba(255,255,255,0.05)');
+        const nameColor = isUn ? '#fbbf24' : (operatorIndex===1?'#fbbf24':operatorIndex<=3?'#e2e8f0':'#94a3b8');
 
-        return `<div onclick="promptCalibrarParaCorte('${opName.replace('⚠️ ', '')}')" title="${isUn ? 'Haz clic para asignar a un operador' : 'Haz clic para calibrar baseline de este turno'}" style="cursor:pointer; background:${cardBg}; border-radius:8px; padding:9px 13px; display:flex; justify-content:space-between; align-items:center; border:1px solid ${cardBorder}; margin-bottom:4px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='${cardBg}'">
+        return `<div onclick="promptCalibrarParaCorte('${opName}')" title="${isUn ? 'Haz clic para reasignar perfiles a operadores del turno' : 'Haz clic para calibrar baseline'}" style="cursor:pointer; background:${cardBg}; border-radius:8px; padding:9px 13px; display:flex; justify-content:space-between; align-items:center; border:1px solid ${cardBorder}; margin-bottom:4px; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='${cardBg}'">
           <div style="min-width:0;flex:1;padding-right:10px;">
             <div style="font-size:0.78rem;font-weight:700;color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${medal} ${opName}</div>
-            <div style="font-size:0.52rem;color:${isUn ? '#f87171' : '#475569'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${perfsStr}</div>
+            <div style="font-size:0.52rem;color:${isUn ? '#fbbf24' : '#475569'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${perfsStr}</div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
-            <div style="font-size:1rem;font-weight:800;color:${isUn ? '#f87171' : (idx===0?'#fbbf24':'#5eead4')};">${data.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}</div>
+            <div style="font-size:1rem;font-weight:800;color:${isUn ? '#fbbf24' : (operatorIndex===1?'#fbbf24':'#5eead4')};">${data.pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})}</div>
             <div style="font-size:0.48rem;color:#475569;text-transform:uppercase;">pts ${tAct}</div>
           </div>
         </div>`;
@@ -28170,7 +28209,7 @@ PT._logKey = function (opName) {
       if (totalEl) totalEl.textContent = globalPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
 
       if (typeof window.logSyncConsole === 'function') {
-        window.logSyncConsole(`Corte live cargado: ${globalPts.toFixed(1)} pts acumulados en ${sorted.length} registros (${unassignedPts > 0 ? unassignedPts.toFixed(1) + ' pts sin asignar' : 'todos asignados'}).`, unassignedPts > 0 ? 'warning' : 'success');
+        window.logSyncConsole(`Corte live cargado: ${globalPts.toFixed(1)} pts acumulados (${unassignedPts > 0 ? unassignedPts.toFixed(1) + ' pts por asignar' : 'todos asignados a ' + tAct}).`, unassignedPts > 0 ? 'warning' : 'success');
       }
     }
 

@@ -27744,71 +27744,10 @@ PT._logKey = function (opName) {
         const remMin = diffMin % 60;
         cdEl.textContent = `⏱️ SIGUIENTE CORTE: ${nextSlot} (en ${diffH > 0 ? diffH + 'h ' : ''}${remMin}m)`;
       }
-
-      // 4. Filtrar slots pasados del turno activo para verificar si existen
-      const pastSlots = [];
-      for (const slot of slots) {
-        const [sH, sM] = slot.split(':').map(Number);
-        let isPast = false;
-        if (tAct === 'Noche') {
-          if (_hCol >= 22) {
-            isPast = false;
-          } else {
-            if (_hCol > sH || (_hCol === sH && _mCol >= sM)) {
-              isPast = true;
-            }
-          }
-        } else {
-          if (_hCol > sH || (_hCol === sH && _mCol >= sM)) {
-            isPast = true;
-          }
-        }
-        if (isPast) {
-          pastSlots.push(slot);
-        }
-      }
-
-      if (pastSlots.length === 0) return;
-
-      // 5. Consultar historial fresco desde Supabase para prevenir duplicados
-      let bitacora = [];
-      try {
-        const { data: kvData, error } = await _sb.from('kv_store').select('value').eq('key', 'rr_corte_bitacora_history').maybeSingle();
-        if (!error && kvData && kvData.value) {
-          bitacora = typeof kvData.value === 'string' ? JSON.parse(kvData.value) : kvData.value;
-        }
-      } catch (e) {
-        console.error('[Auto-Corte] Error comprobando bitácora para corte automático:', e);
-        return;
-      }
-
-      // 6. Verificar y guardar automáticamente el corte si falta
-      for (const slot of pastSlots) {
-        const exists = bitacora.some(b => b.fecha === logicalDate && b.jornada === tAct && b.hora === slot);
-        if (!exists) {
-          console.info(`[Auto-Corte] Guardando corte automático de las ${slot} (${logicalDate} ${tAct})`);
-          if (typeof _toastSync === 'function') {
-            _toastSync(`⏳ Guardando corte automático de las ${slot}...`);
-          }
-          
-          try {
-            await saveCorteTurnoBitacora(true, slot);
-            if (typeof _toastSync === 'function') {
-              _toastSync(`✅ Corte de las ${slot} guardado y sincronizado automáticamente.`);
-            }
-          } catch (err) {
-            console.error(`[Auto-Corte] Error al guardar corte automático de las ${slot}:`, err);
-            if (typeof _toastSync === 'function') {
-              _toastSync(`❌ Error en corte automático de las ${slot}`, true);
-            }
-          }
-          break; // Detener para evitar ejecuciones concurrentes en este ciclo
-        }
-      }
     }
 
     function _autoCorteScheduler() {
-      console.info('[Auto-Corte] Inicializando planificador de cortes automáticos.');
+      console.info('[Auto-Corte] Inicializando planificador de cortes automáticos (cuenta atrás UI).');
       _autoCorteCheck();
       setInterval(_autoCorteCheck, 60000); // Revisar cada minuto
     }
@@ -28746,17 +28685,6 @@ PT._logKey = function (opName) {
     async function sincronizarDatamePaneles() {
       if (typeof _sb === 'undefined') return;
       if (!_sbBootReady) return; // Esperar boot de Supabase
-
-      // AUTO-CORTE DE TURNO CADA 2 HORAS (0, 2, 4, 6...)
-      const _hLocal = new Date().getHours();
-      if (_hLocal % 2 === 0) {
-        if (window._lastAutoCorteHour !== _hLocal) {
-          window._lastAutoCorteHour = _hLocal;
-          if (typeof saveCorteTurnoBitacora === 'function') {
-            saveCorteTurnoBitacora(true).catch(e => console.warn('Auto corte failed', e));
-          }
-        }
-      }
 
       // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
       // Esto asegura que las asignaciones hechas por monitores se distribuyan a todos los usuarios

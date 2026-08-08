@@ -25771,43 +25771,59 @@ PT._logKey = function (opName) {
       if (!asiEstados[k]) asiEstados[k] = { estado: '', nota: '' };
       
       const prevEst = asiEstados[k].estado;
-      asiEstados[k].estado = prevEst === estado ? '' : estado;
+      const nuevoEst = prevEst === estado ? '' : estado;
+      asiEstados[k].estado = nuevoEst;
       
-      // Si estamos marcando algo nuevo, quitar el modo "guardado"
       const grid = document.getElementById('asi-ops-grid');
       if (grid) grid.classList.remove('asi-saved');
       
-      // Si volvemos a marcar Presente, quitar flag de salida manual
-      if (asiEstados[k].estado === 'P') {
+      const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
+
+      if (nuevoEst === 'P' || nuevoEst === 'T') {
         asiEstados[k].salidaManual = false;
+        if (!asiEstados[k].horaIngreso) {
+          const nowBog = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+          asiEstados[k].horaIngreso = nowBog.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+        }
+        // Limpiar cualquier salidaTS previa expirada para que asiAutoRelease NO borre el estado
+        if (!allHoras[name]) allHoras[name] = {};
+        delete allHoras[name].salidaTS;
+        allHoras[name].ingresoTS = Date.now();
+        allHoras[name].fecha = typeof localDateStr === 'function' ? localDateStr() : new Date().toISOString().slice(0,10);
+        localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+      } else if (nuevoEst === '' || nuevoEst === 'A') {
+        asiEstados[k].horaIngreso = '';
+        if (allHoras[name]) {
+          delete allHoras[name].salidaTS;
+          delete allHoras[name].ingresoTS;
+          localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+        }
       }
       
-      asiSaveDraft(); asiRender();
+      asiSaveDraft();
+      asiRender();
     }
 
     function asiTerminarTurnoManual(name, role) {
       if (!confirm(`¿Seguro que deseas terminar el turno de ${name}?`)) return;
       const k = asiKey(name, role);
       
-      // 1. Quitar "Presente"
       if (!asiEstados[k]) {
         asiEstados[k] = { estado: '', nota: '', horaIngreso: '' };
       }
       asiEstados[k].estado = ''; 
-      asiEstados[k].salidaManual = true; // Flag para que el dispositivo del op sepa que debe cerrar
+      asiEstados[k].salidaManual = true;
+      asiEstados[k].horaIngreso = '';
       
-      // 2. Registrar salida en horas
       const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
       if (allHoras[name]) {
          allHoras[name].salidaTS = Date.now(); 
          localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
       }
       
-      // 3. Persistir cambios
       asiSaveDraft(); 
       asiRender();
       
-      // 4. Si es posible, notificar a Supabase de inmediato para que el op se entere
       if (typeof asiGuardar === 'function') {
          setTimeout(asiGuardar, 100);
       }
@@ -25837,7 +25853,7 @@ PT._logKey = function (opName) {
         let salidaStr = '';
         if (horasReg?.salidaTS) {
           const sTime = new Date(horasReg.salidaTS).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-          salidaStr = ` <span style="color:#fb7185;margin-left:4px;">(?? Salida: ${sTime})</span>`;
+          salidaStr = ` <span style="color:#fb7185;margin-left:4px;">(Salida: ${sTime})</span>`;
         }
         horaIngresoHTML = `<div style="font-size:.62rem;color:#34d399;margin-top:2px;">🕐 Ingresó: ${cur.horaIngreso}${autoTag}${salidaStr}</div>`;
       }
@@ -25963,97 +25979,48 @@ PT._logKey = function (opName) {
       const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
       const now = Date.now();
       let changed = false;
-      const dateStr = typeof localDateStr === 'function' ? localDateStr() : '';
-      const _horaCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' })).getHours();
-
-      // Mapeo fin de turno estándar (8h): Mañana (14h), Tarde (22h), Noche (06h)
-      const turnoFinMap = { 'Mañana': 14, 'Tarde': 22, 'Noche': 6 };
 
       if (typeof operatorsData !== 'undefined') {
         operatorsData.forEach(op => {
           if (!op.turno || op.group === 'SP' || op.group === 'N/A') return;
           const k = (typeof asiKey === 'function') ? asiKey(op.name, 'operador') : op.name + '||operador';
-          const inPresente = typeof asiEstados !== 'undefined' && asiEstados[k]?.estado === 'P';
+          const inPresente = typeof asiEstados !== 'undefined' && (asiEstados[k]?.estado === 'P' || asiEstados[k]?.estado === 'T');
           if (!inPresente) return;
 
           const infoHoras = allHoras[op.name] || {};
           const es12h = infoHoras.horas === 12;
+          const maxDuracionMs = (es12h ? 12.5 : 8.5) * 3600 * 1000;
 
-          // Si el operador ya tiene salidaTS registrada y el tiempo expiró
-          if (!infoHoras.salidaTS) {
-            let expirado = false;
-
-            if (es12h && infoHoras.ingresoTS) {
-              // ⏱️ 12H SHIFT: Expira a las 12 horas exactas de su hora de marcación
-              if (now >= infoHoras.ingresoTS + (12 * 3600 * 1000)) expirado = true;
-            } else if (infoHoras.ingresoTS) {
-              // ⏱️ 8H CON INGRESO REGISTRADO: Expira a las 8.5 horas
-              if (now >= infoHoras.ingresoTS + (8.5 * 3600 * 1000)) expirado = true;
-            } else {
-              // ⏱️ 8H ESTÁNDAR SEGÚN HORA DE COLOMBIA
-              const finH = turnoFinMap[op.turno];
-              if (finH === 6) {
-                // Noche (22:00 -> 06:00 AM): Expirado si ya son las 06:00 AM o más (hasta antes de la Noche siguiente 21:00)
-                if (_horaCol >= 6 && _horaCol < 21) expirado = true;
-              } else if (finH !== undefined && _horaCol >= finH) {
-                expirado = true;
-              }
-            }
-
-            if (expirado) {
-              if (!allHoras[op.name]) allHoras[op.name] = {};
-              allHoras[op.name].salidaTS = Date.now() - 1; // Marcar expiración
-              localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
-            }
+          // Solo auto-liberar si transcurrió la jornada completa (8.5h o 12.5h) desde la hora exacta de ingreso (ingresoTS)
+          if (infoHoras.ingresoTS && (now >= infoHoras.ingresoTS + maxDuracionMs)) {
+            infoHoras.salidaTS = Date.now() - 1;
+            allHoras[op.name] = infoHoras;
+            localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
           }
         });
       }
 
       for (const name in allHoras) {
         const info = allHoras[name];
-        // Verificar si hay una salida programada y si ya pasó la hora
         if (info.salidaTS && now > info.salidaTS) {
-          const op = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => _normName(o.name) === _normName(name)) : null;
-          if (op && op.profiles && op.profiles.length > 0) {
-            console.log(`[AutoRelease] Turno cumplido (8h/12h) para ${name}. Perfiles liberados para el relevo.`);
-          }
-          
           const isMon = typeof loadMonitores === 'function' ? loadMonitores().includes(name) : false;
           const k = (typeof asiKey === 'function') ? asiKey(name, isMon ? 'monitor' : 'operador') : name + '||' + (isMon ? 'monitor' : 'operador');
           
-          // Desconectar / liberar estado en memoria
           if (typeof asiEstados !== 'undefined' && asiEstados[k] && (asiEstados[k].estado === 'P' || asiEstados[k].estado === 'T')) {
+            console.log(`[AutoRelease] Turno cumplido para ${name}. Liberando estado de asistencia.`);
             asiEstados[k].estado = '';
             changed = true;
           }
 
-          // Limpiar directamente en los drafts de localStorage para sincronización total
-          if (typeof ASI_KEY !== 'undefined' && dateStr) {
-            ['manana', 'tarde', 'noche'].forEach(sh => {
-              const draftKey = ASI_KEY + '_draft_' + dateStr + '_' + sh;
-              const draft = JSON.parse(localStorage.getItem(draftKey) || '{}');
-              if (draft[k] && (draft[k].estado === 'P' || draft[k].estado === 'T')) {
-                draft[k].estado = '';
-                localStorage.setItem(draftKey, JSON.stringify(draft));
-                changed = true;
-              }
-            });
-          }
-
-          // Limpiar timer para no repetir ciclo
           delete info.salidaTS;
+          delete info.ingresoTS;
           allHoras[name] = info;
           localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
         }
       }
 
       if (changed) {
-        if (typeof saveData === 'function') saveData();
-        const asiTab = document.getElementById('tab-asistencia');
-        if (asiTab && asiTab.classList.contains('active') && typeof asiRender === 'function') {
-           asiRender();
-        }
-        if (typeof renderRanking === 'function') setTimeout(renderRanking, 200);
+        asiSaveDraft();
       }
     }
 

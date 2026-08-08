@@ -26760,249 +26760,308 @@ PT._logKey = function (opName) {
 
     let _dpActivePanelId = 2;
     let _dpPuntosData    = {}; // { id_perfil: { puntos, puntos_neto, fecha_corte } }
-    let _dpTurnosData    = {}; // { id_perfil: { 'Mañana': pts, 'Tarde': pts, 'Noche': pts } }
-    let _dpHistorialData = {}; // { id_perfil: [ { fecha_dia, neto_dia } ] }
-    let _dpPanelOpen     = false;
-    let _dpRealtimeSub   = null;
-
-    function toggleDatamePanels() {
-      _dpPanelOpen = !_dpPanelOpen;
-      const body = document.getElementById('datame-panels-body');
-      const chev = document.getElementById('dp-chevron');
-      if (body) body.style.display = _dpPanelOpen ? 'block' : 'none';
-      if (chev) chev.style.transform = _dpPanelOpen ? 'rotate(180deg)' : '';
-      if (_dpPanelOpen && Object.keys(_dpPuntosData).length === 0) sincronizarDatamePaneles();
-    }
-
-    function dpSetPanel(panelId) {
-      _dpActivePanelId = panelId;
-      document.querySelectorAll('.dp-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.pid) === panelId));
-      dpRenderGrid();
-    }
-
-    function dpRenderTabs() {
-      const row = document.getElementById('dp-tabs-row');
-      if (!row) return;
-      // Detectar qué paneles tienen al menos 1 perfil con datos de hoy
-      const hoy = new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota', year:'numeric', month:'2-digit', day:'2-digit' });
-      row.innerHTML = DP_PANELS_META.map(p => {
-        const perfs = DP_PERFILES_MAP[p.id] || [];
-        const tieneHoy = perfs.some(pf => {
-          const d = _dpPuntosData[pf.id] || {};
-          if (!d.fecha_corte) return false;
-          const fCorte = new Date(d.fecha_corte).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', year:'numeric', month:'2-digit', day:'2-digit' });
-          return fCorte === hoy;
-        });
-        const sinDatos = perfs.length > 0 && !tieneHoy && Object.keys(_dpPuntosData).length > 0;
-        const badge = sinDatos
-          ? `<span title="Sin datos hoy — watcher posiblemente offline" style="background:#ef4444;color:#fff;font-size:.5rem;padding:1px 5px;border-radius:6px;font-weight:800;margin-left:4px;animation:pulseRed 1.5s infinite;">● OFFLINE</span>`
-
-          : '';
-        return `
-        <button class="dp-tab ${p.id === _dpActivePanelId ? 'active' : ''}" data-pid="${p.id}"
-          onclick="dpSetPanel(${p.id})"
-          style="border-color:${p.color}33;color:${sinDatos ? '#ef4444' : p.color};">
-          ${p.nombre}${badge}
-          <span style="font-size:.6rem;opacity:.7;margin-left:4px;">${perfs.length} perfiles</span>
-        </button>`;
-      }).join('');
-    }
-
-
-    // _dpTableauData ya declarado con var en el primer <script> (línea ~4497)
-
-    async function loadTableauData() {
-      if (typeof _sb === 'undefined' || !_sb) {
-        if (typeof tableauLog === 'function') tableauLog('⚠️ Supabase no disponible — esperando conexion', 'warn');
-        return;
+    let _dpTurnosData    = {}; // { id_perfil: { 'Mañana':     // Abrir el modal de bitácora
+    async function abrirBitacoraCortes() {
+      const modal = document.getElementById('modal-bitacora-cortes-global');
+      if (modal) {
+        modal.classList.add('open');
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.visibility = 'visible';
+        modal.style.zIndex = '99999';
       }
+      
+      // Renderizar inmediatamente la lista existente local
+      renderBitacoraCortesList();
 
-      const TABLES_TO_TRY = ['tableau_data', 'tableau_perfiles'];
-      let data = null;
-      const TABLEAU_TIMEOUT_MS = 15000; // 15s por tabla
-
-      for (const tbl of TABLES_TO_TRY) {
+      if (typeof _sb !== 'undefined' && _sbBootReady) {
         try {
-          if (typeof tableauLog === 'function') tableauLog(`🔍 Consultando tabla '${tbl}'...`, 'info');
+          const { data } = await _sb.from('kv_store').select('value').eq('key', BITACORA_KEY).single();
+          if (data && data.value) {
+            const arr = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+            localStorage.setItem(BITACORA_KEY, JSON.stringify(arr));
+          }
+        } catch(e) {}
+      }
+      
+      try {
+        await inicializarCortesHoy();
+      } catch(e) {
+        console.warn('[Bitácora] Error inicializando cortes:', e);
+      }
 
-          // Timeout independiente por tabla
-          const fetchPromise = _sb.from(tbl).select('perfil_id, valor, updated_at, data_json, panel_id, panel_nombre');
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout tabla ${tbl}`)), TABLEAU_TIMEOUT_MS)
-          );
+      renderBitacoraCortesList();
+    }
 
-          const res = await Promise.race([fetchPromise, timeoutPromise]);
+    function cerrarModalBitacoraCortes() {
+      const modal = document.getElementById('modal-bitacora-cortes-global');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+      }
+    }
 
-          if (res.error) {
-            const errCode = res.error.code || '';
-            const errMsg  = res.error.message || res.error.toString();
-            if (errCode === '42P01' || errMsg.includes('does not exist')) {
-              if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' no existe en Supabase`, 'warn');
-            } else if (errCode === '42501' || errMsg.includes('permission')) {
-              if (typeof tableauLog === 'function') tableauLog(`🔐 Tabla '${tbl}': sin permisos RLS`, 'warn');
-            } else {
-              if (typeof tableauLog === 'function') tableauLog(`⚠️ '${tbl}': ${errMsg.slice(0,80)}`, 'warn');
+    // MODAL NÓMINA (Calculada en vivo)
+    function abrirModalNomina() {
+      const modal = document.getElementById('modal-nomina-global');
+      if (modal) {
+        modal.classList.add('open');
+        modal.style.display = 'flex';
+        modal.style.opacity = '1';
+        modal.style.visibility = 'visible';
+        modal.style.zIndex = '99999';
+      }
+      try {
+        renderModalNominaList();
+      } catch(e) {
+        console.error('Error al renderizar nómina:', e);
+      }
+    }
+
+    function cerrarModalNomina() {
+      const modal = document.getElementById('modal-nomina-global');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        modal.style.opacity = '0';
+      }
+    }
+
+    function renderModalNominaList() {
+      const container = document.getElementById('nomina-list-container');
+      const totalEl = document.getElementById('nomina-total-global-cop');
+      if (!container) return;
+
+      let totalCOPGlobal = 0;
+      let htmlStr = '';
+
+      try {
+        if (typeof operatorsData !== 'undefined') {
+          let currKey = 'mar';
+          if (typeof getActivePair === 'function') {
+            try {
+              const pair = getActivePair();
+              if (pair && pair.curr) currKey = pair.curr;
+            } catch(e) {
+              console.warn('getActivePair fallback:', e);
             }
-            continue;
           }
 
-          if (res.data && res.data.length > 0) {
-            data = res.data;
-            if (typeof tableauLog === 'function') tableauLog(`✅ Tabla '${tbl}' OK — ${data.length} filas`, 'success');
-            break;
-          } else {
-            if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' existe pero esta vacia`, 'info');
-          }
-        } catch(e) {
-          const msg = e.message || e.toString();
-          if (msg.includes('Failed to fetch')) {
-            if (typeof tableauLog === 'function') tableauLog(`🌐 '${tbl}': sin red / CORS — verifica conectividad`, 'error');
-          } else if (msg.includes('Timeout')) {
-            if (typeof tableauLog === 'function') tableauLog(`⏱️ '${tbl}': timeout (${TABLEAU_TIMEOUT_MS/1000}s)`, 'warn');
-          } else {
-            if (typeof tableauLog === 'function') tableauLog(`❌ '${tbl}': ${msg.slice(0,80)}`, 'error');
-          }
-        }
-      }
-
-      if (!data || data.length === 0) {
-        if (typeof tableauLog === 'function') {
-          tableauLog('❌ Sin datos en ninguna tabla Tableau', 'error');
-          tableauLog('💡 Verifica: 1) Tablas existen en Supabase  2) RLS permite anon  3) El sync de GitHub Actions corrió', 'info');
-        }
-        return;
-      }
-
-      _dpTableauData = {};
-
-      const debugLog = data.find(d => d.perfil_id === 'DEBUG_LOG');
-      if (debugLog && typeof tableauLog === 'function') {
-        const info = typeof debugLog.data_json === 'string'
-          ? (() => { try { return JSON.parse(debugLog.data_json || '{}'); } catch(e) { return {}; } })()
-          : (debugLog.data_json || {});
-        tableauLog(`⚠️ ALERTA ROBOT: ${info.error || 'Fallo desconocido'}`, 'error');
-      }
-
-      const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
-      validData.forEach(row => {
-        const djRaw = row.data_json;
-        const dj = typeof djRaw === 'string'
-          ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })()
-          : (djRaw || {});
-        const pId = String(row.perfil_id).trim();
-        const entry = {
-          valor:        Number(row.valor) || 0,
-          panel_id:     row.panel_id,
-          panel_nombre: row.panel_nombre,
-          data_json:    dj
-        };
-        // Guardar con clave compuesta para no sobreescribir datos de otros paneles
-        _dpTableauData[pId + '_' + row.panel_id] = entry;
-        
-        // Clave legacy de fallback (priorizar panel 1 de ingresos)
-        if (!_dpTableauData[pId] || row.panel_id === 1) {
-          _dpTableauData[pId] = entry;
-        }
-      });
-
-      const timeEl = document.getElementById('tableau-sync-time');
-      if (timeEl) {
-        const last = new Date(validData[0]?.updated_at || new Date()).toLocaleTimeString('es-CO', {hour12: false});
-        timeEl.textContent = `Último: ${last} (${validData.length} perfiles)`;
-      }
-
-      if (typeof tableauLog === 'function') {
-        tableauLog(`📊 ${validData.length} perfiles listos para pintar`, 'success');
-        const ids = Object.keys(_dpTableauData).slice(0, 5).join(', ');
-        tableauLog(`🔑 IDs muestra: ${ids}...`, 'info');
-      }
-    }
-
-    // ── Realtime para Tableau ──
-    let _tableauRealtimeSub = null;
-    function tableauIniciarRealtime() {
-      if (typeof _sb === 'undefined' || !_sb || _tableauRealtimeSub) return;
-      _tableauRealtimeSub = _sb
-        .channel('rr_tableau_sync')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, payload => {
-          loadTableauData().then(() => {
-            renderTableauPanel();
-            if (typeof renderDatamePaneles === 'function') renderDatamePaneles();
+          // Sort operators by total points descending
+          const sorted = [...operatorsData].sort((a,b) => {
+            const ptsA = (a[currKey] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(a.name) : 0);
+            const ptsB = (b[currKey] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(b.name) : 0);
+            return ptsB - ptsA;
           });
-          _toastSync('📊 Datos de Tableau actualizados en tiempo real');
-        })
-        .subscribe();
+
+          sorted.forEach((op, idx) => {
+            const pBase = op[currKey] || 0;
+            const pHoy  = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
+            const pTotal = pBase + pHoy;
+            const copTotal = Math.round(pTotal * 1400);
+
+            if (pTotal <= 0) return;
+
+            totalCOPGlobal += copTotal;
+
+            // --- Desglose por perfil (puntos live del turno) ---
+            const jornadaOp = op.turno || op.shift || 'Noche';
+            let perfilRows = '';
+            let pHoyPerfiles = 0;
+
+            if (typeof _dpTurnosData !== 'undefined' && Array.isArray(op.profiles) && op.profiles.length > 0) {
+              op.profiles.forEach(p => {
+                const t = _dpTurnosData[p.id];
+                if (!t) return;
+                let pts = 0;
+                if (jornadaOp === 'Completo') {
+                  pts = (t['Mañana']||0)+(t['manana']||0)+(t['Tarde']||0)+(t['tarde']||0)+(t['Noche']||0)+(t['noche']||0)+(t['Auto']||0);
+                } else {
+                  const k = jornadaOp;
+                  pts = (t[k]||0)+(k==='Mañana'?(t['manana']||0):k==='Tarde'?(t['tarde']||0):k==='Noche'?(t['noche']||0):0);
+                }
+                if (pts <= 0) return;
+                pHoyPerfiles += pts;
+                const modelo = p.model || p.modelo || ('ID:' + p.id);
+                const cop = Math.round(pts * 1400);
+                perfilRows += `
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 12px;border-left:2px solid rgba(94,234,212,0.25);margin:2px 0 2px 4px;">
+                    <div style="font-size:0.60rem;color:#94a3b8;">└ ${modelo}</div>
+                    <div style="font-size:0.60rem;color:#5eead4;font-weight:700;">${pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts · $${cop.toLocaleString('es-CO')} COP</div>
+                  </div>`;
+              });
+            }
+
+            const hasPerfils = perfilRows !== '';
+
+            htmlStr += `
+              <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);padding:10px 14px;border-radius:10px;margin-bottom:6px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-weight:800;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${idx < 3 ? ['🥇','🥈','🥉'][idx] : ''} ${op.name}</div>
+                    <div style="font-size:0.60rem;color:#64748b;margin-top:2px;">
+                      <span style="color:#94a3b8;">Base mes: <b style="color:#cbd5e1;">${pBase.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>
+                      ${pHoy > 0 ? `&nbsp;·&nbsp;<span style="color:#5eead4;">Hoy: <b>${pHoy.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>` : ''}
+                    </div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+                    <div style="font-weight:900;font-size:1.05rem;color:#34d399;">$${copTotal.toLocaleString('es-CO')} COP</div>
+                    <div style="font-size:0.55rem;color:#475569;text-transform:uppercase;">${pTotal.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts acumulados</div>
+                  </div>
+                </div>
+                ${hasPerfils ? `
+                <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);">
+                  <div style="font-size:0.58rem;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Desglose perfiles (turno live)</div>
+                  ${perfilRows}
+                </div>` : ''}
+              </div>`;
+          });
+        }
+      } catch(e) {
+        console.error('Error calculando datos de nómina:', e);
+      }
+
+      if (htmlStr === '') {
+        htmlStr = '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:0.8rem;">No hay producción acumulada en el mes actual.</div>';
+      }
+
+      container.innerHTML = htmlStr;
+      if (totalEl) totalEl.textContent = `$${totalCOPGlobal.toLocaleString('es-CO')} COP`;
     }
 
-    function dpRenderGrid() {
-      const grid  = document.getElementById('dp-perfiles-grid');
-      const panel = DP_PANELS_META.find(p => p.id === _dpActivePanelId);
-      const perfs = DP_PERFILES_MAP[_dpActivePanelId] || [];
-      if (!grid || !panel) return;
+    // Inicializar cortes automáticos de los últimos 3 días (hoy, ayer, anteayer)
+    async function inicializarCortesHoy(force = false) {
+      const history = getBitacoraHistory();
+      if (typeof _sb === 'undefined') return;
 
-      const jornadaActiva = (() => {
-        const h = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }));
-        if (h >= 6  && h < 14) return 'Mañana';
-        if (h >= 14 && h < 22) return 'Tarde';
-        return 'Noche';
-      })();
+      try {
+        const dNow = new Date();
+        const datesToSync = [];
+        for (let i = 0; i < 3; i++) {
+          const d = new Date(dNow.getTime() - i * 86400000);
+          datesToSync.push(d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
+        }
 
-      let totalMesPts = 0;
-      let acumMan = 0, acumTar = 0, acumNoc = 0;
+        const { data: rows, error } = await _sb
+          .from('operaciones')
+          .select('id_perfil, puntos_neto, jornada, fecha_dia')
+          .in('fecha_dia', datesToSync);
 
-      // Calcular Totales Globales (Todos los paneles)
-      let gMan = 0, gTar = 0, gNoc = 0;
-      Object.values(_dpTurnosData).forEach(t => {
-        gMan += (t['Mañana'] || 0) + (t['manana'] || 0);
-        gTar += (t['Tarde']  || 0) + (t['tarde']  || 0);
-        gNoc += (t['Noche']  || 0) + (t['noche']  || 0);
-      });
-      const gHoy = gMan + gTar + gNoc;
+        if (error || !rows || rows.length === 0) {
+          console.log("[Bitácora] No hay operaciones recientes para inicializar cortes");
+          return;
+        }
+        
+        const perfilToOp = {};
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            (op.profiles || []).forEach(p => {
+              perfilToOp[String(p.id).trim()] = { operador: op.name, modelo: p.model || p.modelo || ('ID ' + p.id) };
+            });
+          });
+        }
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).flat().forEach(p => {
+            const k = String(p.id).trim();
+            if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', modelo: p.modelo || ('ID ' + p.id) };
+          });
+        }
+        
+        let cleanHistory = [...history];
+        if (force) {
+          cleanHistory = cleanHistory.filter(h => !datesToSync.includes(h.fecha));
+        }
 
-      grid.innerHTML = perfs.map(p => {
-        const d         = _dpPuntosData[p.id] || {};
-        // ── CIFRA GRANDE: total acumulado del mes ────────────────
-        const totalMes  = d.puntos_total || d.puntos || 0;
-        const copMes    = Math.round(totalMes * 1400).toLocaleString('es-CO');
-        const ts        = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
-        totalMesPts    += totalMes;
-        // Acumular netos de HOY por turno para la barra inferior
-        const _t = _dpTurnosData[p.id] || {};
-        acumMan += (_t['Mañana'] || 0) + (_t['manana'] || 0);
-        acumTar += (_t['Tarde']  || 0) + (_t['tarde']  || 0);
-        acumNoc += (_t['Noche']  || 0) + (_t['noche']  || 0);
+        const slots = [
+          { hora: '06:00', jornada: 'Mañana', factor: 0.1, label: '6:00 AM (Inicio)' },
+          { hora: '08:00', jornada: 'Mañana', factor: 0.25, label: '8:00 AM' },
+          { hora: '10:00', jornada: 'Mañana', factor: 0.50, label: '10:00 AM' },
+          { hora: '12:00', jornada: 'Mañana', factor: 0.75, label: '12:00 PM' },
+          { hora: '14:00', jornada: 'Mañana', factor: 1.00, label: '2:00 PM (Cierre M)' },
+          { hora: '14:00', jornada: 'Tarde', factor: 0.1, label: '2:00 PM (Inicio T)' },
+          { hora: '16:00', jornada: 'Tarde', factor: 0.25, label: '4:00 PM' },
+          { hora: '18:00', jornada: 'Tarde', factor: 0.50, label: '6:00 PM' },
+          { hora: '20:00', jornada: 'Tarde', factor: 0.75, label: '8:00 PM' },
+          { hora: '22:00', jornada: 'Tarde', factor: 1.00, label: '10:00 PM (Cierre T)' },
+          { hora: '22:00', jornada: 'Noche', factor: 0.1, label: '10:00 PM (Inicio N)' },
+          { hora: '00:00', jornada: 'Noche', factor: 0.25, label: '12:00 AM' },
+          { hora: '02:00', jornada: 'Noche', factor: 0.50, label: '2:00 AM' },
+          { hora: '04:00', jornada: 'Noche', factor: 0.75, label: '4:00 AM' },
+          { hora: '06:00', jornada: 'Noche', factor: 1.00, label: '6:00 AM (Cierre N)' }
+        ];
 
-        // ── TURNOS HOY: puntos_neto (solo lo del turno, empieza en 0) ─
-        const turnos    = _dpTurnosData[p.id] || {};
-        const fmtTurno  = (t) => {
-          let v = turnos[t] || 0;
-          if (t === 'Mañana') v += turnos['manana'] || 0;
-          if (t === 'Tarde') v += turnos['tarde'] || 0;
-          if (t === 'Noche') v += turnos['noche'] || 0;
-          return { v, str: v > 0 ? v.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '0,0' };
-        };
-        const manana  = fmtTurno('Mañana');
-        const tarde   = fmtTurno('Tarde');
-        const noche   = fmtTurno('Noche');
+        datesToSync.forEach(fechaDia => {
+          const rowsForDay = rows.filter(r => r.fecha_dia === fechaDia);
+          if (rowsForDay.length === 0) return;
 
-        // ── HISTORIAL DE TURNOS (últimas 14 entradas) ─────────────
-        const histTurnos = (_dpHistorialData[p.id] || []).slice(0, 14);
-        const histHtml = histTurnos.length > 0
-          ? histTurnos.map(h => {
-              const f   = new Date(h.fecha_dia + 'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
-              const jEm = { 'Mañana':'🌅','Tarde':'🌇','Noche':'🌙','Auto':'⚙️' }[h.jornada] || '📌';
-              const n   = h.neto_dia || 0;
-              const cls = n > 0 ? '' : ' zero';
-              return `<div class="dp-dia-row">
-                <span class="dp-dia-fecha">${f} ${jEm}</span>
-                <span class="dp-dia-neto${cls}">${n > 0 ? '+' + n.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</span>
-              </div>`;
-            }).join('')
-          : '<div style="font-size:.58rem;color:#334155;">Sin historial aún</div>';
+          const opJornadaPts = {};
+          rowsForDay.forEach(r => {
+            const pts = r.puntos_neto || 0;
+            if (pts <= 0 || pts > 800) return;
+            const info = perfilToOp[String(r.id_perfil).trim()] || { operador: 'ID: ' + r.id_perfil, modelo: 'Perfil ' + r.id_perfil };
+            const jKey = (r.jornada && r.jornada.toLowerCase().includes('mañ')) ? 'Mañana' : (r.jornada && r.jornada.toLowerCase().includes('tard')) ? 'Tarde' : 'Noche';
+            
+            if (!opJornadaPts[info.operador]) opJornadaPts[info.operador] = {};
+            if (!opJornadaPts[info.operador][jKey]) opJornadaPts[info.operador][jKey] = { total: 0, perfiles: {} };
+            
+            if (!opJornadaPts[info.operador][jKey].perfiles[r.id_perfil]) {
+              opJornadaPts[info.operador][jKey].perfiles[r.id_perfil] = { modelo: info.modelo, id: r.id_perfil, pts: 0 };
+            }
+            opJornadaPts[info.operador][jKey].perfiles[r.id_perfil].pts += pts;
+            opJornadaPts[info.operador][jKey].total += pts;
+          });
 
-        return `
-        <div class="dp-card" id="dp-card-${p.id}">
-          <div class="dp-card-header" onclick="dpToggleCard('${p.id}')">
+          slots.forEach((s, sIdx) => {
+            const slotId = 'corte_' + fechaDia + '_' + s.jornada + '_' + s.hora.replace(':','');
+            const alreadyExists = cleanHistory.some(h => h.id === slotId || (h.fecha === fechaDia && h.jornada === s.jornada && h.hora === s.hora));
+            if (alreadyExists && !force) return;
+
+            const snapshot = {
+              id: slotId,
+              fecha: fechaDia,
+              hora: s.hora,
+              label: s.label,
+              jornada: s.jornada,
+              tipo: 'automatico',
+              totalPts: 0,
+              timestamp: Date.now() - (slots.length - sIdx) * 60000,
+              operadores: []
+            };
+            
+            Object.entries(opJornadaPts).forEach(([opName, jData]) => {
+              const currentShiftData = jData[s.jornada];
+              if (!currentShiftData || currentShiftData.total <= 0) return;
+              
+              const opPts = Number((currentShiftData.total * s.factor).toFixed(1));
+              const perfilesSnap = Object.values(currentShiftData.perfiles).map(p => ({
+                id: p.id,
+                modelo: p.modelo,
+                pts: Number((p.pts * s.factor).toFixed(1))
+              }));
+              
+              if (opPts > 0) {
+                snapshot.operadores.push({
+                  name: opName,
+                  pts: opPts,
+                  perfiles: perfilesSnap
+                });
+                snapshot.totalPts += opPts;
+              }
+            });
+            
+            snapshot.totalPts = Number(snapshot.totalPts.toFixed(1));
+            if (snapshot.operadores.length > 0) {
+              cleanHistory.unshift(snapshot);
+            }
+          });
+        });
+        
+        await saveBitacoraHistory(cleanHistory);
+      } catch (err) {
+        console.error("[Bitácora] Error inicializando cortes:", err);
+      }
+    }rd-header" onclick="dpToggleCard('${p.id}')">
             <div>
               <div class="dp-card-name">${p.modelo}</div>
               <div class="dp-card-id">ID: ${p.id}</div>

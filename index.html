@@ -11031,29 +11031,59 @@
     async function _mediaUpsert(name, tipo, data) {
       if (typeof _sb === 'undefined' || !_sb) return;
       try {
+        const nowIso = new Date().toISOString();
         await _sb.from('rr_media').upsert(
-          { nombre: name.trim().toUpperCase(), tipo, data, updated_at: new Date().toISOString() },
+          { nombre: name.trim().toUpperCase(), tipo, data, updated_at: nowIso },
           { onConflict: 'nombre,tipo' }
         );
+        // Guardar localmente de inmediato para evitar recarga
+        const cacheKey = tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
+        localStorage.setItem(cacheKey, data);
+        localStorage.setItem(cacheKey + '_ts', nowIso);
       } catch(e) { console.warn('[MEDIA] upsert error:', e); }
     }
 
-    // ── Cargar todas las imágenes desde Supabase al iniciar ──────────────
+    // ── Cargar todas las imágenes desde Supabase al iniciar (Optimizado) ──
     async function mediaCargarTodo() {
       if (typeof _sb === 'undefined' || !_sb) return;
       try {
-        const { data, error } = await _sb.from('rr_media').select('nombre,tipo,data');
-        if (error || !data) return;
-        data.forEach(row => {
-          if (!row.nombre || !row.data) return;
+        // Solo pedir metadatos ligeros primero para comparar
+        const { data: list, error: errList } = await _sb.from('rr_media').select('nombre,tipo,updated_at');
+        if (errList || !list) return;
+
+        let downloadCount = 0;
+        let cacheHits = 0;
+
+        for (const row of list) {
+          if (!row.nombre) continue;
           const name = row.nombre;
-          if (row.tipo === 'avatar') {
-            localStorage.setItem(avatarKey(name), row.data);
-          } else if (row.tipo === 'banner') {
-            localStorage.setItem(bannerKey(name), row.data);
+          const cacheKey = row.tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
+          const tsKey = cacheKey + '_ts';
+
+          const cachedVal = localStorage.getItem(cacheKey);
+          const cachedTs  = localStorage.getItem(tsKey);
+
+          // Si el archivo ya está en local y la marca de tiempo coincide, usar caché
+          if (cachedVal && cachedTs === row.updated_at) {
+            cacheHits++;
+            continue;
           }
-        });
-        console.log(`[MEDIA] ${data.length} imágenes cargadas desde Supabase`);
+
+          // Solo descargar base64 pesado del archivo faltante o modificado
+          const { data: detail, error: errDetail } = await _sb
+            .from('rr_media')
+            .select('data')
+            .eq('nombre', name)
+            .eq('tipo', row.tipo)
+            .maybeSingle();
+
+          if (!errDetail && detail && detail.data) {
+            localStorage.setItem(cacheKey, detail.data);
+            localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+            downloadCount++;
+          }
+        }
+        console.log(`[MEDIA] Sincronización: ${cacheHits} de caché local, ${downloadCount} descargados.`);
       } catch(e) { console.warn('[MEDIA] cargar error:', e); }
     }
 
@@ -11067,8 +11097,13 @@
           const row = payload.new;
           if (!row || !row.nombre || !row.data) return;
           const name = row.nombre;
+          const cacheKey = row.tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
+          const tsKey = cacheKey + '_ts';
+          
+          localStorage.setItem(cacheKey, row.data);
+          localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+
           if (row.tipo === 'avatar') {
-            localStorage.setItem(avatarKey(name), row.data);
             // 🚀 Actualización reactiva: buscar todas las imágenes con este nombre
             const target = name.trim().toUpperCase();
             const imgs = document.querySelectorAll(`[data-av-name="${target}"]`);
@@ -11080,7 +11115,6 @@
               if (heroAv) heroAv.src = row.data;
             }
           } else if (row.tipo === 'banner') {
-            localStorage.setItem(bannerKey(name), row.data);
             const target = name.trim().toUpperCase();
             const bns = document.querySelectorAll(`[data-bn-name="${target}"]`);
             bns.forEach(img => { img.src = row.data; });
@@ -17168,6 +17202,17 @@ function exportarDatos() {
           }
         };
       }
+      if (typeof window._loadFullHistory === 'undefined') {
+        window._loadFullHistory = false;
+      }
+      if (typeof window.toggleLoadFullHistory === 'undefined') {
+        window.toggleLoadFullHistory = function() {
+          window._loadFullHistory = !window._loadFullHistory;
+          window._opsSupabaseCache = null;
+          if (typeof renderOperators === 'function') renderOperators();
+          if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
+        };
+      }
 
       const camiloProfileIds = new Set([
         '167493871', '158644203', '164812184', '93461947', '166575347', 
@@ -17239,6 +17284,16 @@ function exportarDatos() {
             console.log('[REPORT-SUPABASE] Usando cache global de Supabase:', opsSupabase.length, 'registros.');
           } else {
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout YTD')), 12000));
+            const FECHA_INICIO = (() => {
+              if (window._loadFullHistory) return '2026-01-01';
+              const d = new Date();
+              d.setMonth(d.getMonth() - 1);
+              d.setDate(1);
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              return `${yyyy}-${mm}-${dd}`;
+            })();
             const paginatedFetch = async () => {
               let page = 0;
               const pageSize = 1000;
@@ -17249,7 +17304,7 @@ function exportarDatos() {
                 const to = (page + 1) * pageSize - 1;
                 const { data, error: fetchErr } = await _sb.from('operaciones')
                   .select('id_perfil, puntos_total, puntos_neto, jornada, fecha_dia, agencia')
-                  .gte('fecha_dia', '2026-01-01')
+                  .gte('fecha_dia', FECHA_INICIO)
                   .range(from, to);
                 
                 if (fetchErr) throw fetchErr;
@@ -17559,9 +17614,14 @@ function exportarDatos() {
               <span style="font-size:1.6rem;">&#127758;</span> Operacion Global Inteligente
               <span style="font-size:0.65rem;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.3);padding:3px 8px;border-radius:8px;font-weight:700;">LIVE DATA</span>
             </h2>
-            <button onclick="exportarInformeDirectivo()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#c7d2fe;padding:8px 14px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:6px;">
-              <span>&#128200;</span> Exportar Informe Directivo
-            </button>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button onclick="window.toggleLoadFullHistory()" style="background:${window._loadFullHistory ? 'rgba(52,211,153,0.2)' : 'rgba(239,68,68,0.1)'};border:${window._loadFullHistory ? '1px solid rgba(52,211,153,0.5)' : '1px solid rgba(239,68,68,0.3)'};color:${window._loadFullHistory ? '#34d399' : '#f87171'};padding:8px 14px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.3s ease;">
+                <span>📊</span> ${window._loadFullHistory ? 'Carga Anual Completa' : 'Cargar Historial Anual'}
+              </button>
+              <button onclick="exportarInformeDirectivo()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#c7d2fe;padding:8px 14px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <span>&#128200;</span> Exportar Informe Directivo
+              </button>
+            </div>
           </div>
 
           <!-- PESTAÑAS DE EMPRESA (Romero vs Camilo) -->
@@ -26777,6 +26837,12 @@ PT._logKey = function (opName) {
       }
     }
 
+    window._changeBitacoraCompanyView = function(view) {
+      window._bitacoraCompanyView = view;
+      renderBitacoraCortesList();
+      renderSelectedCorteDetail();
+    };
+
     // MODAL NÓMINA (Calculada en vivo)
     function abrirModalNomina() {
       const modal = document.getElementById('modal-nomina-global');
@@ -27347,6 +27413,27 @@ PT._logKey = function (opName) {
         const dateHtml = items.map(item => {
           const isSelected = window._selectedBitacoraCorteId === item.id;
           const badgeColor = item.tipo === 'manual' ? '#10b981' : '#6366f1';
+          
+          let totalToShow = item.totalPts || 0;
+          if (window._bitacoraCompanyView && window._bitacoraCompanyView !== 'all') {
+            const currentViewLower = window._bitacoraCompanyView.toLowerCase();
+            totalToShow = (item.operadores || []).reduce((sum, op) => {
+              const opCompany = (op.company || '').toLowerCase();
+              if (opCompany === currentViewLower) {
+                return sum + (op.pts || 0);
+              }
+              const companyProfiles = (op.perfiles || []).filter(p => {
+                const pCompany = (p.company || op.company || '').toLowerCase();
+                return pCompany === currentViewLower;
+              });
+              if (companyProfiles.length > 0) {
+                return sum + companyProfiles.reduce((s, p) => s + (p.pts || 0), 0);
+              }
+              return sum;
+            }, 0);
+            totalToShow = Math.round(totalToShow * 100) / 100;
+          }
+
           return `<div onclick="selectBitacoraCorte('${item.id}')" style="background:${isSelected ? 'rgba(45,212,191,0.12)' : 'rgba(255,255,255,0.02)'}; border:1px solid ${isSelected ? '#2dd4bf' : 'rgba(255,255,255,0.05)'}; border-radius:6px; padding:8px 10px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition:all 0.2s;" onmouseover="this.style.borderColor='#2dd4bf'">
             <div style="min-width:0; flex:1;">
               <div style="font-size:0.7rem; font-weight:700; color:${isSelected ? '#2dd4bf' : '#e2e8f0'}; display:flex; align-items:center; gap:5px;">
@@ -27356,7 +27443,7 @@ PT._logKey = function (opName) {
               <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">${item.label || item.jornada}</div>
             </div>
             <div style="text-align:right; flex-shrink:0;">
-              <div style="font-size:0.75rem; font-weight:800; color:#5eead4;">${item.totalPts || 0} pts</div>
+              <div style="font-size:0.75rem; font-weight:800; color:#5eead4;">${totalToShow} pts</div>
             </div>
           </div>`;
         }).join('');
@@ -27396,7 +27483,41 @@ PT._logKey = function (opName) {
         metaEl.textContent = `${item.fecha} · ${item.hora} · ${item.jornada.toUpperCase()}`;
       }
       
-      const sortedOps = (item.operadores || []).sort((a,b) => b.pts - a.pts);
+      let displayedOps = [];
+      let totalCorteToShow = 0;
+      
+      const currentView = window._bitacoraCompanyView || 'all';
+      const currentViewLower = currentView.toLowerCase();
+      
+      (item.operadores || []).forEach(op => {
+        const opCompany = (op.company || '').toLowerCase();
+        
+        if (currentView === 'all') {
+          displayedOps.push(op);
+          totalCorteToShow += (op.pts || 0);
+        } else {
+          const companyProfiles = (op.perfiles || []).filter(p => {
+            const pCompany = (p.company || op.company || '').toLowerCase();
+            return pCompany === currentViewLower;
+          });
+          
+          if (companyProfiles.length > 0) {
+            const opPtsSum = companyProfiles.reduce((s, p) => s + (p.pts || 0), 0);
+            displayedOps.push({
+              ...op,
+              pts: Math.round(opPtsSum * 100) / 100,
+              perfiles: companyProfiles
+            });
+            totalCorteToShow += opPtsSum;
+          } else if (opCompany === currentViewLower) {
+            displayedOps.push(op);
+            totalCorteToShow += (op.pts || 0);
+          }
+        }
+      });
+      
+      totalCorteToShow = Math.round(totalCorteToShow * 100) / 100;
+      const sortedOps = displayedOps.sort((a,b) => b.pts - a.pts);
       
       let tableRows = sortedOps.map((op, idx) => {
         const perfsStr = (op.perfiles || []).map(p => `${p.modelo}: ${p.pts}`).join(' · ');
@@ -27420,13 +27541,13 @@ PT._logKey = function (opName) {
       }).join('');
       
       if (tableRows.length === 0) {
-        tableRows = `<tr><td colspan="2" style="text-align:center; padding:20px; color:#64748b; font-size:0.65rem;">No hay operadores en este corte.</td></tr>`;
+        tableRows = `<tr><td colspan="2" style="text-align:center; padding:20px; color:#64748b; font-size:0.65rem;">No hay operadores en este corte para la empresa seleccionada.</td></tr>`;
       }
       
       container.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; background:rgba(255,255,255,0.01); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.03);">
           <div style="font-size:0.7rem; color:#94a3b8;">
-            Total Corte: <strong style="color:#5eead4; font-size:0.8rem;">${item.totalPts} pts</strong>
+            Total Corte: <strong style="color:#5eead4; font-size:0.8rem;">${totalCorteToShow} pts</strong>
           </div>
           <button onclick="copiarCorteAlPortapapeles('${item.id}')" style="background:#0284c7; border:none; color:#fff; padding:4px 10px; border-radius:4px; font-size:0.6rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:0.2s;" onmouseover="this.style.background='#0369a1'">
             📋 Copiar a Portapapeles (WhatsApp)
@@ -28762,8 +28883,17 @@ PT._logKey = function (opName) {
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        // FIX CUOTA: Habilitar consulta histórica desde el inicio del año (2026) para gráficas anuales
-        const FECHA_INICIO = '2026-01-01';
+        // FIX CUOTA: Habilitar consulta histórica dinámica (desde mes anterior por defecto para ahorrar ancho de banda)
+        const FECHA_INICIO = (() => {
+          if (window._loadFullHistory) return '2026-01-01';
+          const d = new Date();
+          d.setMonth(d.getMonth() - 1);
+          d.setDate(1);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${yyyy}-${mm}-${dd}`;
+        })();
         const hoy = localDateStr();
         console.log('Iniciando sincronización dinámica...', 'info');
 
@@ -30586,6 +30716,8 @@ PT._logKey = function (opName) {
         <button class="close-btn" onclick="cerrarModalBitacoraCortes()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
       </div>
       
+      <div id="bitacora-tabs-container" style="margin-bottom:10px;"></div>
+      
       <!-- Cuerpo con dos columnas (izquierda: lista de cortes, derecha: detalle del corte seleccionado) -->
       <div style="display:flex; flex:1; min-height:0; gap:16px;">
         <!-- Lista de Cortes (Column 1) -->
@@ -30629,6 +30761,8 @@ PT._logKey = function (opName) {
         </div>
         <button class="close-btn" onclick="cerrarModalNomina()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
       </div>
+      
+      <div id="nomina-tabs-container" style="margin-bottom:10px;"></div>
       
       <div id="nomina-list-container" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
         <!-- Se llena con JS -->

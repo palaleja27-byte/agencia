@@ -74,6 +74,17 @@ Las tarjetas de Ranking se calculan de manera dinámica (Línea 5063 de index.ht
 - Si el operador está **logueado** en este momento, se le suman los puntos de la `jornada actual` (sin importar si es su turno oficial).
 - Si el operador **no está logueado**, se muestran los puntos acumulados de su turno oficial.
 
+### 7. Integración de Empresa / División en la Bitácora de Cortes
+- Se agregaron las pestañas **"Todos"**, **"Romero"** y **"Camilo"** al modal global de la **Bitácora de Cortes**.
+- Al seleccionar una empresa específica, el listado de cortes calcula de forma dinámica la suma de puntos correspondiente únicamente a los operadores y perfiles de esa división.
+- Al seleccionar un corte específico del historial, el desglose de producción por operador se filtra en tiempo real para mostrar únicamente a los operadores que tienen perfiles vinculados a la división activa, recomputando los totales al instante.
+- Se mantiene el soporte para edición manual de puntos de cada operador individual directamente desde el desglose filtrado.
+
+---
+
+## 🚀 Verificación
+- Los archivos locales han sido validados y actualizados listos para desplegarse.
+
 ---
 
 ## 🗺️ 3. Mapa Rápido del Monolito (index.html)

@@ -6411,7 +6411,7 @@
             </div>
             
             <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-               <span style="font-size:.7rem; color:#94a3b8;">Total acumulado en este turno (Global):</span>
+               <span id="dp-corte-total-label" style="font-size:.7rem; color:#94a3b8;">Total acumulado en este turno (Global):</span>
                <strong id="dp-corte-total-global" style="font-size:1.1rem; color:#34d399;">0.0 pts</strong>
             </div>
           </div>
@@ -17163,6 +17163,9 @@ function exportarDatos() {
           if (typeof rkFetchSupabaseTotals === 'function') {
             rkFetchSupabaseTotals();
           }
+          if (typeof renderCorteTurnoLive === 'function') {
+            renderCorteTurnoLive();
+          }
         };
       }
 
@@ -17184,9 +17187,13 @@ function exportarDatos() {
         '171638277', '168486464', '99766806'
       ]);
 
-      const belongsToCompany = (op) => {
+      window.camiloProfileIds = camiloProfileIds;
+      window.romeroProfileIds = romeroProfileIds;
+
+      const belongsToCompany = (op, targetCompanyView) => {
         if (!op) return false;
-        if (window._reportCompanyView === 'global') return true;
+        const view = targetCompanyView || window._reportCompanyView || 'global';
+        if (view === 'global') return true;
 
         let hasCamiloProfile = false;
         let hasRomeroProfile = false;
@@ -17204,13 +17211,14 @@ function exportarDatos() {
         const belongsRomero = hasRomeroProfile || emp.includes('ROMERO') || plat.includes('ROMERO') || (!hasCamiloProfile && plat === 'PRIME');
         const belongsCamilo = hasCamiloProfile || emp.includes('CAMILO') || plat.includes('CAMILO');
 
-        if (window._reportCompanyView === 'romero') {
+        if (view === 'romero') {
           return belongsRomero && !hasCamiloProfile;
-        } else if (window._reportCompanyView === 'camilo') {
+        } else if (view === 'camilo') {
           return belongsCamilo && !hasRomeroProfile;
         }
         return false;
       };
+      window.belongsToCompany = belongsToCompany;
 
       const profileToOpMap = {};
       operatorsData.forEach(op => {
@@ -27199,48 +27207,7 @@ PT._logKey = function (opName) {
       }
     }
 
-    // Abrir el modal de bitácora
-    async function abrirBitacoraCortes() {
-      const modal = document.getElementById('modal-bitacora-cortes-global');
-      if (modal) modal.style.display = 'flex';
-      
-      if (typeof _sb !== 'undefined' && _sbBootReady) {
-        try {
-          const { data } = await _sb.from('kv_store').select('value').eq('key', BITACORA_KEY).single();
-          if (data && data.value) {
-            const arr = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-            localStorage.setItem(BITACORA_KEY, JSON.stringify(arr));
-          }
-        } catch(e) {}
-      }
-      
-      await inicializarCortesHoy();
-      renderBitacoraCortesList();
-    }
-
-    function cerrarModalBitacoraCortes() {
-      const modal = document.getElementById('modal-bitacora-cortes-global');
-      if (modal) modal.style.display = 'none';
-    }
-
-    // MODAL NÓMINA (Calculada en vivo)
-    function abrirModalNomina() {
-      const modal = document.getElementById('modal-nomina-global');
-      if (modal) {
-        modal.style.display = 'flex';
-        modal.style.zIndex = '99999';
-      }
-      try {
-        renderModalNominaList();
-      } catch(e) {
-        console.error('Error al renderizar nómina:', e);
-      }
-    }
-
-    function cerrarModalNomina() {
-      const modal = document.getElementById('modal-nomina-global');
-      if (modal) modal.style.display = 'none';
-    }
+    // (Duplicate modal controls removed to prevent override conflicts)
 
     // (Duplicate renderModalNominaList removed to avoid conflicts)
 
@@ -28065,9 +28032,24 @@ PT._logKey = function (opName) {
       let globalPts = 0;
       let unassignedPts = 0;
 
+      const activeView = window._reportCompanyView || 'global';
+
       rows.forEach(r => {
         const pts = r.puntos_neto || 0;
         if (pts <= 0 || pts > 800) return; // sanidad
+
+        const pid = String(r.id_perfil).trim();
+        // Filtrar por compañía/división activa
+        if (activeView === 'romero') {
+          if (window.camiloProfileIds && window.camiloProfileIds.has(pid)) {
+            return; // Omitir perfil si pertenece a la otra agencia
+          }
+        } else if (activeView === 'camilo') {
+          if (window.romeroProfileIds && window.romeroProfileIds.has(pid)) {
+            return; // Omitir perfil si pertenece a la otra agencia
+          }
+        }
+
         globalPts += pts;
 
         const info = perfilToOp[String(r.id_perfil).trim()] || { operador: '—', grupo: '', modelo: 'Perfil ' + r.id_perfil, turnoOp: '' };
@@ -28164,6 +28146,11 @@ PT._logKey = function (opName) {
       corteWrap.innerHTML = bannerHtml + cardsHtml;
 
       if (totalEl) totalEl.textContent = globalPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
+      const labelTotalEl = document.getElementById('dp-corte-total-label');
+      if (labelTotalEl) {
+        const labelText = activeView === 'global' ? 'Global' : activeView === 'romero' ? 'División Romero' : 'División Camilo';
+        labelTotalEl.textContent = `Total acumulado en este turno (${labelText}):`;
+      }
 
       if (typeof window.logSyncConsole === 'function') {
         window.logSyncConsole(`Corte live cargado: ${globalPts.toFixed(1)} pts acumulados (${unassignedPts > 0 ? unassignedPts.toFixed(1) + ' pts por asignar' : 'todos asignados a ' + tAct}).`, unassignedPts > 0 ? 'warning' : 'success');

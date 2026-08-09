@@ -28078,10 +28078,13 @@ PT._logKey = function (opName) {
 
     async function renderCorteTurnoLive() {
       if (!_sbBootReady) return; // Esperar boot
-      const corteWrap = document.getElementById('dp-corte-perfiles-list');
-      const totalEl   = document.getElementById('dp-corte-total-global');
-      const labelEl   = document.getElementById('dp-corte-active-label');
-      if (!corteWrap) return;
+      const wrapRomero = document.getElementById('dp-corte-perfiles-romero');
+      const wrapCamilo = document.getElementById('dp-corte-perfiles-camilo');
+      const corteWrap  = document.getElementById('dp-corte-perfiles-list') || wrapRomero;
+      const totalEl    = document.getElementById('dp-corte-total-global');
+      const labelEl    = document.getElementById('dp-corte-active-label');
+      
+      if (!wrapRomero && !wrapCamilo && !corteWrap) return;
       if (typeof _sb === 'undefined') return;
 
       // Detectar turno activo por hora Colombia
@@ -28092,7 +28095,9 @@ PT._logKey = function (opName) {
       if (labelEl) labelEl.textContent = 'TURNO: ' + tAct.toUpperCase();
 
       // Mostrar loading
-      corteWrap.innerHTML = '<div style="text-align:center;padding:16px;color:#475569;font-size:.72rem;">⏳ Cargando datos del turno ' + tAct + '...</div>';
+      const loadingHtml = '<div style="text-align:center;padding:16px;color:#475569;font-size:.72rem;">⏳ Cargando datos del turno ' + tAct + '...</div>';
+      if (wrapRomero) wrapRomero.innerHTML = loadingHtml;
+      if (wrapCamilo) wrapCamilo.innerHTML = loadingHtml;
 
       try {
         const hoy = typeof getLogicalDate === 'function' ? getLogicalDate() : (typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
@@ -28134,7 +28139,9 @@ PT._logKey = function (opName) {
             .lte('puntos_neto', 800);
 
           if (!rowsAll || rowsAll.length === 0) {
-            corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin datos para hoy aún.<br><small>La sincronización se actualiza automáticamente cada 5 min.</small></div>';
+            const noDataHtml = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin datos para hoy aún.<br><small>La sincronización se actualiza automáticamente cada 5 min.</small></div>';
+            if (wrapRomero) wrapRomero.innerHTML = noDataHtml;
+            if (wrapCamilo) wrapCamilo.innerHTML = noDataHtml;
             if (totalEl) totalEl.textContent = '0,0 pts';
             return;
           }
@@ -28153,7 +28160,9 @@ PT._logKey = function (opName) {
             .lte('puntos_neto', 800);
 
           if (!rowsHoy || rowsHoy.length === 0) {
-            corteWrap.innerHTML = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin producción registrada para el turno ' + tAct + ' hoy.<br><small style="font-size:.6rem;">Actualización automática cada 5 min.</small></div>';
+            const noProdHtml = '<div style="text-align:center;padding:20px;color:#475569;font-size:.7rem;">Sin producción registrada para el turno ' + tAct + ' hoy.<br><small style="font-size:.6rem;">Actualización automática cada 5 min.</small></div>';
+            if (wrapRomero) wrapRomero.innerHTML = noProdHtml;
+            if (wrapCamilo) wrapCamilo.innerHTML = noProdHtml;
             if (totalEl) totalEl.textContent = '0,0 pts';
             return;
           }
@@ -28165,7 +28174,9 @@ PT._logKey = function (opName) {
 
       } catch(e) {
         console.error('[Corte] Error:', e);
-        corteWrap.innerHTML = '<div style="text-align:center;padding:16px;color:#f87171;font-size:.7rem;">⚠️ Error al cargar datos. Reintentando...</div>';
+        const errHtml = '<div style="text-align:center;padding:16px;color:#f87171;font-size:.7rem;">⚠️ Error al cargar datos. Reintentando...</div>';
+        if (wrapRomero) wrapRomero.innerHTML = errHtml;
+        if (wrapCamilo) wrapCamilo.innerHTML = errHtml;
         setTimeout(renderCorteTurnoLive, 15000);
       }
     }

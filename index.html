@@ -9513,16 +9513,10 @@
                const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                if (turnosPerfil) {
                   // DELTA-SHIFT™: sumar únicamente los turnos correspondientes a la jornada/12h del operador
-                  let pts = 0;
-                  turnosLeer.forEach(tKey => {
-                    pts += typeof getShiftPtsSafe === 'function' ? getShiftPtsSafe(turnosPerfil, tKey) : 0;
-                  });
-                  // 🔬 PRO FIX: Solo sumar 'Auto' si la jornada es Completo (día completo). 
-                  // Esto evita que puntos sin turno definido inflen turnos específicos y se dupliquen.
-                  if (turnosLeer.length === 3 || op.turno === 'Completo') {
-                    pts += (turnosPerfil['Auto'] || 0);
-                  }
-                  pts += (turnosPerfil['LocalFallback'] || 0);
+                  let pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) +
+                             (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) +
+                             (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0) +
+                             (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
                   if (pts > 5000) pts = 0; // 🛡️ SANIDAD DELTA-SHIFT™: ignora totales mensuales corruptos
                   datamePts += pts;
                }

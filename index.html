@@ -26212,7 +26212,6 @@ PT._logKey = function (opName) {
         { id:'101245945', modelo:'PABLO B' },     { id:'103289167', modelo:'LUIS' },
         { id:'103291980', modelo:'ARMANDO' },      { id:'113579174', modelo:'RONALDO' },
         { id:'113752797', modelo:'ROMARIO' },      { id:'114851358', modelo:'JOHANNA' },
-        { id:'118404407', modelo:'MILENA' },       { id:'130431310', modelo:'RAFAEL' },
         { id:'132062039', modelo:'BEATRIZ' },      { id:'145839775', modelo:'BRUNO' },
         { id:'151070498', modelo:'VALQUIMAR' },    { id:'151410237', modelo:'EZEQUIEL' },
         { id:'153037229', modelo:'HORACIO B' },    { id:'153039388', modelo:'AGUSTIN FERNANDO' },
@@ -26598,6 +26597,7 @@ PT._logKey = function (opName) {
       } catch (err) {
         console.error("[Bitácora] Error inicializando cortes:", err);
       }
+    }
     
 
     // ═══════════════════════════════════════════════════════════════
@@ -26638,111 +26638,6 @@ PT._logKey = function (opName) {
 
     // (Duplicate renderModalNominaList removed to avoid conflicts)
 
-
-    // Inicializar cortes de hoy (6AM, 8AM, 10AM...)
-    async function inicializarCortesHoy(force = false) {
-      const history = getBitacoraHistory();
-      const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-      const yaHayHoy = history.some(h => h.fecha === hoy);
-      if (yaHayHoy && !force) return;
-      
-      if (typeof _sb === 'undefined') return;
-      try {
-        const { data: rows, error } = await _sb.from('operaciones').select('id_perfil, puntos_neto, jornada').eq('fecha_dia', hoy);
-        if (error || !rows || rows.length === 0) {
-          console.log("[Bitácora] No hay operaciones hoy para inicializar");
-          return;
-        }
-        
-        const perfilToOp = {};
-        if (typeof operatorsData !== 'undefined') {
-          operatorsData.forEach(op => {
-            (op.profiles || []).forEach(p => {
-              perfilToOp[String(p.id).trim()] = { operador: op.name, modelo: p.model || p.modelo || ('ID ' + p.id) };
-            });
-          });
-        }
-        if (typeof DP_PERFILES_MAP !== 'undefined') {
-          Object.values(DP_PERFILES_MAP).flat().forEach(p => {
-            const k = String(p.id).trim();
-            if (!perfilToOp[k]) perfilToOp[k] = { operador: '—', modelo: p.modelo || ('ID ' + p.id) };
-          });
-        }
-        
-        const opJornadaPts = {};
-        rows.forEach(r => {
-          const pts = r.puntos_neto || 0;
-          if (pts <= 0 || pts > 800) return;
-          const info = perfilToOp[String(r.id_perfil).trim()] || { operador: 'ID: ' + r.id_perfil, modelo: 'Perfil ' + r.id_perfil };
-          const jKey = r.jornada === 'Mañana' ? 'Mañana' : r.jornada === 'Tarde' ? 'Tarde' : 'Noche';
-          
-          if (!opJornadaPts[info.operador]) opJornadaPts[info.operador] = {};
-          if (!opJornadaPts[info.operador][jKey]) opJornadaPts[info.operador][jKey] = { total: 0, perfiles: {} };
-          
-          if (!opJornadaPts[info.operador][jKey].perfiles[r.id_perfil]) {
-            opJornadaPts[info.operador][jKey].perfiles[r.id_perfil] = { modelo: info.modelo, id: r.id_perfil, pts: 0 };
-          }
-          opJornadaPts[info.operador][jKey].perfiles[r.id_perfil].pts += pts;
-          opJornadaPts[info.operador][jKey].total += pts;
-        });
-        
-        const slots = [
-          { hora: '06:00', jornada: 'Mañana', factor: 0.0, label: '6:00 AM (Inicio)' },
-          { hora: '08:00', jornada: 'Mañana', factor: 0.25, label: '8:00 AM' },
-          { hora: '10:00', jornada: 'Mañana', factor: 0.50, label: '10:00 AM' },
-          { hora: '12:00', jornada: 'Mañana', factor: 0.75, label: '12:00 PM' },
-          { hora: '14:00', jornada: 'Mañana', factor: 1.00, label: '2:00 PM (Cierre M)' },
-          { hora: '14:00', jornada: 'Tarde', factor: 0.0, label: '2:00 PM (Inicio T)' },
-          { hora: '16:00', jornada: 'Tarde', factor: 0.25, label: '4:00 PM' },
-          { hora: '18:00', jornada: 'Tarde', factor: 0.50, label: '6:00 PM' },
-          { hora: '20:00', jornada: 'Tarde', factor: 0.75, label: '8:00 PM' },
-          { hora: '22:00', jornada: 'Tarde', factor: 1.00, label: '10:00 PM (Cierre T)' }
-        ];
-        
-        let cleanHistory = force ? history.filter(h => h.fecha !== hoy) : history;
-        
-        const nowTs = Date.now();
-        slots.forEach((s, sIdx) => {
-          const snapshot = {
-            id: 'corte_' + hoy + '_' + s.jornada + '_' + s.hora.replace(':',''),
-            fecha: hoy,
-            hora: s.hora,
-            label: s.label,
-            jornada: s.jornada,
-            tipo: 'automatico',
-            totalPts: 0,
-            timestamp: nowTs - (slots.length - sIdx) * 60000,
-            operadores: []
-          };
-          
-          Object.entries(opJornadaPts).forEach(([opName, jData]) => {
-            const currentShiftData = jData[s.jornada];
-            if (!currentShiftData || currentShiftData.total <= 0) return;
-            
-            const opPts = Number((currentShiftData.total * s.factor).toFixed(1));
-            const perfilesSnap = Object.values(currentShiftData.perfiles).map(p => ({
-              id: p.id,
-              modelo: p.modelo,
-              pts: Number((p.pts * s.factor).toFixed(1))
-            }));
-            
-            snapshot.operadores.push({
-              name: opName,
-              pts: opPts,
-              perfiles: perfilesSnap
-            });
-            snapshot.totalPts += opPts;
-          });
-          
-          snapshot.totalPts = Number(snapshot.totalPts.toFixed(1));
-          cleanHistory.push(snapshot);
-        });
-        
-        await saveBitacoraHistory(cleanHistory);
-      } catch (err) {
-        console.error("[Bitácora] Error inicializando cortes hoy:", err);
-      }
-    }
 
     async function inicializarCortesHoyForce() {
       if (confirm("¿Estás seguro de que deseas REGENERAR todos los cortes automáticos de hoy? Esto sobrescribirá cualquier edición manual realizada en los cortes de hoy.")) {

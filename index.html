@@ -12673,6 +12673,11 @@
         } catch (renderError) {
           console.error('[Boot Zero-Wait] Error renderizando UI local:', renderError);
         }
+        // FIX: Llamar sincronizarDatamePaneles en el Zero-Wait path para llenar _dpTurnosData
+        // (renderRanking se re-ejecutará automáticamente ~800ms después con puntos reales)
+        if (typeof sincronizarDatamePaneles === 'function') {
+          setTimeout(sincronizarDatamePaneles, 800);
+        }
         _bootDone(); // Ocultar pantalla de carga INMEDIATAMENTE
       } else if (!_sbBootReady) {
         _bootProgress(20, 'Conectando con Supabase...');

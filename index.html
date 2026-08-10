@@ -26186,7 +26186,10 @@ PT._logKey = function (opName) {
 
     let _dpActivePanelId = 2;
     let _dpPuntosData    = {}; // { id_perfil: { puntos, puntos_neto, fecha_corte } }
-    let _dpTurnosData    = {}; // { id_perfil: { 'Mañana':     // Abrir el modal de bitácora
+    let _dpTurnosData    = {}; // { id_perfil: { 'Mañana': pts, 'Tarde': pts, 'Noche': pts } }
+    let _dpHistorialData = {}; // { id_perfil: [ { fecha_dia, neto_dia } ] }
+    let _dpPanelOpen     = false;
+    let _dpRealtimeSub   = null;
     async function abrirBitacoraCortes(companyView) {
       if (companyView) {
         window._bitacoraCompanyView = companyView;
@@ -28824,6 +28827,339 @@ PT._logKey = function (opName) {
       // y se reinicien las animaciones CSS de los swimlanes con cada pulso.
     }
 
+    function toggleDatamePanels() {
+      _dpPanelOpen = !_dpPanelOpen;
+      const body = document.getElementById('datame-panels-body');
+      const chev = document.getElementById('dp-chevron');
+      if (body) body.style.display = _dpPanelOpen ? 'block' : 'none';
+      if (chev) chev.style.transform = _dpPanelOpen ? 'rotate(180deg)' : '';
+      if (_dpPanelOpen && Object.keys(_dpPuntosData).length === 0) sincronizarDatamePaneles();
+    }
+
+    function dpSetPanel(panelId) {
+      _dpActivePanelId = panelId;
+      document.querySelectorAll('.dp-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.pid) === panelId));
+      dpRenderGrid();
+    }
+
+    function dpRenderTabs() {
+      const row = document.getElementById('dp-tabs-row');
+      if (!row) return;
+      row.innerHTML = DP_PANELS_META.map(p => `
+        <button class="dp-tab ${p.id === _dpActivePanelId ? 'active' : ''}" data-pid="${p.id}"
+          onclick="dpSetPanel(${p.id})"
+          style="border-color:${p.color}33;color:${p.color};">
+          ${p.nombre}
+          <span style="font-size:.6rem;opacity:.7;margin-left:4px;">${(DP_PERFILES_MAP[p.id]||[]).length} perfiles</span>
+        </button>`).join('');
+    }
+
+    function dpRenderGrid() {
+      const grid  = document.getElementById('dp-perfiles-grid');
+      const panel = DP_PANELS_META.find(p => p.id === _dpActivePanelId);
+      const perfs = DP_PERFILES_MAP[_dpActivePanelId] || [];
+      if (!grid || !panel) return;
+
+      const jornadaActiva = (() => {
+        const h = parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' }));
+        if (h >= 6  && h < 14) return 'Mañana';
+        if (h >= 14 && h < 22) return 'Tarde';
+        return 'Noche';
+      })();
+
+      let totalMesPts = 0;
+      let acumMan = 0, acumTar = 0, acumNoc = 0;
+
+      let gMan = 0, gTar = 0, gNoc = 0;
+      Object.values(_dpTurnosData).forEach(t => {
+        gMan += (t['Mañana'] || 0) + (t['manana'] || 0);
+        gTar += (t['Tarde']  || 0) + (t['tarde']  || 0);
+        gNoc += (t['Noche']  || 0) + (t['noche']  || 0);
+      });
+      const gHoy = gMan + gTar + gNoc;
+
+      grid.innerHTML = perfs.map(p => {
+        const d         = _dpPuntosData[p.id] || {};
+        const totalMes  = d.puntos_total || d.puntos || 0;
+        const copMes    = Math.round(totalMes * 1400).toLocaleString('es-CO');
+        const ts        = d.fecha_corte ? new Date(d.fecha_corte).toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'}) : '—';
+        totalMesPts    += totalMes;
+        const _t = _dpTurnosData[p.id] || {};
+        acumMan += (_t['Mañana'] || 0) + (_t['manana'] || 0);
+        acumTar += (_t['Tarde']  || 0) + (_t['tarde']  || 0);
+        acumNoc += (_t['Noche']  || 0) + (_t['noche']  || 0);
+
+        const turnos    = _dpTurnosData[p.id] || {};
+        const fmtTurno  = (t) => {
+          let v = turnos[t] || 0;
+          if (t === 'Mañana') v += turnos['manana'] || 0;
+          if (t === 'Tarde') v += turnos['tarde'] || 0;
+          if (t === 'Noche') v += turnos['noche'] || 0;
+          return { v, str: v > 0 ? v.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '0,0' };
+        };
+        const manana  = fmtTurno('Mañana');
+        const tarde   = fmtTurno('Tarde');
+        const noche   = fmtTurno('Noche');
+
+        const histTurnos = (_dpHistorialData[p.id] || []).slice(0, 14);
+        const histHtml = histTurnos.length > 0
+          ? histTurnos.map(h => {
+              const f   = new Date(h.fecha_dia + 'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit'});
+              const jEm = { 'Mañana':'🌅','Tarde':'🌇','Noche':'🌙','Auto':'⚙️' }[h.jornada] || '📌';
+              const n   = h.neto_dia || 0;
+              const cls = n > 0 ? '' : ' zero';
+              return `<div class="dp-dia-row">
+                <span class="dp-dia-fecha">${f} ${jEm}</span>
+                <span class="dp-dia-neto${cls}">${n > 0 ? '+' + n.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</span>
+              </div>`;
+            }).join('')
+          : '<div style="font-size:.58rem;color:#334155;">Sin historial aún</div>';
+
+        return `
+        <div class="dp-card" id="dp-card-${p.id}">
+          <div class="dp-card-header" onclick="dpToggleCard('${p.id}')">
+            <div>
+              <div class="dp-card-name">${p.modelo}</div>
+              <div class="dp-card-id">ID: ${p.id}</div>
+              <div class="dp-card-pts">${totalMes > 0 ? totalMes.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) : '—'}</div>
+              <div class="dp-card-cop">${totalMes > 0 ? '$'+copMes+' COP' : ''}</div>
+              <div class="dp-card-ts">${totalMes > 0 ? '📅 '+ts : '⏳ Sin datos'}</div>
+            </div>
+            <button class="dp-card-expand-btn">▼</button>
+          </div>
+
+          <div class="dp-card-detail">
+            <div style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">🕐 Hoy por turno</div>
+            <div class="dp-turno-row">
+              <span class="dp-turno-label">🌅 Mañana${'Mañana'===jornadaActiva?' ●':''}</span>
+              <span class="dp-turno-pts manana">${manana.str} pts</span>
+            </div>
+            <div class="dp-turno-row">
+              <span class="dp-turno-label">🌇 Tarde${'Tarde'===jornadaActiva?' ●':''}</span>
+              <span class="dp-turno-pts tarde">${tarde.str} pts</span>
+            </div>
+            <div class="dp-turno-row">
+              <span class="dp-turno-label">🌙 Noche${'Noche'===jornadaActiva?' ●':''}</span>
+              <span class="dp-turno-pts noche">${noche.str} pts</span>
+            </div>
+
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(45,212,191,.15);">
+              <div style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">⚡ Total Hoy</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:1rem;font-weight:800;color:#2dd4bf;">${(manana.v+tarde.v+noche.v).toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</span>
+                <span style="font-size:.72rem;font-weight:700;color:#34d399;">$${Math.round((manana.v+tarde.v+noche.v)*1400).toLocaleString('es-CO')} COP</span>
+              </div>
+            </div>
+
+            <div class="dp-dias-title">📆 Historial de turnos</div>
+            ${histHtml}
+          </div>
+        </div>`;
+      }).join('');
+
+      const _fmt = v => v.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1});
+      const _cop = v => '$' + Math.round(v*1400).toLocaleString('es-CO') + ' COP';
+      const acumHoy = acumMan + acumTar + acumNoc;
+      const _g = id => document.getElementById(id);
+      if (_g('dp-t-man-pts')) _g('dp-t-man-pts').textContent = _fmt(acumMan);
+      if (_g('dp-t-man-cop')) _g('dp-t-man-cop').textContent = _cop(acumMan);
+      if (_g('dp-t-tar-pts')) _g('dp-t-tar-pts').textContent = _fmt(acumTar);
+      if (_g('dp-t-tar-cop')) _g('dp-t-tar-cop').textContent = _cop(acumTar);
+      if (_g('dp-t-noc-pts')) _g('dp-t-noc-pts').textContent = _fmt(acumNoc);
+      if (_g('dp-t-noc-cop')) _g('dp-t-noc-cop').textContent = _cop(acumNoc);
+      if (_g('dp-t-hoy-pts')) _g('dp-t-hoy-pts').textContent = _fmt(acumHoy);
+      if (_g('dp-t-hoy-cop')) _g('dp-t-hoy-cop').textContent = _cop(acumHoy);
+
+      if (_g('dp-g-man-pts')) _g('dp-g-man-pts').textContent = _fmt(gMan);
+      if (_g('dp-g-tar-pts')) _g('dp-g-tar-pts').textContent = _fmt(gTar);
+      if (_g('dp-g-noc-pts')) _g('dp-g-noc-pts').textContent = _fmt(gNoc);
+      if (_g('dp-g-hoy-pts')) _g('dp-g-hoy-pts').textContent = _fmt(gHoy);
+      if (_g('dp-g-hoy-cop')) _g('dp-g-hoy-cop').textContent = _cop(gHoy);
+      const totalCop = Math.round(totalMesPts * 1400).toLocaleString('es-CO');
+      const ptsEl = document.getElementById('dp-panel-total-pts');
+      const copEl = document.getElementById('dp-panel-total-cop');
+      if (ptsEl) ptsEl.textContent = totalMesPts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1}) + ' pts';
+      if (copEl) copEl.textContent = '$' + totalCop + ' COP';
+
+      renderCorteTurnoLive();
+
+      const tAct = detectarTurno();
+      let ptsActShift = 0;
+      if (tAct === 'Mañana') ptsActShift = acumMan;
+      else if (tAct === 'Tarde') ptsActShift = acumTar;
+      else ptsActShift = acumNoc;
+      
+      const ptsLider = ptsActShift * 0.10;
+      const supPts = document.getElementById('pt-sup-pts');
+      const supCop = document.getElementById('pt-sup-cop');
+      if (supPts) supPts.textContent = ptsLider.toFixed(1);
+      if (supCop) supCop.textContent = '$' + Math.round(ptsLider * 1400).toLocaleString('es-CO');
+
+      const allPts = Object.values(_dpPuntosData).reduce((s,d) => s + (d.puntos_total || d.puntos || 0), 0);
+      const badge = document.getElementById('dp-total-badge');
+      if (badge) badge.textContent = allPts.toLocaleString('es-CO',{minimumFractionDigits:0}) + ' pts totales';
+    }
+
+    function dpToggleCard(id) {
+      const card = document.getElementById('dp-card-' + id);
+      if (card) card.classList.toggle('expanded');
+    }
+
+    async function dpSyncConFeedback() {
+      const btn = document.getElementById('dp-sync-btn');
+      const t0  = Date.now();
+      console.log('🔄 [SYNC] ========== INICIO SYNC GLOBAL ===========');
+
+      if (btn) { btn.textContent = '⏳ Syncing...'; btn.disabled = true; btn.style.opacity = '.6'; }
+
+      if (confirm("¿Deseas forzar una extracción profunda desde Datame (tardará ~2 minutos en procesar)?\n\nSi cancelas, solo se refrescará la pantalla con los datos actuales ya extraídos.")) {
+         let pat = localStorage.getItem('github_pat_sync');
+         if (!pat) {
+             pat = prompt("Por única vez, ingresa tu GitHub PAT (Personal Access Token con permisos actions:write) para autorizar la conexión:");
+             if (pat) localStorage.setItem('github_pat_sync', pat);
+         }
+         
+         if (pat) {
+            try {
+               const res = await fetch('https://api.github.com/repos/palaleja27-byte/agencia/actions/workflows/main.yml/dispatches', {
+                 method: 'POST',
+                 headers: {
+                   'Authorization': 'Bearer ' + pat,
+                   'Accept': 'application/vnd.github.v3+json',
+                   'Content-Type': 'application/json'
+                 },
+                 body: JSON.stringify({ ref: 'main' })
+               });
+               if (res.ok) {
+                   alert('🚀 Extracción forzada iniciada con éxito.\nEl servidor remoto (GitHub) está leyendo los perfiles. La pantalla se actualizará automáticamente cuando termine (aprox. 2 min).');
+               } else {
+                   if (res.status === 401 || res.status === 404) {
+                       alert('❌ Token inválido o sin permisos. Se borrará el token guardado. Intenta de nuevo.');
+                       localStorage.removeItem('github_pat_sync');
+                   } else {
+                       alert('❌ Error de Github: ' + res.status);
+                   }
+               }
+            } catch (err) {
+               console.error('Error disparando Github Actions:', err);
+               alert('❌ Error de red al contactar Github Actions.');
+            }
+         }
+      }
+
+      console.log('📡 [SYNC] Paso 1 — Consultando Datame/Supabase...');
+      await sincronizarDatamePaneles();
+      console.log('✅ [SYNC] Paso 1 OK — Paneles Datame actualizados');
+      if (btn) { btn.textContent = '↻ Sync'; btn.disabled = false; btn.style.opacity = '1'; }
+    }
+
+    async function loadTableauData() {
+      if (typeof _sb === 'undefined' || !_sb) {
+        if (typeof tableauLog === 'function') tableauLog('⚠️ Supabase no disponible — esperando conexion', 'warn');
+        return;
+      }
+
+      const TABLES_TO_TRY = ['tableau_data', 'tableau_perfiles'];
+      let data = null;
+      const TABLEAU_TIMEOUT_MS = 15000;
+
+      for (const tbl of TABLES_TO_TRY) {
+        try {
+          if (typeof tableauLog === 'function') tableauLog(`🔍 Consultando tabla '${tbl}'...`, 'info');
+
+          const fetchPromise = _sb.from(tbl).select('perfil_id, valor, updated_at, data_json');
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout tabla ${tbl}`)), TABLEAU_TIMEOUT_MS)
+          );
+
+          const res = await Promise.race([fetchPromise, timeoutPromise]);
+
+          if (res.error) {
+            const errCode = res.error.code || '';
+            const errMsg  = res.error.message || res.error.toString();
+            if (errCode === '42P01' || errMsg.includes('does not exist')) {
+              if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' no existe en Supabase`, 'warn');
+            } else if (errCode === '42501' || errMsg.includes('permission')) {
+              if (typeof tableauLog === 'function') tableauLog(`🔐 Tabla '${tbl}': sin permisos RLS`, 'warn');
+            } else {
+              if (typeof tableauLog === 'function') tableauLog(`⚠️ '${tbl}': ${errMsg.slice(0,80)}`, 'warn');
+            }
+            continue;
+          }
+
+          if (res.data && res.data.length > 0) {
+            data = res.data;
+            if (typeof tableauLog === 'function') tableauLog(`✅ Tabla '${tbl}' OK — ${data.length} filas`, 'success');
+            break;
+          } else {
+            if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' existe pero esta vacia`, 'info');
+          }
+        } catch(e) {
+          const msg = e.message || e.toString();
+          if (msg.includes('Failed to fetch')) {
+            if (typeof tableauLog === 'function') tableauLog(`🌐 '${tbl}': sin red / CORS — verifica conectividad`, 'error');
+          } else if (msg.includes('Timeout')) {
+            if (typeof tableauLog === 'function') tableauLog(`⏱️ '${tbl}': timeout (${TABLEAU_TIMEOUT_MS/1000}s)`, 'warn');
+          } else {
+            if (typeof tableauLog === 'function') tableauLog(`❌ '${tbl}': ${msg.slice(0,80)}`, 'error');
+          }
+        }
+      }
+
+      if (!data || data.length === 0) {
+        if (typeof tableauLog === 'function') {
+          tableauLog('❌ Sin datos en ninguna tabla Tableau', 'error');
+        }
+        return;
+      }
+
+      _dpTableauData = {};
+
+      const debugLog = data.find(d => d.perfil_id === 'DEBUG_LOG');
+      if (debugLog && typeof tableauLog === 'function') {
+        const info = typeof debugLog.data_json === 'string'
+          ? (() => { try { return JSON.parse(debugLog.data_json || '{}'); } catch(e) { return {}; } })()
+          : (debugLog.data_json || {});
+        tableauLog(`⚠️ ALERTA ROBOT: ${info.error || 'Fallo desconocido'}`, 'error');
+      }
+
+      const validData = data.filter(d => d.perfil_id !== 'DEBUG_LOG');
+      validData.forEach(row => {
+        const djRaw = row.data_json;
+        const dj = typeof djRaw === 'string'
+          ? (() => { try { return JSON.parse(djRaw); } catch(e) { return {}; } })()
+          : (djRaw || {});
+        _dpTableauData[String(row.perfil_id).trim()] = {
+          valor:     Number(row.valor) || 0,
+          data_json: dj
+        };
+      });
+
+      const timeEl = document.getElementById('tableau-sync-time');
+      if (timeEl) {
+        const last = new Date(validData[0]?.updated_at || new Date()).toLocaleTimeString('es-CO', {hour12: false});
+        timeEl.textContent = `Último: ${last} (${validData.length} perfiles)`;
+      }
+
+      if (typeof tableauLog === 'function') {
+        tableauLog(`📊 ${validData.length} perfiles listos para pintar`, 'success');
+      }
+    }
+
+    let _tableauRealtimeSub = null;
+    function tableauIniciarRealtime() {
+      if (typeof _sb === 'undefined' || !_sb || _tableauRealtimeSub) return;
+      _tableauRealtimeSub = _sb
+        .channel('rr_tableau_sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, payload => {
+          loadTableauData().then(() => {
+            renderTableauPanel();
+            if (typeof renderDatamePaneles === 'function') renderDatamePaneles();
+          });
+        })
+        .subscribe();
+    }
+
     function dpIniciarRealtime() {
       if (typeof _sb === 'undefined' || _dpRealtimeSub) return;
       let _dpDebounceTimer = null;
@@ -28831,7 +29167,6 @@ PT._logKey = function (opName) {
         .channel('datame-operaciones-rt')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' },
           (payload) => {
-            // Captura inmediata de actividad para el feed en vivo
             if (payload.new && payload.new.puntos_neto > 0) {
               _capturarActividadViva(payload.new);
             }
@@ -28849,7 +29184,7 @@ PT._logKey = function (opName) {
 
     function dpMostrarWrap() {
       const wrap = document.getElementById('datame-panels-wrap');
-      if (wrap && (currentRole === 'monitor' || currentRole === 'admin')) {
+      if (wrap && (currentRole === 'monitor' || currentRole === 'admin' || currentRole === 'operador')) {
         wrap.style.display = 'block';
         dpRenderTabs();
         dpIniciarRealtime();

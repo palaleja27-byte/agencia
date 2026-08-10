@@ -12549,8 +12549,10 @@
         if (typeof window.logSyncConsole === 'function') {
           window.logSyncConsole('🚀 Sistema AgenciaRR iniciado. Conexión a Supabase lista.', 'success');
         }
-        if (typeof sincronizarDatamePaneles === 'function') {
-          sincronizarDatamePaneles();
+        // sincronizarDatamePaneles() se llama tras _sbBootReady=true en el boot de Supabase.
+        // Este fallback solo actúa si el boot ya completó (sesión recurrente con cache local)
+        if (typeof sincronizarDatamePaneles === 'function' && _sbBootReady) {
+          setTimeout(sincronizarDatamePaneles, 500);
         }
       } catch (e) {
         console.error('[CyberUI] Error al inicializar:', e);
@@ -12789,6 +12791,11 @@
           _toastSync('🟢 Datos sincronizados con Supabase');
         }
         _sbBootReady = true;
+        // 🔥 FIX RACE CONDITION: Llamar sincronizarDatamePaneles() AQUÍ, DESPUÉS de _sbBootReady=true
+        // Antes se llamaba en _bootDone() donde _sbBootReady era aún false → retornaba vacío sin datos
+        if (typeof sincronizarDatamePaneles === 'function') {
+          setTimeout(sincronizarDatamePaneles, 500);
+        }
 
       } catch (e) {
         const errMsg = (e.message || e.toString());
@@ -12799,6 +12806,10 @@
           console.warn('[Supabase] Fallback inmediato a datos locales para evitar bloqueos en usuarios nuevos.');
           _sbBootReady = true;
           _bootProgress(100, `⚠️ Conectando en segundo plano...`);
+          // FIX: También disparar sincronizarDatamePaneles en fallback para llenar _dpTurnosData
+          if (typeof sincronizarDatamePaneles === 'function') {
+            setTimeout(sincronizarDatamePaneles, 1000);
+          }
           try {
             if (typeof loadData === 'function') loadData();
             if (currentRole === 'operador' && currentOpName) {

@@ -5781,6 +5781,16 @@
 
       // ── SHIMS GLOBALES (deben existir ANTES que cualquier otro script) ──
       if (typeof currentRole === 'undefined') { window.currentRole = null; }
+      window.getCurrentRole = function() {
+        if (window.currentRole) return window.currentRole;
+        const s = sessionStorage.getItem('rr_prime_session') || localStorage.getItem('rr_prime_session');
+        if (s) {
+          try {
+            return atob(s).split(':')[0];
+          } catch(e) {}
+        }
+        return 'operador';
+      };
       if (typeof detectarTurno === 'undefined') {
         window.detectarTurno = function() {
           var h = new Date().getHours();
@@ -32953,18 +32963,27 @@ CONFIGURACIÓN DE CONTEXTO:
       // 3. Popular select de modelos para icebreakers (Admin ve todo, Operador ve los suyos)
       const iceModelSel = document.getElementById('ice-gen-model');
       if (iceModelSel) {
-        const isUserAdmin = (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor'));
+        const activeRole = (typeof window.getCurrentRole === 'function' ? window.getCurrentRole() : (window.currentRole || (typeof currentRole !== 'undefined' ? currentRole : '')));
+        const isUserAdmin = (activeRole === 'admin' || activeRole === 'monitor');
+        console.log('[populateImgModels] Active role:', activeRole, 'isUserAdmin:', isUserAdmin);
         let html = '<option value="">-- Tono General --</option>';
         if (isUserAdmin) {
           const allProfilesMap = new Map();
+          let opCount = 0;
+          let profileCount = 0;
           if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+            opCount = operatorsData.length;
             operatorsData.forEach(o => {
               (o.profiles || []).forEach(p => {
                 const mName = p.model || p.nombre || p.name;
-                if (mName) allProfilesMap.set(mName.toUpperCase(), mName);
+                if (mName) {
+                  allProfilesMap.set(mName.toUpperCase(), mName);
+                  profileCount++;
+                }
               });
             });
           }
+          console.log(`[populateImgModels] Admin branch. Operators: ${opCount}, Profiles mapped: ${profileCount}, Unique models: ${allProfilesMap.size}`);
           allProfilesMap.forEach((modelName) => {
             html += `<option value="${modelName}">${modelName}</option>`;
           });
@@ -32974,12 +32993,14 @@ CONFIGURACIÓN DE CONTEXTO:
             const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === activeOpName.trim().toUpperCase());
             if (op && Array.isArray(op.profiles)) profiles = op.profiles;
           }
+          console.log(`[populateImgModels] Operator branch. ActiveOpName: ${activeOpName}, Profiles assigned: ${profiles.length}`);
           profiles.forEach(p => {
             const mName = p.model || p.nombre || p.name;
             if (mName) html += `<option value="${mName}">${mName}</option>`;
           });
         }
         iceModelSel.innerHTML = html;
+        console.log('[populateImgModels] Inner HTML populated:', html);
       }
 
       // 4. Renderizar escenarios rápidos

@@ -6553,6 +6553,28 @@
       <div style="margin-top:24px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.1);">
         <h4 style="margin:0 0 12px; font-size:0.95rem; color:#f472b6; text-transform:uppercase;">✨ Generador Inteligente y Contextual</h4>
         
+        
+        <!-- Selector de Motor IA de Texto (Multi-Engine) ADMIN -->
+        <div style="background:rgba(45, 212, 191, 0.08); border:1px solid rgba(45, 212, 191, 0.3); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:8px; margin-bottom: 12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="font-size:0.7rem; color:var(--primary); font-weight:900; text-transform:uppercase; letter-spacing:0.5px;">⚡ Motor de Inteligencia Artificial</label>
+            <span id="ice-engine-status-badge-admin" style="font-size:0.6rem; background:rgba(45, 212, 191, 0.2); color:#2dd4bf; padding:2px 8px; border-radius:12px; font-weight:800;">⚡ GRATIS (Sin Key)</span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <select id="ice-text-engine-select-admin" onchange="window.handleIceTextEngineChange(this.value, true)" style="flex:1; min-width:200px; background:#0f172a; border:1px solid rgba(45, 212, 191, 0.4); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.75rem; font-weight:700; cursor:pointer; outline:none;">
+              <option value="pollinations" selected>⚡ Pollinations AI (Mistral/Llama - Gratis sin Key)</option>
+              <option value="gemini">🌟 Google Gemini 2.0 Flash (Fácil Key Gratuita)</option>
+              <option value="openai">🤖 ChatGPT / OpenAI (GPT-4o / GPT-3.5)</option>
+              <option value="anthropic">🧠 Claude 3.5 Sonnet (Anthropic)</option>
+              <option value="groq">⚡ Groq (Llama 3.3 70B Ultra Rápido)</option>
+              <option value="deepseek">🐉 DeepSeek V3 / R1 (Razonamiento Profundo)</option>
+              <option value="openrouter">🌐 OpenRouter (Acceso Universal Multi-IA)</option>
+              <option value="together">🌐 Together AI (OpenSource LLM)</option>
+              <option value="huggingface">🤗 HuggingFace Hub (OpenSource)</option>
+            </select>
+            <input type="password" id="ice-engine-apikey-input-admin" placeholder="Ingresa tu API Key..." onchange="window.saveIceEngineKey(this.value, true)" onkeyup="window.saveIceEngineKey(this.value, true)" style="flex:1; min-width:220px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.75rem; outline:none; display:none;">
+          </div>
+        </div>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:10px;">
           <div>
             <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Modelo (Tono/Personalidad)</label>
@@ -21093,6 +21115,65 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
            PT.renderOperatorTasks(name);
         };
 
+        window.handleIceTextEngineChange = function(engine, isAdmin = false) {
+          const suffix = isAdmin ? '-admin' : '';
+          const activeKey = isAdmin ? 'rr_active_text_ai_admin' : 'rr_active_text_ai';
+          window.setPerUserSetting(activeKey, engine);
+          const inputEl = document.getElementById(`ice-engine-apikey-input${suffix}`);
+          const badgeEl = document.getElementById(`ice-engine-status-badge${suffix}`);
+          
+          if (!inputEl || !badgeEl) return;
+
+          if (engine === 'pollinations') {
+            inputEl.style.display = 'none';
+            badgeEl.innerText = '⚡ GRATIS (Sin Key)';
+            badgeEl.style.background = 'rgba(45, 212, 191, 0.2)';
+            badgeEl.style.color = '#2dd4bf';
+          } else {
+            inputEl.style.display = 'block';
+            const storedKey = window.getPerUserSetting(`rr_key_${engine}${suffix}`) || '';
+            inputEl.value = storedKey;
+            if (storedKey.trim()) {
+              badgeEl.innerText = '🔑 KEY CONFIGURADA';
+              badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
+              badgeEl.style.color = '#34d399';
+            } else {
+              badgeEl.innerText = '⚠️ REQUIERE KEY';
+              badgeEl.style.background = 'rgba(239, 68, 68, 0.2)';
+              badgeEl.style.color = '#f87171';
+            }
+          }
+        };
+
+        window.saveIceEngineKey = function(val, isAdmin = false) {
+          const suffix = isAdmin ? '-admin' : '';
+          const sel = document.getElementById(`ice-text-engine-select${suffix}`);
+          if (!sel) return;
+          const engine = sel.value;
+          if (engine && engine !== 'pollinations') {
+            window.setPerUserSetting(`rr_key_${engine}${suffix}`, val.trim());
+            if (engine === 'gemini' && val.trim() && !isAdmin) localStorage.setItem('rr_ai_api_key', val.trim());
+            window.handleIceTextEngineChange(engine, isAdmin);
+          }
+        };
+
+        window.initIceTextEngineUI = function(isAdmin = false) {
+          const suffix = isAdmin ? '-admin' : '';
+          const sel = document.getElementById(`ice-text-engine-select${suffix}`);
+          if (!sel) return;
+          const activeKey = isAdmin ? 'rr_active_text_ai_admin' : 'rr_active_text_ai';
+          const activeEngine = window.getPerUserSetting(activeKey) || 'pollinations';
+          sel.value = activeEngine;
+          window.handleIceTextEngineChange(activeEngine, isAdmin);
+        };
+
+        setTimeout(() => { 
+          if (typeof window.initIceTextEngineUI === 'function') {
+            window.initIceTextEngineUI(false);
+            window.initIceTextEngineUI(true);
+          }
+        }, 500);
+
         PT.guardarBitacoraOp = function(name) {
            const shift = detectarTurno().toLowerCase();
            let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
@@ -21344,54 +21425,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           else { scoreEl.innerText = 'RECHAZO INMINENTE'; scoreEl.style.color = '#ef4444'; panel.style.border = '1px solid rgba(239,68,68,0.3)'; }
         };
 
-        window.handleIceTextEngineChange = function(engine) {
-          window.setPerUserSetting('rr_active_text_ai', engine);
-          const inputEl = document.getElementById('ice-engine-apikey-input');
-          const badgeEl = document.getElementById('ice-engine-status-badge');
-          
-          if (!inputEl || !badgeEl) return;
-
-          if (engine === 'pollinations') {
-            inputEl.style.display = 'none';
-            badgeEl.innerText = '⚡ GRATIS (Sin Key)';
-            badgeEl.style.background = 'rgba(45, 212, 191, 0.2)';
-            badgeEl.style.color = '#2dd4bf';
-          } else {
-            inputEl.style.display = 'block';
-            const storedKey = window.getPerUserSetting(`rr_key_${engine}`) || '';
-            inputEl.value = storedKey;
-            if (storedKey.trim()) {
-              badgeEl.innerText = '🔑 KEY CONFIGURADA';
-              badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
-              badgeEl.style.color = '#34d399';
-            } else {
-              badgeEl.innerText = '⚠️ REQUIERE KEY';
-              badgeEl.style.background = 'rgba(239, 68, 68, 0.2)';
-              badgeEl.style.color = '#f87171';
-            }
-          }
-        };
-
-        window.saveIceEngineKey = function(val) {
-          const sel = document.getElementById('ice-text-engine-select');
-          if (!sel) return;
-          const engine = sel.value;
-          if (engine && engine !== 'pollinations') {
-            window.setPerUserSetting(`rr_key_${engine}`, val.trim());
-            if (engine === 'gemini' && val.trim()) localStorage.setItem('rr_ai_api_key', val.trim());
-            window.handleIceTextEngineChange(engine);
-          }
-        };
-
-        window.initIceTextEngineUI = function() {
-          const sel = document.getElementById('ice-text-engine-select');
-          if (!sel) return;
-          const activeEngine = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
-          sel.value = activeEngine;
-          window.handleIceTextEngineChange(activeEngine);
-        };
-
-        setTimeout(() => { if (typeof window.initIceTextEngineUI === 'function') window.initIceTextEngineUI(); }, 500);
+        // Block removed by script
 
         PT.generateIce = async function (cat) {
           const area = document.getElementById('pt-ice-textarea');
@@ -31995,7 +32029,7 @@ PT._logKey = function (opName) {
       const selectedModelName = modelSel ? modelSel.value : '';
       const clientContext = contextEl ? contextEl.value.trim() : '';
       
-      const motorSeleccionado = localStorage.getItem('rr_active_text_ai') || 'ollama';
+      const motorSeleccionado = localStorage.getItem('rr_active_text_ai_admin') || 'pollinations';
 
       resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Razonando y adaptando tono a la personalidad (${motorSeleccionado})...</div>`;
 
@@ -32015,12 +32049,16 @@ CONFIGURACIÓN DE CONTEXTO:
           contextualPrompt += `\n- Contexto o intereses del Cliente chateando: "${clientContext}" (utiliza este gancho/información de forma sutil pero directa para llamar su atención inmediatamente).`;
         }
 
-        contextualPrompt += `\n\nREGLAS ESTRICTAS DE RESPUESTA:
-- Deben ser extremadamente creativos, con alta tensión conversacional y enfocados a generar intriga (curiosity gap).
-- NUNCA usar frases cliché o saludos sosos como "hola cómo estás".
+        contextualPrompt += `\n\nREGLAS ESTRICTAS DE RESPUESTA (TalkyTimes Guidelines):
+- 🚫 CERO CONTENIDO EXPLÍCITO O NUDES en el primer mensaje. Tono SFW (Safe for work).
+- 🚫 NO pidas dinero, regalos, tokens o propinas.
+- 🚫 NO incluyas enlaces, URLs ni redirijas a otras redes sociales.
+- ✅ TERMINA SIEMPRE CON UNA PREGUNTA ABIERTA (?) para forzar la respuesta.
+- Deben ser creativos, con alta tensión conversacional y enfocados a generar intriga.
+- NUNCA usar frases cliché como "hola cómo estás".
 - Máximo 120 caracteres por frase.
-- HUMANIZACIÓN EXTREMA (Estilo "/human"): Escribe como una chica real chateando desde su móvil. Evita la puntuación perfecta, usa minúsculas casuales, incluye alguna muletilla y haz que suene muy espontáneo e imperfecto.
-- Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS. No enumeres, no pongas introducciones ni conclusiones.`;
+- HUMANIZACIÓN EXTREMA: Escribe como una chica real chateando desde su móvil de forma espontánea e imperfecta.
+- Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS.`;
 
         const outputText = await window.rrFetchTextAI(contextualPrompt, 'Eres un asistente experto en redactar ganchos e icebreakers de dating. Responde únicamente con las frases separadas por |.');
         
@@ -32575,7 +32613,7 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
       const selectedModelName = modelSel ? modelSel.value : '';
       const clientContext = contextEl ? contextEl.value.trim() : '';
       
-      const motorSeleccionado = (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting('rr_active_text_ai') : null) || localStorage.getItem('rr_active_text_ai') || 'gemini';
+      const motorSeleccionado = (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting('rr_active_text_ai_admin') : null) || localStorage.getItem('rr_active_text_ai_admin') || 'pollinations';
 
       resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Generando icebreakers irresistibles con ${motorSeleccionado.toUpperCase()}...</div>`;
 
@@ -32595,12 +32633,16 @@ CONFIGURACIÓN DE CONTEXTO:
           contextualPrompt += `\n- Contexto o intereses del Cliente chateando: "${clientContext}" (utiliza este gancho/información de forma sutil pero directa para llamar su atención inmediatamente).`;
         }
 
-        contextualPrompt += `\n\nREGLAS ESTRICTAS DE RESPUESTA:
-- Deben ser extremadamente creativos, con alta tensión conversacional y enfocados a generar intriga (curiosity gap).
-- NUNCA usar frases cliché o saludos sosos como "hola cómo estás".
+        contextualPrompt += `\n\nREGLAS ESTRICTAS DE RESPUESTA (TalkyTimes Guidelines):
+- 🚫 CERO CONTENIDO EXPLÍCITO O NUDES en el primer mensaje. Tono SFW (Safe for work).
+- 🚫 NO pidas dinero, regalos, tokens o propinas.
+- 🚫 NO incluyas enlaces, URLs ni redirijas a otras redes sociales.
+- ✅ TERMINA SIEMPRE CON UNA PREGUNTA ABIERTA (?) para forzar la respuesta.
+- Deben ser creativos, con alta tensión conversacional y enfocados a generar intriga.
+- NUNCA usar frases cliché como "hola cómo estás".
 - Máximo 120 caracteres por frase.
-- HUMANIZACIÓN EXTREMA (Estilo "/human"): Escribe como una chica real chateando desde su móvil. Evita la puntuación perfecta, usa minúsculas casuales, incluye alguna muletilla y haz que suene muy espontáneo e imperfecto.
-- Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS. No enumeres, no pongas introducciones ni conclusiones.`;
+- HUMANIZACIÓN EXTREMA: Escribe como una chica real chateando desde su móvil de forma espontánea e imperfecta.
+- Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS.`;
 
         const outputText = await window.rrFetchTextAI(contextualPrompt, 'Eres un asistente experto en redactar ganchos e icebreakers de dating. Responde únicamente con las frases separadas por |.');
         

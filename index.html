@@ -7639,15 +7639,18 @@
     window.rrFetchTextAI = async function(prompt, systemPrompt = '') {
       let engine = window.getPerUserSetting('rr_active_text_ai') || 'gemini';
       
-      const gKey = window.getPerUserSetting('rr_key_gemini') || window.getPerUserSetting('rr_g_key_manual') || window.getPerUserSetting('rr_ai_api_key') || '';
-      const groqKey = window.getPerUserSetting('rr_key_groq') || window.getPerUserSetting('rr_groq_key') || '';
-      const deepseekKey = window.getPerUserSetting('rr_key_deepseek') || window.getPerUserSetting('rr_deepseek_key') || '';
-      const orKey = window.getPerUserSetting('rr_key_openrouter') || window.getPerUserSetting('rr_or_key') || '';
-      const openaiKey = window.getPerUserSetting('rr_key_openai') || window.getPerUserSetting('rr_openai_key') || '';
-      const anthropicKey = window.getPerUserSetting('rr_key_anthropic') || window.getPerUserSetting('rr_ai_stk_manual') || '';
-      const togetherKey = window.getPerUserSetting('rr_key_together') || window.getPerUserSetting('rr_together_key') || '';
-      const mistralKey = window.getPerUserSetting('rr_key_mistral') || window.getPerUserSetting('rr_mistral_key') || '';
-      const hfKey = window.getPerUserSetting('rr_key_huggingface') || window.getPerUserSetting('rr_hf_key') || '';
+      const isSystemAdmin = (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor'));
+      const keySuffix = isSystemAdmin ? '-admin' : '';
+      
+      const gKey = window.getPerUserSetting(`rr_key_gemini${keySuffix}`) || window.getPerUserSetting('rr_key_gemini') || window.getPerUserSetting('rr_g_key_manual') || window.getPerUserSetting('rr_ai_api_key') || '';
+      const groqKey = window.getPerUserSetting(`rr_key_groq${keySuffix}`) || window.getPerUserSetting('rr_key_groq') || window.getPerUserSetting('rr_groq_key') || '';
+      const deepseekKey = window.getPerUserSetting(`rr_key_deepseek${keySuffix}`) || window.getPerUserSetting('rr_key_deepseek') || window.getPerUserSetting('rr_deepseek_key') || '';
+      const orKey = window.getPerUserSetting(`rr_key_openrouter${keySuffix}`) || window.getPerUserSetting('rr_key_openrouter') || window.getPerUserSetting('rr_or_key') || '';
+      const openaiKey = window.getPerUserSetting(`rr_key_openai${keySuffix}`) || window.getPerUserSetting('rr_key_openai') || window.getPerUserSetting('rr_openai_key') || '';
+      const anthropicKey = window.getPerUserSetting(`rr_key_anthropic${keySuffix}`) || window.getPerUserSetting('rr_key_anthropic') || window.getPerUserSetting('rr_ai_stk_manual') || '';
+      const togetherKey = window.getPerUserSetting(`rr_key_together${keySuffix}`) || window.getPerUserSetting('rr_key_together') || window.getPerUserSetting('rr_together_key') || '';
+      const mistralKey = window.getPerUserSetting(`rr_key_mistral${keySuffix}`) || window.getPerUserSetting('rr_key_mistral') || window.getPerUserSetting('rr_mistral_key') || '';
+      const hfKey = window.getPerUserSetting(`rr_key_huggingface${keySuffix}`) || window.getPerUserSetting('rr_key_huggingface') || window.getPerUserSetting('rr_hf_key') || '';
       
       // Forzar Pollinations como motor por defecto para evitar timeouts con servidores locales caídos
       if (!engine || engine === 'ollama') engine = 'pollinations';
@@ -8675,6 +8678,11 @@
       _applyManualProfiles();
       
       recalcGrowth();
+      
+      // Auto-populate image and icebreaker model select elements after data load
+      if (typeof window.populateImgModels === 'function') {
+        window.populateImgModels();
+      }
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -32029,7 +32037,9 @@ PT._logKey = function (opName) {
       const selectedModelName = modelSel ? modelSel.value : '';
       const clientContext = contextEl ? contextEl.value.trim() : '';
       
-      const motorSeleccionado = localStorage.getItem('rr_active_text_ai_admin') || 'pollinations';
+      const isUserAdmin = (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor'));
+      const activeKey = isUserAdmin ? 'rr_active_text_ai_admin' : 'rr_active_text_ai';
+      const motorSeleccionado = (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting(activeKey) : null) || localStorage.getItem(activeKey) || 'pollinations';
 
       resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Razonando y adaptando tono a la personalidad (${motorSeleccionado})...</div>`;
 
@@ -32061,6 +32071,10 @@ CONFIGURACIÓN DE CONTEXTO:
 - Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS.`;
 
         const outputText = await window.rrFetchTextAI(contextualPrompt, 'Eres un asistente experto en redactar ganchos e icebreakers de dating. Responde únicamente con las frases separadas por |.');
+        
+        if (!outputText || !outputText.trim()) {
+          throw new Error("El motor de IA (" + motorSeleccionado.toUpperCase() + ") no devolvió respuesta. Por favor, asegúrate de ingresar una API Key válida si estás usando Gemini, Claude o Groq.");
+        }
         
         const selected = outputText.split('|').map(s => s.trim()).filter(s => s.length > 5).slice(0,3);
 
@@ -32613,7 +32627,9 @@ Debes verificar estrictamente estas 5 reglas y devolver un JSON (nada de texto m
       const selectedModelName = modelSel ? modelSel.value : '';
       const clientContext = contextEl ? contextEl.value.trim() : '';
       
-      const motorSeleccionado = (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting('rr_active_text_ai_admin') : null) || localStorage.getItem('rr_active_text_ai_admin') || 'pollinations';
+      const isUserAdmin = (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor'));
+      const activeKey = isUserAdmin ? 'rr_active_text_ai_admin' : 'rr_active_text_ai';
+      const motorSeleccionado = (typeof window.getPerUserSetting === 'function' ? window.getPerUserSetting(activeKey) : null) || localStorage.getItem(activeKey) || 'pollinations';
 
       resultsEl.innerHTML = `<div style="text-align:center; color:#fbbf24; font-style:italic; padding:12px 0;">⏳ Generando icebreakers irresistibles con ${motorSeleccionado.toUpperCase()}...</div>`;
 
@@ -32645,6 +32661,10 @@ CONFIGURACIÓN DE CONTEXTO:
 - Separa cada frase EXACTAMENTE con el símbolo de tubería (|) y NADA MÁS.`;
 
         const outputText = await window.rrFetchTextAI(contextualPrompt, 'Eres un asistente experto en redactar ganchos e icebreakers de dating. Responde únicamente con las frases separadas por |.');
+        
+        if (!outputText || !outputText.trim()) {
+          throw new Error("El motor de IA (" + motorSeleccionado.toUpperCase() + ") no devolvió respuesta. Por favor, asegúrate de ingresar una API Key válida si estás usando Gemini, Claude o Groq.");
+        }
         
         const selected = outputText.split('|').map(s => s.trim()).filter(s => s.length > 5).slice(0,3);
 
@@ -32930,19 +32950,35 @@ CONFIGURACIÓN DE CONTEXTO:
         admSel.innerHTML = html;
       }
 
-      // 3. Popular select de modelos para icebreakers
+      // 3. Popular select de modelos para icebreakers (Admin ve todo, Operador ve los suyos)
       const iceModelSel = document.getElementById('ice-gen-model');
       if (iceModelSel) {
-        let profiles = [];
-        if (activeOpName && typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
-          const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === activeOpName.trim().toUpperCase());
-          if (op && Array.isArray(op.profiles)) profiles = op.profiles;
-        }
+        const isUserAdmin = (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor'));
         let html = '<option value="">-- Tono General --</option>';
-        profiles.forEach(p => {
-          const mName = p.model || p.nombre || p.name;
-          if (mName) html += `<option value="${mName}">${mName}</option>`;
-        });
+        if (isUserAdmin) {
+          const allProfilesMap = new Map();
+          if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+            operatorsData.forEach(o => {
+              (o.profiles || []).forEach(p => {
+                const mName = p.model || p.nombre || p.name;
+                if (mName) allProfilesMap.set(mName.toUpperCase(), mName);
+              });
+            });
+          }
+          allProfilesMap.forEach((modelName) => {
+            html += `<option value="${modelName}">${modelName}</option>`;
+          });
+        } else {
+          let profiles = [];
+          if (activeOpName && typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+            const op = operatorsData.find(o => (o.name || '').trim().toUpperCase() === activeOpName.trim().toUpperCase());
+            if (op && Array.isArray(op.profiles)) profiles = op.profiles;
+          }
+          profiles.forEach(p => {
+            const mName = p.model || p.nombre || p.name;
+            if (mName) html += `<option value="${mName}">${mName}</option>`;
+          });
+        }
         iceModelSel.innerHTML = html;
       }
 

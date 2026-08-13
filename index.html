@@ -10328,39 +10328,28 @@
             }
             return;
           }
-          if (window._rkLiveEngine) {
-             console.log('[LIVE-RT] Ya existe una suscripción activa, saltando...');
-             return;
-          }
           
-          window._rkLiveEngine = _sb
-            .channel('rr-live-ops')
-            .on('postgres_changes', {
-              event: '*', schema: 'public', table: 'operaciones'
-            }, (payload) => {
-              const r = payload.new || payload.record;
-              if (!r) return;
-              const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-              if (r.fecha_dia !== hoy) return;
-              
-              // 🔥 ACTUALIZAR CACHÉ GLOBAL DE PUNTOS (_dpTurnosData) 🔥
-              // Esto permite que renderRanking() pinte los puntos nuevos sin esperar al sync de 5min
-              if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada) {
-                if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
-                
-                const pt = Number(r.puntos_total) || 0;
-                const pb = Number(r.puntos_baseline) || 0;
-                const pn = Number(r.puntos_neto) || 0;
-                
-                // Usar el mayor entre el neto de la DB y el calculado (pt-pb) para máxima precisión
-                let netoReal = pn;
-                if (pt > 0 && pt > pb && (pt - pb) > netoReal) netoReal = pt - pb;
-                
-                _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
-              }
+          
+          window.addEventListener('rr_op_change', (e) => {
+            const payload = e.detail;
+            const r = payload.new || payload.record;
+            if (!r) return;
+            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            if (r.fecha_dia !== hoy) return;
+            
+            if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada) {
+              if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
+              const pt = Number(r.puntos_total) || 0;
+              const pb = Number(r.puntos_baseline) || 0;
+              const pn = Number(r.puntos_neto) || 0;
+              let netoReal = pn;
+              if (pt > 0 && pt > pb && (pt - pb) > netoReal) netoReal = pt - pb;
+              _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
+            }
 
-              const neto = Number(r.puntos_neto) || 0;
-              if (neto <= 0) return;
+            const neto = Number(r.puntos_neto) || 0;
+            if (neto <= 0) return;
+            if (typeof _rrResolveName === 'function') {
               const resolved = _rrResolveName(r.id_perfil, r.agencia);
               const entry = {
                 op: resolved.op,
@@ -10371,16 +10360,14 @@
                 turno: r.jornada || '—',
                 time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
               };
-              // Insertar al inicio del feed, mantener max 150
               window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 150);
-              _rrPintarLiveFeed();
-              // Debounce ranking re-render on realtime events
+              if (typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
               clearTimeout(window._rkLiveRenderTimer);
               window._rkLiveRenderTimer = setTimeout(() => {
                 if (typeof renderRanking === 'function') renderRanking();
               }, 1500);
-            })
-            .subscribe();
+            }
+        });
           console.log('[LIVE-RT] Supabase Realtime activo en tabla operaciones');
         } catch(e) { console.warn('[LIVE-RT]', e); }
       }, delay);
@@ -12923,6 +12910,67 @@
       }
     }
 
+    
+    // ── MASTER REALTIME ENGINE (OPTIMIZATION) ──
+    // Unifies all Supabase WebSocket connections into ONE single channel
+    let _globalRealtimeActive = false;
+    function _initMasterRealtime() {
+      if (typeof _sb === 'undefined' || !_sb || _globalRealtimeActive) return;
+      
+      console.log('[MASTER-RT] Iniciando canal global unificado para ahorrar cuota...');
+      const globalChannel = _sb.channel('agencia_global_rt', { config: { broadcast: { ack: true, self: true } } });
+      
+      // Suscripción a operaciones (solo para Admins y Monitores para ahorrar mensajes, o polling si es operador)
+      if (currentRole === 'admin' || currentRole === 'monitor') {
+          globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
+             window.dispatchEvent(new CustomEvent('rr_op_change', { detail: payload }));
+          });
+          
+          globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, (payload) => {
+             window.dispatchEvent(new CustomEvent('rr_tableau_change', { detail: payload }));
+          });
+      }
+
+      // Suscripción a kv_store (Todos)
+      globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'kv_store' }, (payload) => {
+         window.dispatchEvent(new CustomEvent('rr_kv_change', { detail: payload }));
+      });
+
+      // Suscripción a alertas de voz (Todos)
+      globalChannel.on('broadcast', { event: 'voice_alert' }, (payload) => {
+         window.dispatchEvent(new CustomEvent('rr_voice_alert', { detail: payload }));
+      });
+
+      globalChannel.subscribe((status) => {
+         if (status === 'SUBSCRIBED') {
+           _globalRealtimeActive = true;
+           if (!_sbOnline) { _sbOnline = true; if(typeof _toastSync === 'function') _toastSync('🟢 Realtime Unificado Activo'); }
+           console.log('[MASTER-RT] 🚀 Suscrito exitosamente a agencia_global_rt');
+         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+           if (_sbOnline) { _sbOnline = false; if(typeof _toastSync === 'function') _toastSync('🔴 Realtime desconectado', true); }
+         }
+      });
+      
+      // Fallback Polling para Operadores (60s)
+      if (currentRole === 'operador') {
+         setInterval(() => {
+            console.log('[POLLING] Actualizando Live Feed para operador (ahorro de cuota)...');
+            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            _sb.from('operaciones').select('id_perfil, puntos_neto, puntos_total, jornada, agencia')
+              .eq('fecha_dia', hoy).gt('puntos_neto', 0).order('id', { ascending: false }).limit(150)
+              .then(({data: rows}) => {
+                 if(rows && rows.length) {
+                    window._rrLiveFeed = rows.map(r => {
+                      const resolved = _rrResolveName(r.id_perfil, r.agencia);
+                      return { op: resolved.op, modelo: resolved.modelo, perfil: r.id_perfil, pts: Number(r.puntos_neto)||0, total: Number(r.puntos_total)||0, turno: r.jornada||'—', time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) };
+                    });
+                    if(typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
+                 }
+              });
+         }, 60000);
+      }
+    }
+
     function _bootDone() {
       const boot = document.getElementById('rr-boot-screen');
       if (!boot) return;
@@ -12931,7 +12979,7 @@
 
       // Iniciar suscripciones en tiempo real
       if (typeof _sbRealtime === 'function') {
-        _sbRealtime();
+        _initMasterRealtime();
       }
 
       // Disparar la malla cibernética y el refresco dinámico de datos reales en la entrada
@@ -13297,243 +13345,76 @@
 
     function _sbRealtime() {
       if (!_sb) return;
-      if (window._sbKvChannel) {
-        console.log('[LIVE-RT] Ya existe la suscripción de kv_store_changes, saltando...');
-        return;
-      }
+      
 
       // 1. Canal KV_STORE (Configuraciones y datos corregidos)
-      window._sbKvChannel = _sb.channel('kv_store_changes')
-        .on('postgres_changes',
-          { event: '*', schema: 'public', table: 'kv_store' },
-          ({ eventType, new: row, old: oldRow }) => {
+      window.addEventListener('rr_kv_change', (e) => {
+            const payload = e.detail;
+            const eventType = payload.eventType;
+            const row = payload.new || payload.record;
+            const oldRow = payload.old || payload.old_record;
             if (eventType === 'DELETE') {
-              _origRemoveItem(oldRow.key);
-            } else if (row?.key && !_sbShouldExclude(row.key)) {
-              // Ignorar evento realtime si nosotros mismos guardamos hace menos de 3s (race condition)
+              if (typeof _origRemoveItem === 'function') _origRemoveItem(oldRow.key);
+            } else if (row?.key && typeof _sbShouldExclude === 'function' && !_sbShouldExclude(row.key)) {
               const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
-              // rr_prime_cortes NUNCA se ignora — es la fuente de puntos del operador
-              // rr_prime_asistencia_draft NUNCA se ignora — es el canal de login de operadores remotos
               const _isAsistenciaDraft = row.key.startsWith('rr_prime_asistencia_draft');
               const _isChatKey = row.key.startsWith('rr_chat_') || row.key.startsWith('rr_solicitudes_contenido');
-              // Guard: ignorar eco para TODAS las claves si guardamos hace < 3s
               if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && !_isAsistenciaDraft && !_isChatKey) return;
-              // Guard EXTRA para primeOperatorsData2026: 8 segundos para evitar race conditions de agregar operador
-              if (row.key === 'primeOperatorsData2026' && msSinceLocalSave < 8000) {
-                console.info('[RT] Ignorando eco de primeOperatorsData2026 (guardado hace ' + msSinceLocalSave + 'ms)');
-                return;
-              }
+              if (row.key === 'primeOperatorsData2026' && msSinceLocalSave < 8000) return;
+              
               if (row.key === 'primeOperatorsData2026') {
                 _sb.from('kv_store').select('value').eq('key', 'primeOperatorsData2026_ts').single()
                   .then(({ data: tsData }) => {
                     const remoteTsVal = tsData ? tsData.value : '0';
-                    syncMergeOperatorsData(row.value, remoteTsVal);
-                    // Recargar datos y refrescar interfaces
+                    if (typeof syncMergeOperatorsData === 'function') syncMergeOperatorsData(row.value, remoteTsVal);
                     if (typeof loadData === 'function') loadData();
-                    if (currentRole === 'operador' && currentOpName) {
-                      if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
+                    if (currentRole === 'operador' && currentOpName && typeof renderOpDashboard === 'function') {
+                      renderOpDashboard(currentOpName);
                     } else {
                       if (typeof renderRanking === 'function') renderRanking();
                       if (typeof renderOperators === 'function') renderOperators();
                     }
                   });
               } else if (row.key.startsWith('rr_profile_')) {
-                // Si nosotros mismos acabamos de guardar este rr_profile_*, ignorar el eco de Supabase.
-                // Sin este check, el Realtime re-renderiza la pagina mientras el usuario
-                // tiene un dropdown abierto, y puede traer valores viejos de otros clientes.
                 const _msProfile = Date.now() - (_localSaveTs[row.key] || 0);
-                if (_msProfile < 10000) return; // Ignorar ecos de nuestros propios cambios por 10s
-                // Solo actualizar localStorage/cache en memoria — NO re-renderizar
+                if (_msProfile < 10000) return;
                 const _rtVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
-                _origSetItem(row.key, _rtVal);
+                if (typeof _origSetItem === 'function') _origSetItem(row.key, _rtVal);
                 _sbMemCache[row.key] = _rtVal;
-                // Aplicar silenciosamente en operatorsData sin re-renderizar UI
-                if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
               } else {
-                // FIX: Supabase realtime may deliver value as an object (jsonb) or string.
-                // localStorage.setItem requires a string — always stringify objects.
-                const _rtVal = (row.value !== null && typeof row.value === 'object')
-                  ? JSON.stringify(row.value)
-                  : row.value;
-                _origSetItem(row.key, _rtVal);
-                _sbMemCache[row.key] = _rtVal; // memory cache actualizado por realtime
-              }
-              // Recargar datos en memoria si es una clave de negocio crítica
-              const critical = [
-                'primeOperatorsData2026', 'rr_prime_cortes', 'rr_prime_asistencia',
-                'rr_perfil_metrics', 'rr_alertas_sistema', 'rr_metas_operacion',
-                'rr_prime_logs_entrada', 'rr_prime_consejos_2026',
-                'rr_prime_op_pins', 'rr_shift_handovers', 'rr_solicitudes_contenido'
-              ];
-              const ptKeys = ['rr_prime_v15_mañana', 'rr_prime_v15_tarde', 'rr_prime_v15_noche'];
-
-              // ── Solicitudes de Contenido en Tiempo Real ──
-              if (row.key === 'rr_solicitudes_contenido') {
-                if (typeof currentRole !== 'undefined' && (currentRole === 'admin' || currentRole === 'monitor')) {
-                  if (typeof playBeep === 'function') playBeep('bell');
-                  if (typeof renderAdminSolicitudes === 'function') renderAdminSolicitudes();
-                } else if (typeof currentRole !== 'undefined' && currentRole === 'operador') {
-                  if (typeof renderOpSolicitudesHistorial === 'function') renderOpSolicitudesHistorial();
-                }
-              }
-
-              // ── Asistencia draft en tiempo real (auto-login del operador) ──
-              // La clave es dinámica: rr_prime_asistencia_draft_FECHA_TURNO
-              if (row.key.startsWith('rr_prime_asistencia_draft')) {
-                // Monitor/admin: re-renderizar grilla de asistencia + módulo conectados en tiempo real
-                if ((currentRole === 'monitor' || currentRole === 'admin')) {
-                  // Recargar draft desde localStorage (ya actualizado arriba) y re-renderizar
-                  if (typeof asiLoadDraft === 'function') asiLoadDraft();
-                  if (typeof asiRender === 'function') asiRender();
-                  // Módulo de avatares: actualizar inmediatamente
-                  if (typeof renderConnectedOps === 'function') renderConnectedOps();
-                  // Ranking completo (incluye badges y tabla)
-                  if (typeof renderRanking === 'function') setTimeout(renderRanking, 100);
-                  // Toast de notificación cuando un operador se conecta
-                  try {
-                    const _draftParsed = typeof row.value === 'object' ? row.value : JSON.parse(row.value || '{}');
-                    const _newOps = Object.entries(_draftParsed)
-                      .filter(([k, v]) => k.endsWith('||operador') && v?.estado === 'P' && v?.autoMarcado)
-                      .map(([k]) => k.replace('||operador', ''));
-                    if (_newOps.length > 0) {
-                      _toastSync('🟢 ' + _newOps.join(', ') + ' se conect' + (_newOps.length > 1 ? 'aron' : 'ó'));
-                    }
-                  } catch(e) {}
-                }
-              }
-
-              // --- CHAT REAL-TIME SYNC ---
-              if (row.key.startsWith('rr_chat_')) {
-                const chatOpName = row.key.replace('rr_chat_', '');
-                if (currentRole === 'monitor' || currentRole === 'admin') {
-                  if (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === chatOpName.toLowerCase()) {
-                    cargarHistorialChatSeleccionado(false);
-                  } else {
-                    procesarMensajeChatRealtime(row);
-                  }
-                } else if (currentRole === 'operador') {
-                  if (currentOpName && currentOpName.toLowerCase() === chatOpName.toLowerCase()) {
-                    cargarHistorialChatSeleccionado(false);
-                  }
-                }
-              }
-              // --- CUSTOM ALERTS SYNC ---
-              if (row.key.startsWith('rr_custom_alert_')) {
-                const targetOpName = row.key.replace('rr_custom_alert_', '');
-                if (currentRole === 'operador' && currentOpName && currentOpName.toLowerCase() === targetOpName.toLowerCase()) {
-                  try {
-                    const alertData = JSON.parse(row.value);
-                    lanzarAlertaMonitor(alertData.nivel, alertData.msg, alertData.sound);
-                    
-                    // Borrar alerta en Supabase para no re-procesarla
-                    if (_sb) {
-                      _sb.from('kv_store').delete().eq('key', row.key).then(() => {});
-                    }
-                  } catch (e) {
-                    console.error("Error parseando alerta personalizada en tiempo real:", e);
-                  }
-                }
-              }
-
-              // --- ADMIN FORCE LOGOUT ---
-              if (row.key === 'rr_admin_logout_signal') {
-                if (currentRole === 'admin' && row.value !== window._lastAdminPinChangeTs) {
-                  alert('🔒 La contraseña de Administrador ha sido cambiada. Tu sesión ha sido cerrada por seguridad.');
-                  if (typeof loginLogout === 'function') loginLogout(true);
-                }
-              }
-
-
-              if (critical.includes(row.key) && typeof loadData === 'function') {
-                loadData();
-                if (currentRole === 'operador' && typeof renderOpDashboard === 'function') {
-                  renderOpDashboard(currentOpName);
-                  // Corte nuevo → actualizar barra de progreso y puntos al instante
-                  if (row.key === 'rr_prime_cortes') {
-                    if (typeof renderCorteSection === 'function') renderCorteSection(currentOpName);
-                    if (typeof renderOpStats === 'function') renderOpStats(currentOpName);
-                  }
-                  // Actualizar módulo de empalmes si recibe cambio de empalmes
-                  if (row.key === 'rr_shift_handovers' && typeof renderHandoverModule === 'function' && currentOpName) {
-                    renderHandoverModule(currentOpName);
-                  }
-                } else if (typeof renderRanking === 'function') {
-                  renderRanking();
-                  // Monitor: también refrescar asistencia si recibe cambio de operadores
-                  if (row.key === 'primeOperatorsData2026' &&
-                    typeof asiLoadDraft === 'function' && typeof asiRender === 'function') {
-                    asiLoadDraft(); asiRender();
-                  }
-                  // Monitor/admin: refrescar vista de empalmes si recibe cambio de empalmes
-                  if (row.key === 'rr_shift_handovers' && typeof renderHandoversAdminView === 'function') {
-                    renderHandoversAdminView();
-                  }
-                }
-              }
-              // PT realtime: re-render Plan de Trabajo cuando otro PC cambia el turno
-              if (row.key.startsWith('rr_prime_v15_') && typeof PT !== 'undefined') {
-                const shift = row.key.replace('rr_prime_v15_', '');
-                PT.baseDatos[shift] = JSON.parse(row.value || '[]');
-                if (PT.shiftActual === shift) {
-                   PT.renderAll();
-                   _toastSync('📋 Plan de Trabajo actualizado');
-                }
-                // También actualizar barra competitiva en op-dashboard
-                if (currentRole === 'operador') {
-                  if (typeof renderCompetitiveBar === 'function') renderCompetitiveBar();
-                  // 🚀 POPUP INSTANTÁNEO DE CAPACITACIÓN 🚀
-                  if (typeof PT.checkTrainingPending === 'function' && currentOpName) {
-                    PT.checkTrainingPending(currentOpName);
-                  }
-                  if (typeof PT.checkTrainingIAPending === 'function' && currentOpName) {
-                    PT.checkTrainingIAPending(currentOpName);
-                  }
+                const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
+                if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
+                _sbMemCache[row.key] = finalVal;
+                if (row.key === 'rr_prime_cortes' && currentRole === 'admin' && typeof refreshLocalCortesView === 'function') {
+                  refreshLocalCortesView();
                 }
               }
             }
-          })
-        .subscribe(status => {
-          if (status === 'SUBSCRIBED') {
-            if (!_sbOnline) { _sbOnline = true; _toastSync('🟢 Tiempo real activo'); }
-          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-            if (_sbOnline) { _sbOnline = false; _toastSync('🔴 Realtime desconectado', true); }
-          }
         });
 
       // 2. Canal OPERACIONES (Detección instantánea de puntos Datame)
       // Modificado: Se elimina la restricción de rol para que se suscriba incluso en la pantalla de login (esencial para TV/móvil)
-      _sb.channel('operaciones_changes')
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'operaciones' },
-          () => { 
+      window.addEventListener('rr_op_change', (e) => {
+          if (e.detail.eventType === 'INSERT') {
             console.log("[Bridge] ⚡ Cambio detectado en Datame Supabase -> Disparando Laser Sync...");
-            _debouncedLaserSync(); 
+            if (typeof _debouncedLaserSync === 'function') _debouncedLaserSync(); 
           }
-        )
-        .subscribe();
+        });
 
       // 3. Canal GLOBAL ALERTS (Alertas de voz invasivas para todos los dispositivos)
-      window._voiceBroadcastChannel = _sb.channel('global_alerts', { config: { broadcast: { ack: true, self: true } } })
-        .on('broadcast', { event: 'voice_alert' }, (payload) => {
+      window.addEventListener('rr_voice_alert', (e) => {
+          const payload = e.detail;
           console.log("🔊 Alerta de voz global recibida:", payload);
           if (payload.payload && payload.payload.text) {
-            if (typeof _toastSync === 'function') {
-              _toastSync("🔔 Alerta de voz: " + payload.payload.text, false);
-            }
+            if (typeof _toastSync === 'function') _toastSync("🔔 Alerta de voz: " + payload.payload.text, false);
             if (window._enableVoiceAlerts === false && typeof window.toggleVoiceAlerts === 'function') {
-              window.toggleVoiceAlerts(); // Fuerza la activación
+              window.toggleVoiceAlerts(); 
             } else {
-              window._enableVoiceAlerts = true; // Porcentaje de seguridad
+              window._enableVoiceAlerts = true;
             }
-            if (typeof window.speakText === 'function') {
-              window.speakText(payload.payload.text);
-            } else {
-              console.warn("window.speakText no esta disponible.");
-            }
+            if (typeof window.speakText === 'function') window.speakText(payload.payload.text);
           }
-        })
-        .subscribe((status) => {
-          console.log("[Broadcast] Estado de suscripción:", status);
+        });
         });
     }
 
@@ -28787,31 +28668,15 @@ PT._logKey = function (opName) {
           if (typeof dpIniciarRealtime === 'function') dpIniciarRealtime();
           // Reactivar canal Ranking Live Engine si fue suspendido
           if (!window._rkLiveEngine && typeof _sb !== 'undefined') {
-            window._rkLiveEngine = _sb
-              .channel('rr-live-ops')
-              .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
-                const r = payload.new || payload.record;
-                if (!r) return;
+            window._rkLiveEngine = window.addEventListener('rr_op_change', (e) => {
+                const payload = e.detail;
+                if (!payload.new) return;
+                const r = payload.new;
                 const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-                if (r.fecha_dia !== hoy) return;
-                if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada) {
-                  if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
-                  const pn = Number(r.puntos_neto) || 0;
-                  const pt = Number(r.puntos_total) || 0;
-                  const pb = Number(r.puntos_baseline) || 0;
-                  
-                  // 🔬 DELTA-SHIFT™ PRO FIX: Exigir pb > 0 para evitar que el total (pt) se coma al neto (pn)
-                  let netoReal = pn;
-                  if (pt > 0 && pb > 0 && pt >= pb) {
-                     netoReal = Math.max(pn, pt - pb);
-                  }
-                  
-                  _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
+                if (r.fecha_dia === hoy) {
+                  if (typeof renderAdminFeed === 'function') renderAdminFeed();
                 }
-                clearTimeout(window._rkLiveRenderTimer);
-                window._rkLiveRenderTimer = setTimeout(() => { if (typeof renderRanking === 'function') renderRanking(); }, 1500);
-              })
-              .subscribe();
+              });
           }
           console.log('🔓 [DELTA-SHIFT] Realtime reactivado.');
         } catch(e) { console.warn('Error reactivando realtime:', e); }
@@ -29846,36 +29711,30 @@ PT._logKey = function (opName) {
     let _tableauRealtimeSub = null;
     function tableauIniciarRealtime() {
       if (typeof _sb === 'undefined' || !_sb || _tableauRealtimeSub) return;
-      _tableauRealtimeSub = _sb
-        .channel('rr_tableau_sync')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, payload => {
-          loadTableauData().then(() => {
-            renderTableauPanel();
-            if (typeof renderDatamePaneles === 'function') renderDatamePaneles();
-          });
-        })
-        .subscribe();
+      window.addEventListener('rr_tableau_change', (e) => {
+          if (typeof loadTableauData === 'function') {
+            loadTableauData().then(() => {
+              if (typeof renderTableauPanel === 'function') renderTableauPanel();
+              if (typeof renderDatamePaneles === 'function') renderDatamePaneles();
+            });
+          }
+        });
     }
 
     function dpIniciarRealtime() {
       if (typeof _sb === 'undefined' || !_sb || _dpRealtimeSub) return;
       let _dpDebounceTimer = null;
-      _dpRealtimeSub = _sb
-        .channel('datame-operaciones-rt')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' },
-          (payload) => {
-            if (payload.new && payload.new.puntos_neto > 0) {
-              _capturarActividadViva(payload.new);
-            }
-
-            clearTimeout(_dpDebounceTimer);
-            _dpDebounceTimer = setTimeout(() => {
-              console.log('[DP] 🔴 Cambio en operaciones detectado — actualizando panel...');
-              console.log('Datos recibidos del Watcher. Sincronizando...', 'info');
-              sincronizarDatamePaneles();
-            }, 5000); 
-          })
-        .subscribe();
+      window.addEventListener('rr_op_change', (e) => {
+          const payload = e.detail;
+          if (payload.new && payload.new.puntos_neto > 0) {
+            if (typeof _capturarActividadViva === 'function') _capturarActividadViva(payload.new);
+          }
+          clearTimeout(window._dpDebounceTimer);
+          window._dpDebounceTimer = setTimeout(() => {
+            console.log('[DP] 🔴 Cambio en operaciones detectado — actualizando panel...');
+            if (typeof sincronizarDatamePaneles === 'function') sincronizarDatamePaneles();
+          }, 5000); 
+        });
       console.log('[DP] Realtime activado en tabla operaciones');
     }
 

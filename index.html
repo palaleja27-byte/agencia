@@ -4697,6 +4697,68 @@
         flex: 1 1 45% !important;
         max-width: 48% !important;
       }
+      
+      /* Mobile modal and sub-tabs fixes */
+      .modal-content {
+        max-width: 95% !important;
+        width: 95% !important;
+        max-height: 92vh !important;
+        padding: 15px !important;
+        margin: 5px !important;
+      }
+      .bitacora-two-cols {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        gap: 16px;
+      }
+      .bitacora-col-left {
+        width: 35%;
+        border-right: 1px solid rgba(255,255,255,0.05);
+        padding-right: 12px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .bitacora-col-right {
+        width: 65%;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      
+      @media (max-width: 768px) {
+        .bitacora-two-cols {
+          flex-direction: column !important;
+          overflow-y: auto !important;
+          flex: 1 !important;
+          height: auto !important;
+          gap: 15px !important;
+        }
+        .bitacora-col-left, .bitacora-col-right {
+          width: 100% !important;
+          border-right: none !important;
+          padding-right: 0 !important;
+          flex: none !important;
+          height: auto !important;
+        }
+        .bitacora-col-left {
+          border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+          padding-bottom: 12px !important;
+          margin-bottom: 8px !important;
+        }
+        
+        .op-tabs-nav, .admin-tabs-nav {
+          justify-content: center !important;
+          gap: 6px !important;
+          padding-bottom: 8px !important;
+          margin: 10px 0 5px 0 !important;
+        }
+        .op-tab-btn, .admin-tab-btn {
+          padding: 8px 12px !important;
+          font-size: 0.65rem !important;
+        }
+      }
     }
   </style>
 </head>
@@ -26945,7 +27007,41 @@ PT._logKey = function (opName) {
       }
     }
 
+    function renderBitacoraTabs() {
+      const container = document.getElementById('bitacora-tabs-container');
+      if (!container) return;
+      
+      const currentView = window._bitacoraCompanyView || 'all';
+      
+      container.innerHTML = `
+        <div style="display:flex; gap:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px; flex-wrap:wrap; justify-content:center;">
+          <button class="bitacora-tab-btn ${currentView === 'all' ? 'active' : ''}" onclick="window._changeBitacoraCompanyView('all')" 
+            style="background:${currentView === 'all' ? 'rgba(45,212,191,0.15)' : 'rgba(255,255,255,0.02)'}; 
+            border:1px solid ${currentView === 'all' ? '#2dd4bf' : 'rgba(255,255,255,0.08)'}; 
+            color:${currentView === 'all' ? '#2dd4bf' : '#94a3b8'}; 
+            padding:6px 12px; border-radius:8px; font-size:0.68rem; font-weight:800; cursor:pointer; transition:0.2s;">
+            🌐 Todas las Agencias
+          </button>
+          <button class="bitacora-tab-btn ${currentView === 'romero' ? 'active' : ''}" onclick="window._changeBitacoraCompanyView('romero')" 
+            style="background:${currentView === 'romero' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.02)'}; 
+            border:1px solid ${currentView === 'romero' ? '#10b981' : 'rgba(255,255,255,0.08)'}; 
+            color:${currentView === 'romero' ? '#34d399' : '#94a3b8'}; 
+            padding:6px 12px; border-radius:8px; font-size:0.68rem; font-weight:800; cursor:pointer; transition:0.2s;">
+            💼 Agencia Romero
+          </button>
+          <button class="bitacora-tab-btn ${currentView === 'camilo' ? 'active' : ''}" onclick="window._changeBitacoraCompanyView('camilo')" 
+            style="background:${currentView === 'camilo' ? 'rgba(56,189,248,0.15)' : 'rgba(255,255,255,0.02)'}; 
+            border:1px solid ${currentView === 'camilo' ? '#38bdf8' : 'rgba(255,255,255,0.08)'}; 
+            color:${currentView === 'camilo' ? '#38bdf8' : '#94a3b8'}; 
+            padding:6px 12px; border-radius:8px; font-size:0.68rem; font-weight:800; cursor:pointer; transition:0.2s;">
+            💼 Agencia Camilo
+          </button>
+        </div>
+      `;
+    }
+
     function renderBitacoraCortesList() {
+      renderBitacoraTabs();
       const container = document.getElementById('bitacora-cortes-list-container');
       if (!container) return;
       
@@ -30643,9 +30739,9 @@ PT._logKey = function (opName) {
       <div id="bitacora-tabs-container" style="margin-bottom:10px;"></div>
       
       <!-- Cuerpo con dos columnas (izquierda: lista de cortes, derecha: detalle del corte seleccionado) -->
-      <div style="display:flex; flex:1; min-height:0; gap:16px;">
+      <div class="bitacora-two-cols">
         <!-- Lista de Cortes (Column 1) -->
-        <div style="width:35%; border-right:1px solid rgba(255,255,255,0.05); padding-right:12px; display:flex; flex-direction:column;">
+        <div class="bitacora-col-left">
           <h3 style="font-size:0.75rem; color:#94a3b8; text-transform:uppercase; margin-top:0; margin-bottom:10px;">Cortes Registrados</h3>
           <div id="bitacora-cortes-list-container" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
              <!-- Inyectado por JS -->
@@ -30653,7 +30749,7 @@ PT._logKey = function (opName) {
         </div>
         
         <!-- Detalle del Corte (Column 2) -->
-        <div style="width:65%; display:flex; flex-direction:column;">
+        <div class="bitacora-col-right">
           <h3 style="font-size:0.75rem; color:#94a3b8; text-transform:uppercase; margin-top:0; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
             <span>Detalle del Corte Seleccionado</span>
             <span id="bitacora-selected-corte-meta" style="font-size:0.65rem; color:#e2e8f0; background:rgba(45,212,191,0.15); padding:2px 8px; border-radius:4px;">—</span>

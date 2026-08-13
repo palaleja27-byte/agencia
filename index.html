@@ -9027,7 +9027,18 @@
       _rkSearchTimer = setTimeout(() => renderRanking(), 120);
     }
 
-    window.switchAdminSubTab = function(tabId) {
+    window.switchAdminSubTab = function(tabId, forceState = null) {
+      const targetPane = document.getElementById('admin-tab-pane-' + tabId);
+      if (!targetPane) return;
+      
+      const targetBtn = Array.from(document.querySelectorAll('.admin-tab-btn')).find(btn => {
+        const onClickAttr = btn.getAttribute('onclick') || '';
+        return onClickAttr.includes(tabId);
+      });
+      
+      const isAlreadyActive = targetBtn && targetBtn.classList.contains('active');
+      const shouldCollapse = (forceState === 'collapse') || (forceState === null && isAlreadyActive);
+      
       document.querySelectorAll('.admin-tab-pane').forEach(pane => {
         pane.style.display = 'none';
       });
@@ -9035,19 +9046,27 @@
         btn.classList.remove('active');
       });
       
-      const targetPane = document.getElementById('admin-tab-pane-' + tabId);
-      if (targetPane) targetPane.style.display = 'block';
+      if (shouldCollapse) {
+        localStorage.setItem('rr_active_admin_sub_tab', 'collapsed');
+      } else {
+        targetPane.style.display = 'block';
+        if (targetBtn) targetBtn.classList.add('active');
+        localStorage.setItem('rr_active_admin_sub_tab', tabId);
+      }
+    };
+
+    window.switchOpTab = function(tabId, forceState = null) {
+      const targetPane = document.getElementById('op-tab-pane-' + tabId);
+      if (!targetPane) return;
       
-      const targetBtn = Array.from(document.querySelectorAll('.admin-tab-btn')).find(btn => {
+      const targetBtn = Array.from(document.querySelectorAll('.op-tab-btn')).find(btn => {
         const onClickAttr = btn.getAttribute('onclick') || '';
         return onClickAttr.includes(tabId);
       });
-      if (targetBtn) targetBtn.classList.add('active');
       
-      localStorage.setItem('rr_active_admin_sub_tab', tabId);
-    };
-
-    window.switchOpTab = function(tabId) {
+      const isAlreadyActive = targetBtn && targetBtn.classList.contains('active');
+      const shouldCollapse = (forceState === 'collapse') || (forceState === null && isAlreadyActive);
+      
       document.querySelectorAll('.op-tab-pane').forEach(pane => {
         pane.style.display = 'none';
       });
@@ -9055,16 +9074,13 @@
         btn.classList.remove('active');
       });
       
-      const targetPane = document.getElementById('op-tab-pane-' + tabId);
-      if (targetPane) targetPane.style.display = 'block';
-      
-      const targetBtn = Array.from(document.querySelectorAll('.op-tab-btn')).find(btn => {
-        const onClickAttr = btn.getAttribute('onclick') || '';
-        return onClickAttr.includes(tabId);
-      });
-      if (targetBtn) targetBtn.classList.add('active');
-      
-      localStorage.setItem('rr_active_op_tab', tabId);
+      if (shouldCollapse) {
+        localStorage.setItem('rr_active_op_tab', 'collapsed');
+      } else {
+        targetPane.style.display = 'block';
+        if (targetBtn) targetBtn.classList.add('active');
+        localStorage.setItem('rr_active_op_tab', tabId);
+      }
     };
 
     function switchTab(tabIndex) {
@@ -19259,7 +19275,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (role === 'admin' || role === 'monitor') {
         const savedAdminTab = localStorage.getItem('rr_active_admin_sub_tab') || 'tableau';
         if (typeof window.switchAdminSubTab === 'function') {
-          window.switchAdminSubTab(savedAdminTab);
+          if (savedAdminTab === 'collapsed') {
+            window.switchAdminSubTab('tableau', 'collapse');
+          } else {
+            window.switchAdminSubTab(savedAdminTab);
+          }
         }
       }
       
@@ -20088,7 +20108,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // Restaurar pestaña activa del operador
       if (typeof window.switchOpTab === 'function') {
         const savedTab = localStorage.getItem('rr_active_op_tab') || 'icebreakers';
-        window.switchOpTab(savedTab);
+        if (savedTab === 'collapsed') {
+          window.switchOpTab('icebreakers', 'collapse');
+        } else {
+          window.switchOpTab(savedTab);
+        }
       }
     }
 

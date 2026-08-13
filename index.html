@@ -9324,7 +9324,7 @@
     // Actualiza Global Total, Promedio y Crecimiento con datos REALES de Supabase
     // ════════════════════════════════════════════════════════════════════════
     async function rkFetchSupabaseTotals() {
-      if (typeof _sb === 'undefined') return;
+      if (typeof _sb === 'undefined' || !_sb) return;
       if (typeof _sbBootReady !== 'undefined' && !_sbBootReady) return;
       
       const formatMes = (d) => {
@@ -10271,96 +10271,120 @@
         }
       });
     }
-    // 1. Carga inicial desde Supabase (ultimos 150 eventos del dia)
-    setTimeout(async () => {
-      try {
-        if (typeof _sb === 'undefined') return;
-        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const { data: rows } = await _sb
-          .from('operaciones')
-          .select('id_perfil, puntos_neto, puntos_total, jornada, agencia')
-          .eq('fecha_dia', hoy)
-          .gt('puntos_neto', 0)
-          .order('id', { ascending: false })
-          .limit(150);
-        if (!rows || !rows.length) return;
-        window._rrLiveFeed = rows.map(r => {
-          const resolved = _rrResolveName(r.id_perfil, r.agencia);
-          return {
-            op: resolved.op,
-            modelo: resolved.modelo,
-            perfil: r.id_perfil,
-            pts: Number(r.puntos_neto) || 0,
-            total: Number(r.puntos_total) || 0,
-            turno: r.jornada || '—',
-            time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-          };
-        });
-        _rrPintarLiveFeed();
-        if (typeof renderAlertas === 'function') renderAlertas();
-      } catch(e) { console.warn('[LIVE-INIT]', e); }
-    }, 1500);
-
-    // 2. Suscripcion Realtime: reacciona INSTANTANEAMENTE a cada INSERT o UPDATE
-    setTimeout(() => {
-      try {
-        if (typeof _sb === 'undefined') return;
-        if (window._rkLiveEngine) {
-           console.log('[LIVE-RT] Ya existe una suscripción activa, saltando...');
-           return;
-        }
-        
-        window._rkLiveEngine = _sb
-          .channel('rr-live-ops')
-          .on('postgres_changes', {
-            event: '*', schema: 'public', table: 'operaciones'
-          }, (payload) => {
-            const r = payload.new || payload.record;
-            if (!r) return;
-            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-            if (r.fecha_dia !== hoy) return;
-            
-            // 🔥 ACTUALIZAR CACHÉ GLOBAL DE PUNTOS (_dpTurnosData) 🔥
-            // Esto permite que renderRanking() pinte los puntos nuevos sin esperar al sync de 5min
-            if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada) {
-              if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
-              
-              const pt = Number(r.puntos_total) || 0;
-              const pb = Number(r.puntos_baseline) || 0;
-              const pn = Number(r.puntos_neto) || 0;
-              
-              // Usar el mayor entre el neto de la DB y el calculado (pt-pb) para máxima precisión
-              let netoReal = pn;
-              if (pt > 0 && pt > pb && (pt - pb) > netoReal) netoReal = pt - pb;
-              
-              _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
+    // 1. Carga inicial desde Supabase (últimos 150 eventos del día)
+    //    Reintenta con backoff exponencial hasta que _sb esté disponible
+    (function _liveInitWithRetry(attempt) {
+      const delays = [1500, 3000, 5000, 8000, 12000]; // ms entre intentos
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      setTimeout(async () => {
+        try {
+          if (typeof _sb === 'undefined' || !_sb) {
+            // _sb aún no está listo — reintenta si quedan intentos
+            if (attempt < delays.length - 1) {
+              console.log('[LIVE-INIT] _sb no listo, reintentando... (intento ' + (attempt + 1) + ')');
+              _liveInitWithRetry(attempt + 1);
+            } else {
+              console.warn('[LIVE-INIT] _sb nunca se inicializó tras ' + delays.length + ' intentos.');
             }
-
-            const neto = Number(r.puntos_neto) || 0;
-            if (neto <= 0) return;
+            return;
+          }
+          const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+          const { data: rows } = await _sb
+            .from('operaciones')
+            .select('id_perfil, puntos_neto, puntos_total, jornada, agencia')
+            .eq('fecha_dia', hoy)
+            .gt('puntos_neto', 0)
+            .order('id', { ascending: false })
+            .limit(150);
+          if (!rows || !rows.length) return;
+          window._rrLiveFeed = rows.map(r => {
             const resolved = _rrResolveName(r.id_perfil, r.agencia);
-            const entry = {
+            return {
               op: resolved.op,
               modelo: resolved.modelo,
               perfil: r.id_perfil,
-              pts: neto,
+              pts: Number(r.puntos_neto) || 0,
               total: Number(r.puntos_total) || 0,
               turno: r.jornada || '—',
               time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
             };
-            // Insertar al inicio del feed, mantener max 150
-            window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 150);
-            _rrPintarLiveFeed();
-            // Debounce ranking re-render on realtime events
-            clearTimeout(window._rkLiveRenderTimer);
-            window._rkLiveRenderTimer = setTimeout(() => {
-              if (typeof renderRanking === 'function') renderRanking();
-            }, 1500);
-          })
-          .subscribe();
-        console.log('[LIVE-RT] Supabase Realtime activo en tabla operaciones');
-      } catch(e) { console.warn('[LIVE-RT]', e); }
-    }, 3000);
+          });
+          _rrPintarLiveFeed();
+          if (typeof renderAlertas === 'function') renderAlertas();
+        } catch(e) { console.warn('[LIVE-INIT]', e); }
+      }, delay);
+    })(0);
+
+    // 2. Suscripcion Realtime: reacciona INSTANTANEAMENTE a cada INSERT o UPDATE
+    (function _liveRtWithRetry(attempt) {
+      const delays = [3000, 5000, 8000, 12000, 18000];
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      setTimeout(() => {
+        try {
+          if (typeof _sb === 'undefined' || !_sb) {
+            if (attempt < delays.length - 1) {
+              console.log('[LIVE-RT] _sb no listo, reintentando... (intento ' + (attempt + 1) + ')');
+              _liveRtWithRetry(attempt + 1);
+            }
+            return;
+          }
+          if (window._rkLiveEngine) {
+             console.log('[LIVE-RT] Ya existe una suscripción activa, saltando...');
+             return;
+          }
+          
+          window._rkLiveEngine = _sb
+            .channel('rr-live-ops')
+            .on('postgres_changes', {
+              event: '*', schema: 'public', table: 'operaciones'
+            }, (payload) => {
+              const r = payload.new || payload.record;
+              if (!r) return;
+              const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+              if (r.fecha_dia !== hoy) return;
+              
+              // 🔥 ACTUALIZAR CACHÉ GLOBAL DE PUNTOS (_dpTurnosData) 🔥
+              // Esto permite que renderRanking() pinte los puntos nuevos sin esperar al sync de 5min
+              if (typeof _dpTurnosData !== 'undefined' && r.id_perfil && r.jornada) {
+                if (!_dpTurnosData[r.id_perfil]) _dpTurnosData[r.id_perfil] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
+                
+                const pt = Number(r.puntos_total) || 0;
+                const pb = Number(r.puntos_baseline) || 0;
+                const pn = Number(r.puntos_neto) || 0;
+                
+                // Usar el mayor entre el neto de la DB y el calculado (pt-pb) para máxima precisión
+                let netoReal = pn;
+                if (pt > 0 && pt > pb && (pt - pb) > netoReal) netoReal = pt - pb;
+                
+                _dpTurnosData[r.id_perfil][r.jornada] = netoReal;
+              }
+
+              const neto = Number(r.puntos_neto) || 0;
+              if (neto <= 0) return;
+              const resolved = _rrResolveName(r.id_perfil, r.agencia);
+              const entry = {
+                op: resolved.op,
+                modelo: resolved.modelo,
+                perfil: r.id_perfil,
+                pts: neto,
+                total: Number(r.puntos_total) || 0,
+                turno: r.jornada || '—',
+                time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+              };
+              // Insertar al inicio del feed, mantener max 150
+              window._rrLiveFeed = [entry, ...(window._rrLiveFeed || [])].slice(0, 150);
+              _rrPintarLiveFeed();
+              // Debounce ranking re-render on realtime events
+              clearTimeout(window._rkLiveRenderTimer);
+              window._rkLiveRenderTimer = setTimeout(() => {
+                if (typeof renderRanking === 'function') renderRanking();
+              }, 1500);
+            })
+            .subscribe();
+          console.log('[LIVE-RT] Supabase Realtime activo en tabla operaciones');
+        } catch(e) { console.warn('[LIVE-RT]', e); }
+      }, delay);
+    })(0);
   }
 
   // --- FIN DE FILA DE ESTADÍSTICAS ---
@@ -14544,7 +14568,7 @@
     }
 
     async function psaCargarDesdeSupabase() {
-      if (typeof _sb === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+      if (typeof _sb === 'undefined' || !_sb || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
       const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       const jornada = _psaJornadaActual();
       try {
@@ -19618,7 +19642,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     async function renderOpStats(name) {
       const el = document.getElementById('op-stats-content');
       if (!el) return;
-      if (typeof _sb === 'undefined') {
+      if (typeof _sb === 'undefined' || !_sb) {
         el.innerHTML = '<div style="color:#475569;font-size:.75rem;padding:12px;">Cargando datos...</div>';
         return;
       }
@@ -23694,7 +23718,7 @@ PT._logKey = function (opName) {
       // CARGA PRINCIPAL DE DATOS
       // ─────────────────────────────────────────────────────────────
       async function ciaLoadData() {
-        if (typeof _sb === 'undefined') { return; }
+        if (typeof _sb === 'undefined' || !_sb) { return; }
         const hoy = ciaLocalDate();
         const mesStart = ciaMonthStart();
         const last7 = ciaLast7Start();
@@ -25436,7 +25460,7 @@ PT._logKey = function (opName) {
       (function initCIA() {
         // Diferir para no bloquear carga inicial
         setTimeout(async () => {
-          if (typeof _sb === 'undefined') return;
+          if (typeof _sb === 'undefined' || !_sb) return;
           await ciaLoadData();
           if (typeof loadTableauData === 'function') await loadTableauData().catch(()=>{}); else if (typeof window.loadTableauData === 'function') await window.loadTableauData().catch(()=>{});
           ciaRenderKPIs();
@@ -25445,7 +25469,7 @@ PT._logKey = function (opName) {
 
         // Auto-refresh cada 5 min
         setInterval(async () => {
-          if (typeof _sb === 'undefined') return;
+          if (typeof _sb === 'undefined' || !_sb) return;
           await ciaLoadData();
           ciaRenderKPIs();
           // Re-render tab activo
@@ -26322,7 +26346,7 @@ PT._logKey = function (opName) {
     // =====================================================================
     let _laserSyncRunning = false;
     async function sincronizarDatameRelacional() {
-      if (typeof _sb === 'undefined' || !operatorsData) return;
+      if (typeof _sb === 'undefined' || !_sb || !operatorsData) return;
       // Esperar a que el boot de Supabase termine antes de disparar
       if (!_sbBootReady) { console.log('[Bridge] Boot no listo, posponiendo Laser Sync...'); return; }
       // Mutex: evitar ejecuciones concurrentes
@@ -26428,7 +26452,7 @@ PT._logKey = function (opName) {
     }
 
     async function testDatameExtraction() {
-      if (typeof _sb === 'undefined' || !operatorsData) return;
+      if (typeof _sb === 'undefined' || !_sb || !operatorsData) return;
       console.log("[Test Datame] 🟢 Iniciando suite de pruebas de extracción Datame...");
       
       const loader = document.getElementById('rr-boot-msg');
@@ -27021,7 +27045,7 @@ PT._logKey = function (opName) {
     // Inicializar cortes automáticos de los últimos 3 días (hoy, ayer, anteayer)
     async function inicializarCortesHoy(force = false) {
       const history = getBitacoraHistory();
-      if (typeof _sb === 'undefined') return;
+      if (typeof _sb === 'undefined' || !_sb) return;
 
       try {
         const dNow = new Date();
@@ -27878,7 +27902,7 @@ PT._logKey = function (opName) {
       const labelEl    = document.getElementById('dp-corte-active-label');
       
       if (!wrapRomero && !wrapCamilo && !corteWrap) return;
-      if (typeof _sb === 'undefined') return;
+      if (typeof _sb === 'undefined' || !_sb) return;
 
       // Detectar turno activo por hora Colombia
       const _hCol = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', hour12: false, hour: 'numeric' })).getHours
@@ -28509,7 +28533,7 @@ PT._logKey = function (opName) {
       }
     }
     window.sincronizarDeltaShift = async function(silent = false) {
-      if (typeof _sb === 'undefined') { if (!silent) alert('Supabase no disponible'); return; }
+      if (typeof _sb === 'undefined' || !_sb) { if (!silent) alert('Supabase no disponible'); return; }
       if (!silent && !confirm('¿Reconstruir matemáticamente los puntos de HOY aplicando DELTA-SHIFT™?\n\nEsto corregirá baselines corruptos usando herencia continua entre jornadas.')) return;
       
       const btn = document.getElementById('btn-fix-delta');
@@ -28798,7 +28822,7 @@ PT._logKey = function (opName) {
     // Corte 10:00 AM 2026-05-14: "Comienza" = baseline al inicio del turno 6am
     // ══════════════════════════════════════════════════════════
     window.calibrarManana = async function(fecha) {
-      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
+      if (typeof _sb === 'undefined' || !_sb) { console.error('❌ Supabase no disponible'); return; }
       const fechaDia = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       console.log(`🔧 Calibrando baseline MAÑANA para ${fechaDia}...`);
 
@@ -28889,7 +28913,7 @@ PT._logKey = function (opName) {
     // Muestra el estado real de los registros en BD para hoy
     // ══════════════════════════════════════════════════════════
     window.diagnosticarOperador = async function(nombreOp) {
-      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
+      if (typeof _sb === 'undefined' || !_sb) { console.error('❌ Supabase no disponible'); return; }
       const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => 
         o.name.toUpperCase().includes(nombreOp.toUpperCase())
@@ -28923,7 +28947,7 @@ PT._logKey = function (opName) {
     // Donde 1825 = los puntos que tenía Datame al INICIO del turno Mañana
     // ══════════════════════════════════════════════════════════
     window.calibrarBaseline = async function(nombreOp, baselineManual, jornadaTarget) {
-      if (typeof _sb === 'undefined') { console.error('❌ Supabase no disponible'); return; }
+      if (typeof _sb === 'undefined' || !_sb) { console.error('❌ Supabase no disponible'); return; }
       const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       const jornada = jornadaTarget || (typeof detectarJornada === 'function' ? detectarJornada() : 'Mañana');
       const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => 
@@ -28955,7 +28979,7 @@ PT._logKey = function (opName) {
 
 
     async function sincronizarDatamePaneles() {
-      if (typeof _sb === 'undefined') return;
+      if (typeof _sb === 'undefined' || !_sb) return;
       if (!_sbBootReady) return; // Esperar boot de Supabase
 
       // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
@@ -29834,7 +29858,7 @@ PT._logKey = function (opName) {
     }
 
     function dpIniciarRealtime() {
-      if (typeof _sb === 'undefined' || _dpRealtimeSub) return;
+      if (typeof _sb === 'undefined' || !_sb || _dpRealtimeSub) return;
       let _dpDebounceTimer = null;
       _dpRealtimeSub = _sb
         .channel('datame-operaciones-rt')
@@ -30075,7 +30099,7 @@ PT._logKey = function (opName) {
 
     // ── Consulta Supabase y calcula neto de la sesión ─────────────
     async function _opRtSync(opName) {
-      if (typeof _sb === 'undefined' || !opName) return;
+      if (typeof _sb === 'undefined' || !_sb || !opName) return;
       
       // 🔥 BLOQUEO POR CIERRE DE TURNO 🔥
       if (typeof asiEstados !== 'undefined') {
@@ -30393,7 +30417,7 @@ PT._logKey = function (opName) {
 
     // ── Activar realtime cuando el operador hace login ────────────
     function opRtActivar(opName) {
-      if (!opName || typeof _sb === 'undefined') return;
+      if (!opName || typeof _sb === 'undefined' || !_sb) return;
       if (_opRtOpName && typeof _n === 'function' && _n(_opRtOpName) === _n(opName) && _opRtSub) {
         // 🛡️ PREVENIR BUCLE INFINITO: Si ya hay una sesión Realtime activa para este operador, no reiniciar
         return;

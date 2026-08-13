@@ -26665,6 +26665,31 @@ PT._logKey = function (opName) {
     };
 
     // MODAL NÓMINA (Calculada en vivo)
+    // Inicializar selectores de meses de nómina
+    function populateNominaMonths() {
+      const select = document.getElementById('nomina-month-select');
+      if (!select || select.options.length > 0) return; // ya cargado
+      
+      const now = new Date();
+      // Generar últimos 6 meses
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const monthName = d.toLocaleDateString('es-CO', { month: 'long' });
+        const label = monthName.toUpperCase() + ' ' + yyyy;
+        const val = `${yyyy}-${mm}`;
+        
+        select.innerHTML += `<option value="${val}">${label}</option>`;
+      }
+      
+      const day = now.getDate();
+      const periodSelect = document.getElementById('nomina-period-select');
+      if (periodSelect) {
+        periodSelect.value = day <= 15 ? 'q1' : 'q2';
+      }
+    }
+
     function abrirModalNomina(companyView) {
       if (companyView) {
         window._nominaCompanyView = companyView;
@@ -26678,6 +26703,7 @@ PT._logKey = function (opName) {
         modal.style.zIndex = '99999';
       }
       try {
+        populateNominaMonths();
         renderModalNominaList();
       } catch(e) {
         console.error('Error al renderizar nómina:', e);
@@ -26700,7 +26726,13 @@ PT._logKey = function (opName) {
       renderModalNominaList();
     };
 
-    function renderModalNominaList() {
+    // Toggle de transporte por operador en nómina
+    window.toggleNominaTransport = function(opName, checked) {
+      localStorage.setItem('rr_nomina_transport_' + opName, checked ? 'true' : 'false');
+      renderModalNominaList();
+    };
+
+    async function renderModalNominaList() {
       const container = document.getElementById('nomina-list-container');
       const totalEl = document.getElementById('nomina-total-global-cop');
       if (!container) return;
@@ -26723,22 +26755,76 @@ PT._logKey = function (opName) {
         `;
       }
 
+      const monthSelect = document.getElementById('nomina-month-select');
+      const periodSelect = document.getElementById('nomina-period-select');
+      if (!monthSelect || !periodSelect) return;
+
+      const monthVal = monthSelect.value;   // "YYYY-MM"
+      const periodVal = periodSelect.value; // "q1" | "q2" | "month"
+
+      container.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:0.75rem;">⏳ Cargando producción del período y liquidando...</div>';
+
       let totalCOPGlobal = 0;
       let htmlStr = '';
 
       try {
         if (typeof operatorsData !== 'undefined') {
-          let currKey = 'mar';
-          if (typeof getActivePair === 'function') {
-            try {
-              const pair = getActivePair();
-              if (pair && pair.curr) currKey = pair.curr;
-            } catch(e) {
-              console.warn('getActivePair fallback:', e);
-            }
+          // 1. Cargar operaciones de base de datos para el mes seleccionado
+          const startOfSelectedMonth = monthVal + '-01';
+          const endOfSelectedMonth = monthVal + '-31';
+          
+          let ops = [];
+          if (typeof _sb !== 'undefined') {
+            const { data, error } = await _sb
+              .from('operaciones')
+              .select('id_perfil, puntos_neto, fecha_dia')
+              .gte('fecha_dia', startOfSelectedMonth)
+              .lte('fecha_dia', endOfSelectedMonth);
+            if (!error && data) ops = data;
           }
 
-          // Filtrar operadores por división de empresa
+          // 2. Agrupar puntos por ID de perfil para la quincena/mes
+          const profilePts = {};
+          ops.forEach(r => {
+            if (!r.fecha_dia) return;
+            const parts = r.fecha_dia.split('-');
+            const day = parseInt(parts[2]);
+            if (isNaN(day)) return;
+
+            let matches = false;
+            if (periodVal === 'q1' && day <= 15) matches = true;
+            else if (periodVal === 'q2' && day >= 16) matches = true;
+            else if (periodVal === 'month') matches = true;
+
+            if (matches) {
+              const pid = String(r.id_perfil).trim();
+              profilePts[pid] = (profilePts[pid] || 0) + (Number(r.puntos_neto) || 0);
+            }
+          });
+
+          // 3. Definición de Operadores en Amarillo (Mínimo + Comisión)
+          const YELLOW_OPERATORS = new Set([
+            "JESUS ENRIQUE CONTRERAS",
+            "KAREN DANIELA GUTIERREZ CAPER",
+            "NERCILIA SUAN",
+            "KEVIN JHOSNEIVER RAMIREZ VELAZQUEZ",
+            "YONATAN ANTONIO ALEMAN HERRERA",
+            "LENIN ALEXANDER ROJAS RUIZ",
+            "DEYBIS JOSE REYES TEJADA",
+            "JAIRO DANIEL TORREALBA TABATA",
+            "NICOLE DE LA ANGELES MAESTRI RIVERO"
+          ]);
+
+          const isYellowOperator = (opName) => {
+            const norm = opName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+            for (let name of YELLOW_OPERATORS) {
+              const normName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+              if (norm === normName) return true;
+            }
+            return false;
+          };
+
+          // 4. Filtrar por división de empresa
           const filteredOps = operatorsData.filter(op => {
             if (typeof window.belongsToCompany === 'function') {
               return window.belongsToCompany(op, activeView);
@@ -26746,71 +26832,118 @@ PT._logKey = function (opName) {
             return true;
           });
 
-          // Sort operators by total points descending
-          const sorted = [...filteredOps].sort((a,b) => {
-            const ptsA = (a[currKey] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(a.name) : 0);
-            const ptsB = (b[currKey] || 0) + (typeof getPuntosHoy === 'function' ? getPuntosHoy(b.name) : 0);
-            return ptsB - ptsA;
-          });
+          // 5. Calcular los pagos correspondientes
+          const calculatedOps = filteredOps.map(op => {
+            let opPts = 0;
+            const perfilesList = [];
 
-          sorted.forEach((op, idx) => {
-            const pBase = op[currKey] || 0;
-            const pHoy  = typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0;
-            const pTotal = pBase + pHoy;
-            const copTotal = Math.round(pTotal * 1400);
+            (op.profiles || []).forEach(p => {
+              const pid = String(p.id).trim();
+              const pts = profilePts[pid] || 0;
+              opPts += pts;
+              if (pts > 0) {
+                perfilesList.push({
+                  modelo: p.model || p.modelo || ('ID: ' + p.id),
+                  id: pid,
+                  pts
+                });
+              }
+            });
 
-            if (pTotal <= 0) return;
+            const isYellow = isYellowOperator(op.name);
+            let payout = 0;
+            let breakdownText = '';
+            let usesTransport = false;
 
-            totalCOPGlobal += copTotal;
-
-            // --- Desglose por perfil (puntos live del turno) ---
-            const jornadaOp = op.turno || op.shift || 'Noche';
-            let perfilRows = '';
-            let pHoyPerfiles = 0;
-
-            if (typeof _dpTurnosData !== 'undefined' && Array.isArray(op.profiles) && op.profiles.length > 0) {
-              op.profiles.forEach(p => {
-                const t = _dpTurnosData[p.id];
-                if (!t) return;
-                let pts = 0;
-                if (jornadaOp === 'Completo') {
-                  pts = (t['Mañana']||0)+(t['manana']||0)+(t['Tarde']||0)+(t['tarde']||0)+(t['Noche']||0)+(t['noche']||0)+(t['Auto']||0);
-                } else {
-                  const k = jornadaOp;
-                  pts = (t[k]||0)+(k==='Mañana'?(t['manana']||0):k==='Tarde'?(t['tarde']||0):k==='Noche'?(t['noche']||0):0);
-                }
-                if (pts <= 0) return;
-                pHoyPerfiles += pts;
-                const modelo = p.model || p.modelo || ('ID:' + p.id);
-                const cop = Math.round(pts * 1400);
-                perfilRows += `
-                  <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 12px;border-left:2px solid rgba(94,234,212,0.25);margin:2px 0 2px 4px;">
-                    <div style="font-size:0.60rem;color:#94a3b8;">└ ${modelo}</div>
-                    <div style="font-size:0.60rem;color:#5eead4;font-weight:700;">${pts.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts · $${cop.toLocaleString('es-CO')} COP</div>
-                  </div>`;
-              });
+            if (isYellow) {
+              usesTransport = localStorage.getItem('rr_nomina_transport_' + op.name) === 'true';
+              
+              if (periodVal === 'q1' || periodVal === 'q2') {
+                // Quincenal
+                const basePay = usesTransport ? 875000 : 1000000;
+                const threshold = 2500;
+                const extraPts = Math.max(0, opPts - threshold);
+                const extraPay = extraPts * 100;
+                payout = basePay + extraPay;
+                
+                breakdownText = `Base Quincena: $${basePay.toLocaleString('es-CO')} COP | Comisión: ${extraPts.toFixed(1)} pts extra ($${extraPay.toLocaleString('es-CO')} COP)`;
+              } else {
+                // Mensual completo
+                const basePay = usesTransport ? 1750000 : 2000000;
+                const threshold = 5000;
+                const extraPts = Math.max(0, opPts - threshold);
+                const extraPay = extraPts * 100;
+                payout = basePay + extraPay;
+                
+                breakdownText = `Base Mes: $${basePay.toLocaleString('es-CO')} COP | Comisión: ${extraPts.toFixed(1)} pts extra ($${extraPay.toLocaleString('es-CO')} COP)`;
+              }
+            } else {
+              // Contrato por puntos (Blanco)
+              payout = opPts * 1300;
+              breakdownText = `Pago Puntos: ${opPts.toFixed(1)} pts x $1.300 COP = $${payout.toLocaleString('es-CO')} COP`;
             }
 
+            return {
+              op,
+              opPts,
+              payout,
+              isYellow,
+              usesTransport,
+              breakdownText,
+              perfilesList
+            };
+          });
+
+          // Ordenar por pago descendente
+          calculatedOps.sort((a, b) => b.payout - a.payout);
+
+          // Renderizar los elementos
+          calculatedOps.forEach(({ op, opPts, payout, isYellow, usesTransport, breakdownText, perfilesList }, idx) => {
+            totalCOPGlobal += payout;
+
+            let perfilRows = perfilesList.map(p => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0 3px 12px;border-left:2px solid rgba(245,158,11,0.25);margin:2px 0 2px 4px;">
+                <div style="font-size:0.60rem;color:#94a3b8;">└ ${p.modelo} (${p.id})</div>
+                <div style="font-size:0.60rem;color:#f59e0b;font-weight:700;">${p.pts.toFixed(1)} pts</div>
+              </div>
+            `).join('');
+
             const hasPerfils = perfilRows !== '';
+
+            const toggleTransportFn = `window.toggleNominaTransport('${op.name}', this.checked)`;
+
+            const transportWidget = isYellow ? `
+              <div style="margin-top:6px; display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="chk-trans-${op.name.replace(/\s+/g, '_')}" ${usesTransport ? 'checked' : ''} onchange="${toggleTransportFn}" style="cursor:pointer; width:12px; height:12px;">
+                <label for="chk-trans-${op.name.replace(/\s+/g, '_')}" style="font-size:0.62rem; color:#a5b4fc; font-weight:700; cursor:pointer;">🚌 Usa Transporte de la Empresa</label>
+              </div>
+            ` : '';
+
+            const badgeText = isYellow 
+              ? `<span style="font-size:0.55rem; background:rgba(251,191,36,0.15); color:#fbbf24; border:1px solid rgba(251,191,36,0.3); padding:2px 6px; border-radius:4px; font-weight:800; text-transform:uppercase;">MÍNIMO + COMISIÓN</span>`
+              : `<span style="font-size:0.55rem; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.3); padding:2px 6px; border-radius:4px; font-weight:800; text-transform:uppercase;">POR PUNTOS ($1.300/pt)</span>`;
 
             htmlStr += `
               <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);padding:10px 14px;border-radius:10px;margin-bottom:6px;">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                   <div style="min-width:0;flex:1;">
-                    <div style="font-weight:800;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${idx < 3 ? ['🥇','🥈','🥉'][idx] : ''} ${op.name}</div>
-                    <div style="font-size:0.60rem;color:#64748b;margin-top:2px;">
-                      <span style="color:#94a3b8;">Base mes: <b style="color:#cbd5e1;">${pBase.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>
-                      ${pHoy > 0 ? `&nbsp;·&nbsp;<span style="color:#5eead4;">Hoy: <b>${pHoy.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts</b></span>` : ''}
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <div style="font-weight:800;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${idx < 3 ? ['🥇','🥈','🥉'][idx] : ''} ${op.name}</div>
+                      ${badgeText}
                     </div>
+                    <div style="font-size:0.60rem;color:#64748b;margin-top:4px;">
+                      ${breakdownText}
+                    </div>
+                    ${transportWidget}
                   </div>
                   <div style="text-align:right;flex-shrink:0;margin-left:12px;">
-                    <div style="font-weight:900;font-size:1.05rem;color:#34d399;">$${copTotal.toLocaleString('es-CO')} COP</div>
-                    <div style="font-size:0.55rem;color:#475569;text-transform:uppercase;">${pTotal.toLocaleString('es-CO',{minimumFractionDigits:1,maximumFractionDigits:1})} pts acumulados</div>
+                    <div style="font-weight:900;font-size:1.05rem;color:#34d399;">$${Math.round(payout).toLocaleString('es-CO')} COP</div>
+                    <div style="font-size:0.55rem;color:#475569;text-transform:uppercase;">${opPts.toFixed(1)} pts</div>
                   </div>
                 </div>
                 ${hasPerfils ? `
                 <div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);">
-                  <div style="font-size:0.58rem;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Desglose perfiles (turno live)</div>
+                  <div style="font-size:0.58rem;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Producción por Perfil</div>
                   ${perfilRows}
                 </div>` : ''}
               </div>`;
@@ -26818,14 +26951,15 @@ PT._logKey = function (opName) {
         }
       } catch(e) {
         console.error('Error calculando datos de nómina:', e);
+        htmlStr = `<div style="color:#f87171;text-align:center;padding:20px;font-size:0.8rem;">⚠️ Error al calcular la nómina: ${e.message}</div>`;
       }
 
       if (htmlStr === '') {
-        htmlStr = '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:0.8rem;">No hay producción acumulada en el mes actual.</div>';
+        htmlStr = '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:0.8rem;">No hay producción acumulada en el período seleccionado.</div>';
       }
 
       container.innerHTML = htmlStr;
-      if (totalEl) totalEl.textContent = `$${totalCOPGlobal.toLocaleString('es-CO')} COP`;
+      if (totalEl) totalEl.textContent = `$${Math.round(totalCOPGlobal).toLocaleString('es-CO')} COP`;
     }
 
     // Inicializar cortes automáticos de los últimos 3 días (hoy, ayer, anteayer)
@@ -31012,10 +31146,26 @@ PT._logKey = function (opName) {
     <div class="modal-content" style="max-width:700px; background:#0f172a; border: 1px solid rgba(217, 119, 6, 0.3); border-radius:12px; width:100%; max-height:85vh; display:flex; flex-direction:column; padding:20px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom: 1px solid rgba(217, 119, 6, 0.2); padding-bottom: 10px;">
         <div>
-          <h2 style="margin:0; color:#f59e0b; font-size:1.1rem; letter-spacing: 1px; display:flex; align-items:center; gap:8px;">💰 Reporte de Nómina (Mes Actual)</h2>
-          <div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Producción mensual calculada a $1,400 COP por punto (Referencia quincenal).</div>
+          <h2 style="margin:0; color:#f59e0b; font-size:1.1rem; letter-spacing: 1px; display:flex; align-items:center; gap:8px;">💰 Reporte de Nómina Quincenal</h2>
+          <div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Cálculo quincenal: Mínimo/Puntos según tipo de contrato de operador.</div>
         </div>
         <button class="close-btn" onclick="cerrarModalNomina()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>
+      </div>
+      
+      <!-- Selectores de período de nómina -->
+      <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:140px;">
+          <label style="display:block; font-size:0.6rem; color:#64748b; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Seleccionar Mes</label>
+          <select id="nomina-month-select" onchange="renderModalNominaList()" style="width:100%; background:#0f172a; border:1px solid rgba(217, 119, 6, 0.3); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.75rem; font-weight:700; cursor:pointer; outline:none;"></select>
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label style="display:block; font-size:0.6rem; color:#64748b; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Período de Pago</label>
+          <select id="nomina-period-select" onchange="renderModalNominaList()" style="width:100%; background:#0f172a; border:1px solid rgba(217, 119, 6, 0.3); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.75rem; font-weight:700; cursor:pointer; outline:none;">
+            <option value="q1">📅 Primera Quincena (Días 1 - 15)</option>
+            <option value="q2">📅 Segunda Quincena (Días 16 - Fin)</option>
+            <option value="month">📅 Todo el Mes (Acumulado Completo)</option>
+          </select>
+        </div>
       </div>
       
       <div id="nomina-tabs-container" style="margin-bottom:10px;"></div>

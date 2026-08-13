@@ -6289,8 +6289,8 @@
                 <button id="dp-corte-save-btn" onclick="saveCorteTurnoBitacora()" style="background:#0f766e; border:1px solid #14b8a6; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#115e59'" onmouseout="this.style.background='#0f766e'">
                   💾 Guardar Corte
                 </button>
-                <button id="dp-corte-retrasado-btn" onclick="preguntarCorteRetrasado()" style="background:#3f3f46; border:1px solid #52525b; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#52525b'" onmouseout="this.style.background='#3f3f46'">
-                  ⏱️ Corte del Pasado
+                <button id="dp-corte-download-btn" onclick="descargarResumenCorteImagen()" style="background:#2563eb; border:1px solid #3b82f6; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+                  🖼️ Descargar Imagen
                 </button>
                 <button id="dp-corte-calibrar-btn" onclick="promptCalibrarInicioGeneral()" style="background:#5b21b6; border:1px solid #7c3aed; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#5b21b6'">
                   🔧 Calibrar Inicio
@@ -27965,7 +27965,242 @@ PT._logKey = function (opName) {
         const totalUnassigned = unassignedPtsRomero + unassignedPtsCamilo;
         window.logSyncConsole(`Corte live cargado: ${totalPtsCombined.toFixed(1)} pts acumulados (Romero: ${globalPtsRomero.toFixed(1)} pts | Camilo: ${globalPtsCamilo.toFixed(1)} pts).`, totalUnassigned > 0 ? 'warning' : 'success');
       }
+      
+      // Guardar caches globales para exportar a imagen
+      window._lastOpMapRomero = opMapRomero;
+      window._lastOpMapCamilo = opMapCamilo;
+      window._lastGlobalPtsRomero = globalPtsRomero;
+      window._lastGlobalPtsCamilo = globalPtsCamilo;
+      window._lastUnassignedPtsRomero = unassignedPtsRomero;
+      window._lastUnassignedPtsCamilo = unassignedPtsCamilo;
+      window._lastCorteTurnoName = tAct;
     }
+
+    // Descargar resumen de corte de producción en formato de imagen
+    window.descargarResumenCorteImagen = function() {
+      const opMapRomero = window._lastOpMapRomero || {};
+      const opMapCamilo = window._lastOpMapCamilo || {};
+      const tName = window._lastCorteTurnoName || 'Turno';
+      
+      const sortedRomero = Object.entries(opMapRomero).sort((a, b) => {
+        if (a[1].isUnassigned) return 1;
+        if (b[1].isUnassigned) return -1;
+        return b[1].pts - a[1].pts;
+      });
+      const sortedCamilo = Object.entries(opMapCamilo).sort((a, b) => {
+        if (a[1].isUnassigned) return 1;
+        if (b[1].isUnassigned) return -1;
+        return b[1].pts - a[1].pts;
+      });
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const headerHeight = 180;
+      const footerHeight = 100;
+      const rowHeight = 70;
+      const margin = 30;
+      const colWidth = 540;
+      const gap = 40;
+      
+      const maxRows = Math.max(sortedRomero.length, sortedCamilo.length, 1);
+      const bodyHeight = maxRows * rowHeight + 40;
+      
+      canvas.width = margin * 2 + colWidth * 2 + gap;
+      canvas.height = headerHeight + bodyHeight + footerHeight;
+      
+      // 1. Fondo gradiente premium
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      bgGrad.addColorStop(0, '#090d16');
+      bgGrad.addColorStop(0.5, '#0b0f19');
+      bgGrad.addColorStop(1, '#05070b');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Líneas de rejilla cibernéticas sutiles
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+      
+      // Resplandores de luz radiales
+      const drawGlow = (x, y, radius, color) => {
+        const radGrad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        radGrad.addColorStop(0, color);
+        radGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = radGrad;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawGlow(150, 150, 250, 'rgba(45, 212, 191, 0.08)');
+      drawGlow(canvas.width - 150, canvas.height - 150, 250, 'rgba(56, 189, 248, 0.08)');
+      
+      // 2. Cabecera
+      const accentGrad = ctx.createLinearGradient(margin, 0, canvas.width - margin, 0);
+      accentGrad.addColorStop(0, '#2dd4bf');
+      accentGrad.addColorStop(0.5, '#818cf8');
+      accentGrad.addColorStop(1, '#38bdf8');
+      ctx.fillStyle = accentGrad;
+      ctx.fillRect(margin, 20, canvas.width - margin * 2, 4);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = "bold 32px 'Outfit', 'Inter', sans-serif";
+      ctx.fillText("REPORTE DE CORTE DE PRODUCCIÓN", margin, 75);
+      
+      const todayStr = new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      ctx.fillStyle = '#64748b';
+      ctx.font = "600 15px 'Outfit', 'Inter', sans-serif";
+      ctx.fillText(todayStr.toUpperCase(), margin, 108);
+      
+      const badgeX = margin;
+      const badgeY = 125;
+      const badgeW = 220;
+      const badgeH = 34;
+      ctx.fillStyle = 'rgba(129, 140, 248, 0.12)';
+      ctx.strokeStyle = 'rgba(129, 140, 248, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8); else ctx.rect(badgeX, badgeY, badgeW, badgeH);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.fillStyle = '#a5b4fc';
+      ctx.font = "bold 13px 'Outfit', 'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText("TURNO: " + tName.toUpperCase(), badgeX + badgeW / 2, badgeY + 22);
+      ctx.textAlign = 'left';
+      
+      // 3. Columnas
+      const romeroX = margin;
+      const camiloX = margin + colWidth + gap;
+      const columnsY = headerHeight + 10;
+      
+      // Romero Header
+      ctx.fillStyle = 'rgba(45, 212, 191, 0.1)';
+      ctx.strokeStyle = 'rgba(45, 212, 191, 0.25)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(romeroX, columnsY, colWidth, 42, 8); else ctx.rect(romeroX, columnsY, colWidth, 42);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.fillStyle = '#2dd4bf';
+      ctx.font = "bold 15px 'Outfit', 'Inter', sans-serif";
+      ctx.fillText("💼 AGENCIA ROMERO", romeroX + 15, columnsY + 26);
+      
+      const totalRomeroStr = (window._lastGlobalPtsRomero || 0).toFixed(1) + " PTS";
+      ctx.textAlign = 'right';
+      ctx.fillText(totalRomeroStr, romeroX + colWidth - 15, columnsY + 26);
+      ctx.textAlign = 'left';
+      
+      // Camilo Header
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.1)';
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(camiloX, columnsY, colWidth, 42, 8); else ctx.rect(camiloX, columnsY, colWidth, 42);
+      ctx.fill();
+      ctx.stroke();
+      
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = "bold 15px 'Outfit', 'Inter', sans-serif";
+      ctx.fillText("💼 AGENCIA CAMILO", camiloX + 15, columnsY + 26);
+      
+      const totalCamiloStr = (window._lastGlobalPtsCamilo || 0).toFixed(1) + " PTS";
+      ctx.textAlign = 'right';
+      ctx.fillText(totalCamiloStr, camiloX + colWidth - 15, columnsY + 26);
+      ctx.textAlign = 'left';
+      
+      // 4. Pintar Operadores
+      const drawOperators = (list, startX, startY) => {
+        let opIdx = 0;
+        const medals = ['🥇','🥈','🥉'];
+        
+        list.forEach(([opName, data]) => {
+          const y = startY + 60 + opIdx * rowHeight;
+          const isUn = data.isUnassigned;
+          
+          ctx.fillStyle = isUn ? 'rgba(245, 158, 11, 0.05)' : 'rgba(255, 255, 255, 0.02)';
+          ctx.strokeStyle = isUn ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)';
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(startX, y, colWidth, 60, 10); else ctx.rect(startX, y, colWidth, 60);
+          ctx.fill();
+          ctx.stroke();
+          
+          let medalText = isUn ? '⚠️' : (opIdx < 3 ? medals[opIdx] : '#' + (opIdx + 1));
+          
+          ctx.font = "bold 14px 'Outfit', 'Inter', sans-serif";
+          ctx.fillStyle = isUn ? '#fbbf24' : (opIdx === 0 ? '#fbbf24' : '#e2e8f0');
+          ctx.fillText(medalText + " " + opName, startX + 15, y + 25);
+          
+          const perfs = data.perfiles || [];
+          const perfsStr = perfs
+            .sort((a,b) => b.pts - a.pts)
+            .map(p => `${p.modelo} (${p.id}): ${p.pts.toFixed(1)}`)
+            .join(' · ');
+          
+          ctx.font = "500 11px 'Outfit', 'Inter', sans-serif";
+          ctx.fillStyle = isUn ? 'rgba(245, 158, 11, 0.65)' : '#64748b';
+          
+          let displayPerfs = perfsStr;
+          if (ctx.measureText(displayPerfs).width > colWidth - 110) {
+            while (ctx.measureText(displayPerfs + "...").width > colWidth - 110 && displayPerfs.length > 5) {
+              displayPerfs = displayPerfs.slice(0, -1);
+            }
+            displayPerfs += "...";
+          }
+          ctx.fillText(displayPerfs || 'Sin perfiles asignados', startX + 15, y + 45);
+          
+          ctx.font = "bold 18px 'Outfit', 'Inter', sans-serif";
+          ctx.fillStyle = isUn ? '#fbbf24' : (startX === romeroX ? '#2dd4bf' : '#38bdf8');
+          ctx.textAlign = 'right';
+          ctx.fillText(data.pts.toFixed(1) + " pts", startX + colWidth - 15, y + 36);
+          ctx.textAlign = 'left';
+          
+          if (!isUn) opIdx++;
+        });
+      };
+      
+      drawOperators(sortedRomero, romeroX, columnsY);
+      drawOperators(sortedCamilo, camiloX, columnsY);
+      
+      // 5. Pie de página
+      const footerY = canvas.height - footerHeight + 10;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(margin, footerY, canvas.width - margin * 2, 70, 12); else ctx.rect(margin, footerY, canvas.width - margin * 2, 70);
+      ctx.fill();
+      ctx.stroke();
+      
+      const totalCombined = (window._lastGlobalPtsRomero || 0) + (window._lastGlobalPtsCamilo || 0);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = "600 13px 'Outfit', 'Inter', sans-serif";
+      ctx.fillText("PRODUCCIÓN COMBINADA DEL TURNO:", margin + 25, footerY + 39);
+      
+      ctx.fillStyle = '#a5b4fc';
+      ctx.font = "bold 24px 'Outfit', 'Inter', sans-serif";
+      ctx.textAlign = 'right';
+      ctx.fillText(totalCombined.toFixed(1) + " PTS", canvas.width - margin - 25, footerY + 44);
+      ctx.textAlign = 'left';
+      
+      const link = document.createElement('a');
+      const filename = `corte_turno_${tName.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.png`;
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
 
     async function dpSyncConFeedback() {
       const btn = document.getElementById('dp-sync-btn');

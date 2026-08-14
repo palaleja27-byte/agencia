@@ -5500,7 +5500,7 @@
     <!-- PESTAÑA: TRAVEL MISLEADING -->
     <div id="op-tab-pane-tm" class="op-tab-pane" style="display: none;">
       <iframe 
-        style="width: 100%; height: 800px; border: 1px solid #1e293b; border-radius: 16px; background: #070a12; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.6);"
+        style="width: 100%; height: 820px; border: 1px solid #1e293b; border-radius: 16px; background: #070a12; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.6);"
         allow="clipboard-write"
         title="Filtro Anti-TM Agencia Romero"
         srcdoc="<!DOCTYPE html>
@@ -5669,13 +5669,17 @@
     .option-tag { font-size: 0.68rem; font-weight: 800; color: #818cf8; text-transform: uppercase; margin-bottom: 4px; display: block; }
     .option-text { font-size: 0.88rem; color: #f1f5f9; line-height: 1.35; flex: 1; }
 
+    .btn-group { display: flex; gap: 6px; flex-shrink: 0; }
     .btn-copy {
       background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
-      padding: 7px 14px; font-size: 0.75rem; font-weight: 700; border-radius: 6px; cursor: pointer;
+      padding: 7px 12px; font-size: 0.73rem; font-weight: 700; border-radius: 6px; cursor: pointer;
       white-space: nowrap; transition: all 0.2s;
     }
     .btn-copy:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
     .btn-copy.copied { background: #10b981 !important; color: #fff !important; border-color: #10b981 !important; }
+    .btn-copy-plain { background: rgba(255, 255, 255, 0.05); color: #94a3b8; border: 1px solid rgba(255, 255, 255, 0.1); }
+    .btn-copy-plain:hover { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border-color: #6366f1; }
+
     .key-link { font-size: 0.72rem; color: #38bdf8; text-decoration: none; font-weight: 700; }
     .key-link:hover { text-decoration: underline; }
   </style>
@@ -5741,12 +5745,20 @@
       <div id='badge' class='badge-result'></div>
       <div id='analysis' style='font-size: 0.82rem; color: #94a3b8; margin-bottom: 14px; background: #0f172a; padding: 10px 12px; border-radius: 8px; border-left: 3px solid #6366f1;'></div>
       
-      <label style='font-size: 0.8rem; font-weight: 800; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;'>5 Respuestas Seguras Sugeridas (con comando /human):</label>
+      <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;'>
+        <label style='font-size: 0.8rem; font-weight: 800; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;'>5 Respuestas Seguras Sugeridas:</label>
+        <label style='font-size: 0.74rem; color: #a5b4fc; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; background: rgba(99, 102, 241, 0.12); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.3);'>
+          <input type='checkbox' id='toggleHumanPrefix' checked onchange='reRenderOptions()' style='cursor: pointer; accent-color: #6366f1;' /> Mostrar prefijo /human
+        </label>
+      </div>
+
       <div id='options' class='options-grid'></div>
     </div>
   </div>
 
   <script>
+    let lastResult = null;
+
     const PROVIDERS = {
       deepseek: {
         name: 'DeepSeek V3 (Asia)',
@@ -5799,7 +5811,6 @@
       const inputEl = document.getElementById('apiKey');
       inputEl.placeholder = 'Clave ' + config.name + ' (' + config.placeholder + ')';
 
-      // Auto-cargar clave desde localStorage app o módulo
       const savedKey = localStorage.getItem('tm_' + pKey + '_key') || localStorage.getItem(config.storageKey) || localStorage.getItem('rr_ai_api_key');
       if (savedKey) {
         inputEl.value = savedKey;
@@ -5945,8 +5956,8 @@
 
         const rawContent = data.choices[0].message.content;
         const cleanContent = rawContent.replace(/\`\`\`json|\`\`\`/gi, '').trim();
-        const result = JSON.parse(cleanContent);
-        renderResult(result);
+        lastResult = JSON.parse(cleanContent);
+        renderResult(lastResult);
       } catch (e) {
         loader.style.display = 'none';
         alert('Error al procesar la respuesta con ' + config.name + ': ' + e.message);
@@ -5957,9 +5968,7 @@
       const outputBox = document.getElementById('outputBox');
       const badge = document.getElementById('badge');
       const analysis = document.getElementById('analysis');
-      const options = document.getElementById('options');
 
-      options.innerHTML = '';
       outputBox.style.display = 'block';
 
       if (res.riesgo) {
@@ -5971,8 +5980,19 @@
       }
 
       analysis.innerHTML = '<strong>Análisis de Seguridad:</strong> ' + (res.razon || 'Mensaje procesado correctamente.');
+      reRenderOptions();
 
-      let rawList = res.opciones || res.respuestas || [];
+      outputBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function reRenderOptions() {
+      if (!lastResult) return;
+      const options = document.getElementById('options');
+      options.innerHTML = '';
+
+      const showHuman = document.getElementById('toggleHumanPrefix').checked;
+
+      let rawList = lastResult.opciones || lastResult.respuestas || [];
       if (!Array.isArray(rawList)) rawList = [];
 
       const defaultCategories = [
@@ -5986,16 +6006,17 @@
       rawList.forEach((item, index) => {
         const cat = (typeof item === 'object' && item.categoria) ? item.categoria : (defaultCategories[index] || ('Opción ' + (index + 1)));
         const rawTxt = (typeof item === 'object' && item.texto) ? item.texto : String(item);
-        const formattedTxt = rawTxt.startsWith('/human') ? rawTxt : ('/human ' + rawTxt);
+        
+        // Texto limpio sin /human
+        const cleanTxt = rawTxt.replace(/^\/human\s*/i, '').trim();
+        // Texto con o sin prefijo según el checkbox
+        const displayTxt = showHuman ? ('/human ' + cleanTxt) : cleanTxt;
 
         const card = document.createElement('div');
         card.className = 'option-card';
-        card.innerHTML = '<div style=&quot;flex:1;&quot;><span class=&quot;option-tag&quot;>' + cat + '</span><div class=&quot;option-text&quot;>' + formattedTxt + '</div></div><button type=&quot;button&quot; class=&quot;btn-copy&quot; onclick=&quot;copiarTexto(this, `' + formattedTxt.replace(/'/g, &quot;\\'&quot;) + '`)&quot;>📋 Copiar</button>';
+        card.innerHTML = '<div style=&quot;flex:1;&quot;><span class=&quot;option-tag&quot;>' + cat + '</span><div class=&quot;option-text&quot;>' + displayTxt + '</div></div><div class=&quot;btn-group&quot;><button type=&quot;button&quot; class=&quot;btn-copy&quot; onclick=&quot;copiarTexto(this, `' + displayTxt.replace(/'/g, &quot;\\'&quot;) + '`)&quot;>📋 Copiar</button><button type=&quot;button&quot; class=&quot;btn-copy btn-copy-plain&quot; title=&quot;Copiar solo el texto sin /human&quot; onclick=&quot;copiarTexto(this, `' + cleanTxt.replace(/'/g, &quot;\\'&quot;) + '`)&quot;>✂️ Texto Solo</button></div>';
         options.appendChild(card);
       });
-
-      // Scroll suave al resultado
-      outputBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     function copiarTexto(btn, text) {

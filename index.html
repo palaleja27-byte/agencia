@@ -22332,29 +22332,51 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           }
 
           const txt = area.value.trim();
-          const prompt = `Actúa como el Auditor de Cumplimiento más estricto de la Agencia Romero y TalkyTimes.
-Evalúa este Icebreaker (primer mensaje a un cliente): "${txt}"
+          const prompt = `Actúa como el Auditor de Cumplimiento y Editor de Contenido de la Agencia Romero y TalkyTimes.
+Tu tarea es auditar y mejorar el Icebreaker escrito por el operador: "${txt}"
 
-REGLAS ABSOLUTAS DE CUMPLIMIENTO:
-1. TRAVEL MISLEADING (TM): Prohibido prometer viajes, prometer verse en persona, viajar a su ciudad o dar fechas de encuentro. Si promete viaje o cita en persona, tm es false.
-2. LONGITUD: Máximo 120 caracteres contando espacios. Si excede 120, len es false.
-3. COMERCIAL: Prohibido pedir dinero, regalos, tokens o créditos. Si pide, money es false.
-4. SEGURIDAD: Prohibido dar redes sociales o teléfonos. Si da, links es false.
-5. PREGUNTA: Debe incluir una pregunta abierta intrigante. Si no tiene ?, open es false.
-6. REWRITE HUMANIZADO ANTI-TM: En "rewrite" genera un abridor de MENOS DE 90 CARACTERES, súper casual, coqueto, misterioso, 100% LIBRE DE TM y con pregunta abierta que suene como una chica real chateando de su celular (ej: "¿Qué secreto o pasión escondes que podría sorprender a alguien que te conoce?").
+REGLAS ABSOLUTAS:
+1. CONSERVACIÓN DE CONTEXTO OBLIGATORIA: La sugerencia en "rewrite" DEBE REESCRIBIR Y MEJORAR LA MISMA IDEA, TEMA, METÁFORA O HISTORIA QUE ESCRIBIÓ EL OPERADOR en el texto original. NUNCA cambies el tema central ni des respuestas genéricas no relacionadas (ejemplo: si el texto habla de Cristóbal Colón o explorar mundos, la sugerencia DEBE mantener la idea de Colón o explorar pero condensada).
+2. TRAVEL MISLEADING (TM): Prohibido prometer viajes, prometer verse en persona, viajar a su ciudad o dar fechas de encuentro real.
+3. LONGITUD ESTRICTA: El "rewrite" DEBE TENER MENOS DE 100 CARACTERES CON ESPACIOS.
+4. ESTRUCTURA: Debe ser súper humanizado (chica real chateando), coqueto, intrigante e incluir UNA PREGUNTA ABIERTA (?) para pescar respuesta.
 
-Devuelve UNICAMENTE un JSON estricto (sin texto markdown):
+Devuelve UNICAMENTE este JSON válido (sin markdown):
 {
-  "len": boolean,
-  "tm": boolean,
-  "money": boolean,
-  "links": boolean,
-  "open": boolean,
-  "explicit": boolean,
+  "len": boolean (true si el texto original <= 120 chars),
+  "tm": boolean (true si el texto original NO promete viajes/citas reales),
+  "money": boolean (true si el texto original NO pide dinero/tokens),
+  "links": boolean (true si el texto original NO da redes o teléfonos),
+  "open": boolean (true si el texto original incluye pregunta ?),
+  "explicit": boolean (true si el texto original es SFW),
   "score": número 1-100,
-  "verdict": "explicación clara en 1 o 2 oraciones del resultado o problema principal de Travel Misleading / longitud",
-  "rewrite": "abridor optimizado de menos de 90 caracteres coqueto, misterioso, 100% Anti-TM y con pregunta abierta"
+  "verdict": "explicación clara de 1 oración indicando el problema principal del texto original",
+  "rewrite": "versión mejorada de MENOS DE 100 CARACTERES que MANTIENE EL MISMO CONTEXTO O TEMA del texto original, 100% Anti-TM y con pregunta abierta"
 }`;
+
+          // Función de respaldo contextual por si falla la red
+          const getContextualFallback = (origText) => {
+            if (/col[oó]n|mundo|explorar|descubrir/i.test(origText)) {
+              return "No seré Colón, pero me encanta explorar mentes intrigantes... ¿te dejas descubrir? 🌎✨";
+            }
+            if (/viaj|aventura|destin/i.test(origText)) {
+              return "Las mejores aventuras no necesitan mapa, solo buena química... ¿cuál es tu lugar favorito? ✨";
+            }
+            if (/mirad|ojo|sonrisa|arte/i.test(origText)) {
+              return "Dicen que una mirada lo dice todo... ¿qué es lo primero que notas en una chica? 😉";
+            }
+            if (/noche|sueñ|estrella|luna/i.test(origText)) {
+              return "Hay noches que inspiran grandes conversaciones... ¿eres más de trasnochar o de madrugar? 🌙";
+            }
+            let cleaned = origText.replace(/https?:\/\/\S+|@\S+/gi, '').trim();
+            if (cleaned.length > 90) {
+              let short = cleaned.substring(0, 85).replace(/\s+\S*$/, '');
+              if (!/\?|¿/.test(short)) short += '... ¿te atreves a responder?';
+              return short;
+            }
+            if (!/\?|¿/.test(cleaned)) cleaned += ' ¿Qué opinas?';
+            return cleaned;
+          };
 
           try {
             let resJSON = null;
@@ -22409,7 +22431,7 @@ Devuelve UNICAMENTE un JSON estricto (sin texto markdown):
               `;
 
               if (!allPass || resJSON.rewrite) {
-                const suggestionText = resJSON.rewrite || '¿Qué secreto o pasión escondes que podría sorprender a alguien que te conoce?';
+                const suggestionText = resJSON.rewrite || getContextualFallback(txt);
                 finalHTML += `
                   <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:12px; border-radius:10px; text-align:left; margin-top:8px;">
                     <div style="font-size:0.75rem; color:#38bdf8; font-weight:800; text-transform:uppercase; margin-bottom:6px; display:flex; align-items:center; gap:6px;">🤖 SUGERENCIA IA:</div>
@@ -22447,10 +22469,11 @@ Devuelve UNICAMENTE un JSON estricto (sin texto markdown):
           `;
 
           if (!pass) {
+            const fallbackSug = getContextualFallback(txt);
             fbHTML += `
               <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:12px; border-radius:10px; text-align:left; margin-top:8px;">
                 <div style="font-size:0.75rem; color:#38bdf8; font-weight:800; text-transform:uppercase; margin-bottom:6px;">🤖 SUGERENCIA IA:</div>
-                <div style="font-size:0.88rem; color:#fff; font-style:italic; font-weight:700; margin-bottom:10px;" id="ice-ai-suggestion">¿Qué secreto o pasión escondes que podría sorprender a alguien que te conoce?</div>
+                <div style="font-size:0.88rem; color:#fff; font-style:italic; font-weight:700; margin-bottom:10px;" id="ice-ai-suggestion">${fallbackSug}</div>
                 <button type="button" onclick="document.getElementById('pt-ice-textarea').value = document.getElementById('ice-ai-suggestion').innerText; PT.auditIcebreaker();" style="background:#38bdf8; color:#0f172a; border:none; padding:6px 14px; border-radius:6px; font-weight:800; cursor:pointer; font-size:0.75rem;">Usar Sugerencia</button>
               </div>
             `;

@@ -12,7 +12,11 @@ Esta Skill es la documentación técnica viva del proyecto AgenciaRR. Contiene e
 
 ## 📋 1. Reglas de Modificación Quirúrgica
 
-- **PROHIBIDO leer el archivo completo.** El `index.html` tiene +14,700 líneas.
+- **PROHIBIDO LEER EL ARCHIVO COMPLETO.** El `index.html` tiene +14,700 líneas.
+- **REGLA MANDATORIA SUPABASE (FREE TIER COMPLIANCE):** 
+  - **SIEMPRE SE TRABAJARÁ SIN PASARSE DE LA CAPA GRATUITA DE SUPABASE.**
+  - **Prohibido mantener múltiples canales de Realtime independientes**: Toda la aplicación DEBE reutilizar el *MASTER REALTIME ENGINE* central con eventos `CustomEvent` (`rr_op_change`, `rr_voice_alert`, etc.) para no agotar la cuota de conexiones ni sobrepasar límites de ancho de banda (Egress/API requests).
+  - **Consultas quirúrgicas**: Usar `.select('columnas_especificas')`, `.limit()`, paginación inteligente y debouncing para evitar lecturas masivas innecesarias.
 - **Flujo obligatorio**:
   1. Usar `grep_search` o `Select-String` para localizar identificadores clave.
   2. Usar `view_file` con `StartLine`/`EndLine` precisos (radio de ±50 líneas).

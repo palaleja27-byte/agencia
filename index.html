@@ -5654,7 +5654,11 @@
 
               <div class='input-group'>
                 <label>API Key de OpenAI (sk-...)</label>
-                <input type='password' id='apiKey' placeholder='Pega tu API Key de OpenAI aquí' />
+                <div style='display: flex; gap: 10px;'>
+                  <input type='password' id='apiKey' placeholder='Pega tu API Key de OpenAI aquí' onchange='saveApiKey()' />
+                  <button id='btnVerify' style='background: #1f2937; color: white; border: 1px solid #374151; border-radius: 8px; padding: 0 16px; cursor: pointer; white-space: nowrap;' onclick='verifyApiKey()'>Verificar Clave</button>
+                </div>
+                <div id='keyStatus' style='font-size: 0.85rem; margin-top: 8px; font-weight: bold; display: none;'></div>
               </div>
 
               <div class='input-group'>
@@ -5662,7 +5666,7 @@
                 <textarea id='userPrompt' placeholder='Ej: ¿De dónde eres? / ¿Cuándo nos vemos?'></textarea>
               </div>
 
-              <button class='btn-main' onclick='analizar()'>Filtrar y Generar Respuestas Seguras</button>
+              <button class='btn-main' onclick='analizar()'>Filtrar y Generar 5 Respuestas Seguras</button>
 
               <div class='loader' id='loader'>⚡ Procesando bajo directrices de Agencia Romero...</div>
 
@@ -5675,7 +5679,56 @@
             </div>
 
             <script>
+              window.onload = function() {
+                const savedKey = localStorage.getItem('tm_openai_key');
+                if (savedKey) {
+                  document.getElementById('apiKey').value = savedKey;
+                }
+              };
+
+              function saveApiKey() {
+                const apiKey = document.getElementById('apiKey').value.trim();
+                if(apiKey) localStorage.setItem('tm_openai_key', apiKey);
+                else localStorage.removeItem('tm_openai_key');
+              }
+
+              async function verifyApiKey() {
+                saveApiKey();
+                const apiKey = document.getElementById('apiKey').value.trim();
+                const statusDiv = document.getElementById('keyStatus');
+                statusDiv.style.display = 'block';
+                
+                if (!apiKey) {
+                  statusDiv.style.color = 'var(--red-bright)';
+                  statusDiv.textContent = '❌ Por favor ingresa una clave API primero.';
+                  return;
+                }
+
+                statusDiv.style.color = 'var(--gray-text)';
+                statusDiv.textContent = '⏳ Verificando clave...';
+                document.getElementById('btnVerify').disabled = true;
+
+                try {
+                  const res = await fetch('https://api.openai.com/v1/models', {
+                    headers: { 'Authorization': 'Bearer ' + apiKey }
+                  });
+                  if (res.ok) {
+                    statusDiv.style.color = 'var(--green-neon)';
+                    statusDiv.textContent = '✅ Clave válida y funcionando correctamente.';
+                  } else {
+                    statusDiv.style.color = 'var(--red-bright)';
+                    statusDiv.textContent = '❌ Clave inválida o rechazada por OpenAI.';
+                  }
+                } catch(e) {
+                  statusDiv.style.color = 'var(--red-bright)';
+                  statusDiv.textContent = '❌ Error de conexión al verificar.';
+                } finally {
+                  document.getElementById('btnVerify').disabled = false;
+                }
+              }
+
               async function analizar() {
+                saveApiKey();
                 const apiKey = document.getElementById('apiKey').value.trim();
                 const prompt = document.getElementById('userPrompt').value.trim();
                 const loader = document.getElementById('loader');
@@ -5696,9 +5749,12 @@
                   \"respuestas\": [
                     \"/human [Opción neutral 1]\",
                     \"/human [Opción coqueta pero sin promesas 2]\",
-                    \"/human [Opción enfocada en el usuario 3]\"
+                    \"/human [Opción enfocada en el usuario 3]\",
+                    \"/human [Opción evasiva elegante 4]\",
+                    \"/human [Opción misteriosa 5]\"
                   ]
-                }`;
+                }
+                DEBES PROPORCIONAR EXACTAMENTE 5 OPCIONES DE RESPUESTA, NI UNA MÁS NI UNA MENOS.`;
 
                 try {
                   const res = await fetch('https://api.openai.com/v1/chat/completions', {

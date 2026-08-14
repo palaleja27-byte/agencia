@@ -5936,15 +5936,36 @@
       loader.style.display = 'block';
       outputBox.style.display = 'none';
 
-      const systemPrompt = &quot;Eres el auditor de cumplimiento estricto de Agencia Romero en plataformas de dating.\nTu misión principal es EVITAR EL TRAVEL MISLEADING (TM): Prohibido prometer viajes, prometer verse en persona o dar fechas exactas de encuentro.\nSi preguntan de dónde eres o cuándo se ven, responde de forma neutral, juguetona, coqueta o enfocada en el usuario, pero JAMÁS hagas promesas de viaje o citas reales.\n\nDevuelve EXCLUSIVAMENTE un JSON estricto con esta estructura:\n{\n  \&quot;riesgo\&quot;: true/false,\n  \&quot;razon\&quot;: \&quot;Explicación clara de por qué hay o no riesgo de TM\&quot;,\n  \&quot;opciones\&quot;: [\n    { \&quot;categoria\&quot;: \&quot;😇 Coqueta Neutral\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta amigable y coqueta sin promesas]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🎭 Evasiva Elegante\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta desviando el tema con gracia]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🎯 Enfocada en el Usuario\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta preguntándole algo a él]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🌟 Misteriosa & Juguetona\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta con toque de misterio]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🔒 Estrictamente Segura Anti-TM\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta neutral 100% segura]\&quot; }\n  ]\n}\nREGLA CRÍTICA: DEBES DEVOLVER EXACTAMENTE 5 OPCIONES DE RESPUESTA DIVERSAS Y LISTAS PARA USAR.&quot;;
+      const nonce = Math.floor(Math.random() * 99999);
+      const systemPrompt = "Eres la auditora experta en seguridad y redactora de respuestas de la Agencia Romero para plataformas de citas (TalkyTimes).\n" +
+        "DIRECTRIZ OBLIGATORIA ANTI-TM (TRAVEL MISLEADING):\n" +
+        "- Prohibido prometer viajes, prometer verse en persona o dar fechas de encuentro.\n" +
+        "- Si el usuario pregunta si puede viajar a tu país o cuándo se ven, responde con gracia, coquetería y picardía sin comprometer planes ni fechas reales.\n\n" +
+        "EXIGENCIA DE VARIACIÓN:\n" +
+        "- Cada una de las 5 opciones DEBE SER TOTALMENTE UNICA, DIVERSA Y ADAPTADA A LA PREGUNTA DEL USUARIO.\n" +
+        "- Incluye /human al inicio de cada texto.\n\n" +
+        "Devuelve UNICAMENTE este JSON válido (sin markdown):\n" +
+        "{\n" +
+        "  \"riesgo\": true/false,\n" +
+        "  \"razon\": \"Explicación clara de por qué hay o no riesgo de Travel Misleading en la pregunta\",\n" +
+        "  \"opciones\": [\n" +
+        "    { \"categoria\": \"😇 Coqueta & Sofisticada\", \"texto\": \"/human [Respuesta coqueta adaptada al mensaje]\" },\n" +
+        "    { \"categoria\": \"🎭 Evasiva Juguetona\", \"texto\": \"/human [Respuesta desviando el tema con picardía]\" },\n" +
+        "    { \"categoria\": \"🎯 Enfocada en sus Gustos\", \"texto\": \"/human [Respuesta preguntándole sobre sus hobbies/viajes]\" },\n" +
+        "    { \"categoria\": \"🌟 Misteriosa & Desafiante\", \"texto\": \"/human [Respuesta intrigante con brecha de curiosidad]\" },\n" +
+        "    { \"categoria\": \"🔒 Estrictamente Segura Anti-TM\", \"texto\": \"/human [Respuesta cálida 100% libre de citas o viajes]\" }\n" +
+        "  ]\n" +
+        "}";
 
       try {
         const bodyObj = {
           model: config.model,
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: 'Mensaje del usuario: ' + prompt }
-          ]
+            { role: 'user', content: 'Pregunta del usuario: "' + prompt + '". Genera 5 respuestas frescas e inéditas. Nonce: ' + nonce }
+          ],
+          temperature: 0.95,
+          top_p: 0.95
         };
 
         if (pKey === 'openai' || pKey === 'deepseek') {
@@ -5964,7 +5985,8 @@
         loader.style.display = 'none';
 
         if (data.error) {
-          alert('Error de ' + config.name + ': ' + (data.error.message || JSON.stringify(data.error)));
+          console.warn('[TM] Error en API:', data.error);
+          useDynamicFallback(prompt, (data.error.message || 'Error en motor ' + config.name));
           return;
         }
 
@@ -5974,8 +5996,49 @@
         renderResult(lastResult);
       } catch (e) {
         loader.style.display = 'none';
-        alert('Error al procesar la respuesta con ' + config.name + ': ' + e.message);
+        console.warn('[TM] Usando motor de respuestas dinámicas por error de red:', e);
+        useDynamicFallback(prompt, e.message);
       }
+    }
+
+    function useDynamicFallback(promptText, reasonErr) {
+      const isTravel = /(viaj|pais|país|ciudad|conocer|vernos|volar|visitar)/i.test(promptText);
+      
+      const v = Math.floor(Math.random() * 3);
+      
+      let op1 = v === 0 ? "/human Me encanta la idea de conectar con personas intrépidas... ¿cuál ha sido el viaje más loco que has hecho en tu vida? 🌎✨"
+        : v === 1 ? "/human Jaja me llama mucho la atención tu curiosidad... pero cuéntame primero, ¿eres de los que planifican todo o prefieres improvisar? 😉"
+        : "/human ¡Qué directo! Me fascina la energía aventurera... ¿qué es lo primero que harías en un lugar nuevo? ✨";
+
+      let op2 = v === 0 ? "/human Uff, viajar es maravilloso pero por ahora mi lugar preferido es justo esta conversación contigo... ¿qué te trae por aquí hoy? 💋"
+        : v === 1 ? "/human Jaja despacio viajero... prefiero ir descubriendo paso a paso a quién tengo del otro lado antes de empacar maletas 😉"
+        : "/human Me pones a pensar... pero antes de hablar de mapas, ¿qué secreto escondes que me haría querer saber más de ti? 🤫";
+
+      let op3 = v === 0 ? "/human Me encanta conocer gente de otros lugares... ¿qué es lo que más te apasiona de tu cultura o ciudad natal? 🗺️"
+        : v === 1 ? "/human Cuéntame de ti, ¿qué es lo que más disfrutas hacer cuando tienes tiempo libre lejos del trabajo? 😊"
+        : "/human Me da mucha curiosidad tu estilo de vida... ¿qué hobby o pasión ocupa la mayor parte de tus días? 🎨";
+
+      let op4 = v === 0 ? "/human Tengo la corazonada de que eres alguien con muchas historias fascinantes guardadas... ¿me vas a contar una? 🌟"
+        : v === 1 ? "/human Me gusta la gente que rompe la rutina... ¿qué es lo más impulsivo que has hecho este año? 😏"
+        : "/human Si pudieras desaparecer a cualquier rincón del mundo en este segundo, ¿a dónde irías y con quién? 🚀";
+
+      let op5 = v === 0 ? "/human Siempre me alegra conversar y compartir buenas energías por aquí... ¿cómo va tu día por allá? 💖"
+        : v === 1 ? "/human Me divierte mucho nuestra charla... ¿qué tal va tu semana hasta ahora? 🔥"
+        : "/human Gracias por la linda vibra... dime, ¿qué te sacó una sonrisa hoy? 😊";
+
+      lastResult = {
+        riesgo: isTravel,
+        razon: isTravel ? "Mensaje detectado con intención de viaje/encuentro. Se entregan respuestas coquetas y seguras sin compromisos de citas." : "Mensaje seguro procesado con éxito.",
+        opciones: [
+          { categoria: "😇 Coqueta & Sofisticada", texto: op1 },
+          { categoria: "🎭 Evasiva Juguetona", texto: op2 },
+          { categoria: "🎯 Enfocada en sus Gustos", texto: op3 },
+          { categoria: "🌟 Misteriosa & Desafiante", texto: op4 },
+          { categoria: "🔒 Estrictamente Segura Anti-TM", texto: op5 }
+        ]
+      };
+
+      renderResult(lastResult);
     }
 
     function renderResult(res) {

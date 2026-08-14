@@ -5428,6 +5428,7 @@
             <div style="font-size: 0.78rem; font-weight: 800; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">AUDITORÍA DE REGLAS:</div>
             <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.8rem; color: #94a3b8;">
               <div id="audit-len"><span class="audit-icon">⏳</span> Longitud óptima (< 120)</div>
+              <div id="audit-tm"><span class="audit-icon">⏳</span> Cumple normas Anti-TM (Sin promesas de viaje/citas)</div>
               <div id="audit-sec"><span class="audit-icon">⏳</span> Sin pedir dinero o tokens</div>
               <div id="audit-com"><span class="audit-icon">⏳</span> Sin enlaces ni RRSS externas</div>
               <div id="audit-que"><span class="audit-icon">⏳</span> Incluye pregunta abierta (?)</div>
@@ -21927,106 +21928,122 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           `;
           
           // Auto-actualizar el reloj en tiempo real
-          if(!window._taskTimerInterval) {
-             window._taskTimerInterval = setInterval(() => {
-                if (document.getElementById('op-tasks-content')) {
-                   PT.renderOperatorTasks(name);
-                }
-             }, 60000); // Refrescar cada minuto
-          }
-        };
-
-        PT.toggleTaskOp = function(name, tIdx) {
-           const shift = detectarTurno().toLowerCase();
-           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
-           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
-           if (opIdx === -1) return;
-           
-           // Evitar alternar si la tarea está bloqueada por tiempo y no estaba completada
-           if (data[opIdx].tareasBloqueadas && data[opIdx].tareasBloqueadas[tIdx] && !data[opIdx].tareasEstado[tIdx]) {
-              alert("❌ Esta tarea ha sido bloqueada. El tiempo límite de 2 horas ha expirado.");
-              return;
-           }
-
-           data[opIdx].cycle = localDateStr() + "_" + shift;
-           data[opIdx].tareasEstado[tIdx] = !data[opIdx].tareasEstado[tIdx];
-           
-           // Si el usuario desmarca una tarea, asegurar que no quede bloqueada por error si aún hay tiempo
-           if (!data[opIdx].tareasEstado[tIdx] && data[opIdx].tareasBloqueadas) {
-               data[opIdx].tareasBloqueadas[tIdx] = false; 
-           }
-
-           localStorage.setItem('rr_prime_v15_' + shift, JSON.stringify(data));
-           PT.renderOperatorTasks(name);
-        };
-
-        window.handleIceTextEngineChange = function(engine, isAdmin = false) {
-          const suffix = isAdmin ? '-admin' : '';
-          const activeKey = isAdmin ? 'rr_active_text_ai_admin' : 'rr_active_text_ai';
-          window.setPerUserSetting(activeKey, engine);
-          const inputEl = document.getElementById(`ice-engine-apikey-input${suffix}`);
-          const badgeEl = document.getElementById(`ice-engine-status-badge${suffix}`);
+             PT.auditIcebreaker = function() {
+          const area = document.getElementById('pt-ice-textarea');
+          const cc = document.getElementById('ice-char-count');
+          const copyBtn = document.getElementById('ice-copy-btn');
+          const scoreEl = document.getElementById('ice-audit-score');
           
-          if (!inputEl || !badgeEl) return;
+          if (!area || !area.value.trim()) {
+            if (copyBtn) copyBtn.style.display = 'none';
+            if (cc) cc.innerText = '0 / 120 caracteres';
+            if (scoreEl) {
+              scoreEl.innerText = 'Esperando icebreaker...';
+              scoreEl.style.color = '#94a3b8';
+            }
+            const setNull = (id, txt) => { const el = document.getElementById(id); if (el) { el.innerHTML = '<span class="audit-icon">⏳</span> ' + txt; el.style.color = '#94a3b8'; } };
+            setNull('audit-len', 'Longitud óptima (< 120)');
+            setNull('audit-tm', 'Cumple normas Anti-TM (Sin promesas de viaje/citas)');
+            setNull('audit-sec', 'Sin pedir dinero o tokens');
+            setNull('audit-com', 'Sin enlaces ni RRSS externas');
+            setNull('audit-que', 'Incluye pregunta abierta (?)');
+            setNull('audit-ton', 'Tono seguro y profesional (SFW)');
+            return;
+          }
+          
+          const text = area.value.trim();
+          const len = text.length;
+          if (cc) cc.innerText = len + ' / 120 caracteres';
+          if (copyBtn) copyBtn.style.display = 'block';
 
-          if (engine === 'pollinations') {
-            inputEl.style.display = 'none';
-            badgeEl.innerText = '⚡ GRATIS (Sin Key)';
-            badgeEl.style.background = 'rgba(45, 212, 191, 0.2)';
-            badgeEl.style.color = '#2dd4bf';
-          } else {
-            inputEl.style.display = 'block';
-            const storedKey = window.getPerUserSetting(`rr_key_${engine}${suffix}`) || '';
-            inputEl.value = storedKey;
-            if (storedKey.trim()) {
-              badgeEl.innerText = '🔑 KEY CONFIGURADA';
-              badgeEl.style.background = 'rgba(16, 185, 129, 0.2)';
-              badgeEl.style.color = '#34d399';
+          let score = 100;
+
+          // 1. Longitud
+          const aLen = document.getElementById('audit-len');
+          if (aLen) {
+            if (len > 120) {
+              aLen.innerHTML = '❌ Excede 120 caracteres (' + len + '/120)';
+              score -= 30; aLen.style.color = '#ef4444';
+            } else if (len < 25) {
+              aLen.innerHTML = '⚠️ Un poco corto (' + len + '/120)';
+              score -= 10; aLen.style.color = '#eab308';
             } else {
-              badgeEl.innerText = '⚠️ REQUIERE KEY';
-              badgeEl.style.background = 'rgba(239, 68, 68, 0.2)';
-              badgeEl.style.color = '#f87171';
+              aLen.innerHTML = '✅ Longitud óptima (' + len + '/120)';
+              aLen.style.color = '#10b981';
             }
           }
-        };
 
-        window.saveIceEngineKey = function(val, isAdmin = false) {
-          const suffix = isAdmin ? '-admin' : '';
-          const sel = document.getElementById(`ice-text-engine-select${suffix}`);
-          if (!sel) return;
-          const engine = sel.value;
-          if (engine && engine !== 'pollinations') {
-            window.setPerUserSetting(`rr_key_${engine}${suffix}`, val.trim());
-            if (engine === 'gemini' && val.trim() && !isAdmin) localStorage.setItem('rr_ai_api_key', val.trim());
-            window.handleIceTextEngineChange(engine, isAdmin);
+          // 2. Anti-TM (Travel Misleading)
+          const aTm = document.getElementById('audit-tm');
+          const tmRegex = /(viaj|visitar|conocer(nos)? en persona|vernos|voy a tu ciudad|vengo a verte|viajo|pasaje|vuelo|hotel|nos vemos|cu[aá]ndo nos vemos)/i;
+          if (aTm) {
+            if (tmRegex.test(text)) {
+              aTm.innerHTML = '❌ Promesa de viaje o cita en persona (Riesgo TM)';
+              aTm.style.color = '#ef4444'; score -= 40;
+            } else {
+              aTm.innerHTML = '✅ Cumple normas Anti-TM (Sin promesas de viaje/citas)';
+              aTm.style.color = '#10b981';
+            }
           }
-        };
 
-        window.initIceTextEngineUI = function(isAdmin = false) {
-          const suffix = isAdmin ? '-admin' : '';
-          const sel = document.getElementById(`ice-text-engine-select${suffix}`);
-          if (!sel) return;
-          const activeKey = isAdmin ? 'rr_active_text_ai_admin' : 'rr_active_text_ai';
-          const activeEngine = window.getPerUserSetting(activeKey) || 'pollinations';
-          sel.value = activeEngine;
-          window.handleIceTextEngineChange(activeEngine, isAdmin);
-        };
-
-        setTimeout(() => { 
-          if (typeof window.initIceTextEngineUI === 'function') {
-            window.initIceTextEngineUI(false);
-            window.initIceTextEngineUI(true);
+          // 3. Sin dinero o tokens
+          const aSec = document.getElementById('audit-sec');
+          const comRegex = /(coins|tokens|créditos|regalo|gift|money|dinero|dólares|dolares|pay|pagar)/i;
+          if (aSec) {
+            if (comRegex.test(text)) {
+              aSec.innerHTML = '🚫 PELIGRO: Solicitud de dinero o tokens detectada';
+              aSec.style.color = '#ef4444'; score -= 40;
+            } else {
+              aSec.innerHTML = '✅ Sin pedir dinero o tokens';
+              aSec.style.color = '#10b981';
+            }
           }
-        }, 500);
 
-        PT.guardarBitacoraOp = function(name) {
-           const shift = detectarTurno().toLowerCase();
-           let data = JSON.parse(localStorage.getItem('rr_prime_v15_' + shift) || '[]');
-           let opIdx = data.findIndex(o => _normName(o.name) === _normName(name));
-           if (opIdx === -1) return;
-           
-           PT.shiftActual = shift;
-           PT.baseDatos[shift] = data;
+          // 4. Sin enlaces ni RRSS
+          const aCom = document.getElementById('audit-com');
+          const contactRegex = /(@|instagram|whatsapp|snapchat|facebook|telegram|skype|\b\d{5,}\b|\.com|\.net)/i;
+          if (aCom) {
+            if (contactRegex.test(text)) {
+              aCom.innerHTML = '🚫 PELIGRO: Enlace o red social detectada';
+              aCom.style.color = '#ef4444'; score -= 40;
+            } else {
+              aCom.innerHTML = '✅ Sin enlaces ni RRSS externas';
+              aCom.style.color = '#10b981';
+            }
+          }
+
+          // 5. Pregunta abierta (?)
+          const aQue = document.getElementById('audit-que');
+          if (aQue) {
+            if (/\?|¿/.test(text)) {
+              aQue.innerHTML = '✅ Incluye pregunta abierta (?)';
+              aQue.style.color = '#10b981';
+            } else {
+              aQue.innerHTML = '⚠️ Se recomienda incluir pregunta abierta (?)';
+              aQue.style.color = '#eab308'; score -= 15;
+            }
+          }
+
+          // 6. Tono seguro (SFW)
+          const aTon = document.getElementById('audit-ton');
+          const adultRegex = /(coger|mamar|pito|concha|puta|fuck|suck|cock|pussy)/i;
+          if (aTon) {
+            if (adultRegex.test(text)) {
+              aTon.innerHTML = '❌ Tono explícito o inapropiado (Mejor ser sugerente)';
+              aTon.style.color = '#ef4444'; score -= 25;
+            } else {
+              aTon.innerHTML = '✅ Tono seguro y profesional (SFW)';
+              aTon.style.color = '#10b981';
+            }
+          }
+
+          if (scoreEl && !scoreEl.innerHTML.includes('APROBADO') && !scoreEl.innerHTML.includes('RECHAZADO')) {
+            scoreEl.innerText = score >= 90 ? '💯 ' + score + '% SEGURO · ¡Icebreaker de alta conversión!'
+              : score >= 70 ? '⚠️ ' + score + '% ACEPTABLE · Revisa las recomendaciones'
+              : '🔴 ' + score + '% RIESGO ALTO · Corrige los problemas marcados';
+            scoreEl.style.color = score >= 90 ? '#10b981' : score >= 70 ? '#eab308' : '#ef4444';
+          }
+        };Datos[shift] = data;
            PT.guardarBitacora(opIdx);
            
            // Enviar notificación al monitor/admin
@@ -22315,19 +22332,28 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           }
 
           const txt = area.value.trim();
-          const prompt = `Actúa como el Auditor de Cumplimiento más estricto de TalkyTimes.
+          const prompt = `Actúa como el Auditor de Cumplimiento más estricto de la Agencia Romero y TalkyTimes.
 Evalúa este Icebreaker (primer mensaje a un cliente): "${txt}"
 
-Debes verificar estrictamente las 5 reglas y devolver UNICAMENTE un JSON (sin texto markdown, solo JSON válido):
+REGLAS ABSOLUTAS DE CUMPLIMIENTO:
+1. TRAVEL MISLEADING (TM): Prohibido prometer viajes, prometer verse en persona, viajar a su ciudad o dar fechas de encuentro. Si promete viaje o cita en persona, tm es false.
+2. LONGITUD: Máximo 120 caracteres contando espacios. Si excede 120, len es false.
+3. COMERCIAL: Prohibido pedir dinero, regalos, tokens o créditos. Si pide, money es false.
+4. SEGURIDAD: Prohibido dar redes sociales o teléfonos. Si da, links es false.
+5. PREGUNTA: Debe incluir una pregunta abierta intrigante. Si no tiene ?, open es false.
+6. REWRITE HUMANIZADO ANTI-TM: En "rewrite" genera un abridor de MENOS DE 90 CARACTERES, súper casual, coqueto, misterioso, 100% LIBRE DE TM y con pregunta abierta que suene como una chica real chateando de su celular (ej: "¿Qué secreto o pasión escondes que podría sorprender a alguien que te conoce?").
+
+Devuelve UNICAMENTE un JSON estricto (sin texto markdown):
 {
-  "len": boolean, true si el mensaje tiene 120 caracteres o menos con espacios.
-  "money": boolean, true si NO pide dinero, regalos, tokens, ni créditos.
-  "links": boolean, true si NO contiene enlaces, redes sociales (ig, snap, whatsapp), ni números.
-  "open": boolean, true si incluye una pregunta abierta o gancho que genere respuesta.
-  "explicit": boolean, true si el tono es seguro y profesional (SFW, no porno vulgar explícito).
-  "score": número del 1 al 100 calificando el poder de conversión.
-  "verdict": "explicación clara en 1 o 2 oraciones del resultado o problema principal",
-  "rewrite": "abridor optimizado de menos de 100 caracteres con pregunta abierta que cumple el 100% de las reglas"
+  "len": boolean,
+  "tm": boolean,
+  "money": boolean,
+  "links": boolean,
+  "open": boolean,
+  "explicit": boolean,
+  "score": número 1-100,
+  "verdict": "explicación clara en 1 o 2 oraciones del resultado o problema principal de Travel Misleading / longitud",
+  "rewrite": "abridor optimizado de menos de 90 caracteres coqueto, misterioso, 100% Anti-TM y con pregunta abierta"
 }`;
 
           try {
@@ -22352,6 +22378,7 @@ Debes verificar estrictamente las 5 reglas y devolver UNICAMENTE un JSON (sin te
 
             if (resJSON) {
               const lenPass = Boolean(resJSON.len);
+              const tmPass = Boolean(resJSON.tm !== false);
               const moneyPass = Boolean(resJSON.money);
               const linksPass = Boolean(resJSON.links);
               const openPass = Boolean(resJSON.open);
@@ -22365,19 +22392,20 @@ Debes verificar estrictamente las 5 reglas y devolver UNICAMENTE un JSON (sin te
               };
 
               updateUI('audit-len', lenPass, 'Longitud óptima (' + txt.length + '/120)', 'Excede 120 caracteres (' + txt.length + '/120)');
+              updateUI('audit-tm', tmPass, 'Cumple normas Anti-TM (Sin promesas de viaje/citas)', 'Promesa de viaje o cita en persona (Riesgo TM)');
               updateUI('audit-sec', moneyPass, 'Sin pedir dinero o tokens', 'Solicitud de dinero o tokens detectada');
               updateUI('audit-com', linksPass, 'Sin enlaces ni RRSS externas', 'Enlace o red social detectada');
               updateUI('audit-que', openPass, 'Incluye pregunta abierta (?)', 'Se recomienda incluir pregunta abierta (?)');
               updateUI('audit-ton', explicitPass, 'Tono seguro y profesional (SFW)', 'Tono inseguro o explícito (SFW)');
 
-              const allPass = lenPass && moneyPass && linksPass && openPass && explicitPass && (resJSON.score >= 80);
+              const allPass = lenPass && tmPass && moneyPass && linksPass && openPass && explicitPass && (resJSON.score >= 80);
               const scoreNum = resJSON.score || (allPass ? 95 : 60);
 
               let finalHTML = `
                 <div style="font-weight:900; font-size:1.1rem; color:${allPass ? '#10b981' : '#ef4444'}; margin-top:12px; margin-bottom:6px;">
                   ${allPass ? '🌟 APROBADO' : '⚠️ RECHAZADO'} (Score: ${scoreNum}/100)
                 </div>
-                <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px; line-height:1.4;">${resJSON.verdict || (allPass ? 'El abridor cumple con todas las directrices de TalkyTimes.' : 'El abridor necesita mejoras para ser seguro y efectivo.')}</div>
+                <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px; line-height:1.4;">${resJSON.verdict || (allPass ? 'El abridor cumple con todas las directrices de TalkyTimes y Anti-TM.' : 'El abridor necesita mejoras para ser seguro y efectivo.')}</div>
               `;
 
               if (!allPass || resJSON.rewrite) {
@@ -22400,21 +22428,22 @@ Debes verificar estrictamente las 5 reglas y devolver UNICAMENTE un JSON (sin te
             if (btn) { btn.innerHTML = origBtnText; btn.disabled = false; }
           }
 
-          // Fallback local si falla la red
+          // Fallback local Anti-TM si falla la red
           const len = txt.length;
           const isTooLong = len > 120;
+          const hasTM = /(viaj|visitar|conocer(nos)? en persona|vernos|voy a tu ciudad|vengo a verte|viajo|pasaje|vuelo|hotel|nos vemos)/i.test(txt);
           const hasMoney = /(coins|tokens|money|dinero|pay)/i.test(txt);
           const hasLinks = /(@|whatsapp|instagram)/i.test(txt);
           const hasQue = /\?|¿/.test(txt);
 
-          const pass = !isTooLong && !hasMoney && !hasLinks && hasQue;
+          const pass = !isTooLong && !hasTM && !hasMoney && !hasLinks && hasQue;
           const sc = pass ? 95 : 60;
 
           let fbHTML = `
             <div style="font-weight:900; font-size:1.1rem; color:${pass ? '#10b981' : '#ef4444'}; margin-top:12px; margin-bottom:6px;">
               ${pass ? '🌟 APROBADO' : '⚠️ RECHAZADO'} (Score: ${sc}/100)
             </div>
-            <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">${isTooLong ? 'El mensaje inicial es demasiado largo y tiene un tono que podría ser considerado inapropiado para un primer contacto.' : pass ? '¡Excelente abridor de alta conversión!' : 'El abridor requiere ajustes para cumplir las reglas de TalkyTimes.'}</div>
+            <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">${hasTM ? 'El abridor viola las políticas Anti-TM (Travel Misleading) al sugerir encuentros o viajes.' : isTooLong ? 'El mensaje inicial es demasiado largo y excede los 120 caracteres permitidos.' : pass ? '¡Excelente abridor de alta conversión!' : 'El abridor requiere ajustes para cumplir las reglas.'}</div>
           `;
 
           if (!pass) {

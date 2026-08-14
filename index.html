@@ -22299,44 +22299,134 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         PT.auditIcebreakerWithAI = async function() {
           const area = document.getElementById('pt-ice-textarea');
           const scoreEl = document.getElementById('ice-audit-score');
+          const btn = event?.currentTarget || document.querySelector('.ice-validator-card button[onclick*="auditIcebreakerWithAI"]');
+          
           if (!area || !area.value.trim()) {
             alert('Por favor escribe o pega un icebreaker para validar con IA.');
             return;
           }
 
           PT.auditIcebreaker();
+
+          const origBtnText = btn ? btn.innerHTML : '🤖 Validar con IA';
+          if (btn) { btn.innerHTML = '⏳ Analizando...'; btn.disabled = true; }
           if (scoreEl) {
-            scoreEl.innerText = '⚡ Validando abridor con Inteligencia Artificial...';
-            scoreEl.style.color = '#38bdf8';
+            scoreEl.innerHTML = '<span style="color:#38bdf8; font-weight:700;">⚡ Analizando abridor con Inteligencia Artificial...</span>';
           }
 
           const txt = area.value.trim();
-          const sys = 'Eres un auditor experto de icebreakers de TalkyTimes. Evalúa la efectividad de este abridor en 1 sola frase motivadora con puntaje (ej: 🌟 95/100 · Gran gancho emocional y excelente pregunta abierta). Responde en español.';
-          
+          const prompt = `Actúa como el Auditor de Cumplimiento más estricto de TalkyTimes.
+Evalúa este Icebreaker (primer mensaje a un cliente): "${txt}"
+
+Debes verificar estrictamente las 5 reglas y devolver UNICAMENTE un JSON (sin texto markdown, solo JSON válido):
+{
+  "len": boolean, true si el mensaje tiene 120 caracteres o menos con espacios.
+  "money": boolean, true si NO pide dinero, regalos, tokens, ni créditos.
+  "links": boolean, true si NO contiene enlaces, redes sociales (ig, snap, whatsapp), ni números.
+  "open": boolean, true si incluye una pregunta abierta o gancho que genere respuesta.
+  "explicit": boolean, true si el tono es seguro y profesional (SFW, no porno vulgar explícito).
+  "score": número del 1 al 100 calificando el poder de conversión.
+  "verdict": "explicación clara en 1 o 2 oraciones del resultado o problema principal",
+  "rewrite": "abridor optimizado de menos de 100 caracteres con pregunta abierta que cumple el 100% de las reglas"
+}`;
+
           try {
-            // Usar endpoint GET anónimo de Pollinations (Sin error 402) o motor local
-            const promptUrl = 'https://text.pollinations.ai/' + encodeURIComponent('Evalúa este abridor: "' + txt + '"') + '?system=' + encodeURIComponent(sys);
-            const res = await fetch(promptUrl);
-            if (res.ok) {
-              const data = await res.text();
-              if (scoreEl && data.trim()) {
-                scoreEl.innerText = data.trim();
-                scoreEl.style.color = '#38bdf8';
-                return;
+            let resJSON = null;
+            if (typeof window.rrFetchTextAI === 'function') {
+              try {
+                let rawText = await window.rrFetchTextAI(prompt, 'Solo devuelve JSON válido sin caracteres extra ni backticks.');
+                rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+                resJSON = JSON.parse(rawText);
+              } catch(e1) {}
+            }
+
+            if (!resJSON) {
+              const pUrl = 'https://text.pollinations.ai/' + encodeURIComponent(prompt) + '?json=true';
+              const r = await fetch(pUrl);
+              if (r.ok) {
+                const t = await r.text();
+                const clean = t.replace(/```json/gi, '').replace(/```/g, '').trim();
+                resJSON = JSON.parse(clean);
               }
             }
-          } catch(e) {}
 
-          // Fallback a validación inteligente local
-          if (scoreEl) {
-            const scoreText = scoreEl.innerText;
-            if (scoreText.includes('100%') || scoreText.includes('💯')) {
-              scoreEl.innerText = '🌟 98/100 · ¡Excelente abridor! Cumple con la regla de <120 caracteres y tiene alto nivel de enganche.';
-            } else {
-              scoreEl.innerText = '⚠️ 75/100 · Abridor aceptable, pero revisa las alertas en rojo/amarillo arriba para maximizar respuestas.';
+            if (resJSON) {
+              const lenPass = Boolean(resJSON.len);
+              const moneyPass = Boolean(resJSON.money);
+              const linksPass = Boolean(resJSON.links);
+              const openPass = Boolean(resJSON.open);
+              const explicitPass = Boolean(resJSON.explicit);
+
+              const updateUI = (id, pass, okMsg, failMsg) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = pass ? '✅ ' + okMsg : '❌ ' + failMsg;
+                el.style.color = pass ? '#10b981' : '#ef4444';
+              };
+
+              updateUI('audit-len', lenPass, 'Longitud óptima (' + txt.length + '/120)', 'Excede 120 caracteres (' + txt.length + '/120)');
+              updateUI('audit-sec', moneyPass, 'Sin pedir dinero o tokens', 'Solicitud de dinero o tokens detectada');
+              updateUI('audit-com', linksPass, 'Sin enlaces ni RRSS externas', 'Enlace o red social detectada');
+              updateUI('audit-que', openPass, 'Incluye pregunta abierta (?)', 'Se recomienda incluir pregunta abierta (?)');
+              updateUI('audit-ton', explicitPass, 'Tono seguro y profesional (SFW)', 'Tono inseguro o explícito (SFW)');
+
+              const allPass = lenPass && moneyPass && linksPass && openPass && explicitPass && (resJSON.score >= 80);
+              const scoreNum = resJSON.score || (allPass ? 95 : 60);
+
+              let finalHTML = `
+                <div style="font-weight:900; font-size:1.1rem; color:${allPass ? '#10b981' : '#ef4444'}; margin-top:12px; margin-bottom:6px;">
+                  ${allPass ? '🌟 APROBADO' : '⚠️ RECHAZADO'} (Score: ${scoreNum}/100)
+                </div>
+                <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px; line-height:1.4;">${resJSON.verdict || (allPass ? 'El abridor cumple con todas las directrices de TalkyTimes.' : 'El abridor necesita mejoras para ser seguro y efectivo.')}</div>
+              `;
+
+              if (!allPass || resJSON.rewrite) {
+                const suggestionText = resJSON.rewrite || '¿Qué secreto o pasión escondes que podría sorprender a alguien que te conoce?';
+                finalHTML += `
+                  <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:12px; border-radius:10px; text-align:left; margin-top:8px;">
+                    <div style="font-size:0.75rem; color:#38bdf8; font-weight:800; text-transform:uppercase; margin-bottom:6px; display:flex; align-items:center; gap:6px;">🤖 SUGERENCIA IA:</div>
+                    <div style="font-size:0.88rem; color:#fff; font-style:italic; font-weight:700; margin-bottom:10px;" id="ice-ai-suggestion">${suggestionText}</div>
+                    <button type="button" onclick="document.getElementById('pt-ice-textarea').value = document.getElementById('ice-ai-suggestion').innerText; PT.auditIcebreaker();" style="background:#38bdf8; color:#0f172a; border:none; padding:6px 14px; border-radius:6px; font-weight:800; cursor:pointer; font-size:0.75rem; transition:transform 0.1s;">Usar Sugerencia</button>
+                  </div>
+                `;
+              }
+
+              scoreEl.innerHTML = finalHTML;
+              return;
             }
-            scoreEl.style.color = '#38bdf8';
+          } catch(e) {
+            console.warn('[AuditAI] Fallback:', e);
+          } finally {
+            if (btn) { btn.innerHTML = origBtnText; btn.disabled = false; }
           }
+
+          // Fallback local si falla la red
+          const len = txt.length;
+          const isTooLong = len > 120;
+          const hasMoney = /(coins|tokens|money|dinero|pay)/i.test(txt);
+          const hasLinks = /(@|whatsapp|instagram)/i.test(txt);
+          const hasQue = /\?|¿/.test(txt);
+
+          const pass = !isTooLong && !hasMoney && !hasLinks && hasQue;
+          const sc = pass ? 95 : 60;
+
+          let fbHTML = `
+            <div style="font-weight:900; font-size:1.1rem; color:${pass ? '#10b981' : '#ef4444'}; margin-top:12px; margin-bottom:6px;">
+              ${pass ? '🌟 APROBADO' : '⚠️ RECHAZADO'} (Score: ${sc}/100)
+            </div>
+            <div style="font-size:0.85rem; color:#cbd5e1; margin-bottom:12px;">${isTooLong ? 'El mensaje inicial es demasiado largo y tiene un tono que podría ser considerado inapropiado para un primer contacto.' : pass ? '¡Excelente abridor de alta conversión!' : 'El abridor requiere ajustes para cumplir las reglas de TalkyTimes.'}</div>
+          `;
+
+          if (!pass) {
+            fbHTML += `
+              <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:12px; border-radius:10px; text-align:left; margin-top:8px;">
+                <div style="font-size:0.75rem; color:#38bdf8; font-weight:800; text-transform:uppercase; margin-bottom:6px;">🤖 SUGERENCIA IA:</div>
+                <div style="font-size:0.88rem; color:#fff; font-style:italic; font-weight:700; margin-bottom:10px;" id="ice-ai-suggestion">¿Qué secreto o pasión escondes que podría sorprender a alguien que te conoce?</div>
+                <button type="button" onclick="document.getElementById('pt-ice-textarea').value = document.getElementById('ice-ai-suggestion').innerText; PT.auditIcebreaker();" style="background:#38bdf8; color:#0f172a; border:none; padding:6px 14px; border-radius:6px; font-weight:800; cursor:pointer; font-size:0.75rem;">Usar Sugerencia</button>
+              </div>
+            `;
+          }
+          scoreEl.innerHTML = fbHTML;
         };
 
         // Block removed by script

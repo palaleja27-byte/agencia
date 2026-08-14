@@ -5500,7 +5500,7 @@
     <!-- PESTAÑA: TRAVEL MISLEADING -->
     <div id="op-tab-pane-tm" class="op-tab-pane" style="display: none;">
       <iframe 
-        style="width: 100%; height: 780px; border: 1px solid #1e293b; border-radius: 16px; background: #070a12; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.6);"
+        style="width: 100%; height: 800px; border: 1px solid #1e293b; border-radius: 16px; background: #070a12; box-shadow: 0 4px 25px rgba(0, 0, 0, 0.6);"
         allow="clipboard-write"
         title="Filtro Anti-TM Agencia Romero"
         srcdoc="<!DOCTYPE html>
@@ -5559,7 +5559,7 @@
       background: rgba(15, 23, 42, 0.6);
       border: 1px solid #1e293b;
       border-radius: 12px;
-      padding: 12px 16px;
+      padding: 14px 16px;
       margin-bottom: 16px;
     }
     .key-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -5571,9 +5571,8 @@
     .status-badge.ok { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .status-badge.off { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
     
-    .input-row { display: flex; gap: 10px; }
-    input[type='password'], textarea {
-      flex: 1;
+    .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    select, input[type='password'], textarea {
       padding: 10px 14px;
       background: #030712;
       border: 1px solid #334155;
@@ -5582,8 +5581,8 @@
       font-size: 0.85rem;
       transition: all 0.2s;
     }
-    input[type='password']:focus, textarea:focus {
-      outline: none;
+    select { outline: none; cursor: pointer; font-weight: 600; }
+    select:focus, input[type='password']:focus, textarea:focus {
       border-color: #6366f1;
       box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
     }
@@ -5677,6 +5676,8 @@
     }
     .btn-copy:hover { background: #6366f1; color: #fff; border-color: #6366f1; }
     .btn-copy.copied { background: #10b981 !important; color: #fff !important; border-color: #10b981 !important; }
+    .key-link { font-size: 0.72rem; color: #38bdf8; text-decoration: none; font-weight: 700; }
+    .key-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -5691,17 +5692,26 @@
       </div>
     </div>
 
-    <!-- BLOQUE CLAVE API PERSISTENTE -->
+    <!-- BLOQUE PROVEEDOR MULTI-IA Y CLAVE PERSISTENTE -->
     <div class='key-box'>
       <div class='key-header'>
-        <span class='key-title'>🔑 API Key de OpenAI (sk-...)</span>
+        <span class='key-title'>🤖 Motor de IA & Clave API</span>
         <span id='keyBadge' class='status-badge off'>🔴 Clave no verificada</span>
       </div>
       <div class='input-row'>
-        <input type='password' id='apiKey' placeholder='Pega tu API Key de OpenAI aquí' onchange='saveApiKey()' onblur='saveApiKey()' />
+        <select id='providerSelect' onchange='changeProvider()'>
+          <option value='deepseek'>🇨🇳 DeepSeek V3 (Asia - Recomendado)</option>
+          <option value='groq'>⚡ Groq Llama-3.3 (Gratis & Ultra-rápido)</option>
+          <option value='openai'>🤖 OpenAI (GPT-4o-mini)</option>
+          <option value='openrouter'>🌐 OpenRouter (Universal)</option>
+        </select>
+        <input type='password' id='apiKey' placeholder='Pega tu API Key del motor elegido' onchange='saveApiKey()' onblur='saveApiKey()' style='flex:1;' />
         <button type='button' id='btnVerify' class='btn btn-verify' onclick='verifyApiKey()'>⚡ Verificar Clave</button>
       </div>
-      <div id='keyMsg' style='font-size: 0.72rem; margin-top: 6px; display: none;'></div>
+      <div style='display:flex; justify-content:space-between; align-items:center; margin-top:8px;'>
+        <div id='keyMsg' style='font-size: 0.72rem;'></div>
+        <a id='keyLink' href='https://platform.deepseek.com/api_keys' target='_blank' rel='noopener' class='key-link'>🔗 Obtener clave gratis/económica →</a>
+      </div>
     </div>
 
     <!-- PRESETS RÁPIDOS -->
@@ -5737,22 +5747,80 @@
   </div>
 
   <script>
-    window.onload = function() {
-      const savedKey = localStorage.getItem('tm_openai_key') || localStorage.getItem('rr_openai_key') || localStorage.getItem('rr_ai_api_key');
-      if (savedKey) {
-        document.getElementById('apiKey').value = savedKey;
-        updateBadge(true, 'Clave cargada automáticamente');
+    const PROVIDERS = {
+      deepseek: {
+        name: 'DeepSeek V3 (Asia)',
+        endpoint: 'https://api.deepseek.com/chat/completions',
+        model: 'deepseek-chat',
+        storageKey: 'rr_deepseek_key',
+        link: 'https://platform.deepseek.com/api_keys',
+        placeholder: 'sk-...'
+      },
+      groq: {
+        name: 'Groq Llama-3.3',
+        endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+        model: 'llama-3.3-70b-versatile',
+        storageKey: 'rr_groq_key',
+        link: 'https://console.groq.com/keys',
+        placeholder: 'gsk_...'
+      },
+      openai: {
+        name: 'OpenAI GPT-4o-mini',
+        endpoint: 'https://api.openai.com/v1/chat/completions',
+        model: 'gpt-4o-mini',
+        storageKey: 'rr_openai_key',
+        link: 'https://platform.openai.com/api-keys',
+        placeholder: 'sk-...'
+      },
+      openrouter: {
+        name: 'OpenRouter',
+        endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+        model: 'deepseek/deepseek-chat',
+        storageKey: 'rr_or_key',
+        link: 'https://openrouter.ai/keys',
+        placeholder: 'sk-or-v1-...'
       }
     };
 
+    window.onload = function() {
+      const savedProvider = localStorage.getItem('tm_active_provider') || 'deepseek';
+      document.getElementById('providerSelect').value = savedProvider;
+      changeProvider();
+    };
+
+    function changeProvider() {
+      const pKey = document.getElementById('providerSelect').value;
+      const config = PROVIDERS[pKey] || PROVIDERS.deepseek;
+      localStorage.setItem('tm_active_provider', pKey);
+
+      const linkEl = document.getElementById('keyLink');
+      linkEl.href = config.link;
+
+      const inputEl = document.getElementById('apiKey');
+      inputEl.placeholder = 'Clave ' + config.name + ' (' + config.placeholder + ')';
+
+      // Auto-cargar clave desde localStorage app o módulo
+      const savedKey = localStorage.getItem('tm_' + pKey + '_key') || localStorage.getItem(config.storageKey) || localStorage.getItem('rr_ai_api_key');
+      if (savedKey) {
+        inputEl.value = savedKey;
+        updateBadge(true, 'Clave ' + config.name + ' lista');
+      } else {
+        inputEl.value = '';
+        updateBadge(false, 'Ingresa clave de ' + config.name);
+      }
+    }
+
     function saveApiKey() {
+      const pKey = document.getElementById('providerSelect').value;
+      const config = PROVIDERS[pKey] || PROVIDERS.deepseek;
       const apiKey = document.getElementById('apiKey').value.trim();
-      if(apiKey) {
-        localStorage.setItem('tm_openai_key', apiKey);
-        localStorage.setItem('rr_openai_key', apiKey); // Sync app key
+
+      if (apiKey) {
+        localStorage.setItem('tm_' + pKey + '_key', apiKey);
+        localStorage.setItem(config.storageKey, apiKey);
         updateBadge(true, 'Clave guardada');
       } else {
-        localStorage.removeItem('tm_openai_key');
+        localStorage.removeItem('tm_' + pKey + '_key');
         updateBadge(false, 'Sin clave');
       }
     }
@@ -5761,7 +5829,7 @@
       const badge = document.getElementById('keyBadge');
       if (isOk) {
         badge.className = 'status-badge ok';
-        badge.textContent = '🟢 API Key Lista (' + text + ')';
+        badge.textContent = '🟢 ' + text;
       } else {
         badge.className = 'status-badge off';
         badge.textContent = '🔴 ' + text;
@@ -5775,6 +5843,8 @@
 
     async function verifyApiKey() {
       saveApiKey();
+      const pKey = document.getElementById('providerSelect').value;
+      const config = PROVIDERS[pKey] || PROVIDERS.deepseek;
       const apiKey = document.getElementById('apiKey').value.trim();
       const msg = document.getElementById('keyMsg');
       const btn = document.getElementById('btnVerify');
@@ -5782,31 +5852,36 @@
 
       if (!apiKey) {
         msg.style.color = '#f87171';
-        msg.textContent = '❌ Ingresa una API Key de OpenAI válida.';
+        msg.textContent = '❌ Por favor ingresa una API Key válida primero.';
         updateBadge(false, 'Sin clave');
         return;
       }
 
       msg.style.color = '#94a3b8';
-      msg.textContent = '⏳ Verificando con OpenAI...';
+      msg.textContent = '⏳ Probando conexión con ' + config.name + '...';
       btn.disabled = true;
 
       try {
-        const res = await fetch('https://api.openai.com/v1/models', {
+        const testEndpoint = pKey === 'openai' ? 'https://api.openai.com/v1/models'
+          : pKey === 'deepseek' ? 'https://api.deepseek.com/models'
+          : pKey === 'groq' ? 'https://api.groq.com/openai/v1/models'
+          : 'https://openrouter.ai/api/v1/models';
+
+        const res = await fetch(testEndpoint, {
           headers: { 'Authorization': 'Bearer ' + apiKey }
         });
         if (res.ok) {
           msg.style.color = '#34d399';
-          msg.textContent = '✅ ¡Conexión exitosa! La clave es válida y está lista.';
+          msg.textContent = '✅ ¡Conexión exitosa! La clave de ' + config.name + ' funciona correctamente.';
           updateBadge(true, 'Verificada ✓');
         } else {
           msg.style.color = '#f87171';
-          msg.textContent = '❌ Clave rechazada por OpenAI (Verifica tu saldo o API Key).';
+          msg.textContent = '❌ Clave de ' + config.name + ' rechazada o sin cuota.';
           updateBadge(false, 'Inválida');
         }
       } catch(e) {
         msg.style.color = '#f87171';
-        msg.textContent = '❌ Error de red al verificar clave.';
+        msg.textContent = '❌ Error de red al probar la clave.';
         updateBadge(false, 'Error red');
       } finally {
         btn.disabled = false;
@@ -5815,13 +5890,15 @@
 
     async function analizar() {
       saveApiKey();
+      const pKey = document.getElementById('providerSelect').value;
+      const config = PROVIDERS[pKey] || PROVIDERS.deepseek;
       const apiKey = document.getElementById('apiKey').value.trim();
       const prompt = document.getElementById('userPrompt').value.trim();
       const loader = document.getElementById('loader');
       const outputBox = document.getElementById('outputBox');
 
       if (!apiKey) {
-        alert('Por favor ingresa tu API Key de OpenAI para continuar.');
+        alert('Por favor ingresa la API Key de ' + config.name + ' para continuar.');
         document.getElementById('apiKey').focus();
         return;
       }
@@ -5834,54 +5911,45 @@
       loader.style.display = 'block';
       outputBox.style.display = 'none';
 
-      const systemPrompt = `Eres el auditor oficial de cumplimiento de Agencia Romero en aplicaciones de citas.
-Tu misión principal es EVITAR EL TRAVEL MISLEADING (TM): Prohibido prometer viajes, prometer verse en persona o dar fechas exactas de encuentro.
-Si preguntan de dónde eres o cuándo se ven, responde de forma neutral, juguetona, coqueta o enfocada en el usuario, pero JAMÁS hagas promesas de viaje o citas reales.
-
-Devuelve EXCLUSIVAMENTE un JSON estricto con esta estructura:
-{
-  &quot;riesgo&quot;: true/false,
-  &quot;razon&quot;: &quot;Explicación clara de por qué hay o no riesgo de TM&quot;,
-  &quot;opciones&quot;: [
-    { &quot;categoria&quot;: &quot;😇 Coqueta Neutral&quot;, &quot;texto&quot;: &quot;/human [Respuesta amigable y coqueta sin promesas]&quot; },
-    { &quot;categoria&quot;: &quot;🎭 Evasiva Elegante&quot;, &quot;texto&quot;: &quot;/human [Respuesta desviando el tema con gracia]&quot; },
-    { &quot;categoria&quot;: &quot;🎯 Enfocada en el Usuario&quot;, &quot;texto&quot;: &quot;/human [Respuesta preguntándole algo a él]&quot; },
-    { &quot;categoria&quot;: &quot;🌟 Misteriosa & Juguetona&quot;, &quot;texto&quot;: &quot;/human [Respuesta con toque de misterio]&quot; },
-    { &quot;categoria&quot;: &quot;🔒 Estrictamente Segura Anti-TM&quot;, &quot;texto&quot;: &quot;/human [Respuesta neutral 100% segura]&quot; }
-  ]
-}
-REGLA CRÍTICA: DEBES DEVOLVER EXACTAMENTE 5 OPCIONES DE RESPUESTA DIVERSAS Y LISTAS PARA USAR.`;
+      const systemPrompt = &quot;Eres el auditor de cumplimiento estricto de Agencia Romero en plataformas de dating.\nTu misión principal es EVITAR EL TRAVEL MISLEADING (TM): Prohibido prometer viajes, prometer verse en persona o dar fechas exactas de encuentro.\nSi preguntan de dónde eres o cuándo se ven, responde de forma neutral, juguetona, coqueta o enfocada en el usuario, pero JAMÁS hagas promesas de viaje o citas reales.\n\nDevuelve EXCLUSIVAMENTE un JSON estricto con esta estructura:\n{\n  \&quot;riesgo\&quot;: true/false,\n  \&quot;razon\&quot;: \&quot;Explicación clara de por qué hay o no riesgo de TM\&quot;,\n  \&quot;opciones\&quot;: [\n    { \&quot;categoria\&quot;: \&quot;😇 Coqueta Neutral\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta amigable y coqueta sin promesas]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🎭 Evasiva Elegante\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta desviando el tema con gracia]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🎯 Enfocada en el Usuario\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta preguntándole algo a él]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🌟 Misteriosa & Juguetona\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta con toque de misterio]\&quot; },\n    { \&quot;categoria\&quot;: \&quot;🔒 Estrictamente Segura Anti-TM\&quot;, \&quot;texto\&quot;: \&quot;/human [Respuesta neutral 100% segura]\&quot; }\n  ]\n}\nREGLA CRÍTICA: DEBES DEVOLVER EXACTAMENTE 5 OPCIONES DE RESPUESTA DIVERSAS Y LISTAS PARA USAR.&quot;;
 
       try {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        const bodyObj = {
+          model: config.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: 'Mensaje del usuario: ' + prompt }
+          ]
+        };
+
+        if (pKey === 'openai' || pKey === 'deepseek') {
+          bodyObj.response_format = { type: 'json_object' };
+        }
+
+        const res = await fetch(config.endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + apiKey
           },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: 'Mensaje del usuario: ' + prompt }
-            ],
-            response_format: { type: 'json_object' }
-          })
+          body: JSON.stringify(bodyObj)
         });
 
         const data = await res.json();
         loader.style.display = 'none';
 
         if (data.error) {
-          alert('Error de API OpenAI: ' + data.error.message);
+          alert('Error de ' + config.name + ': ' + (data.error.message || JSON.stringify(data.error)));
           return;
         }
 
-        const result = JSON.parse(data.choices[0].message.content);
+        const rawContent = data.choices[0].message.content;
+        const cleanContent = rawContent.replace(/\`\`\`json|\`\`\`/gi, '').trim();
+        const result = JSON.parse(cleanContent);
         renderResult(result);
       } catch (e) {
         loader.style.display = 'none';
-        alert('Error al conectar con OpenAI: ' + e.message);
+        alert('Error al procesar la respuesta con ' + config.name + ': ' + e.message);
       }
     }
 
@@ -5904,17 +5972,25 @@ REGLA CRÍTICA: DEBES DEVOLVER EXACTAMENTE 5 OPCIONES DE RESPUESTA DIVERSAS Y LI
 
       analysis.innerHTML = '<strong>Análisis de Seguridad:</strong> ' + (res.razon || 'Mensaje procesado correctamente.');
 
-      const lista = res.opciones || [];
-      lista.forEach(op => {
+      let rawList = res.opciones || res.respuestas || [];
+      if (!Array.isArray(rawList)) rawList = [];
+
+      const defaultCategories = [
+        &quot;😇 Coqueta Neutral&quot;,
+        &quot;🎭 Evasiva Elegante&quot;,
+        &quot;🎯 Enfocada en el Usuario&quot;,
+        &quot;🌟 Misteriosa & Juguetona&quot;,
+        &quot;🔒 Estrictamente Segura Anti-TM&quot;
+      ];
+
+      rawList.forEach((item, index) => {
+        const cat = (typeof item === 'object' && item.categoria) ? item.categoria : (defaultCategories[index] || ('Opción ' + (index + 1)));
+        const rawTxt = (typeof item === 'object' && item.texto) ? item.texto : String(item);
+        const formattedTxt = rawTxt.startsWith('/human') ? rawTxt : ('/human ' + rawTxt);
+
         const card = document.createElement('div');
         card.className = 'option-card';
-        card.innerHTML = `
-          <div style=&quot;flex:1;&quot;>
-            <span class=&quot;option-tag&quot;>${op.categoria || 'Opción Sugerida'}</span>
-            <div class=&quot;option-text&quot;>${op.texto}</div>
-          </div>
-          <button type=&quot;button&quot; class=&quot;btn-copy&quot; onclick=&quot;copiarTexto(this, '${op.texto.replace(/'/g, &quot;\\'&quot;)}')&quot;>📋 Copiar</button>
-        `;
+        card.innerHTML = '<div style=&quot;flex:1;&quot;><span class=&quot;option-tag&quot;>' + cat + '</span><div class=&quot;option-text&quot;>' + formattedTxt + '</div></div><button type=&quot;button&quot; class=&quot;btn-copy&quot; onclick=&quot;copiarTexto(this, `' + formattedTxt.replace(/'/g, &quot;\\'&quot;) + '`)&quot;>📋 Copiar</button>';
         options.appendChild(card);
       });
 

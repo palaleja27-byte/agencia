@@ -8053,7 +8053,7 @@
       #titan-dashboard {
         font-family: monospace, sans-serif; background-color: #0f172a; color: #10b981; 
         padding: 20px; border-radius: 8px; width: 100%; max-width: 850px;
-        border: 1px solid #10b981; box-sizing: border-box; margin: 15px 0;
+        border: 1px solid #10b981; box-sizing: border-box;
       }
       #titan-dashboard h2, #titan-dashboard h3 { margin-top: 0; color: #fff; border-bottom: 1px solid #334155; padding-bottom: 8px; }
       .titan-box { background: #1e293b; padding: 15px; margin-bottom: 15px; border-radius: 6px; }
@@ -8077,7 +8077,7 @@
         <!-- GESTIÓN DE PALABRAS PROHIBIDAS -->
         <div class="titan-box">
           <h3>🚫 Firewall / Palabras Prohibidas</h3>
-          <p style="font-size: 11px; color:#94a3b8; margin-top:0;">Sepáralas por comas. Al guardar, se desactivará automáticamente el botón "Enviar" en las extensiones si el operador las escribe.</p>
+          <p style="font-size: 11px; color:#94a3b8; margin-top:0;">Sepáralas por comas. Al guardar, se desactivará automáticamente el botón "Enviar" en las extensiones.</p>
           <input type="text" id="banned-words-input" value="whatsapp, skype, email, correo, teléfono, prometo, promesa, banco, tarjeta">
           <button class="titan-btn" onclick="saveBannedWords()">Guardar Reglas</button>
           <span id="save-status" style="color:#10b981; font-size: 12px; margin-left: 10px; display:none;">¡Actualizado!</span>
@@ -8142,10 +8142,10 @@
           if (res.ok) {
             document.getElementById('save-status').style.display = 'inline';
             setTimeout(() => document.getElementById('save-status').style.display = 'none', 3000);
-            addLog('Palabras prohibidas actualizadas y sincronizadas.');
+            addLog('Palabras prohibidas actualizadas.');
           }
         } catch (e) {
-          addLog('Error al guardar palabras prohibidas en el servidor.', true);
+          addLog('Error al guardar palabras prohibidas.', true);
         }
       }
 
@@ -8162,13 +8162,16 @@
       }
       loadBannedWords();
 
-      // Obtener operadores activos directamente desde el backend (soluciona la conexión con Horacio)
       async function fetchOperatorsStatus() {
         try {
           const res = await fetch(`${BACKEND_URL}/api/operators`);
           if (res.ok) {
             const data = await res.json();
-            renderOperatorsTable(data.operators || []);
+            let ops = [];
+            if (Array.isArray(data)) ops = data;
+            else if (data.operators && Array.isArray(data.operators)) ops = data.operators;
+            else if (data.data && Array.isArray(data.data)) ops = data.data;
+            renderOperatorsTable(ops);
           }
         } catch (e) {}
       }
@@ -8184,17 +8187,22 @@
         const now = Date.now();
 
         operators.forEach(op => {
-          const isOnline = (now - op.lastSeen) < 15000; 
+          const lastSeen = op.lastSeen || op.last_seen || now;
+          const isOnline = (now - lastSeen) < 30000; 
           const dotColor = isOnline ? '#10b981' : '#ef4444';
+          const name = op.operator || op.name || op.username || 'N/A';
+          const profile = op.profile || op.profileName || 'N/A';
+          const pendingL = op.pendingLetters !== undefined ? op.pendingLetters : (op.pending_letters || 0);
+          const pendingR = op.pendingReplies !== undefined ? op.pendingReplies : (op.pending_replies || 0);
 
           tbody.innerHTML += `
             <tr>
               <td><span class="status-dot" style="background-color: ${dotColor}"></span></td>
-              <td><b>${op.operator || 'N/A'}</b></td>
-              <td>${op.profile || 'N/A'}</td>
-              <td style="color:#f59e0b; font-weight:bold;">${op.pendingLetters || 0}</td>
-              <td style="color:#ef4444; font-weight:bold;">${op.pendingReplies || 0}</td>
-              <td style="font-size:11px; color:#64748b;">${new Date(op.lastSeen).toLocaleTimeString()}</td>
+              <td><b>${name}</b></td>
+              <td>${profile}</td>
+              <td style="color:#f59e0b; font-weight:bold;">${pendingL}</td>
+              <td style="color:#ef4444; font-weight:bold;">${pendingR}</td>
+              <td style="font-size:11px; color:#64748b;">${new Date(lastSeen).toLocaleTimeString()}</td>
             </tr>
           `;
         });

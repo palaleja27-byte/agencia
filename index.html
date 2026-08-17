@@ -9740,7 +9740,7 @@
       if (confirm("⚡️ ¿CONSOLIDAR BRIDGE (RESET TOTAL)?\n\nEsto borrará la caché local de puntos y la sincronizará de cero desde la nube de forma limpia.\n\nÚsalo si ves datos duplicados o 0s inexplicables.")) {
         localStorage.removeItem('rr_prime_cortes');
         localStorage.removeItem('rr_prime_psa');
-        if (typeof _sb !== 'undefined') {
+        if (typeof _sb !== 'undefined' && _sb) {
           await _sb.from('kv_store').delete().eq('key', 'rr_prime_cortes');
           await _sb.from('kv_store').delete().eq('key', 'rr_prime_psa');
         }
@@ -11759,7 +11759,7 @@
       all[existKey] = arr;
       localStorage.setItem(CORTE_KEY, JSON.stringify(all));
       
-      if (typeof _sb !== 'undefined' && _sbBootReady) {
+      if (typeof _sb !== 'undefined' && _sb && _sbBootReady) {
         try {
           const { data, error } = await _sb.from('kv_store').select('value').eq('key', 'rr_prime_cortes').single();
           let remoteAll = {};
@@ -15861,7 +15861,7 @@
       const desde = mesActual + '-01';
       const pd = {};
       try {
-        if (typeof _sb !== 'undefined') {
+        if (typeof _sb !== 'undefined' && _sb) {
           const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout general de paginación')), 12000));
           const paginatedFetch = async () => {
             let page = 0;
@@ -17438,7 +17438,7 @@ function exportarDatos() {
       // 🧠 BUSCAR PERFILES CON ESTATUS INEXISTENTE EN SUPABASE
       let alertasInexistentesHtml = '';
       try {
-        if (typeof _sb !== 'undefined') {
+        if (typeof _sb !== 'undefined' && _sb) {
           const { data: inexistentes } = await _sb.from('datame_perfiles')
             .select('id_datame, modelo')
             .like('modelo', '%INEXISTENTE%');
@@ -17478,7 +17478,7 @@ function exportarDatos() {
             color: '#fff'
           }).then(async (result) => {
             if (result.isConfirmed) {
-              if (typeof _sb !== 'undefined') {
+              if (typeof _sb !== 'undefined' && _sb) {
                 const { error } = await _sb.from('datame_perfiles').delete().like('modelo', '%INEXISTENTE%');
                 if (!error) {
                   Swal.fire({ icon: 'success', title: 'Limpieza Completada', text: 'Alertas eliminadas con éxito.', background: '#1e293b', color: '#fff' });
@@ -17625,7 +17625,7 @@ function exportarDatos() {
         }
       });
 
-      if (typeof _sb !== 'undefined') {
+      if (typeof _sb !== 'undefined' && _sb) {
         try {
           if (window._opsSupabaseCache && window._opsSupabaseCache.length > 0) {
             opsSupabase = window._opsSupabaseCache;
@@ -24604,7 +24604,7 @@ PT._logKey = function (opName) {
       
       // Intentar cargar textos desde Supabase si está disponible
       setTimeout(() => {
-        if (typeof _sb !== 'undefined') {
+        if (typeof _sb !== 'undefined' && _sb) {
           _sb.from('kv_store').select('value').eq('key', 'icebreaker_texts_db').single().then(({ data }) => {
             if (data && data.value) {
               try {
@@ -24621,7 +24621,7 @@ PT._logKey = function (opName) {
         
         if (newText !== null) {
           window.icebreakerTexts[id] = newText;
-          if (typeof _sb !== 'undefined') {
+          if (typeof _sb !== 'undefined' && _sb) {
              _sb.from('kv_store').upsert({ key: 'icebreaker_texts_db', value: JSON.stringify(window.icebreakerTexts) }, { onConflict: 'key' }).then(() => {
                 const sel = document.getElementById('cia-ib-selector');
                 if (sel && sel.value) {
@@ -27423,7 +27423,7 @@ PT._logKey = function (opName) {
       
       renderBitacoraCortesList();
 
-      if (typeof _sb !== 'undefined' && _sbBootReady) {
+      if (typeof _sb !== 'undefined' && _sb && _sbBootReady) {
         try {
           const { data } = await _sb.from('kv_store').select('value').eq('key', BITACORA_KEY).single();
           if (data && data.value) {
@@ -27569,7 +27569,7 @@ PT._logKey = function (opName) {
           const endOfSelectedMonth = monthVal + '-31';
           
           let ops = [];
-          if (typeof _sb !== 'undefined') {
+          if (typeof _sb !== 'undefined' && _sb) {
             const { data, error } = await _sb
               .from('operaciones')
               .select('id_perfil, puntos_neto, fecha_dia')
@@ -27905,7 +27905,7 @@ PT._logKey = function (opName) {
     // Helper: Guardar historial de bitácora (local y remoto)
     async function saveBitacoraHistory(arr) {
       localStorage.setItem(BITACORA_KEY, JSON.stringify(arr));
-      if (typeof _sb !== 'undefined' && _sbBootReady) {
+      if (typeof _sb !== 'undefined' && _sb && _sbBootReady) {
         try {
           const { data, error } = await _sb.from('kv_store').select('value').eq('key', BITACORA_KEY).single();
           let remoteArr = [];
@@ -28423,7 +28423,7 @@ PT._logKey = function (opName) {
 
       // --- FALLBACK 1: Query Supabase directly if _lastCorteRows is missing ---
       if (!window._lastCorteRows || window._lastCorteRows.length === 0) {
-        if (typeof _sb !== 'undefined' && _sbBootReady) {
+        if (typeof _sb !== 'undefined' && _sb && _sbBootReady) {
           try {
             const { data: rows } = await _sb
               .from('operaciones')
@@ -29501,7 +29501,7 @@ PT._logKey = function (opName) {
           // Reactivar canal Datame-Paneles (dpIniciarRealtime)
           if (typeof dpIniciarRealtime === 'function') dpIniciarRealtime();
           // Reactivar canal Ranking Live Engine si fue suspendido
-          if (!window._rkLiveEngine && typeof _sb !== 'undefined') {
+          if (!window._rkLiveEngine && typeof _sb !== 'undefined' && _sb) {
             window._rkLiveEngine = window.addEventListener('rr_op_change', (e) => {
                 const payload = e.detail;
                 if (!payload.new) return;
@@ -31210,13 +31210,13 @@ PT._logKey = function (opName) {
     async function opRtDesactivar() {
       // Detener polling de respaldo
       if (_opRtPollInterval) { clearInterval(_opRtPollInterval); _opRtPollInterval = null; }
-      if (_opRtSessionId && typeof _sb !== 'undefined') {
+      if (_opRtSessionId && typeof _sb !== 'undefined' && _sb) {
         await _sb.from('op_sessions')
           .update({ fin_ts: new Date().toISOString(), puntos_sesion: _opRtPtosSesion })
           .eq('id', _opRtSessionId);
         console.log('[OP-SESSION] Sesión cerrada. Total:', _opRtPtosSesion.toFixed(2), 'pts');
       }
-      if (_opRtSub && typeof _sb !== 'undefined') { _sb.removeChannel(_opRtSub); _opRtSub = null; }
+      if (_opRtSub && typeof _sb !== 'undefined' && _sb) { _sb.removeChannel(_opRtSub); _opRtSub = null; }
       _opRtOpName = null; _opRtBaseline = null; _opRtPtosSesion = 0; _opRtSessionId = null;
     }
 

@@ -1,20 +1,4 @@
-          // Fallback banco de icebreakers local
-          let langBank = PT.ICEBREAKERS_BANK[PT.iceLang] || PT.ICEBREAKERS_BANK.es;
-          let typeBank = langBank[PT.iceType] || langBank.chat;
-          let clientBank = typeBank[PT.iceClient] || typeBank.nuevo;
-          let pool = clientBank[cat] || clientBank.real;
-          
-          let randomMsg = pool[Math.floor(Math.random() * pool.length)];
-          if (PT.iceVipHook) {
-             const hookAppend = PT.iceLang === 'en' ? " By the way, I just uploaded some new private stuff today... tell me if you like it." : " Por cierto, acabo de subir cositas nuevas hoy... dime si te gustan.";
-             randomMsg += hookAppend;
-          }
-          const ctxInput = (document.getElementById('ice-context-input')?.value || '').trim();
-          if (ctxInput) {
-             const ctxAppend = PT.iceLang === 'en' ? ` P.S. I noticed you like ${ctxInput}...` : ` P.D. Noté lo de ${ctxInput}...`;
-             randomMsg += ctxAppend;
-          }
-          genOutput.innerText = randomMsg;<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -10628,7 +10612,13 @@
             const turnosPerfil = typeof _dpTurnosData !== 'undefined' ? (_dpTurnosData[p.id] || _dpTurnosData[String(p.id)]) : null;
             let datameDia = 0;
             if (turnosPerfil) {
-              datameDia = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) + (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) + (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0) + (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
+              let pts = 0;
+              turnosLeer.forEach(t => {
+                 const keyLower = t.toLowerCase();
+                 const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);
+                 pts += (Number(turnosPerfil[keyCapital]) || 0) + (Number(turnosPerfil[keyLower]) || 0);
+              });
+              datameDia = pts + (Number(turnosPerfil['Auto']) || 0) + (Number(turnosPerfil['LocalFallback']) || 0);
             }
             const ptsDia = Math.max(datameDia, legacyDia);
 

@@ -11543,43 +11543,34 @@
       } catch(e) { console.warn('[MEDIA] cargar error:', e); }
     }
 
-    // ── Realtime: detectar cambios de otros dispositivos ────────────────
-    let _mediaRealtimeSub = null;
-    function mediaIniciarRealtime() {
-      if (typeof _sb === 'undefined' || !_sb || _mediaRealtimeSub) return;
-      _mediaRealtimeSub = _sb
-        .channel('rr_media_sync')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rr_media' }, payload => {
-          const row = payload.new;
-          if (!row || !row.nombre || !row.data) return;
-          const name = row.nombre;
-          const cacheKey = row.tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
-          const tsKey = cacheKey + '_ts';
-          
-          localStorage.setItem(cacheKey, row.data);
-          localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+    // ── Evento global unificado para detectar cambios de rr_media ────────────────
+    window.addEventListener('rr_media_change', (e) => {
+      const payload = e.detail;
+      const row = payload.new;
+      if (!row || !row.nombre || !row.data) return;
+      const name = row.nombre;
+      const cacheKey = row.tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
+      const tsKey = cacheKey + '_ts';
+      
+      localStorage.setItem(cacheKey, row.data);
+      localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
 
-          if (row.tipo === 'avatar') {
-            // 🚀 Actualización reactiva: buscar todas las imágenes con este nombre
-            const target = name.trim().toUpperCase();
-            const imgs = document.querySelectorAll(`[data-av-name="${target}"]`);
-            imgs.forEach(img => { img.src = row.data; });
-            
-            // Si es el operador logueado, actualizar su hero
-            if (currentOpName && currentOpName.trim().toUpperCase() === target) {
-              const heroAv = document.querySelector('#op-dash-avatar-wrap img[style*="object-fit:cover"]');
-              if (heroAv) heroAv.src = row.data;
-            }
-          } else if (row.tipo === 'banner') {
-            const target = name.trim().toUpperCase();
-            const bns = document.querySelectorAll(`[data-bn-name="${target}"]`);
-            bns.forEach(img => { img.src = row.data; });
-          }
-          _toastSync('📸 Foto de ' + name + ' actualizada');
-        })
-        .subscribe();
-      console.log('[MEDIA] Realtime activo para rr_media');
-    }
+      if (row.tipo === 'avatar') {
+        const target = name.trim().toUpperCase();
+        const imgs = document.querySelectorAll(`[data-av-name="${target}"]`);
+        imgs.forEach(img => { img.src = row.data; });
+        
+        if (typeof currentOpName !== 'undefined' && currentOpName && currentOpName.trim().toUpperCase() === target) {
+          const heroAv = document.querySelector('#op-dash-avatar-wrap img[style*="object-fit:cover"]');
+          if (heroAv) heroAv.src = row.data;
+        }
+      } else if (row.tipo === 'banner') {
+        const target = name.trim().toUpperCase();
+        const bns = document.querySelectorAll(`[data-bn-name="${target}"]`);
+        bns.forEach(img => { img.src = row.data; });
+      }
+      if(typeof _toastSync === 'function') _toastSync('📸 Foto de ' + name + ' actualizada');
+    });
 
     function triggerAvatarUpload(idx, name) {
       const tmp = document.createElement('input');
@@ -13559,31 +13550,36 @@
     // ── MASTER REALTIME ENGINE (OPTIMIZATION) ──
     // Unifies all Supabase WebSocket connections into ONE single channel
     let _globalRealtimeActive = false;
-    function _initMasterRealtime() {
+    function _initMasterRealtime(role) {
       if (typeof _sb === 'undefined' || !_sb || _globalRealtimeActive) return;
       
-      console.log('[MASTER-RT] Iniciando canal global unificado para ahorrar cuota...');
+      if (role === 'operador') {
+        console.log('[MASTER-RT] 🛑 Realtime WS desactivado para el Operador (ahorro extremo de cuota). Usando solo polling de 60s.');
+        return; // Aborta la conexión WS completamente para operadores
+      }
+      
+      console.log('[MASTER-RT] Iniciando canal global unificado para Admins/Monitores...');
       const globalChannel = _sb.channel('agencia_global_rt', { config: { broadcast: { ack: true, self: true } } });
       
-      // Suscripción a operaciones (solo para Admins y Monitores para ahorrar mensajes, o polling si es operador)
-      if (currentRole === 'admin' || currentRole === 'monitor') {
-          globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
-             window.dispatchEvent(new CustomEvent('rr_op_change', { detail: payload }));
-          });
-          
-          globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, (payload) => {
-             window.dispatchEvent(new CustomEvent('rr_tableau_change', { detail: payload }));
-          });
-      }
+      globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
+         window.dispatchEvent(new CustomEvent('rr_op_change', { detail: payload }));
+      });
+      
+      globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'tableau_perfiles' }, (payload) => {
+         window.dispatchEvent(new CustomEvent('rr_tableau_change', { detail: payload }));
+      });
 
-      // Suscripción a kv_store (Todos)
       globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'kv_store' }, (payload) => {
          window.dispatchEvent(new CustomEvent('rr_kv_change', { detail: payload }));
       });
 
-      // Suscripción a alertas de voz (Todos)
       globalChannel.on('broadcast', { event: 'voice_alert' }, (payload) => {
          window.dispatchEvent(new CustomEvent('rr_voice_alert', { detail: payload }));
+      });
+      
+      // Nueva integración de rr_media al canal global unificado
+      globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'rr_media' }, (payload) => {
+         window.dispatchEvent(new CustomEvent('rr_media_change', { detail: payload }));
       });
 
       globalChannel.subscribe((status) => {
@@ -13595,25 +13591,6 @@
            if (_sbOnline) { _sbOnline = false; if(typeof _toastSync === 'function') _toastSync('🔴 Realtime desconectado', true); }
          }
       });
-      
-      // Fallback Polling para Operadores (60s)
-      if (currentRole === 'operador') {
-         setInterval(() => {
-            console.log('[POLLING] Actualizando Live Feed para operador (ahorro de cuota)...');
-            const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-            _sb.from('operaciones').select('id_perfil, puntos_neto, puntos_total, jornada, agencia')
-              .eq('fecha_dia', hoy).gt('puntos_neto', 0).order('id', { ascending: false }).limit(150)
-              .then(({data: rows}) => {
-                 if(rows && rows.length) {
-                    window._rrLiveFeed = rows.map(r => {
-                      const resolved = _rrResolveName(r.id_perfil, r.agencia);
-                      return { op: oName, modelo: modName, perfil: r.id_perfil, pts: Number(r.puntos_neto)||0, total: Number(r.puntos_total)||0, turno: r.jornada||'—', time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) };
-                    });
-                    if(typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
-                 }
-              });
-         }, 60000);
-      }
     }
 
     function _bootDone() {
@@ -13622,10 +13599,7 @@
       boot.style.opacity = '0';
       setTimeout(() => { boot.style.display = 'none'; }, 500);
 
-      // Iniciar suscripciones en tiempo real
-      if (typeof _sbRealtime === 'function') {
-        _initMasterRealtime();
-      }
+      // (La suscripción realtime ahora se hace después del login)
 
       // Disparar la malla cibernética y el refresco dinámico de datos reales en la entrada
       try {
@@ -13853,7 +13827,7 @@
         if (typeof mediaCargarTodo === 'function') mediaCargarTodo().then(() => {
           if (typeof renderRanking === 'function') renderRanking();
         });
-        if (typeof mediaIniciarRealtime === 'function') mediaIniciarRealtime();
+        if (typeof mediaIniciarRealtime === 'function') // mediaIniciarRealtime(); (ahora unificado)
 
         // ── Sincronizar datos de Tableau (con retry independiente) ──
         if (typeof loadTableauData === 'function') {
@@ -19955,6 +19929,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       // Aplicar permisos de UI según rol (admin/monitor/operador)
       applyRolePermissions(role);
+      
+      // Inicializar Realtime unificado o aplicar restricción según rol
+      if (typeof _initMasterRealtime === 'function') {
+        _initMasterRealtime(role);
+      }
       // ── CRÍTICO: Se guarda en localStorage y sessionStorage para mantener al operador logueado automáticamente ──
       const sessionData = role === 'operador'
         ? btoa(role + ':' + (opName || '') + ':' + Date.now())
@@ -31206,41 +31185,18 @@ PT._logKey = function (opName) {
       // Primera carga → fija el baseline al momento exacto del login
       _opRtSync(opName);
 
-      // 🛡️ FIX REALTIME: escuchar INSERT + UPDATE para capturar la primera fila del turno
-      // (el watcher hace INSERT al inicio del turno, luego UPDATE en cada ciclo).
-      const _chName = 'op-session-' + opName.toLowerCase().replace(/\s+/g, '_');
-      _opRtSub = _sb
-        .channel(_chName)
-        .on('postgres_changes', {
-          event:  'INSERT',
-          schema: 'public',
-          table:  'operaciones',
-          filter: `id_perfil=in.(${ids.join(',')})`
-        }, () => {
-          console.log('[OP-SESSION] 🟢 Nuevo registro del watcher → recalculando');
-          _opRtSync(opName);
-        })
-        .on('postgres_changes', {
-          event:  'UPDATE',
-          schema: 'public',
-          table:  'operaciones',
-          filter: `id_perfil=in.(${ids.join(',')})`
-        }, () => {
-          console.log('[OP-SESSION] 🔴 Datame actualizó puntos → recalculando');
-          _opRtSync(opName);
-        })
-        .subscribe();
+      // 🛡️ REALTIME DESACTIVADO (Punto 3 del acuerdo) para ahorrar cuota. 
+      // El operador usará exclusivamente el refresco por polling.
 
-      // ── Polling de respaldo cada 5 minutos ─────────────────────
-      // Garantiza actualización aunque el canal Realtime falle o esté inactivo
+      // ── Polling de respaldo (Refresco automático cada 60s) ─────────────────────
       _opRtPollInterval = setInterval(() => {
         if (_opRtOpName) {
-          console.log('[OP-SESSION] ⏱️ Polling 5min → sync');
+          console.log('[OP-SESSION] ⏱️ Polling 60s → sync');
           _opRtSync(_opRtOpName);
         }
-      }, 5 * 60 * 1000);
+      }, 60 * 1000);
 
-      console.log('[OP-SESSION] ✅ Activo para', opName, '| IDs:', ids, '| Polling 5min ON');
+      console.log('[OP-SESSION] ✅ Activo para', opName, '| IDs:', ids, '| Polling 60s ON (Realtime WS inactivo)');
     }
 
     // ── Cerrar sesión del operador ────────────────────────────────

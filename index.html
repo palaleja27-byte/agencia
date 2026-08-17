@@ -1,4 +1,20 @@
-<!DOCTYPE html>
+          // Fallback banco de icebreakers local
+          let langBank = PT.ICEBREAKERS_BANK[PT.iceLang] || PT.ICEBREAKERS_BANK.es;
+          let typeBank = langBank[PT.iceType] || langBank.chat;
+          let clientBank = typeBank[PT.iceClient] || typeBank.nuevo;
+          let pool = clientBank[cat] || clientBank.real;
+          
+          let randomMsg = pool[Math.floor(Math.random() * pool.length)];
+          if (PT.iceVipHook) {
+             const hookAppend = PT.iceLang === 'en' ? " By the way, I just uploaded some new private stuff today... tell me if you like it." : " Por cierto, acabo de subir cositas nuevas hoy... dime si te gustan.";
+             randomMsg += hookAppend;
+          }
+          const ctxInput = (document.getElementById('ice-context-input')?.value || '').trim();
+          if (ctxInput) {
+             const ctxAppend = PT.iceLang === 'en' ? ` P.S. I noticed you like ${ctxInput}...` : ` P.D. Noté lo de ${ctxInput}...`;
+             randomMsg += ctxAppend;
+          }
+          genOutput.innerText = randomMsg;<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -5458,7 +5474,6 @@
 
       </div>
     </div>
-    </div>
     <!-- FIN PESTAÑA ICEBREAKERS -->
 
     <!-- PESTAÑA: RENDIMIENTO & PERFILES -->
@@ -6091,11 +6106,11 @@
       if (!Array.isArray(rawList)) rawList = [];
 
       const defaultCategories = [
-        &quot;😇 Coqueta Neutral&quot;,
-        &quot;🎭 Evasiva Elegante&quot;,
-        &quot;🎯 Enfocada en el Usuario&quot;,
-        &quot;🌟 Misteriosa & Juguetona&quot;,
-        &quot;🔒 Estrictamente Segura Anti-TM&quot;
+        "😇 Coqueta Neutral",
+        "🎭 Evasiva Elegante",
+        "🎯 Enfocada en el Usuario",
+        "🌟 Misteriosa & Juguetona",
+        "🔒 Estrictamente Segura Anti-TM"
       ];
 
       rawList.forEach((item, index) => {
@@ -6109,7 +6124,7 @@
 
         const card = document.createElement('div');
         card.className = 'option-card';
-        card.innerHTML = '<div style=&quot;flex:1;&quot;><span class=&quot;option-tag&quot;>' + cat + '</span><div class=&quot;option-text&quot;>' + displayTxt + '</div></div><div class=&quot;btn-group&quot;><button type=&quot;button&quot; class=&quot;btn-copy&quot; onclick=&quot;copiarTexto(this, `' + displayTxt.replace(/'/g, &quot;\\'&quot;) + '`)&quot;>📋 Copiar</button><button type=&quot;button&quot; class=&quot;btn-copy btn-copy-plain&quot; title=&quot;Copiar solo el texto sin /human&quot; onclick=&quot;copiarTexto(this, `' + cleanTxt.replace(/'/g, &quot;\\'&quot;) + '`)&quot;>✂️ Texto Solo</button></div>';
+        card.innerHTML = '<div style="flex:1;"><span class="option-tag">' + cat + '</span><div class="option-text">' + displayTxt + '</div></div><div class="btn-group"><button type="button" class="btn-copy" onclick="copiarTexto(this, `' + displayTxt.replace(/'/g, "\\'") + '`)">📋 Copiar</button><button type="button" class="btn-copy btn-copy-plain" title="Copiar solo el texto sin /human" onclick="copiarTexto(this, `' + cleanTxt.replace(/'/g, "\\'") + '`)">✂️ Texto Solo</button></div>';
         options.appendChild(card);
       });
     }
@@ -10928,7 +10943,8 @@
             .limit(150);
           if (!rows || !rows.length) return;
           window._rrLiveFeed = rows.map(r => {
-            const resolved = _rrResolveName(r.id_perfil, r.agencia);
+            const oName = typeof _n === 'function' ? _n(r.agencia) || _n(String(r.id_perfil)) : (r.agencia || String(r.id_perfil));
+                      const modName = 'Modelo ' + String(r.id_perfil).slice(-3);
             return {
               op: resolved.op,
               modelo: resolved.modelo,
@@ -13591,7 +13607,7 @@
                  if(rows && rows.length) {
                     window._rrLiveFeed = rows.map(r => {
                       const resolved = _rrResolveName(r.id_perfil, r.agencia);
-                      return { op: resolved.op, modelo: resolved.modelo, perfil: r.id_perfil, pts: Number(r.puntos_neto)||0, total: Number(r.puntos_total)||0, turno: r.jornada||'—', time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) };
+                      return { op: oName, modelo: modName, perfil: r.id_perfil, pts: Number(r.puntos_neto)||0, total: Number(r.puntos_total)||0, turno: r.jornada||'—', time: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) };
                     });
                     if(typeof _rrPintarLiveFeed === 'function') _rrPintarLiveFeed();
                  }
@@ -22117,7 +22133,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
               : '🔴 ' + score + '% RIESGO ALTO · Corrige los problemas marcados';
             scoreEl.style.color = score >= 90 ? '#10b981' : score >= 70 ? '#eab308' : '#ef4444';
           }
-        };Datos[shift] = data;
+        };
            PT.guardarBitacora(opIdx);
            
            // Enviar notificación al monitor/admin

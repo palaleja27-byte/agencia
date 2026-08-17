@@ -8047,91 +8047,161 @@
     </div>
 
     <!-- ========================================== -->
-    <!-- PANEL DE MONITOREO - RYR TITAN APEX        -->
-    <!-- Copiar y pegar en tu archivo HTML          -->
+    <!-- MONITOR DE OPERADOR EN VIVO (ADMIN IFRAME) -->
     <!-- ========================================== -->
-
     <style>
       #titan-dashboard {
         font-family: monospace, sans-serif; background-color: #0f172a; color: #10b981; 
-        padding: 20px; border-radius: 8px; width: 100%; max-width: 600px;
+        padding: 20px; border-radius: 8px; width: 100%; max-width: 850px;
         border: 1px solid #10b981; box-sizing: border-box; margin: 15px 0;
       }
-      #titan-dashboard h2 { margin-top: 0; color: #fff; font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+      #titan-dashboard h2, #titan-dashboard h3 { margin-top: 0; color: #fff; border-bottom: 1px solid #334155; padding-bottom: 8px; }
       .titan-box { background: #1e293b; padding: 15px; margin-bottom: 15px; border-radius: 6px; }
-      .titan-live-stats { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
-      .titan-live-stats span { color: #fff; font-weight: bold; }
-      #titan-log { max-height: 250px; overflow-y: auto; background: #000; padding: 10px; border-radius: 5px; font-size: 12px; }
-      .titan-alert-critical { color: #ef4444; font-weight: bold; margin: 4px 0; border-left: 3px solid #ef4444; padding-left: 8px; }
-      .titan-alert-warning { color: #f59e0b; font-weight: bold; margin: 4px 0; border-left: 3px solid #f59e0b; padding-left: 8px; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+      input[type="text"] { width: 100%; padding: 8px; background: #0f172a; color: #fff; border: 1px solid #3b82f6; border-radius: 4px; margin-bottom: 8px; box-sizing: border-box; }
+      button.titan-btn { background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+      button.titan-btn:hover { background: #2563eb; }
+      table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 13px; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #334155; }
+      th { color: #94a3b8; }
+      td { color: #fff; }
+      .status-dot { height: 9px; width: 9px; background-color: #10b981; border-radius: 50%; display: inline-block; }
+      #titan-log { max-height: 180px; overflow-y: auto; background: #000; padding: 10px; border-radius: 5px; font-size: 12px; }
+      .log-violation { color: #ef4444; border-left: 3px solid #ef4444; padding-left: 8px; margin: 4px 0; }
     </style>
 
     <div id="titan-dashboard">
       <h2>🛡️ RYR TITAN - Monitor de Operador en Vivo</h2>
       
-      <div class="titan-box">
-        <div class="titan-live-stats" id="titan-status">
-          Op: <span id="val-op">Esperando conexión...</span> | Perfil: <span id="val-profile">--</span><br>
-          Cartas pendientes ✉️: <span id="val-letters" style="color: #f59e0b;">0</span><br>
-          Chats activos ❗️: <span id="val-replies" style="color: #ef4444;">0</span>
+      <div class="grid-2">
+        <!-- GESTIÓN DE PALABRAS PROHIBIDAS -->
+        <div class="titan-box">
+          <h3>🚫 Firewall / Palabras Prohibidas</h3>
+          <p style="font-size: 11px; color:#94a3b8; margin-top:0;">Sepáralas por comas. Al guardar, se desactivará automáticamente el botón "Enviar" en las extensiones si el operador las escribe.</p>
+          <input type="text" id="banned-words-input" value="whatsapp, skype, email, correo, teléfono, prometo, promesa, banco, tarjeta">
+          <button class="titan-btn" onclick="saveBannedWords()">Guardar Reglas</button>
+          <span id="save-status" style="color:#10b981; font-size: 12px; margin-left: 10px; display:none;">¡Actualizado!</span>
+        </div>
+
+        <!-- LOG DE ALERTAS -->
+        <div class="titan-box">
+          <h3>⚠️ Registro de Alertas</h3>
+          <div id="titan-log">
+            <div style="color: #475569;">[Sistema] Conectado al servidor de monitoreo...</div>
+          </div>
         </div>
       </div>
 
+      <!-- TABLA DE OPERADORES ACTIVOS -->
       <div class="titan-box">
-        <h3 style="margin-top:0; font-size: 14px; color: #94a3b8;">Registro de Alertas:</h3>
-        <div id="titan-log">
-          <div style="color: #475569;">[Sistema] Esperando actividad de la extensión...</div>
-        </div>
+        <h3>👥 Operadores Conectados</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Operador</th>
+              <th>Perfil</th>
+              <th>Cartas (✉️)</th>
+              <th>Chats (❗️)</th>
+              <th>Último Latido</th>
+            </tr>
+          </thead>
+          <tbody id="operators-table-body">
+            <tr>
+              <td colspan="6" style="text-align:center; color:#64748b;">Cargando operadores activos...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
     <script>
-      // Función para registrar alertas en el panel visual
-      function addTitanLog(message, typeClass) {
-        const logDiv = document.getElementById('titan-log');
+      const BACKEND_URL = 'https://ryr-titan-backend.onrender.com';
+
+      function addLog(msg, isError = false) {
+        const log = document.getElementById('titan-log');
         const time = new Date().toLocaleTimeString();
-        const p = document.createElement('div');
-        p.className = typeClass;
-        p.innerHTML = `[${time}] ${message}`;
-        logDiv.prepend(p); // Coloca la alerta más nueva arriba
-        
-        // Limitar el registro a los últimos 30 mensajes para no saturar memoria
-        if (logDiv.children.length > 30) {
-          logDiv.removeChild(logDiv.lastChild);
+        const div = document.createElement('div');
+        div.className = isError ? 'log-violation' : '';
+        div.style.color = isError ? '#ef4444' : '#94a3b8';
+        div.innerHTML = `[${time}] ${msg}`;
+        log.prepend(div);
+        if (log.children.length > 25) log.removeChild(log.lastChild);
+      }
+
+      async function saveBannedWords() {
+        const wordsStr = document.getElementById('banned-words-input').value;
+        const wordsArray = wordsStr.split(',').map(w => w.trim()).filter(Boolean);
+
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/banned-words`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ words: wordsArray })
+          });
+          if (res.ok) {
+            document.getElementById('save-status').style.display = 'inline';
+            setTimeout(() => document.getElementById('save-status').style.display = 'none', 3000);
+            addLog('Palabras prohibidas actualizadas y sincronizadas.');
+          }
+        } catch (e) {
+          addLog('Error al guardar palabras prohibidas en el servidor.', true);
         }
       }
 
-      // ==========================================
-      // ESCUCHADOR DE DATOS DE LA EXTENSIÓN
-      // ==========================================
-      window.addEventListener('message', (event) => {
-        // Validar que el mensaje viene exclusivamente de nuestra extensión
-        if (event.data && event.data.source === 'RYR_TITAN_APEX') {
-          
-          const tipoAlerta = event.data.type;
-          const datos = event.data.data;
-
-          // 1. Actualización en vivo (Latido constante cada segundo)
-          if (tipoAlerta === 'TITAN_HEARTBEAT') {
-            document.getElementById('val-op').innerText = datos.operator || 'N/A';
-            document.getElementById('val-profile').innerText = datos.profile || 'N/A';
-            document.getElementById('val-letters').innerText = datos.pendingLetters || 0;
-            document.getElementById('val-replies').innerText = datos.pendingReplies || 0;
-          } 
-          
-          // 2. Alerta Crítica: Demora en chat (Tiempo restante <= 30 seg)
-          else if (tipoAlerta === 'TITAN_ALERT_DELAY') {
-            // Extraer los nombres de los clientes que están a punto de vencerse
-            const clientesDemorados = datos.delayedChats.map(chat => chat.client).join(', ');
-            addTitanLog(`¡ALERTA DEMORA! El operador ${datos.operator} está por perder el tiempo con: ${clientesDemorados}`, 'titan-alert-critical');
-          } 
-          
-          // 3. Alerta Amarilla: Cartas acumuladas
-          else if (tipoAlerta === 'TITAN_ALERT_LETTERS') {
-            addTitanLog(`¡ATENCIÓN! El operador ${datos.operator} tiene ${datos.pendingLetters} cartas sin leer/responder.`, 'titan-alert-warning');
+      async function loadBannedWords() {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/banned-words`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.words && Array.isArray(data.words)) {
+              document.getElementById('banned-words-input').value = data.words.join(', ');
+            }
           }
+        } catch (e) {}
+      }
+      loadBannedWords();
+
+      // Obtener operadores activos directamente desde el backend (soluciona la conexión con Horacio)
+      async function fetchOperatorsStatus() {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/operators`);
+          if (res.ok) {
+            const data = await res.json();
+            renderOperatorsTable(data.operators || []);
+          }
+        } catch (e) {}
+      }
+
+      function renderOperatorsTable(operators) {
+        const tbody = document.getElementById('operators-table-body');
+        if (!operators || operators.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay operadores activos en este momento.</td></tr>`;
+          return;
         }
-      });
+
+        tbody.innerHTML = '';
+        const now = Date.now();
+
+        operators.forEach(op => {
+          const isOnline = (now - op.lastSeen) < 15000; 
+          const dotColor = isOnline ? '#10b981' : '#ef4444';
+
+          tbody.innerHTML += `
+            <tr>
+              <td><span class="status-dot" style="background-color: ${dotColor}"></span></td>
+              <td><b>${op.operator || 'N/A'}</b></td>
+              <td>${op.profile || 'N/A'}</td>
+              <td style="color:#f59e0b; font-weight:bold;">${op.pendingLetters || 0}</td>
+              <td style="color:#ef4444; font-weight:bold;">${op.pendingReplies || 0}</td>
+              <td style="font-size:11px; color:#64748b;">${new Date(op.lastSeen).toLocaleTimeString()}</td>
+            </tr>
+          `;
+        });
+      }
+
+      setInterval(fetchOperatorsStatus, 3000);
+      fetchOperatorsStatus();
     </script>
   </div>
 

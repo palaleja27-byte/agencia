@@ -5393,12 +5393,30 @@
 
         <!-- Botones Generadores Principales -->
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="ice-btn real" onclick="PT.generateIce('real')" style="padding: 8px; font-size: 0.7rem; flex: 1;">❤️ Real Love</button>
-          <button class="ice-btn hot" onclick="PT.generateIce('hot')" style="padding: 8px; font-size: 0.7rem; flex: 1;">🌶️ Hot Talks</button>
-          <button class="ice-btn deep" onclick="PT.generateIce('deep')" style="padding: 8px; font-size: 0.7rem; flex: 1;">🤝 Friendship</button>
+          <button class="ice-btn real" onclick="PT.generateIce('real')" style="padding: 10px; font-size: 0.78rem; font-weight:800; flex: 1; border-radius:8px; cursor:pointer;">❤️ Real Love</button>
+          <button class="ice-btn hot" onclick="PT.generateIce('hot')" style="padding: 10px; font-size: 0.78rem; font-weight:800; flex: 1; border-radius:8px; cursor:pointer;">🌶️ Hot Talks</button>
+          <button class="ice-btn deep" onclick="PT.generateIce('deep')" style="padding: 10px; font-size: 0.78rem; font-weight:800; flex: 1; border-radius:8px; cursor:pointer;">🤝 Friendship</button>
         </div>
-        
-        <!-- TALKYTIMES ICEBREAKER VALIDATOR (AI PRO) MODULE -->
+
+        <!-- RESULTADO DEDICADO DEL GENERADOR -->
+        <div id="ice-generator-output-box" style="margin-top: 10px; background: rgba(3, 7, 18, 0.85); border: 1px solid rgba(129, 140, 248, 0.35); border-radius: 12px; padding: 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-size: 0.75rem; color: #818cf8; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">✨ Abridor Generado (IA):</div>
+            <span id="ice-generator-badge" style="font-size:0.6rem; background:rgba(129,140,248,0.2); color:#a5b4fc; padding:2px 8px; border-radius:10px; display:none; font-weight:800;">🤖 Listo</span>
+          </div>
+          <div id="ice-generator-output-text" style="font-size: 0.88rem; color: #f8fafc; font-style: italic; line-height: 1.4; min-height: 48px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1);">
+            Configura las opciones arriba y presiona un botón ("Real Love", "Hot Talks" o "Friendship") para generar una propuesta lista para enviar...
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button type="button" onclick="PT.copyGeneratorIce()" style="background: #10b981; color: white; border: none; padding: 7px 16px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px;">Copiar Abridor 📋</button>
+            <button type="button" onclick="PT.sendToValidator()" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; padding: 7px 16px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; cursor: pointer;">Enviar al Validador ⬇️</button>
+          </div>
+        </div>
+
+      </div> <!-- FIN TARJETA GENERADOR -->
+
+      <!-- CARD 2: SEPARADA PARA EL VALIDADOR -->
+      <!-- TALKYTIMES ICEBREAKER VALIDATOR (AI PRO) MODULE -->
         <div class="ice-validator-card" style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); margin-top: 14px;">
           <!-- Header -->
           <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
@@ -10529,17 +10547,11 @@
         
         let legacyPts = hoyCortes.reduce((s, c) => {
           const val = (Number(c.puntos) || 0);
-          if (val > 5000) return s; // 🛡️ SANIDAD DELTA-SHIFT™: ignora cortes inflados sin baseline (>5000 pts)
-          // Filtrar por jornada: incluir si coincide, si no tiene jornada, o si es turno 'Completo'
-          const _normCJ = (c.jornada || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const _normLJ = (jornadaParaLegacy || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const corteMismaJornada = !c.jornada || jornadaParaLegacy === 'Completo' || _normCJ === _normLJ;
-          return s + (corteMismaJornada ? val : 0);
+          if (val > 5000) return s;
+          return s + val;
         }, 0);
-
-        // 🔬 DELTA-SHIFT™ PRIORITY: Usar Datame si tiene datos, sino el legacy (manual).
-        // Evitamos Math.max para que correcciones a la baja (Fix) se reflejen de inmediato.
-        _ptsHoyMap[op.name] = (datamePts > 0) ? datamePts : legacyPts;
+        const fallbackPts = (typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0);
+        _ptsHoyMap[op.name] = (datamePts > 0) ? datamePts : (legacyPts > 0 ? legacyPts : fallbackPts);
         _connectedMap[op.name.toUpperCase()] = estaLogueado;
 
         const last = hoyCortes[hoyCortes.length - 1];
@@ -22546,27 +22558,20 @@ Devuelve UNICAMENTE este JSON válido (sin markdown):
         // Block removed by script
 
         PT.generateIce = async function (cat) {
-          const area = document.getElementById('pt-ice-textarea');
-          const badge = document.getElementById('ice-source-badge');
-          if (!area) return;
+          const genOutput = document.getElementById('ice-generator-output-text');
+          const genBadge = document.getElementById('ice-generator-badge');
+          if (!genOutput) return;
           
-          area.value = '🤖 Generando abridor inteligente...';
-          badge.style.display = 'none';
-          document.getElementById('ice-audit-panel').style.display = 'none';
+          genOutput.innerHTML = '<span style="color:#818cf8;">🤖 Generando abridor inteligente...</span>';
+          if (genBadge) genBadge.style.display = 'none';
 
           const cfg = JSON.parse(localStorage.getItem('rr_openclaw_cfg') || '{}');
-          const apiKey = cfg.key || localStorage.getItem('rr_ai_api_key') || '';
-
           const opName = window.currentOpName || 'el operador';
-          const opPts = typeof getPuntosHoy === 'function' ? getPuntosHoy(opName) : 0;
-          
-          // Leer Inputs Opcionales
-          const ctxInput = document.getElementById('ice-context-input').value.trim();
+          const ctxInput = (document.getElementById('ice-context-input')?.value || '').trim();
           
           const catLabels = { real: 'conexión genuina, amor real y preguntas profundas', hot: 'tensión sexual sugerente, picardía y fantasías', deep: 'amistad, hobbies, complicidad' };
           const catLabel = catLabels[cat] || 'conexión';
           
-          const maxTokens = PT.iceType === 'chat' ? 100 : 250;
           const lenInst = PT.iceType === 'chat' ? 'MÁXIMO 110 CARACTERES (OBLIGATORIO MENOS DE 120 CARACTERES CON ESPACIOS).' : '3 a 4 oraciones (extenso, tipo carta).';
           
           let clientInst = PT.iceClient === 'nuevo' 
@@ -22579,16 +22584,15 @@ Devuelve UNICAMENTE este JSON válido (sin markdown):
 
           const triggers = {
             'cliffhanger': 'Usa BRECHA DE CURIOSIDAD (Cliffhanger). Empieza a decirle algo que te llamó muchísimo la atención sobre él, pero córtalo a la mitad y dile que mejor te lo guardas para no asustarlo.',
-            'coldreading': 'Usa LECTURA EN FRÍO (Cold Reading). Haz una suposición muy audaz sobre su personalidad oculta (ej. que esconde un lado travieso o dominante). Oblígalo a confirmar si tienes razón.',
-            'pushpull': 'Usa TIRA Y AFLOJA (Push-Pull). Hazle un cumplido fuerte pero inmediatamente después insinúa que eso podría ser un problema o que tal vez él no pueda lidiar contigo. Genera tensión.',
-            'challenge': 'Usa DESAFÍO AL EGO. Rétalo sutilmente, asumiendo que probablemente sea "como todos los demás" o que se asustará rápido. Oblígalo a querer probarte lo contrario.'
+            'coldreading': 'Usa LECTURA EN FRÍO (Cold Reading). Haz una suposición muy audaz sobre su personalidad oculta. Oblígalo a confirmar si tienes razón.',
+            'pushpull': 'Usa TIRA Y AFLOJA (Push-Pull). Hazle un cumplido fuerte pero inmediatamente después insinúa que eso podría ser un problema.',
+            'challenge': 'Usa DESAFÍO AL EGO. Rétalo sutilmente, asumiendo que probablemente sea "como todos los demás" o que se asustará rápido.'
           };
           let triggerInst = triggers[PT.iceTrigger] || triggers['cliffhanger'];
 
           let systemPrompt = `Eres una experta modelo de TalkyTimes dominando tácticas de Dating Dynamics y Psicología Oscura. Arquetipo: ${PT.iceArchetype.toUpperCase()}. 
 Genera UN SOLO mensaje de apertura (${PT.iceType}) en idioma ${PT.iceLang.toUpperCase()}.
-Temática base: ${catLabel}. 
-${clientInst} 
+Temática base: ${catLabel}. ${clientInst} 
 TÁCTICA PSICOLÓGICA OBLIGATORIA: ${triggerInst}
 ${hookInst}
 Contexto extra del cliente: ${ctxInput ? ctxInput : 'Ninguno, inventa algo basado en la táctica.'}
@@ -22596,46 +22600,63 @@ REGLAS ESTRICTAS:
 1. Longitud ESTRICTA: ${lenInst} REGLA DE ORO: Si el mensaje supera 120 caracteres SERÁ RECHAZADO. Manténlo extremadamente corto y directo.
 2. OBLIGATORIO: El mensaje debe dejarlo con la urgencia psicológica de responder.
 3. PROHIBIDO usar palabras: instagram, whatsapp, email, coins, tokens, regalos, o lenguaje porno vulgar explícito.
-4. HUMANIZACIÓN EXTREMA (Estilo "/human"): Escribe como una chica real chateando desde su móvil. Evita la puntuación perfecta (puedes omitir mayúsculas iniciales o puntos finales), incluye alguna muletilla natural ("jaja", "mm", "ay"), y haz que suene muy casual e imperfecto. NUNCA parezcas un robot o un texto generado por IA.
+4. HUMANIZACIÓN EXTREMA (Estilo "/human"): Escribe como una chica real chateando desde su móvil. Evita la puntuación perfecta, incluye alguna muletilla natural ("jaja", "mm", "ay"), y haz que suene muy casual e imperfecto.
 Responde SOLO con el mensaje humanizado, sin comillas extra ni introducciones.`;
 
           try {
             const activeEngine = window.getPerUserSetting('rr_active_text_ai') || 'pollinations';
-            const result = await window.rrFetchTextAI(systemPrompt, 'Eres una experta modelo de TalkyTimes dominando tácticas de Dating Dynamics.');
+            const result = await window.rrFetchTextAI(systemPrompt, 'Eres una experta modelo de TalkyTimes.');
             if (result && result.trim()) {
               let cleanRes = result.trim().replace(/^"|"$/g, '');
               if (PT.iceType === 'chat' && cleanRes.length > 120) {
-                // Cortar elegantemente en la última palabra antes de los 115 caracteres
                 cleanRes = cleanRes.substring(0, 115).replace(/\s+\S*$/, '') + '?';
               }
-              area.value = cleanRes;
-              badge.innerText = `🤖 IA (${activeEngine.toUpperCase()}) • ${cat.toUpperCase()}`;
-              badge.style.display = 'block';
-              PT.auditIcebreaker();
+              genOutput.innerText = cleanRes;
+              if (genBadge) {
+                genBadge.innerText = `🤖 IA (${activeEngine.toUpperCase()}) • ${cat.toUpperCase()}`;
+                genBadge.style.display = 'inline-block';
+              }
               return;
             }
-          } catch(e) { console.warn('[ICE] API error, usando banco local:', e); }
-
-          // Fallback: banco local
+          } catch (e) {
+            console.warn('[ICE-GEN] Error fetch IA:', e);
+          }
+          // Fallback banco de icebreakers local
           let langBank = PT.ICEBREAKERS_BANK[PT.iceLang] || PT.ICEBREAKERS_BANK.es;
-          let typeBank = langBank[PT.iceType] || langBank.chat;
-          let clientBank = typeBank[PT.iceClient] || typeBank.nuevo;
-          let list = clientBank[cat] || clientBank.real;
-          
-          let msg = list[Math.floor(Math.random() * list.length)];
-          if (PT.iceVipHook) {
-             const hookAppend = PT.iceLang === 'en' ? " By the way, I just uploaded some new private stuff today... tell me if you like it." : " Por cierto, acabo de subir cositas nuevas hoy... dime si te gustan.";
-             msg += hookAppend;
+          let pool = langBank[cat] || langBank.real;
+          let randomMsg = pool[Math.floor(Math.random() * pool.length)];
+          genOutput.innerText = randomMsg;
+          if (genBadge) {
+            genBadge.innerText = `📚 BANCO LOCAL • ${cat.toUpperCase()}`;
+            genBadge.style.display = 'inline-block';
           }
-          if (ctxInput) {
-             const ctxAppend = PT.iceLang === 'en' ? ` P.S. I noticed you like ${ctxInput}...` : ` P.D. Noté lo de ${ctxInput}...`;
-             msg += ctxAppend;
-          }
+        };
 
-          area.value = msg;
-          badge.innerText = `📚 Banco Local • ${cat.toUpperCase()}`;
-          badge.style.display = 'block';
-          PT.auditIcebreaker();
+        PT.copyGeneratorIce = function() {
+          const el = document.getElementById('ice-generator-output-text');
+          if (!el || !el.innerText) return;
+          const txt = el.innerText.trim();
+          navigator.clipboard.writeText(txt).then(() => {
+            if (typeof Swal !== 'undefined') {
+              Swal.fire({ icon: 'success', title: '¡Abridor Copiado! 📋', text: 'Listo para pegar en TalkyTimes.', timer: 1500, showConfirmButton: false, background: '#0f172a', color: '#fff' });
+            } else {
+              alert('¡Abridor copiado al portapapeles!');
+            }
+          });
+        };
+
+                PT.sendToValidator = function() {
+          const genEl = document.getElementById('ice-generator-output-text');
+          const valEl = document.getElementById('pt-ice-textarea');
+          if (!genEl || !valEl) return;
+          const txt = genEl.innerText.trim();
+          if (!txt || txt.startsWith('Configura') || txt.startsWith('🤖 Generando')) return;
+          valEl.value = txt;
+          PT.onIceTextChange();
+          valEl.scrollIntoView({ behavior: 'smooth' });
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'info', title: 'Transferido al Validador ⬇️', text: 'Tu abridor ya está listo en el Validador para auditar reglas e IA.', timer: 1500, showConfirmButton: false, background: '#0f172a', color: '#fff' });
+          }
         };
 
         // ── Bitácora ──

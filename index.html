@@ -8087,7 +8087,7 @@
         <div class="titan-box">
           <h3>⚠️ Registro de Alertas</h3>
           <div id="titan-log">
-            <div style="color: #475569;">[Sistema] Conectado al servidor de monitoreo...</div>
+            <div style="color: #475569;">[Sistema] Escuchando conexiones de operadores...</div>
           </div>
         </div>
       </div>
@@ -8108,7 +8108,7 @@
           </thead>
           <tbody id="operators-table-body">
             <tr>
-              <td colspan="6" style="text-align:center; color:#64748b;">Cargando operadores activos...</td>
+              <td colspan="6" style="text-align:center; color:#64748b;">Esperando actividad de operadores...</td>
             </tr>
           </tbody>
         </table>
@@ -8117,6 +8117,7 @@
 
     <script>
       const BACKEND_URL = 'https://ryr-titan-backend.onrender.com';
+      let activeOperatorsMap = new Map();
 
       function addLog(msg, isError = false) {
         const log = document.getElementById('titan-log');
@@ -8162,6 +8163,27 @@
       }
       loadBannedWords();
 
+      // Escuchar mensajes directos desde la extensión (Tiempo real instantáneo)
+      window.addEventListener('message', (event) => {
+        try {
+          const message = event.data;
+          if (message && message.source === 'RYR_TITAN_APEX' && message.type === 'TITAN_HEARTBEAT') {
+            const data = message.data;
+            if (data && data.operator) {
+              activeOperatorsMap.set(data.operator, {
+                operator: data.operator,
+                profile: data.profile || 'Perfil',
+                pendingLetters: data.pendingLetters || 0,
+                pendingReplies: data.pendingReplies || 0,
+                lastSeen: Date.now()
+              });
+              renderOperatorsTable();
+            }
+          }
+        } catch (err) {}
+      });
+
+      // Consultar también al backend por si hay otros operadores conectados en paralelo
       async function fetchOperatorsStatus() {
         try {
           const res = await fetch(`${BACKEND_URL}/api/operators`);
@@ -8171,44 +8193,57 @@
             if (Array.isArray(data)) ops = data;
             else if (data.operators && Array.isArray(data.operators)) ops = data.operators;
             else if (data.data && Array.isArray(data.data)) ops = data.data;
-            renderOperatorsTable(ops);
+
+            ops.forEach(op => {
+              const name = op.operator || op.name || op.username;
+              if (name) {
+                activeOperatorsMap.set(name, {
+                  operator: name,
+                  profile: op.profile || op.profileName || 'Perfil',
+                  pendingLetters: op.pendingLetters !== undefined ? op.pendingLetters : (op.pending_letters || 0),
+                  pendingReplies: op.pendingReplies !== undefined ? op.pendingReplies : (op.pending_replies || 0),
+                  lastSeen: op.lastSeen || op.last_seen || Date.now()
+                });
+              }
+            });
+            renderOperatorsTable();
           }
         } catch (e) {}
       }
 
-      function renderOperatorsTable(operators) {
+      function renderOperatorsTable() {
         const tbody = document.getElementById('operators-table-body');
-        if (!operators || operators.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay operadores activos en este momento.</td></tr>`;
+        const now = Date.now();
+        
+        // Filtrar operadores activos (vistos en los últimos 30 segundos)
+        const validOperators = [];
+        activeOperatorsMap.forEach((val, key) => {
+          if ((now - val.lastSeen) < 30000) {
+            validOperators.push(val);
+          }
+        });
+
+        if (validOperators.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b;">Esperando actividad de operadores...</td></tr>`;
           return;
         }
 
         tbody.innerHTML = '';
-        const now = Date.now();
-
-        operators.forEach(op => {
-          const lastSeen = op.lastSeen || op.last_seen || now;
-          const isOnline = (now - lastSeen) < 30000; 
-          const dotColor = isOnline ? '#10b981' : '#ef4444';
-          const name = op.operator || op.name || op.username || 'N/A';
-          const profile = op.profile || op.profileName || 'N/A';
-          const pendingL = op.pendingLetters !== undefined ? op.pendingLetters : (op.pending_letters || 0);
-          const pendingR = op.pendingReplies !== undefined ? op.pendingReplies : (op.pending_replies || 0);
-
+        validOperators.forEach(op => {
           tbody.innerHTML += `
             <tr>
-              <td><span class="status-dot" style="background-color: ${dotColor}"></span></td>
-              <td><b>${name}</b></td>
-              <td>${profile}</td>
-              <td style="color:#f59e0b; font-weight:bold;">${pendingL}</td>
-              <td style="color:#ef4444; font-weight:bold;">${pendingR}</td>
-              <td style="font-size:11px; color:#64748b;">${new Date(lastSeen).toLocaleTimeString()}</td>
+              <td><span class="status-dot" style="background-color: #10b981"></span></td>
+              <td><b>${op.operator}</b></td>
+              <td>${op.profile}</td>
+              <td style="color:#f59e0b; font-weight:bold;">${op.pendingLetters}</td>
+              <td style="color:#ef4444; font-weight:bold;">${op.pendingReplies}</td>
+              <td style="font-size:11px; color:#64748b;">${new Date(op.lastSeen).toLocaleTimeString()}</td>
             </tr>
           `;
         });
       }
 
-      setInterval(fetchOperatorsStatus, 3000);
+      setInterval(fetchOperatorsStatus, 5000);
       fetchOperatorsStatus();
     </script>
   </div>

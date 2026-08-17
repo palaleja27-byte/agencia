@@ -10526,10 +10526,13 @@
                const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
                if (turnosPerfil) {
                   // DELTA-SHIFT™: sumar únicamente los turnos correspondientes a la jornada/12h del operador
-                  let pts = (turnosPerfil['Mañana'] || 0) + (turnosPerfil['manana'] || 0) +
-                             (turnosPerfil['Tarde'] || 0) + (turnosPerfil['tarde'] || 0) +
-                             (turnosPerfil['Noche'] || 0) + (turnosPerfil['noche'] || 0) +
-                             (turnosPerfil['Auto'] || 0) + (turnosPerfil['LocalFallback'] || 0);
+                  let pts = 0;
+                  turnosLeer.forEach(t => {
+                     const keyLower = t.toLowerCase();
+                     const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);
+                     pts += (Number(turnosPerfil[keyCapital]) || 0) + (Number(turnosPerfil[keyLower]) || 0);
+                  });
+                  pts += (Number(turnosPerfil['Auto']) || 0) + (Number(turnosPerfil['LocalFallback']) || 0);
                   if (pts > 5000) pts = 0; // 🛡️ SANIDAD DELTA-SHIFT™: ignora totales mensuales corruptos
                   datamePts += pts;
                }
@@ -10933,8 +10936,7 @@
             .limit(150);
           if (!rows || !rows.length) return;
           window._rrLiveFeed = rows.map(r => {
-            const oName = typeof _n === 'function' ? _n(r.agencia) || _n(String(r.id_perfil)) : (r.agencia || String(r.id_perfil));
-                      const modName = 'Modelo ' + String(r.id_perfil).slice(-3);
+            const resolved = typeof _rrResolveName === 'function' ? _rrResolveName(r.id_perfil, r.agencia) : { op: r.agencia || '—', modelo: 'ID ' + r.id_perfil };
             return {
               op: resolved.op,
               modelo: resolved.modelo,

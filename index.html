@@ -10616,6 +10616,15 @@
             let datameDia = 0;
             if (turnosPerfil) {
               let pts = 0;
+              let turnosSet = new Set([op.turno || 'Mañana']);
+              const _nOpName = typeof _n === 'function' ? _n(op.name) : op.name;
+              const _fk = Object.keys(_horasHoyAll || {}).find(k => (typeof _n === 'function' ? _n(k) : k) === _nOpName);
+              const _hop = (_fk ? _horasHoyAll[_fk] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
+              const _es12h = _hop && _hop.horas === 12 && _hop.fecha === _hoy;
+              if (op.turno === 'Completo') { ['Mañana', 'Tarde', 'Noche'].forEach(t => turnosSet.add(t)); }
+              else if (_es12h) { if (op.turno === 'Noche') { turnosSet.add('Tarde'); turnosSet.add('Noche'); } else { turnosSet.add('Mañana'); turnosSet.add('Tarde'); } }
+              const turnosLeer = Array.from(turnosSet);
+              
               turnosLeer.forEach(t => {
                  const keyLower = t.toLowerCase();
                  const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);

@@ -8046,14 +8046,93 @@
       </select>
     </div>
 
-    <!-- Monitor RYR TITAN - Dashboard en línea -->
-    <iframe 
-      src="https://ryr-titan-backend.onrender.com/dashboard" 
-      width="100%" 
-      height="700px" 
-      style="border: 0; border-radius: 8px; display: block; margin: 15px 0;"
-      allow="fullscreen">
-    </iframe>
+    <!-- ========================================== -->
+    <!-- PANEL DE MONITOREO - RYR TITAN APEX        -->
+    <!-- Copiar y pegar en tu archivo HTML          -->
+    <!-- ========================================== -->
+
+    <style>
+      #titan-dashboard {
+        font-family: monospace, sans-serif; background-color: #0f172a; color: #10b981; 
+        padding: 20px; border-radius: 8px; width: 100%; max-width: 600px;
+        border: 1px solid #10b981; box-sizing: border-box; margin: 15px 0;
+      }
+      #titan-dashboard h2 { margin-top: 0; color: #fff; font-size: 18px; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+      .titan-box { background: #1e293b; padding: 15px; margin-bottom: 15px; border-radius: 6px; }
+      .titan-live-stats { font-size: 14px; line-height: 1.6; color: #cbd5e1; }
+      .titan-live-stats span { color: #fff; font-weight: bold; }
+      #titan-log { max-height: 250px; overflow-y: auto; background: #000; padding: 10px; border-radius: 5px; font-size: 12px; }
+      .titan-alert-critical { color: #ef4444; font-weight: bold; margin: 4px 0; border-left: 3px solid #ef4444; padding-left: 8px; }
+      .titan-alert-warning { color: #f59e0b; font-weight: bold; margin: 4px 0; border-left: 3px solid #f59e0b; padding-left: 8px; }
+    </style>
+
+    <div id="titan-dashboard">
+      <h2>🛡️ RYR TITAN - Monitor de Operador en Vivo</h2>
+      
+      <div class="titan-box">
+        <div class="titan-live-stats" id="titan-status">
+          Op: <span id="val-op">Esperando conexión...</span> | Perfil: <span id="val-profile">--</span><br>
+          Cartas pendientes ✉️: <span id="val-letters" style="color: #f59e0b;">0</span><br>
+          Chats activos ❗️: <span id="val-replies" style="color: #ef4444;">0</span>
+        </div>
+      </div>
+
+      <div class="titan-box">
+        <h3 style="margin-top:0; font-size: 14px; color: #94a3b8;">Registro de Alertas:</h3>
+        <div id="titan-log">
+          <div style="color: #475569;">[Sistema] Esperando actividad de la extensión...</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Función para registrar alertas en el panel visual
+      function addTitanLog(message, typeClass) {
+        const logDiv = document.getElementById('titan-log');
+        const time = new Date().toLocaleTimeString();
+        const p = document.createElement('div');
+        p.className = typeClass;
+        p.innerHTML = `[${time}] ${message}`;
+        logDiv.prepend(p); // Coloca la alerta más nueva arriba
+        
+        // Limitar el registro a los últimos 30 mensajes para no saturar memoria
+        if (logDiv.children.length > 30) {
+          logDiv.removeChild(logDiv.lastChild);
+        }
+      }
+
+      // ==========================================
+      // ESCUCHADOR DE DATOS DE LA EXTENSIÓN
+      // ==========================================
+      window.addEventListener('message', (event) => {
+        // Validar que el mensaje viene exclusivamente de nuestra extensión
+        if (event.data && event.data.source === 'RYR_TITAN_APEX') {
+          
+          const tipoAlerta = event.data.type;
+          const datos = event.data.data;
+
+          // 1. Actualización en vivo (Latido constante cada segundo)
+          if (tipoAlerta === 'TITAN_HEARTBEAT') {
+            document.getElementById('val-op').innerText = datos.operator || 'N/A';
+            document.getElementById('val-profile').innerText = datos.profile || 'N/A';
+            document.getElementById('val-letters').innerText = datos.pendingLetters || 0;
+            document.getElementById('val-replies').innerText = datos.pendingReplies || 0;
+          } 
+          
+          // 2. Alerta Crítica: Demora en chat (Tiempo restante <= 30 seg)
+          else if (tipoAlerta === 'TITAN_ALERT_DELAY') {
+            // Extraer los nombres de los clientes que están a punto de vencerse
+            const clientesDemorados = datos.delayedChats.map(chat => chat.client).join(', ');
+            addTitanLog(`¡ALERTA DEMORA! El operador ${datos.operator} está por perder el tiempo con: ${clientesDemorados}`, 'titan-alert-critical');
+          } 
+          
+          // 3. Alerta Amarilla: Cartas acumuladas
+          else if (tipoAlerta === 'TITAN_ALERT_LETTERS') {
+            addTitanLog(`¡ATENCIÓN! El operador ${datos.operator} tiene ${datos.pendingLetters} cartas sin leer/responder.`, 'titan-alert-warning');
+          }
+        }
+      });
+    </script>
   </div>
 
   <!-- MODAL GRUPOS -->

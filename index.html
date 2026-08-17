@@ -22610,7 +22610,9 @@ Responde SOLO con el mensaje humanizado, sin comillas extra ni introducciones.`;
           }
           // Fallback banco de icebreakers local
           let langBank = PT.ICEBREAKERS_BANK[PT.iceLang] || PT.ICEBREAKERS_BANK.es;
-          let pool = langBank[cat] || langBank.real;
+          let typeBank = langBank[PT.iceType] || langBank.chat;
+          let clientBank = typeBank[PT.iceClient] || typeBank.nuevo;
+          let pool = clientBank[cat] || clientBank.real;
           let randomMsg = pool[Math.floor(Math.random() * pool.length)];
           genOutput.innerText = randomMsg;
           if (genBadge) {
@@ -23080,7 +23082,7 @@ PT._logKey = function (opName) {
         PT.guardarBitacora = function (idx) {
           const op = PT.baseDatos[PT.shiftActual][idx];
           const hechas = PT.TAREAS_MASTER.filter((_, ti) => op.tareasEstado[ti]);
-          if (hechas.length === 0) { alert('No hay tareas marcadas.'); return; }
+          if (hechas.length === 0) { return; }
           
           // Sincronizar puntos reales antes de guardar
           const realPts = getPuntosHoy(op.name) || op.puntos;

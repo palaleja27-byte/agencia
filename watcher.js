@@ -233,7 +233,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
   // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
   // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
-  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 10 && baseline === 0) {
+  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100 && baseline === 0 && new Date().getDate() > 3) {
     const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
     const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
     log(`  🔴 SANITY ${modelo}: baseline corrupto (0.0 pts y neto ${netoTurno.toFixed(1)} > 60% de total ${monthlyTotal.toFixed(1)}) → Estableciendo baseline del 97% (${baselineCorr})`);
@@ -286,7 +286,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     agencia:         panelNombre,
     puntos:          monthlyTotal,
     puntos_total:    monthlyTotal,
-    puntos_baseline: baseline,
+    puntos_baseline: shiftBaselines[key],
     puntos_neto:     netoTurno,
     fecha_corte:     ts,
     fecha_dia:       fechaDia,
@@ -411,20 +411,40 @@ async function watchPanel(panel, perfiles) {
 
       for (const perfil of perfiles) {
         try {
-          await page.evaluate((v) => {
-            const ins = Array.from(document.querySelectorAll('input'));
-            let t = ins.find(i => {
-              const label = (i.getAttribute('aria-label') || '').toLowerCase();
-              const p = (i.placeholder || '').toLowerCase();
-              return label.includes('profile') || p.includes('profile') || label.includes('perfil') || p.includes('perfil') || label.includes('search') || p.includes('search');
-            });
-            if (!t && ins.length >= 3) t = ins[2];
-            if (t) {
-              t.value = v;
-              t.dispatchEvent(new Event('input',  { bubbles: true }));
-              t.dispatchEvent(new Event('change', { bubbles: true }));
+          // Playwright robust fill instead of fragile evaluate
+          const searchSelectors = [
+            'input[aria-label*="search" i]',
+            'input[aria-label*="perfil" i]',
+            'input[aria-label*="profile" i]',
+            'input[placeholder*="search" i]',
+            'input[placeholder*="perfil" i]',
+            'input[placeholder*="profile" i]',
+            'input[type="search"]'
+          ];
+          
+          let filled = false;
+          for (const sel of searchSelectors) {
+            if (await page.isVisible(sel).catch(() => false)) {
+              await page.fill(sel, '');
+              await page.type(sel, perfil.id_datame, { delay: 30 });
+              await page.press(sel, 'Enter');
+              filled = true;
+              break;
             }
-          }, perfil.id_datame);
+          }
+          
+          if (!filled) {
+            // Fallback: try to type in the 3rd input if it exists
+            await page.evaluate((v) => {
+              const ins = Array.from(document.querySelectorAll('input'));
+              if (ins.length >= 3) {
+                ins[2].value = v;
+                ins[2].dispatchEvent(new Event('input', { bubbles: true }));
+                ins[2].dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }, perfil.id_datame);
+          }
+          
           await page.waitForTimeout(500);
           await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);

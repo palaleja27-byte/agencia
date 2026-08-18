@@ -411,38 +411,44 @@ async function watchPanel(panel, perfiles) {
 
       for (const perfil of perfiles) {
         try {
-          // Playwright robust fill instead of fragile evaluate
-          const searchSelectors = [
-            'input[aria-label*="search" i]',
-            'input[aria-label*="perfil" i]',
-            'input[aria-label*="profile" i]',
-            'input[placeholder*="search" i]',
-            'input[placeholder*="perfil" i]',
-            'input[placeholder*="profile" i]',
-            'input[type="search"]'
-          ];
+          // Playwright robust locator for Quasar (where label text is in a sibling/parent element)
+          const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
           
           let filled = false;
-          for (const sel of searchSelectors) {
-            if (await page.isVisible(sel).catch(() => false)) {
-              await page.fill(sel, '');
-              await page.type(sel, perfil.id_datame, { delay: 30 });
-              await page.press(sel, 'Enter');
-              filled = true;
-              break;
+          if (await searchLocator.isVisible().catch(() => false)) {
+            await searchLocator.fill('');
+            await searchLocator.type(perfil.id_datame, { delay: 30 });
+            await searchLocator.press('Enter');
+            filled = true;
+          }
+          
+          if (!filled) {
+            // Fallback: try standard DOM attributes
+            const backupSelectors = ['input[type="search"]', 'input[placeholder*="search" i]', 'input[placeholder*="buscar" i]', 'input[aria-label*="search" i]'];
+            for (const sel of backupSelectors) {
+              if (await page.isVisible(sel).catch(() => false)) {
+                await page.fill(sel, '');
+                await page.type(sel, perfil.id_datame, { delay: 30 });
+                await page.press(sel, 'Enter');
+                filled = true;
+                break;
+              }
             }
           }
           
           if (!filled) {
-            // Fallback: try to type in the 3rd input if it exists
-            await page.evaluate((v) => {
-              const ins = Array.from(document.querySelectorAll('input'));
-              if (ins.length >= 3) {
-                ins[2].value = v;
-                ins[2].dispatchEvent(new Event('input', { bubbles: true }));
-                ins[2].dispatchEvent(new Event('change', { bubbles: true }));
+            // Fallback: try to type in the 3rd input using native Playwright locator
+            try {
+              const inputs = await page.$$('input');
+              if (inputs.length >= 3) {
+                await inputs[2].fill('');
+                await inputs[2].type(perfil.id_datame, { delay: 30 });
+                await inputs[2].press('Enter');
+                filled = true;
               }
-            }, perfil.id_datame);
+            } catch (e) {
+              log(`  ⚠️ Fallback input error: ${e.message}`);
+            }
           }
           
           await page.waitForTimeout(500);

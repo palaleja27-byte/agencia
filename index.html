@@ -8052,7 +8052,7 @@
     <style>
       #titan-dashboard {
         font-family: monospace, sans-serif; background-color: #0f172a; color: #10b981; 
-        padding: 20px; border-radius: 8px; width: 100%; max-width: 850px;
+        padding: 20px; border-radius: 8px; width: 100%; max-width: 880px;
         border: 1px solid #10b981; box-sizing: border-box;
       }
       #titan-dashboard h2, #titan-dashboard h3 { margin-top: 0; color: #fff; border-bottom: 1px solid #334155; padding-bottom: 8px; }
@@ -8060,39 +8060,33 @@
       .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
       input[type="text"] { width: 100%; padding: 8px; background: #0f172a; color: #fff; border: 1px solid #3b82f6; border-radius: 4px; margin-bottom: 8px; box-sizing: border-box; }
       button.titan-btn { background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-      button.titan-btn:hover { background: #2563eb; }
       table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 13px; }
       th, td { text-align: left; padding: 8px; border-bottom: 1px solid #334155; }
       th { color: #94a3b8; }
       td { color: #fff; }
       .status-dot { height: 9px; width: 9px; background-color: #10b981; border-radius: 50%; display: inline-block; }
-      #titan-log { max-height: 180px; overflow-y: auto; background: #000; padding: 10px; border-radius: 5px; font-size: 12px; }
-      .log-violation { color: #ef4444; border-left: 3px solid #ef4444; padding-left: 8px; margin: 4px 0; }
+      #titan-log { max-height: 150px; overflow-y: auto; background: #000; padding: 10px; border-radius: 5px; font-size: 12px; color: #94a3b8; }
     </style>
 
     <div id="titan-dashboard">
       <h2>🛡️ RYR TITAN - Monitor de Operador en Vivo</h2>
       
       <div class="grid-2">
-        <!-- GESTIÓN DE PALABRAS PROHIBIDAS -->
         <div class="titan-box">
           <h3>🚫 Firewall / Palabras Prohibidas</h3>
-          <p style="font-size: 11px; color:#94a3b8; margin-top:0;">Sepáralas por comas. Al guardar, se desactivará automáticamente el botón "Enviar" en las extensiones.</p>
           <input type="text" id="banned-words-input" value="whatsapp, skype, email, correo, teléfono, prometo, promesa, banco, tarjeta">
           <button class="titan-btn" onclick="saveBannedWords()">Guardar Reglas</button>
-          <span id="save-status" style="color:#10b981; font-size: 12px; margin-left: 10px; display:none;">¡Actualizado!</span>
+          <span id="save-status" style="color:#10b981; font-size: 12px; margin-left: 8px; display:none;">¡Guardado!</span>
         </div>
 
-        <!-- LOG DE ALERTAS -->
         <div class="titan-box">
           <h3>⚠️ Registro de Alertas</h3>
           <div id="titan-log">
-            <div style="color: #475569;">[Sistema] Escuchando conexiones de operadores...</div>
+            <div>[Sistema] Conectado al servidor de monitoreo...</div>
           </div>
         </div>
       </div>
 
-      <!-- TABLA DE OPERADORES ACTIVOS -->
       <div class="titan-box">
         <h3>👥 Operadores Conectados</h3>
         <table>
@@ -8108,7 +8102,7 @@
           </thead>
           <tbody id="operators-table-body">
             <tr>
-              <td colspan="6" style="text-align:center; color:#64748b;">Esperando actividad de operadores...</td>
+              <td colspan="6" style="text-align:center; color:#64748b;">Cargando operadores activos...</td>
             </tr>
           </tbody>
         </table>
@@ -8117,23 +8111,10 @@
 
     <script>
       const BACKEND_URL = 'https://ryr-titan-backend.onrender.com';
-      let activeOperatorsMap = new Map();
-
-      function addLog(msg, isError = false) {
-        const log = document.getElementById('titan-log');
-        const time = new Date().toLocaleTimeString();
-        const div = document.createElement('div');
-        div.className = isError ? 'log-violation' : '';
-        div.style.color = isError ? '#ef4444' : '#94a3b8';
-        div.innerHTML = `[${time}] ${msg}`;
-        log.prepend(div);
-        if (log.children.length > 25) log.removeChild(log.lastChild);
-      }
 
       async function saveBannedWords() {
         const wordsStr = document.getElementById('banned-words-input').value;
         const wordsArray = wordsStr.split(',').map(w => w.trim()).filter(Boolean);
-
         try {
           const res = await fetch(`${BACKEND_URL}/api/banned-words`, {
             method: 'POST',
@@ -8143,107 +8124,58 @@
           if (res.ok) {
             document.getElementById('save-status').style.display = 'inline';
             setTimeout(() => document.getElementById('save-status').style.display = 'none', 3000);
-            addLog('Palabras prohibidas actualizadas.');
-          }
-        } catch (e) {
-          addLog('Error al guardar palabras prohibidas.', true);
-        }
-      }
-
-      async function loadBannedWords() {
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/banned-words`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.words && Array.isArray(data.words)) {
-              document.getElementById('banned-words-input').value = data.words.join(', ');
-            }
           }
         } catch (e) {}
       }
-      loadBannedWords();
 
-      // Escuchar mensajes directos desde la extensión (Tiempo real instantáneo)
-      window.addEventListener('message', (event) => {
-        try {
-          const message = event.data;
-          if (message && message.source === 'RYR_TITAN_APEX' && message.type === 'TITAN_HEARTBEAT') {
-            const data = message.data;
-            if (data && data.operator) {
-              activeOperatorsMap.set(data.operator, {
-                operator: data.operator,
-                profile: data.profile || 'Perfil',
-                pendingLetters: data.pendingLetters || 0,
-                pendingReplies: data.pendingReplies || 0,
-                lastSeen: Date.now()
-              });
-              renderOperatorsTable();
-            }
-          }
-        } catch (err) {}
-      });
-
-      // Consultar también al backend por si hay otros operadores conectados en paralelo
       async function fetchOperatorsStatus() {
         try {
           const res = await fetch(`${BACKEND_URL}/api/operators`);
-          if (res.ok) {
-            const data = await res.json();
-            let ops = [];
-            if (Array.isArray(data)) ops = data;
-            else if (data.operators && Array.isArray(data.operators)) ops = data.operators;
-            else if (data.data && Array.isArray(data.data)) ops = data.data;
+          if (!res.ok) return;
+          const data = await res.json();
+          
+          let list = [];
+          if (Array.isArray(data)) list = data;
+          else if (data.operators) list = data.operators;
+          else if (data.data) list = data.data;
 
-            ops.forEach(op => {
-              const name = op.operator || op.name || op.username;
-              if (name) {
-                activeOperatorsMap.set(name, {
-                  operator: name,
-                  profile: op.profile || op.profileName || 'Perfil',
-                  pendingLetters: op.pendingLetters !== undefined ? op.pendingLetters : (op.pending_letters || 0),
-                  pendingReplies: op.pendingReplies !== undefined ? op.pendingReplies : (op.pending_replies || 0),
-                  lastSeen: op.lastSeen || op.last_seen || Date.now()
-                });
-              }
-            });
-            renderOperatorsTable();
+          const tbody = document.getElementById('operators-table-body');
+          const now = Date.now();
+
+          // Considerar activos si se han comunicado en los últimos 45 segundos
+          const activeOps = list.filter(op => {
+            const lastSeen = op.lastSeen || op.last_seen || 0;
+            return (now - lastSeen) < 45000;
+          });
+
+          if (activeOps.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay operadores activos en este momento.</td></tr>`;
+            return;
           }
+
+          tbody.innerHTML = '';
+          activeOps.forEach(op => {
+            const name = op.operator || op.name || 'Op';
+            const profile = op.profile || op.profileName || 'Perfil';
+            const letters = op.pendingLetters !== undefined ? op.pendingLetters : (op.pending_letters || 0);
+            const replies = op.pendingReplies !== undefined ? op.pendingReplies : (op.pending_replies || 0);
+            const lastSeenTime = op.lastSeen ? new Date(op.lastSeen).toLocaleTimeString() : 'Ahora';
+
+            tbody.innerHTML += `
+              <tr>
+                <td><span class="status-dot"></span></td>
+                <td><b>${name}</b></td>
+                <td>${profile}</td>
+                <td style="color:#f59e0b; font-weight:bold;">${letters}</td>
+                <td style="color:#ef4444; font-weight:bold;">${replies}</td>
+                <td style="font-size:11px; color:#64748b;">${lastSeenTime}</td>
+              </tr>
+            `;
+          });
         } catch (e) {}
       }
 
-      function renderOperatorsTable() {
-        const tbody = document.getElementById('operators-table-body');
-        const now = Date.now();
-        
-        // Filtrar operadores activos (vistos en los últimos 30 segundos)
-        const validOperators = [];
-        activeOperatorsMap.forEach((val, key) => {
-          if ((now - val.lastSeen) < 30000) {
-            validOperators.push(val);
-          }
-        });
-
-        if (validOperators.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b;">Esperando actividad de operadores...</td></tr>`;
-          return;
-        }
-
-        tbody.innerHTML = '';
-        validOperators.forEach(op => {
-          tbody.innerHTML += `
-            <tr>
-              <td><span class="status-dot" style="background-color: #10b981"></span></td>
-              <td><b>${op.operator}</b></td>
-              <td>${op.profile}</td>
-              <td style="color:#f59e0b; font-weight:bold;">${op.pendingLetters}</td>
-              <td style="color:#ef4444; font-weight:bold;">${op.pendingReplies}</td>
-              <td style="font-size:11px; color:#64748b;">${new Date(op.lastSeen).toLocaleTimeString()}</td>
-            </tr>
-          `;
-        });
-      }
-
-      setInterval(fetchOperatorsStatus, 5000);
+      setInterval(fetchOperatorsStatus, 3000);
       fetchOperatorsStatus();
     </script>
   </div>

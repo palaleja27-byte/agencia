@@ -8049,135 +8049,16 @@
     <!-- ========================================== -->
     <!-- MONITOR DE OPERADOR EN VIVO (ADMIN IFRAME) -->
     <!-- ========================================== -->
-    <style>
-      #titan-dashboard {
-        font-family: monospace, sans-serif; background-color: #0f172a; color: #10b981; 
-        padding: 20px; border-radius: 8px; width: 100%; max-width: 880px;
-        border: 1px solid #10b981; box-sizing: border-box;
-      }
-      #titan-dashboard h2, #titan-dashboard h3 { margin-top: 0; color: #fff; border-bottom: 1px solid #334155; padding-bottom: 8px; }
-      .titan-box { background: #1e293b; padding: 15px; margin-bottom: 15px; border-radius: 6px; }
-      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-      input[type="text"] { width: 100%; padding: 8px; background: #0f172a; color: #fff; border: 1px solid #3b82f6; border-radius: 4px; margin-bottom: 8px; box-sizing: border-box; }
-      button.titan-btn { background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-      table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 13px; }
-      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #334155; }
-      th { color: #94a3b8; }
-      td { color: #fff; }
-      .status-dot { height: 9px; width: 9px; background-color: #10b981; border-radius: 50%; display: inline-block; }
-      #titan-log { max-height: 150px; overflow-y: auto; background: #000; padding: 10px; border-radius: 5px; font-size: 12px; color: #94a3b8; }
-    </style>
-
-    <div id="titan-dashboard">
-      <h2>🛡️ RYR TITAN - Monitor de Operador en Vivo</h2>
-      
-      <div class="grid-2">
-        <div class="titan-box">
-          <h3>🚫 Firewall / Palabras Prohibidas</h3>
-          <input type="text" id="banned-words-input" value="whatsapp, skype, email, correo, teléfono, prometo, promesa, banco, tarjeta">
-          <button class="titan-btn" onclick="saveBannedWords()">Guardar Reglas</button>
-          <span id="save-status" style="color:#10b981; font-size: 12px; margin-left: 8px; display:none;">¡Guardado!</span>
-        </div>
-
-        <div class="titan-box">
-          <h3>⚠️ Registro de Alertas</h3>
-          <div id="titan-log">
-            <div>[Sistema] Conectado al servidor de monitoreo...</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="titan-box">
-        <h3>👥 Operadores Conectados</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Estado</th>
-              <th>Operador</th>
-              <th>Perfil</th>
-              <th>Cartas (✉️)</th>
-              <th>Chats (❗️)</th>
-              <th>Último Latido</th>
-            </tr>
-          </thead>
-          <tbody id="operators-table-body">
-            <tr>
-              <td colspan="6" style="text-align:center; color:#64748b;">Cargando operadores activos...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div style="margin-top: 20px;">
+      <iframe 
+        src="https://ryr-titan-backend.onrender.com/monitor.html" 
+        width="100%" 
+        height="800px" 
+        frameborder="0" 
+        style="border: 2px solid #10b981; border-radius: 12px; background: #060913; box-shadow: 0 8px 30px rgba(0,0,0,0.7);"
+        allow="autoplay">
+      </iframe>
     </div>
-
-    <script>
-      const BACKEND_URL = 'https://ryr-titan-backend.onrender.com';
-
-      async function saveBannedWords() {
-        const wordsStr = document.getElementById('banned-words-input').value;
-        const wordsArray = wordsStr.split(',').map(w => w.trim()).filter(Boolean);
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/banned-words`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ words: wordsArray })
-          });
-          if (res.ok) {
-            document.getElementById('save-status').style.display = 'inline';
-            setTimeout(() => document.getElementById('save-status').style.display = 'none', 3000);
-          }
-        } catch (e) {}
-      }
-
-      async function fetchOperatorsStatus() {
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/operators`);
-          if (!res.ok) return;
-          const data = await res.json();
-          
-          let list = [];
-          if (Array.isArray(data)) list = data;
-          else if (data.operators) list = data.operators;
-          else if (data.data) list = data.data;
-
-          const tbody = document.getElementById('operators-table-body');
-          const now = Date.now();
-
-          // Considerar activos si se han comunicado en los últimos 45 segundos
-          const activeOps = list.filter(op => {
-            const lastSeen = op.lastSeen || op.last_seen || 0;
-            return (now - lastSeen) < 45000;
-          });
-
-          if (activeOps.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#64748b;">No hay operadores activos en este momento.</td></tr>`;
-            return;
-          }
-
-          tbody.innerHTML = '';
-          activeOps.forEach(op => {
-            const name = op.operator || op.name || 'Op';
-            const profile = op.profile || op.profileName || 'Perfil';
-            const letters = op.pendingLetters !== undefined ? op.pendingLetters : (op.pending_letters || 0);
-            const replies = op.pendingReplies !== undefined ? op.pendingReplies : (op.pending_replies || 0);
-            const lastSeenTime = op.lastSeen ? new Date(op.lastSeen).toLocaleTimeString() : 'Ahora';
-
-            tbody.innerHTML += `
-              <tr>
-                <td><span class="status-dot"></span></td>
-                <td><b>${name}</b></td>
-                <td>${profile}</td>
-                <td style="color:#f59e0b; font-weight:bold;">${letters}</td>
-                <td style="color:#ef4444; font-weight:bold;">${replies}</td>
-                <td style="font-size:11px; color:#64748b;">${lastSeenTime}</td>
-              </tr>
-            `;
-          });
-        } catch (e) {}
-      }
-
-      setInterval(fetchOperatorsStatus, 3000);
-      fetchOperatorsStatus();
-    </script>
   </div>
 
   <!-- MODAL GRUPOS -->

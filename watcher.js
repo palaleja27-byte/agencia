@@ -326,7 +326,11 @@ async function watchPanel(panel, perfiles) {
         if (!Array.isArray(list)) list = [list];
         for (const item of list) {
           // Buscar el valor de puntos en todos los campos conocidos de Datame
-          const rawPts = item.bonuses        ||
+          const rawPts = item.total_en_curso ||
+                         item.total_usd      ||
+                         item.amount_usd     ||
+                         item.current_total  ||
+                         item.bonuses        ||
                          item.total          ||
                          item.total_points   ||
                          item.bonuses_total  ||
@@ -339,9 +343,10 @@ async function watchPanel(panel, perfiles) {
 
           // Extraer ID del perfil con prioridad a campos específicos
           let id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
-          if (!id || id.length < 7) id = (response.url().match(/\d{7,10}/) || [])[0];
-          if (!id || id.length < 7) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
-          if (!id || id.length < 7) continue;
+          // Si el ID extraído no es válido o está vacío, intentar sacarlo de la URL o del JSON
+          if (!id || id.length < 4) id = (response.url().match(/\d{5,10}/) || [])[0];
+          if (!id || id.length < 4) id = (JSON.stringify(item).match(/\d{5,10}/) || [])[0];
+          if (!id || id.length < 4) continue;
 
           const perfil = perfiles.find(p => p.id_datame === id);
           if (!perfil) {

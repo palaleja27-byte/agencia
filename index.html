@@ -20397,7 +20397,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         const curAsi = asiEstados[k];
         const horasReg = (typeof asiGetHoras === 'function') ? asiGetHoras(name) : null;
         
-        // Si no está presente o tiene salida registrada, y estamos en modo operador -> Logout
+        // Si no está presente o tiene salida registrada por el monitor, y estamos en modo operador -> Logout
         if (curAsi && curAsi.estado !== 'P' && curAsi.salidaManual) {
            console.warn("[OP-DASH] Turno finalizado por monitor. Cerrando sesión...");
            alert("Tu turno ha sido finalizado por el monitor. Se cerrará la sesión.");
@@ -20410,6 +20410,41 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
            alert("Has completado tu jornada laboral. ¡Excelente trabajo! La sesión se cerrará.");
            loginLogout();
            return;
+        }
+
+        // AUTO-PROMPT 12 HORAS / AUTO-LOGOUT BASADO EN TIEMPO REAL
+        if (horasReg && horasReg.ingresoTS && !horasReg.salidaTS) {
+           const horasTrabajando = (Date.now() - horasReg.ingresoTS) / 3600000;
+           const targetHoras = parseInt(horasReg.horas) || 8;
+           
+           if (targetHoras === 8 && horasTrabajando >= 7.85 && horasTrabajando < 8.0 && !horasReg.alertado12h) {
+              const allHoras = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
+              const opKey = Object.keys(allHoras).find(k => (typeof normN === 'function' ? normN(k) : k) === (typeof normN === 'function' ? normN(name) : name)) || name;
+              if (!allHoras[opKey]) allHoras[opKey] = {};
+              allHoras[opKey].alertado12h = true;
+              localStorage.setItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia', JSON.stringify(allHoras));
+
+              const ans = confirm("⏳ ¡Atención!\n\nTu turno de 8 horas está a punto de terminar.\n\n¿Estás trabajando turno largo de 12 horas hoy?\n\n[ Aceptar / OK ] para extender a 12h.\n[ Cancelar ] para cerrar turno a las 8h.");
+              
+              if (ans) {
+                 if (typeof asiSetHoras === 'function') asiSetHoras(name, 12);
+                 alert("✅ Turno extendido a 12 horas.");
+              }
+           } else if (horasTrabajando >= targetHoras) {
+              // El tiempo se ha cumplido
+              if (typeof asiTerminarTurnoManual === 'function') {
+                 // Forzamos el logout sin confirmación cambiando window.confirm temporalmente
+                 const oldConfirm = window.confirm;
+                 window.confirm = () => true;
+                 asiTerminarTurnoManual(name, 'operador');
+                 window.confirm = oldConfirm;
+              }
+              
+              console.warn(`[OP-DASH] Jornada completada por tiempo (${targetHoras}h). Cerrando sesión...`);
+              alert(`Has completado tu jornada laboral de ${targetHoras} horas. ¡Excelente trabajo! La sesión se cerrará.`);
+              loginLogout();
+              return;
+           }
         }
       }
 

@@ -17440,20 +17440,26 @@ function exportarDatos() {
     }
 
     
-    function switchRepTab(tabId, btn) {
+    window.switchRepTab = function(tabId, btn) {
       const contents = document.querySelectorAll('.rep-tab-content');
       contents.forEach(c => c.style.display = 'none');
+      
       const btns = document.querySelectorAll('.rep-tab-btn');
       btns.forEach(b => {
         b.style.background = 'transparent';
         b.style.border = '1px solid transparent';
         b.style.color = '#94a3b8';
       });
-      document.getElementById(tabId).style.display = 'block';
-      btn.style.background = 'rgba(99,102,241,0.3)';
-      btn.style.border = '1px solid rgba(99,102,241,0.5)';
-      btn.style.color = '#fff';
-    }
+      
+      const target = document.getElementById(tabId);
+      if (target) target.style.display = 'block';
+      
+      if (btn) {
+        btn.style.background = 'rgba(99,102,241,0.3)';
+        btn.style.border = '1px solid rgba(99,102,241,0.5)';
+        btn.style.color = '#fff';
+      }
+    };
 
     async function renderOperators() {
       const container = document.getElementById('globalOperationReport');
@@ -18010,18 +18016,7 @@ function exportarDatos() {
             </button>
           </div>
 
-          
-          <!-- TABS DE MODULOS -->
-          <div style="display:flex;gap:10px;margin-bottom:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);padding:4px;border-radius:10px;width:max-content;overflow-x:auto;">
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-dashboard', this)" style="background:rgba(99,102,241,0.3);border:1px solid rgba(99,102,241,0.5);color:#fff;padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">📊 Dashboard</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-analisis', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">🧠 Análisis IA</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-top', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">🏆 Top Operadores</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-jornadas', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">🕒 Jornadas</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-chat', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:6px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">💬 Coach IA</button>
-          </div>
-          
-          <div id="rep-dashboard" class="rep-tab-content" style="display:block;">
-<!-- KPIs RAPIDOS -->
+          <!-- KPIs RAPIDOS -->
           <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
             <div style="flex:1;min-width:130px;background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.2);border-radius:10px;padding:12px 16px;position:relative;">
               <button onclick="showSmartInfo('cia-pts')" title="¿Qué mide esto?" style="position:absolute;top:10px;right:10px;background:none;border:none;color:#34d399;font-size:0.7rem;cursor:pointer;padding:0;opacity:0.7;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">ⓘ</button>
@@ -18137,15 +18132,14 @@ function exportarDatos() {
 
           </div>
 
-          <!-- PANEL INFERIOR: ANALISIS + CHAT -->
-          
-
-            
-
-              
           </div>
-          <div id="rep-analisis" class="rep-tab-content" style="display:none;">
-<!-- ANALISIS IA -->
+          <div id="rep-analisis" class="rep-tab-content" style="display:none; max-width:900px; margin:0 auto;">
+          <!-- PANEL INFERIOR: ANALISIS + CHAT -->
+          <div style="display:grid;grid-template-columns:1fr 310px;gap:20px;align-items:start;">
+
+            <div style="display:flex;flex-direction:column;gap:16px;">
+
+              <!-- ANALISIS IA -->
               <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:18px;">
                 <div style="font-size:0.8rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
                   &#129302; Analisis Inteligente de Crecimiento
@@ -18156,10 +18150,9 @@ function exportarDatos() {
                 </div>
               </div>
 
-              
-          </div>
-          <div id="rep-top" class="rep-tab-content" style="display:none;">
-<!-- TOP OPERADORES -->
+              </div>
+          <div id="rep-top" class="rep-tab-content" style="display:none; max-width:600px; margin:0 auto;">
+          <!-- TOP OPERADORES -->
               <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;">
                 <div style="font-size:0.8rem;font-weight:800;color:#e2e8f0;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">&#127885; Top Operadores — Semana Actual</div>
                 <div style="display:flex;flex-direction:column;gap:10px;max-height:290px;overflow-y:auto;padding-right:6px;" class="premium-scrollbar">
@@ -18179,18 +18172,16 @@ function exportarDatos() {
                       </div>
                       <div style="text-align:right;min-width:60px;">
                         <div style="font-size:0.82rem;font-weight:800;color:#fff;">${pts.toFixed(0)}</div>
-                        <div style="font-size:0.55rem;color:#475569;">pts
-          </div>
-        </div>
-      `;
+                        <div style="font-size:0.55rem;color:#475569;">pts</div>
+                      </div>
+                    </div>`;
                   }).join('')}
                 </div>
               </div>
 
-              
-          </div>
-          <div id="rep-jornadas" class="rep-tab-content" style="display:none;">
-<!-- JORNADAS -->
+              </div>
+          <div id="rep-jornadas" class="rep-tab-content" style="display:none; max-width:700px; margin:0 auto;">
+          <!-- JORNADAS -->
               <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:18px;">
                 <div style="font-size:0.8rem;font-weight:800;color:#e2e8f0;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">&#128336; Productividad por Jornada — Semana</div>
                 <div style="display:flex;gap:12px;flex-wrap:wrap;">
@@ -18214,10 +18205,9 @@ function exportarDatos() {
 
             </div>
 
-            
-          </div>
+            </div>
           <div id="rep-chat" class="rep-tab-content" style="display:none; max-width:800px; margin:0 auto;">
-<!-- CHAT IA INTEGRADO -->
+          <!-- CHAT IA INTEGRADO -->
             <div id="reporte-chat-panel" style="background:rgba(15,23,42,0.95);border:1px solid rgba(99,102,241,0.3);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;height:520px;">
               <div style="background:rgba(99,102,241,0.15);border-bottom:1px solid rgba(99,102,241,0.2);padding:12px 16px;display:flex;align-items:center;gap:10px;">
                 <span style="width:8px;height:8px;background:#10b981;border-radius:50%;box-shadow:0 0 6px #10b981;"></span>
@@ -18235,7 +18225,6 @@ function exportarDatos() {
                 <button onclick="enviarReporteChat()" style="background:rgba(99,102,241,0.8);border:none;color:white;font-weight:bold;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;">Enviar</button>
               </div>
             </div>
-
           </div>
         </div>
       `;

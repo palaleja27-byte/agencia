@@ -67,6 +67,29 @@ export default async function handler(req, res) {
 
     const operatorsData = typeof opsRow.value === 'string' ? JSON.parse(opsRow.value) : opsRow.value;
 
+    // 1b. Cargar las asignaciones manuales de perfiles (rr_profile_*)
+    const { data: profileRows, error: profileError } = await supabase
+      .from('kv_store')
+      .select('key, value')
+      .like('key', 'rr_profile_%');
+
+    if (!profileError && profileRows) {
+      const profileMap = {};
+      profileRows.forEach(row => {
+        const opName = row.key.replace('rr_profile_', '').trim().toUpperCase();
+        try {
+          profileMap[opName] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+        } catch(e) {}
+      });
+
+      operatorsData.forEach(op => {
+        const normN = String(op.name).toUpperCase().trim();
+        if (profileMap[normN]) {
+          op.profiles = profileMap[normN];
+        }
+      });
+    }
+
     // 2. Obtener todas las operaciones registradas para el día lógico actual
     const { data: operaciones, error: opError } = await supabase
       .from('operaciones')

@@ -57,6 +57,10 @@ function fechaHoyColombia() {
   return logical.toLocaleDateString('en-CA');
 }
 
+function diaHoyColombia() {
+  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', day: 'numeric' }));
+}
+
 function rangoMesActual() {
   // Rango: inicio del mes → hoy + 2 días al futuro (Basado en la hora lógica de Colombia)
   // Los 2 días extra garantizan que Datame incluya TODOS los datos actuales
@@ -170,7 +174,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
   if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
     // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0
-    if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || new Date().getDate() === 1)) {
+    if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || diaHoyColombia() === 1)) {
       log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
       shiftBaselines[key] = 0;
       await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);
@@ -233,7 +237,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
   // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
   // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
-  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100 && baseline === 0 && new Date().getDate() > 3) {
+  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100 && baseline === 0 && diaHoyColombia() > 3) {
     const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
     const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
     log(`  🔴 SANITY ${modelo}: baseline corrupto (0.0 pts y neto ${netoTurno.toFixed(1)} > 60% de total ${monthlyTotal.toFixed(1)}) → Estableciendo baseline del 97% (${baselineCorr})`);
@@ -264,7 +268,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
 
   // Ignorar si el total bajó (lag de Datame), A MENOS que sea un Reset de Mes en Datame
   if (monthlyTotal < baseline) {
-    if (monthlyTotal < baseline * 0.5 || new Date().getDate() === 1) {
+    if (monthlyTotal < baseline * 0.5 || diaHoyColombia() === 1) {
       log(`  🔄 RECONCILIACIÓN MES ${modelo}: Datame reinició mes (${monthlyTotal.toFixed(1)} < baseline ${baseline.toFixed(1)}) → Fijando baseline a 0.0 pts`);
       shiftBaselines[key] = 0;
       netoTurno = monthlyTotal;

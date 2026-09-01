@@ -50,6 +50,10 @@ function fechaHoyColombia() {
   return logical.toLocaleDateString('en-CA');
 }
 
+function diaHoyColombia() {
+  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota', day: 'numeric' }));
+}
+
 function rangoMesActual() {
     const dt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
     const logical = new Date(dt.getTime() - (6 * 3600000));
@@ -154,7 +158,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
     if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
       // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0
-      if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || new Date().getDate() === 1)) {
+      if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || diaHoyColombia() === 1)) {
         log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
         shiftBaselines[key] = 0;
         await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);

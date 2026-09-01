@@ -173,8 +173,8 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // Re-sincronizar siempre con el baseline de la DB si ya existe
   const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
   if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
-    // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0
-    if (rec.puntos_baseline > monthlyTotal && (monthlyTotal < rec.puntos_baseline * 0.5 || diaHoyColombia() === 1)) {
+    // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0 SOLO el día 1 en Colombia
+    if (rec.puntos_baseline > monthlyTotal && diaHoyColombia() === 1 && (monthlyTotal < rec.puntos_baseline * 0.5 || monthlyTotal < 100)) {
       log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
       shiftBaselines[key] = 0;
       await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);
@@ -206,7 +206,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
       if (prevRec && prevRec.puntos_total > 0 && prevRec.puntos_total <= monthlyTotal) {
         inheritedBaseline = prevRec.puntos_total;
         log(`  🔗 Baseline heredado de turno previo hoy: ${modelo} [${jornada}] = ${inheritedBaseline.toFixed(2)} pts`);
-      } else if (prevRec && prevRec.puntos_total > monthlyTotal) {
+      } else if (prevRec && prevRec.puntos_total > monthlyTotal && diaHoyColombia() === 1) {
         inheritedBaseline = 0;
         log(`  🔄 Reset de Mes Detectado en ${modelo}: baseline fijado en 0.00 pts (cierre anterior fue ${prevRec.puntos_total.toFixed(2)})`);
       } else {
@@ -268,7 +268,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
 
   // Ignorar si el total bajó (lag de Datame), A MENOS que sea un Reset de Mes en Datame
   if (monthlyTotal < baseline) {
-    if (monthlyTotal < baseline * 0.5 || diaHoyColombia() === 1) {
+    if (diaHoyColombia() === 1 && (monthlyTotal < baseline * 0.5 || monthlyTotal < 100)) {
       log(`  🔄 RECONCILIACIÓN MES ${modelo}: Datame reinició mes (${monthlyTotal.toFixed(1)} < baseline ${baseline.toFixed(1)}) → Fijando baseline a 0.0 pts`);
       shiftBaselines[key] = 0;
       netoTurno = monthlyTotal;

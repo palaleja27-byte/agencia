@@ -7475,10 +7475,10 @@
 
           <!-- Filtros de Estado -->
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="sol-tab-btn active" onclick="filtrarSolicitudesAdmin('PENDIENTE', this)" style="background:rgba(245,158,11,0.2); border:1px solid rgba(245,158,11,0.4); color:#fbbf24; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">🟡 Pendientes</button>
-            <button class="sol-tab-btn" onclick="filtrarSolicitudesAdmin('EN_PROCESO', this)" style="background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); color:#60a5fa; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">🔵 En Proceso</button>
-            <button class="sol-tab-btn" onclick="filtrarSolicitudesAdmin('ATENDIDO', this)" style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#34d399; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">🟢 Atendidos</button>
-            <button class="sol-tab-btn" onclick="filtrarSolicitudesAdmin('TODOS', this)" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">📋 Todos</button>
+            <button id="sol-tab-PENDIENTE" class="sol-tab-btn active" onclick="filtrarSolicitudesAdmin('PENDIENTE', this)" style="background:rgba(245,158,11,0.25); border:1.5px solid #f59e0b; color:#fbbf24; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">🟡 Pendientes (0)</button>
+            <button id="sol-tab-EN_PROCESO" class="sol-tab-btn" onclick="filtrarSolicitudesAdmin('EN_PROCESO', this)" style="background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); color:#60a5fa; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">🔵 En Proceso (0)</button>
+            <button id="sol-tab-ATENDIDO" class="sol-tab-btn" onclick="filtrarSolicitudesAdmin('ATENDIDO', this)" style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#34d399; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">🟢 Atendidos (0)</button>
+            <button id="sol-tab-TODOS" class="sol-tab-btn" onclick="filtrarSolicitudesAdmin('TODOS', this)" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; padding:6px 12px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer;">📋 Todos (0)</button>
           </div>
         </div>
 
@@ -33608,18 +33608,17 @@ CONFIGURACIÓN DE CONTEXTO:
     };
 
     window.playCustomVoiceDemo = function() {
-      if (!window.speechSynthesis) return;
       const inputEl = document.getElementById('demo-voice-text');
-      if (!inputEl) return;
-      const text = inputEl.value.trim();
-      if (!text) {
-        inputEl.style.borderBottom = '1px solid #ef4444';
-        setTimeout(() => inputEl.style.borderBottom = 'none', 1000);
-        return;
-      }
+      let text = inputEl ? inputEl.value.trim() : '';
+      if (!text) text = 'esto es una prueba';
       
       try {
-        // Enviar la alerta globalmente a todos los clientes (invasiva)
+        // 1. Reproducir por voz inmediatamente en este dispositivo
+        if (typeof window.speakText === 'function') {
+          window.speakText(text);
+        }
+
+        // 2. Transmitir en tiempo real a TODOS los operadores conectados
         if (window._voiceBroadcastChannel) {
           window._voiceBroadcastChannel.send({
             type: 'broadcast',
@@ -33627,16 +33626,29 @@ CONFIGURACIÓN DE CONTEXTO:
             payload: { text: text }
           }).then(status => console.log('Broadcast status:', status))
             .catch(e => console.warn('Broadcast no enviado:', e));
-        } else {
-           console.warn("No hay canal de broadcast disponible");
         }
 
-        // Efecto visual de "hablando"
-        inputEl.style.color = '#38bdf8';
-        setTimeout(() => {
-          inputEl.style.color = '#e2e8f0'; 
-          inputEl.value = '';
-        }, 3000); // Simulamos el onend visualmente para la PC que envía
+        // 3. Persistir anuncio en Supabase kv_store
+        if (typeof _sb !== 'undefined' && _sb) {
+          _sb.from('kv_store').upsert({
+            key: 'rr_last_voice_announcement',
+            value: JSON.stringify({ text: text, ts: Date.now() })
+          }, { onConflict: 'key' }).catch(e => console.warn('Sync voice announcement err:', e));
+        }
+
+        // 4. Feedback visual y notificación Toast
+        if (typeof _toastSync === 'function') {
+          _toastSync('🎙️ Nota de voz transmitida: "' + text + '"', false);
+        }
+
+        if (inputEl) {
+          inputEl.style.color = '#34d399';
+          inputEl.style.fontWeight = 'bold';
+          setTimeout(() => {
+            inputEl.style.color = '#e2e8f0';
+            inputEl.style.fontWeight = 'normal';
+          }, 3000);
+        }
       } catch (e) {
         console.warn("Falla al enviar TTS Demo: ", e);
       }
@@ -34859,14 +34871,6 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
 
     function filtrarSolicitudesAdmin(estado, btn) {
       window._solFiltroAdmin = estado;
-      document.querySelectorAll('.sol-tab-btn').forEach(b => {
-        b.style.opacity = '0.6';
-        b.style.transform = 'scale(0.98)';
-      });
-      if (btn) {
-        btn.style.opacity = '1';
-        btn.style.transform = 'scale(1)';
-      }
       renderAdminSolicitudes();
     }
 
@@ -34885,16 +34889,61 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
 
       const todas = getSolicitudesContenido();
       const pendientes = todas.filter(s => s.estado === 'PENDIENTE');
-      if (badge) badge.innerText = `${pendientes.length} Pendientes`;
+      const enProceso = todas.filter(s => s.estado === 'EN_PROCESO');
+      const atendidos = todas.filter(s => s.estado === 'ATENDIDO');
 
-      const filtro = window._solFiltroAdmin || 'PENDIENTE';
+      // Actualizar contador del Badge Principal
+      if (badge) {
+        badge.innerText = `${pendientes.length} Pendientes`;
+        if (pendientes.length > 0) {
+          badge.style.background = '#f59e0b';
+          badge.style.color = '#000';
+          badge.style.boxShadow = '0 0 12px rgba(245,158,11,0.6)';
+        } else {
+          badge.style.background = '#10b981';
+          badge.style.color = '#022c22';
+          badge.style.boxShadow = 'none';
+        }
+      }
+
+      // Actualizar estilos y contadores de los botones de pestañas
+      const filtroActual = window._solFiltroAdmin || 'PENDIENTE';
+      const tabs = [
+        { id: 'sol-tab-PENDIENTE', key: 'PENDIENTE', label: `🟡 Pendientes (${pendientes.length})`, activeBg: 'rgba(245,158,11,0.25)', border: '#f59e0b', color: '#fbbf24' },
+        { id: 'sol-tab-EN_PROCESO', key: 'EN_PROCESO', label: `🔵 En Proceso (${enProceso.length})`, activeBg: 'rgba(59,130,246,0.25)', border: '#3b82f6', color: '#60a5fa' },
+        { id: 'sol-tab-ATENDIDO', key: 'ATENDIDO', label: `🟢 Atendidos (${atendidos.length})`, activeBg: 'rgba(16,185,129,0.25)', border: '#10b981', color: '#34d399' },
+        { id: 'sol-tab-TODOS', key: 'TODOS', label: `📋 Todos (${todas.length})`, activeBg: 'rgba(255,255,255,0.12)', border: '#94a3b8', color: '#f8fafc' }
+      ];
+
+      tabs.forEach(t => {
+        const btnEl = document.getElementById(t.id);
+        if (btnEl) {
+          btnEl.innerText = t.label;
+          if (t.key === filtroActual) {
+            btnEl.style.background = t.activeBg;
+            btnEl.style.border = `1.5px solid ${t.border}`;
+            btnEl.style.color = t.color;
+            btnEl.style.boxShadow = `0 0 12px ${t.border}55`;
+            btnEl.style.opacity = '1';
+            btnEl.style.transform = 'scale(1.02)';
+          } else {
+            btnEl.style.background = 'rgba(255,255,255,0.04)';
+            btnEl.style.border = '1px solid rgba(255,255,255,0.1)';
+            btnEl.style.color = '#94a3b8';
+            btnEl.style.boxShadow = 'none';
+            btnEl.style.opacity = '0.7';
+            btnEl.style.transform = 'scale(1)';
+          }
+        }
+      });
+
       let filtradas = todas;
-      if (filtro !== 'TODOS') {
-        filtradas = todas.filter(s => s.estado === filtro);
+      if (filtroActual !== 'TODOS') {
+        filtradas = todas.filter(s => s.estado === filtroActual);
       }
 
       if (filtradas.length === 0) {
-        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:30px; background:rgba(255,255,255,0.02); border-radius:12px; color:#64748b; font-size:0.8rem;">No hay solicitudes de contenido en el filtro actual (${filtro}).</div>`;
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:35px; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:14px; color:#64748b; font-size:0.85rem;">No hay solicitudes de contenido en el filtro <b>${filtroActual}</b>.</div>`;
         return;
       }
 
@@ -34917,12 +34966,12 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         }
 
         html += `
-          <div style="background:rgba(30,41,59,0.7); border:1px solid ${borderCol}; border-radius:14px; padding:14px; display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+          <div style="background:rgba(30,41,59,0.75); border:1px solid ${borderCol}; border-radius:14px; padding:14px; display:flex; flex-direction:column; justify-content:space-between; gap:10px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
             <div>
               <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
                 <div>
                   <div style="font-size:0.85rem; font-weight:900; color:#f8fafc;">👤 ${s.operador}</div>
-                  <div style="font-size:0.65rem; color:#34d399; font-weight:800; margin-top:2px;">💃 Modelo: ${s.id_modelo}</div>
+                  <div style="font-size:0.68rem; color:#34d399; font-weight:800; margin-top:2px;">💃 Modelo: ${s.id_modelo}</div>
                 </div>
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
                   ${statusBadge}
@@ -34930,7 +34979,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
                 </div>
               </div>
 
-              <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:10px; font-size:0.75rem; color:#cbd5e1; line-height:1.4; word-break:break-word;">
+              <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px; font-size:0.75rem; color:#cbd5e1; line-height:1.4; word-break:break-word;">
                 ${s.detalle}
               </div>
 
@@ -34939,6 +34988,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
 
             <!-- Acciones Admin -->
             <div style="display:flex; gap:6px; flex-wrap:wrap; border-top:1px solid rgba(255,255,255,0.06); padding-top:10px; margin-top:4px;">
+              ${s.estado !== 'PENDIENTE' ? `<button onclick="cambiarEstadoSolicitud('${s.id}', 'PENDIENTE')" style="flex:1; background:rgba(245,158,11,0.2); border:1px solid rgba(245,158,11,0.4); color:#fbbf24; padding:6px 8px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">🟡 Pendiente</button>` : ''}
               ${s.estado !== 'EN_PROCESO' ? `<button onclick="cambiarEstadoSolicitud('${s.id}', 'EN_PROCESO')" style="flex:1; background:rgba(59,130,246,0.2); border:1px solid rgba(59,130,246,0.4); color:#60a5fa; padding:6px 8px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">🔵 En Proceso</button>` : ''}
               ${s.estado !== 'ATENDIDO' ? `<button onclick="cambiarEstadoSolicitud('${s.id}', 'ATENDIDO')" style="flex:1; background:rgba(16,185,129,0.2); border:1px solid rgba(16,185,129,0.4); color:#34d399; padding:6px 8px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">🟢 Atendido</button>` : ''}
               <button onclick="eliminarSolicitud('${s.id}')" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; padding:6px 10px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;" title="Borrar Notificación">🗑️</button>
@@ -34958,15 +35008,29 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
         guardarSolicitudesContenido(lista);
         renderAdminSolicitudes();
         if (typeof renderOpSolicitudesHistorial === 'function') renderOpSolicitudesHistorial();
+        
+        let label = '🟡 Pendiente';
+        if (nuevoEstado === 'EN_PROCESO') label = '🔵 En Proceso';
+        else if (nuevoEstado === 'ATENDIDO') label = '🟢 Atendido';
+        
+        if (typeof _toastSync === 'function') {
+          _toastSync(`Solicitud de ${item.id_modelo} marcada como ${label}`, false);
+        }
+        if (typeof playBeep === 'function') playBeep('chime');
       }
     }
 
     function eliminarSolicitud(id) {
       let lista = getSolicitudesContenido();
+      const item = lista.find(s => s.id === id);
       lista = lista.filter(s => s.id !== id);
       guardarSolicitudesContenido(lista);
       renderAdminSolicitudes();
       if (typeof renderOpSolicitudesHistorial === 'function') renderOpSolicitudesHistorial();
+      
+      if (typeof _toastSync === 'function') {
+        _toastSync(`🗑️ Notificación ${item ? item.id_modelo : ''} eliminada`, false);
+      }
     }
 
     window.logSyncConsole = function(msg, type = 'info') {

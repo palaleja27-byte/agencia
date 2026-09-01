@@ -234,6 +234,11 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const baseline  = shiftBaselines[key];
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
+  // 🛡️ MONOTONIC PROGRESSION: Los puntos acumulados en un turno NUNCA bajan por lecturas parciales
+  if (rec && rec.puntos_neto && Number(rec.puntos_neto) > netoTurno) {
+    netoTurno = Number(rec.puntos_neto);
+  }
+
   // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
   // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
   // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.

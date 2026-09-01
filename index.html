@@ -10556,13 +10556,17 @@
         // ⏱️ 12H SHIFT™: Si es 12h, 'jornadaParaLegacy' será 'Completo', lo que permitirá sumar todo.
         const jornadaParaLegacy = op.turno && op.turno !== 'Completo' ? op.turno : (op.turno === 'Completo' ? 'Completo' : jornadaActual);
         
-        let legacyPts = hoyCortes.reduce((s, c) => {
+        const cortesDeTurno = (jornadaParaLegacy === 'Completo') 
+          ? hoyCortes 
+          : hoyCortes.filter(c => !c.jornada || c.jornada === jornadaParaLegacy);
+
+        let legacyPts = cortesDeTurno.reduce((s, c) => {
           const val = (Number(c.puntos) || 0);
           if (val > 5000) return s;
           return s + val;
         }, 0);
         const fallbackPts = (typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0);
-        _ptsHoyMap[op.name] = Math.max(datamePts || 0, legacyPts || 0, fallbackPts || 0);
+        _ptsHoyMap[op.name] = (datamePts > 0) ? datamePts : (legacyPts > 0 ? legacyPts : fallbackPts);
         _connectedMap[op.name.toUpperCase()] = estaLogueado;
 
         const last = hoyCortes[hoyCortes.length - 1];

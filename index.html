@@ -28042,13 +28042,13 @@ PT._logKey = function (opName) {
       const item = history.find(h => h.id === window._selectedBitacoraCorteId);
       
       if (!item) {
-        container.innerHTML = '<div style="color:#64748b; font-size:.65rem; padding:20px; text-align:center;">Selecciona un corte para ver su desglose.</div>';
+        container.innerHTML = '<div style="color:#64748b; font-size:.75rem; padding:30px; text-align:center;">Selecciona un corte de la izquierda para explorar el desglose por operador y perfil.</div>';
         if (metaEl) metaEl.textContent = '—';
         return;
       }
       
       if (metaEl) {
-        metaEl.textContent = `${item.fecha} · ${item.hora} · ${item.jornada.toUpperCase()}`;
+        metaEl.textContent = `${item.fecha} · ${item.hora} · TURNO ${item.jornada.toUpperCase()}`;
       }
       
       let displayedOps = [];
@@ -28087,51 +28087,109 @@ PT._logKey = function (opName) {
       totalCorteToShow = Math.round(totalCorteToShow * 100) / 100;
       const sortedOps = displayedOps.sort((a,b) => b.pts - a.pts);
       
-      let tableRows = sortedOps.map((op, idx) => {
-        const perfsStr = (op.perfiles || []).map(p => `${p.modelo}: ${p.pts}`).join(' · ');
-        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
-          <td style="padding:10px 8px; font-size:0.72rem; font-weight:700; color:#e2e8f0;">
-            #${idx+1} ${op.name}
-            <div style="font-size:0.55rem; color:#475569; font-weight:normal; margin-top:2px;">${perfsStr || 'Sin perfiles'}</div>
-          </td>
-          <td style="padding:10px 8px; text-align:right;">
-            <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px;">
-              <span id="op-pts-val-${op.name.replace(/\s+/g,'_')}" style="font-size:0.85rem; font-weight:800; color:#2dd4bf;">${op.pts} pts</span>
-              <button onclick="iniciarEdicionCorteOp('${item.id}', '${op.name}')" style="background:none; border:none; color:#64748b; cursor:pointer; font-size:0.75rem; padding:2px;" title="Editar puntos" onmouseover="this.style.color='#fbbf24'">✏️</button>
+      let opCardsHtml = sortedOps.map((op, idx) => {
+        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
+        const opPtsFormatted = Number((op.pts || 0).toFixed(2));
+        
+        // Desglose detallado por cada perfil de este operador
+        const perfilesList = op.perfiles || [];
+        let profilesHtml = '';
+        
+        if (perfilesList.length > 0) {
+          profilesHtml = perfilesList.map(p => {
+            const pPts = Number((p.pts || 0).toFixed(2));
+            const pct = opPtsFormatted > 0 ? Math.min(100, Math.round((pPts / opPtsFormatted) * 100)) : 0;
+            const modelName = p.modelo || p.model || `Perfil ${p.id || ''}`;
+            const profileId = p.id ? `(ID ${p.id})` : '';
+
+            return `
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.04); border-radius:8px; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
+                  <span style="font-size:0.85rem;">💃</span>
+                  <div style="min-width:0; flex:1;">
+                    <div style="font-size:0.72rem; font-weight:800; color:#34d399; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                      ${modelName} <span style="font-size:0.6rem; color:#64748b; font-weight:normal;">${profileId}</span>
+                    </div>
+                    <!-- Barra de progreso visual -->
+                    <div style="width:100%; max-width:140px; height:4px; background:rgba(255,255,255,0.08); border-radius:2px; margin-top:3px; overflow:hidden;">
+                      <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, #10b981, #34d399); border-radius:2px;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align:right; flex-shrink:0;">
+                  <span style="font-size:0.75rem; font-weight:800; color:#60a5fa; background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.25); padding:2px 8px; border-radius:6px;">
+                    ${pPts} pts
+                  </span>
+                  <div style="font-size:0.55rem; color:#64748b; margin-top:2px;">${pct}% del total</div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          profilesHtml = `
+            <div style="font-size:0.65rem; color:#64748b; font-style:italic; padding:6px 10px; background:rgba(0,0,0,0.2); border-radius:6px;">
+              Sin desglose individual de perfiles para este registro.
             </div>
-            <div id="op-pts-edit-box-${op.name.replace(/\s+/g,'_')}" style="display:none; justify-content:flex-end; align-items:center; gap:4px; margin-top:4px;">
-              <input type="number" step="0.1" id="op-pts-input-${op.name.replace(/\s+/g,'_')}" value="${op.pts}" style="width:65px; background:#020617; border:1px solid #334155; border-radius:4px; padding:2px 4px; color:#fff; font-size:0.7rem; text-align:right;" />
-              <button onclick="guardarEdicionCorteOp('${item.id}', '${op.name}')" style="background:#10b981; border:none; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.55rem; font-weight:bold; cursor:pointer;">OK</button>
-              <button onclick="cancelarEdicionCorteOp('${op.name}')" style="background:#1e293b; border:none; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.55rem; font-weight:bold; cursor:pointer;">✕</button>
+          `;
+        }
+
+        const escapedName = op.name.replace(/\s+/g,'_');
+
+        return `
+          <div style="background:rgba(30,41,59,0.5); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px; margin-bottom:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+            <!-- Encabezado del Operador -->
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:8px; margin-bottom:10px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:0.8rem; font-weight:900; background:rgba(45,212,191,0.15); border:1px solid rgba(45,212,191,0.3); color:#2dd4bf; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+                  ${medal || ('#' + (idx+1))}
+                </span>
+                <div>
+                  <div style="font-size:0.82rem; font-weight:900; color:#f8fafc;">👤 ${op.name}</div>
+                  <div style="font-size:0.6rem; color:#94a3b8; margin-top:1px;">${perfilesList.length} perfil${perfilesList.length !== 1 ? 'es' : ''} operado${perfilesList.length !== 1 ? 's' : ''}</div>
+                </div>
+              </div>
+
+              <div style="text-align:right; display:flex; align-items:center; gap:8px;">
+                <div>
+                  <span id="op-pts-val-${escapedName}" style="font-size:0.95rem; font-weight:900; color:#2dd4bf; background:rgba(45,212,191,0.12); padding:3px 10px; border-radius:8px; border:1px solid rgba(45,212,191,0.3);">
+                    ${opPtsFormatted} pts
+                  </span>
+                  <div id="op-pts-edit-box-${escapedName}" style="display:none; justify-content:flex-end; align-items:center; gap:4px; margin-top:4px;">
+                    <input type="number" step="0.1" id="op-pts-input-${escapedName}" value="${opPtsFormatted}" style="width:65px; background:#020617; border:1px solid #334155; border-radius:4px; padding:2px 4px; color:#fff; font-size:0.7rem; text-align:right;" />
+                    <button onclick="guardarEdicionCorteOp('${item.id}', '${op.name}')" style="background:#10b981; border:none; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.55rem; font-weight:bold; cursor:pointer;">OK</button>
+                    <button onclick="cancelarEdicionCorteOp('${op.name}')" style="background:#1e293b; border:none; color:#fff; padding:2px 6px; border-radius:3px; font-size:0.55rem; font-weight:bold; cursor:pointer;">✕</button>
+                  </div>
+                </div>
+                <button onclick="iniciarEdicionCorteOp('${item.id}', '${op.name}')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#94a3b8; border-radius:6px; padding:4px 6px; cursor:pointer; font-size:0.75rem;" title="Editar puntos del operador" onmouseover="this.style.color='#fbbf24'">✏️</button>
+              </div>
             </div>
-          </td>
-        </tr>`;
+
+            <!-- Lista de Perfiles de este Operador -->
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              ${profilesHtml}
+            </div>
+          </div>
+        `;
       }).join('');
       
-      if (tableRows.length === 0) {
-        tableRows = `<tr><td colspan="2" style="text-align:center; padding:20px; color:#64748b; font-size:0.65rem;">No hay operadores en este corte para la empresa seleccionada.</td></tr>`;
+      if (opCardsHtml.length === 0) {
+        opCardsHtml = `<div style="text-align:center; padding:30px; color:#64748b; font-size:0.75rem;">No hay operadores en este corte para la empresa seleccionada.</div>`;
       }
       
       container.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; background:rgba(255,255,255,0.01); padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.03);">
-          <div style="font-size:0.7rem; color:#94a3b8;">
-            Total Corte: <strong style="color:#5eead4; font-size:0.8rem;">${totalCorteToShow} pts</strong>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; background:linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.8)); padding:12px 14px; border-radius:12px; border:1px solid rgba(45,212,191,0.25); box-shadow:0 4px 15px rgba(0,0,0,0.3);">
+          <div>
+            <div style="font-size:0.65rem; color:#94a3b8; text-transform:uppercase; font-weight:bold; letter-spacing:0.5px;">Producción Total del Corte</div>
+            <div style="font-size:1.25rem; font-weight:900; color:#34d399; letter-spacing:0.5px;">${totalCorteToShow} <span style="font-size:0.75rem; color:#a7f3d0;">pts</span></div>
           </div>
-          <button onclick="copiarCorteAlPortapapeles('${item.id}')" style="background:#0284c7; border:none; color:#fff; padding:4px 10px; border-radius:4px; font-size:0.6rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px; transition:0.2s;" onmouseover="this.style.background='#0369a1'">
-            📋 Copiar a Portapapeles (WhatsApp)
+          <button onclick="copiarCorteAlPortapapeles('${item.id}')" style="background:linear-gradient(135deg, #0284c7, #0369a1); border:none; color:#fff; padding:8px 14px; border-radius:10px; font-size:0.7rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 0 10px rgba(2,132,199,0.4); transition:all 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+            <span>📋</span> Copiar Reporte WhatsApp
           </button>
         </div>
-        <table style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05); text-align:left;">
-              <th style="padding:6px 8px; font-size:0.6rem; color:#64748b; text-transform:uppercase;">Operador / Desglose</th>
-              <th style="padding:6px 8px; text-align:right; font-size:0.6rem; color:#64748b; text-transform:uppercase;">Producción</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tableRows}
-          </tbody>
-        </table>
+
+        <div style="display:flex; flex-direction:column;">
+          ${opCardsHtml}
+        </div>
       `;
     }
 

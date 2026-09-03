@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260901_1940 -->
-  <title>AGENCIA RR — Monitoreo v16.6 [PRO-STABLE]</title>
+  <!-- build:20260902_2115 -->
+  <title>AGENCIA RR — Monitoreo v16.7 [PRO-STABLE]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -7927,8 +7927,10 @@
     </div>
   </div>
 
-  <!-- MODAL AGREGAR OPERADOR -->
-  <div class="modal-pin-ov" id="modal-add-op">
+  </div> <!-- FIN TAB 0: RANKING / MONITOR -->
+
+  <!-- MODAL AGREGAR OPERADOR (GLOBAL) -->
+  <div class="modal-pin-ov" id="modal-add-op" style="z-index:99999;">
     <div class="modal-pin-box">
       <h3 style="display:flex; align-items:center; gap:6px;">➕ Agregar Operador <button onclick="showSmartInfo('agregar-operador')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#a78bfa'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h3>
       <div class="pin-change-row">
@@ -7971,10 +7973,10 @@
         <label>Turno</label>
         <select class="pin-change-inp" id="addop-turno" style="letter-spacing:0;">
           <option value="">— Seleccionar —</option>
-          <option>Mañana</option>
-          <option>Tarde</option>
-          <option>Noche</option>
-          <option>Completo</option>
+          <option value="Mañana">Mañana</option>
+          <option value="Tarde">Tarde</option>
+          <option value="Noche">Noche</option>
+          <option value="Completo">Completo</option>
         </select>
       </div>
       <div class="pin-change-row">
@@ -7999,12 +8001,12 @@
       </div>
       <button class="btn-pin-save" onclick="confirmarAgregarOp()">✅ Agregar Operador</button>
       <button class="btn-pin-cancel"
-        onclick="document.getElementById('modal-add-op').classList.remove('open')">Cancelar</button>
+        onclick="cerrarModalAddOp()">Cancelar</button>
     </div>
   </div>
 
-  <!-- MODAL REGISTRAR CORTE -->
-  <div class="modal-pin-ov" id="modal-corte">
+  <!-- MODAL REGISTRAR CORTE (GLOBAL) -->
+  <div class="modal-pin-ov" id="modal-corte" style="z-index:99999;">
     <div class="modal-pin-box" style="max-width:620px;width:95%;max-height:90vh;overflow-y:auto;">
       <h3>📸 Registrar Corte de Puntos</h3>
 
@@ -8043,8 +8045,6 @@
         </button>
       </div>
     </div>
-  </div>
-
   </div>
 
   <!-- TAB 1: REPORTE OPERACIÓN -->
@@ -17318,16 +17318,45 @@ function exportarDatos() {
       ['addop-name', 'addop-doctype', 'addop-doc', 'addop-group', 'addop-phone', 'addop-email'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
       });
-      const turno = document.getElementById('addop-turno'); if (turno) turno.value = '';
+      const turno = document.getElementById('addop-turno'); if (turno) turno.value = 'Mañana';
       const emp = document.getElementById('addop-empresa'); if (emp) emp.value = '';
-      document.getElementById('modal-add-op').classList.add('open');
+      const modal = document.getElementById('modal-add-op');
+      if (modal) {
+        modal.classList.add('open');
+        modal.style.display = 'flex';
+      }
     }
+    window.abrirAgregarOp = abrirAgregarOp;
+
+    function cerrarModalAddOp() {
+      const modal = document.getElementById('modal-add-op');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+      }
+    }
+    window.cerrarModalAddOp = cerrarModalAddOp;
 
     async function confirmarAgregarOp() {
       const name = document.getElementById('addop-name')?.value.trim().toUpperCase();
       const doc = document.getElementById('addop-doc')?.value.trim();
-      if (!name) return alert('El nombre es obligatorio.');
-      if (operatorsData.find(o => o.name.toUpperCase() === name)) return alert('Ya existe un operador con ese nombre.');
+      if (!name) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ icon: 'warning', title: 'Nombre requerido', text: 'El nombre completo del operador es obligatorio.', background: '#1e293b', color: '#fff' });
+        } else {
+          alert('El nombre es obligatorio.');
+        }
+        return;
+      }
+
+      if (operatorsData.some(o => o && o.name && o.name.toUpperCase().trim() === name)) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ icon: 'error', title: 'Operador duplicado', text: 'Ya existe un operador registrado con ese nombre.', background: '#1e293b', color: '#fff' });
+        } else {
+          alert('Ya existe un operador con ese nombre.');
+        }
+        return;
+      }
 
       const newOp = {
         name,
@@ -17341,9 +17370,9 @@ function exportarDatos() {
         address: '', sex: '',
         empresa: document.getElementById('addop-empresa')?.value.trim() || '',
         contrato: '',
-        turno: document.getElementById('addop-turno')?.value || '',
+        turno: document.getElementById('addop-turno')?.value || 'Mañana',
         cargo: 'Operador', area: 'Operativa',
-        fecha_ingreso: localDateStr(),
+        fecha_ingreso: (typeof localDateStr === 'function' ? localDateStr() : new Date().toISOString().slice(0,10)),
         mensual: '', cuenta: ''
       };
 
@@ -17352,21 +17381,20 @@ function exportarDatos() {
       // ── PROTECCIÓN ANTI-BORRADO: Inyectar en OPERATORS_SOURCE para que loadData() nunca lo pierda ──
       if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
         const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
-        if (!OPERATORS_SOURCE.some(o => _safeN(o.name) === _safeN(newOp.name))) {
+        if (!OPERATORS_SOURCE.some(o => o && o.name && _safeN(o.name) === _safeN(newOp.name))) {
           OPERATORS_SOURCE.push({ ...newOp, profiles: [] });
           console.info('[NUEVO OP] Inyectado en OPERATORS_SOURCE para persistencia de sesión.');
         }
       }
       
-      // 1. Guardar en localStorage de inmediato (usando el wrapper para actualizar timestamps y Supabase)
+      // 1. Guardar en localStorage de inmediato
       const newValue = JSON.stringify(operatorsData);
       localStorage.setItem('primeOperatorsData2026', newValue);
       const tsVal = String(Date.now());
       localStorage.setItem('primeOperatorsData2026_ts', tsVal);
-      // Guard extendido: proteger contra ecos Realtime por 10 segundos
-      _localSaveTs['primeOperatorsData2026'] = Date.now();
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
 
-      // 2. FORZAR inserción directa en Supabase kv_store (evitando race conditions de red de la redefinición)
+      // 2. FORZAR inserción directa en Supabase kv_store
       if (typeof _sb !== 'undefined' && _sb) {
         let opsWithoutProfiles = newValue;
         try {
@@ -17381,20 +17409,38 @@ function exportarDatos() {
           }
         } catch(e) {}
 
+        const normKey = (typeof _normName === 'function' ? _normName(name) : name.replace(/[^A-Z0-9]/g, ''));
         Promise.all([
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'rr_profile_' + normKey, value: '[]' }, { onConflict: 'key' })
         ]).then(() => {
           console.info('✅ [NUEVO OPERADOR BD] Guardado y sincronizado correctamente en Supabase.');
         }).catch(e => console.warn('⚠️ Error al subir nuevo operador a Supabase:', e.message));
       }
 
-      document.getElementById('modal-add-op').classList.remove('open');
-        renderRanking();
-        if (typeof renderOperators === 'function') renderOperators();
-        if (typeof asiRender === 'function') asiRender();
-      alert(`✅ Operador "${name}" agregado correctamente.`);
+      cerrarModalAddOp();
+
+      if (typeof renderRanking === 'function') renderRanking();
+      if (typeof renderOperators === 'function') renderOperators();
+      if (typeof asiRender === 'function') asiRender();
+      if (typeof populateImgModels === 'function') populateImgModels();
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: '¡Operador Agregado!',
+          text: `El operador "${name}" ha sido agregado correctamente a la plataforma.`,
+          background: '#1e293b',
+          color: '#fff',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        alert(`✅ Operador "${name}" agregado correctamente.`);
+      }
     }
+    window.confirmarAgregarOp = confirmarAgregarOp;
 
     // Keep Plan de Trabajo iframe always full size
     window.addEventListener('resize', () => {
@@ -17406,7 +17452,9 @@ function exportarDatos() {
     });
 
     document.addEventListener('click', e => {
-      if (e.target === document.getElementById('modal-add-op')) document.getElementById('modal-add-op').classList.remove('open');
+      if (e.target === document.getElementById('modal-add-op')) {
+        if (typeof cerrarModalAddOp === 'function') cerrarModalAddOp();
+      }
     });
 
     function renderDetConsejos() {

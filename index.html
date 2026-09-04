@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260904_1050 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v17.3 [MOBILE-ALERT-PRO]</title>
+  <!-- build:20260904_1118 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v17.4 [CHAT-LIVE-NOTIFS]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14405,6 +14405,13 @@
                 const _rtVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
                 if (typeof _origSetItem === 'function') _origSetItem(row.key, _rtVal);
                 _sbMemCache[row.key] = _rtVal;
+              } else if (row.key.startsWith('rr_chat_')) {
+                const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
+                if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
+                _sbMemCache[row.key] = finalVal;
+                if (typeof procesarMensajeChatRealtime === 'function') {
+                  procesarMensajeChatRealtime(row);
+                }
               } else {
                 const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
                 if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
@@ -32656,9 +32663,9 @@ PT._logKey = function (opName) {
   <div id="rr-urgent-chat">
     
     <!-- Icono de burbuja flotante (solo visible minimizado) -->
-    <div id="chat-bubble-icon" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 1.8rem; position: absolute; inset: 0; cursor: pointer; transition: 0.2s; background: rgba(99,102,241,0.15);" onclick="document.getElementById('rr-urgent-chat').classList.add('open'); if(typeof cargarHistorialChatSeleccionado === 'function') cargarHistorialChatSeleccionado(true); event.stopPropagation();">
+    <div id="chat-bubble-icon" style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 1.8rem; position: absolute; inset: 0; cursor: pointer; transition: 0.2s; background: rgba(99,102,241,0.15); border-radius: 50%; overflow: visible;" onclick="document.getElementById('rr-urgent-chat').classList.add('open'); document.getElementById('rr-urgent-chat').classList.remove('pulse-chat-attention'); if(typeof cargarHistorialChatSeleccionado === 'function') cargarHistorialChatSeleccionado(true); event.stopPropagation();">
       💬
-      <span id="chat-bubble-badge" style="position: absolute; top: -2px; right: -2px; background: #ef4444; color: #ffffff; border-radius: 12px; min-width: 22px; height: 22px; padding: 0 5px; font-size: 0.72rem; font-weight: 900; box-shadow: 0 0 14px rgba(239, 68, 68, 0.9); display: none; align-items: center; justify-content: center; border: 2px solid #ffffff; z-index: 100000; box-sizing: border-box;">0</span>
+      <span id="chat-bubble-badge" style="position: absolute; top: -4px; right: -4px; background: #ef4444; color: #ffffff; border-radius: 12px; min-width: 22px; height: 22px; padding: 0 6px; font-size: 0.72rem; font-weight: 900; box-shadow: 0 0 12px rgba(239, 68, 68, 0.9); display: none; align-items: center; justify-content: center; border: 2px solid #ffffff; z-index: 100000; box-sizing: border-box; line-height: 1;">0</span>
     </div>
     
     <!-- Cabecera -->
@@ -33459,9 +33466,30 @@ PT._logKey = function (opName) {
       }, 7000);
     }
 
-    function monitorearNuevosMensajesGlobales() {
-      // Optimización profesional: Desactivado el polling activo para ahorrar cuota de base de datos.
-      // Los nuevos mensajes se procesan en tiempo real usando procesarMensajeChatRealtime(row) en postgres_changes.
+    async function sincronizarChatGlobalLive() {
+      if (typeof _sb === 'undefined' || !_sb) return;
+      const role = (typeof currentRole !== 'undefined') ? currentRole : '';
+      if (!role) return;
+
+      if (role === 'operador') {
+        if (!currentOpName) return;
+        const key = `rr_chat_${currentOpName.toLowerCase()}`;
+        try {
+          const { data, error } = await _sb.from('kv_store').select('value').eq('key', key).maybeSingle();
+          if (!error && data && data.value) {
+            procesarMensajeChatRealtime({ key, value: data.value });
+          }
+        } catch(e) {}
+      } else if (role === 'monitor' || role === 'admin') {
+        try {
+          const { data, error } = await _sb.from('kv_store').select('key, value').like('key', 'rr_chat_%');
+          if (!error && Array.isArray(data)) {
+            data.forEach(row => {
+              procesarMensajeChatRealtime(row);
+            });
+          }
+        } catch(e) {}
+      }
     }
 
     function procesarMensajeChatRealtime(row) {
@@ -33482,7 +33510,7 @@ PT._logKey = function (opName) {
       
       if (!Array.isArray(remoteHistory)) return;
 
-      // Guardar inmediatamente en localStorage (sin disparar upsert en loop)
+      // Guardar inmediatamente en localStorage
       if (typeof _origSetItem === 'function') {
         _origSetItem(row.key, JSON.stringify(remoteHistory));
       } else {
@@ -33493,21 +33521,24 @@ PT._logKey = function (opName) {
       const isViewingCurrent = (window.chatSelectedOp && window.chatSelectedOp.toLowerCase() === opNameReal.toLowerCase() && chatPanel && chatPanel.classList.contains('open'));
 
       if (remoteHistory.length > 0) {
-        const lastMsg = remoteHistory[remoteHistory.length - 1];
-        const isFromOther = isOperator ? (lastMsg.sender === 'monitor') : (lastMsg.sender === 'operador');
+        window._toastedMessages = window._toastedMessages || new Set();
 
-        if (isFromOther) {
-          const toastKey = `${opNameReal.toLowerCase()}_${lastMsg.ts}`;
-          window._toastedMessages = window._toastedMessages || new Set();
+        // Verificar todos los mensajes no leídos del otro remitente
+        remoteHistory.forEach(msg => {
+          if (!msg) return;
+          const isFromOther = isOperator ? (msg.sender === 'monitor') : (msg.sender === 'operador');
+          const isUnread = (msg.seen === false || msg.seen === undefined || msg.seen === 0 || msg.seen === 'false');
           
-          const isRecent = Math.abs(Date.now() - lastMsg.ts) < 30000;
-          if (isRecent && !window._toastedMessages.has(toastKey) && !isViewingCurrent) {
-            window._toastedMessages.add(toastKey);
-            if (typeof crearNotificacionToastChat === 'function') {
-              crearNotificacionToastChat(isOperator ? "MONITOR CENTRAL" : opNameReal.toUpperCase(), lastMsg);
+          if (isFromOther && isUnread) {
+            const toastKey = `${opNameReal.toLowerCase()}_${msg.ts}_${msg.text ? msg.text.substring(0, 12) : ''}`;
+            if (!window._toastedMessages.has(toastKey) && !isViewingCurrent) {
+              window._toastedMessages.add(toastKey);
+              if (typeof crearNotificacionToastChat === 'function') {
+                crearNotificacionToastChat(isOperator ? "MONITOR CENTRAL" : opNameReal.toUpperCase(), msg);
+              }
             }
           }
-        }
+        });
       }
 
       if (isViewingCurrent && typeof cargarHistorialChatSeleccionado === 'function') {
@@ -33535,7 +33566,7 @@ PT._logKey = function (opName) {
           if (key && key.startsWith('rr_chat_')) {
             const chatOp = key.replace('rr_chat_', '');
             
-            // Para operador, filtrar solo su propio chat (normalizando guiones bajos y espacios)
+            // Para operador, filtrar solo su propio chat
             if (role === 'operador' && currentOpNorm && normStr(chatOp) !== currentOpNorm) {
               continue;
             }
@@ -33558,14 +33589,21 @@ PT._logKey = function (opName) {
         }
         
         const badge = document.getElementById('chat-bubble-badge');
+        const chatPanel = document.getElementById('rr-urgent-chat');
         if (badge) {
           if (unreadTotal > 0) {
             badge.innerText = unreadTotal > 99 ? '99+' : String(unreadTotal);
             badge.style.display = 'flex';
             badge.style.alignItems = 'center';
             badge.style.justifyContent = 'center';
+            if (chatPanel && !chatPanel.classList.contains('open')) {
+              chatPanel.classList.add('pulse-chat-attention');
+            }
           } else {
             badge.style.display = 'none';
+            if (chatPanel) {
+              chatPanel.classList.remove('pulse-chat-attention');
+            }
           }
         }
       } catch(e){}
@@ -33573,7 +33611,11 @@ PT._logKey = function (opName) {
 
     if (!window._badgeIntervalSet) {
       window._badgeIntervalSet = true;
+      // Sincronización continua de fondo cada 3 segundos
       setInterval(() => {
+        if (typeof sincronizarChatGlobalLive === 'function') {
+          sincronizarChatGlobalLive();
+        }
         if (typeof window.actualizarBadgeMensajesNoLeidos === 'function') {
           window.actualizarBadgeMensajesNoLeidos();
         }

@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260904_1230 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v17.6 [RESPONSIVE-VOICE-MODAL-PRO]</title>
+  <!-- build:20260904_1235 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v17.7 [GLOBAL-AUDIO-BROADCAST-ALL]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13985,12 +13985,7 @@
     function _initMasterRealtime(role) {
       if (typeof _sb === 'undefined' || !_sb || _globalRealtimeActive) return;
       
-      if (role === 'operador') {
-        console.log('[MASTER-RT] 🛑 Realtime WS desactivado para el Operador (ahorro extremo de cuota). Usando solo polling de 60s.');
-        return; // Aborta la conexión WS completamente para operadores
-      }
-      
-      console.log('[MASTER-RT] Iniciando canal global unificado para Admins/Monitores...');
+      console.log('[MASTER-RT] Iniciando canal global unificado en tiempo real para todos los roles (Admin/Monitor/Operador)...');
       const globalChannel = _sb.channel('agencia_global_rt', { config: { broadcast: { ack: true, self: true } } });
       
       globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
@@ -34442,15 +34437,25 @@ CONFIGURACIÓN DE CONTEXTO:
         // 1. Reproducir inmediatamente en este dispositivo local
         window.reproducirAnuncioVozGlobal(annPayload);
 
-        // 2. Guardar en Supabase para que TODOS los operadores conectados lo reciban al instante
+        // 2. Transmitir por canal de WebSocket broadcast en tiempo real
         if (typeof _sb !== 'undefined' && _sb) {
+          try {
+            const rtChan = _sb.channel('agencia_global_rt');
+            rtChan.send({
+              type: 'broadcast',
+              event: 'voice_alert',
+              payload: annPayload
+            });
+          } catch(e){}
+
+          // 3. Guardar en Supabase para que TODOS los operadores conectados lo reciban al instante
           _sb.from('kv_store').upsert({
             key: 'rr_last_voice_announcement',
             value: JSON.stringify(annPayload)
           }, { onConflict: 'key' }).catch(e => console.warn('Sync voice announcement err:', e));
         }
 
-        // 3. Feedback visual
+        // 4. Feedback visual
         if (inputEl) {
           inputEl.value = '';
           inputEl.placeholder = '✓ ¡Anuncio general transmitido a todos!';
@@ -34493,14 +34498,29 @@ CONFIGURACIÓN DE CONTEXTO:
       
       try {
         window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-ES';
-        utterance.rate = 1.05;
+        utterance.volume = 1.0;
+        utterance.rate = 1.0;
         utterance.pitch = 1.0;
-        const voices = window.speechSynthesis.getVoices();
-        const esVoice = voices.find(v => v.lang.startsWith('es') || v.lang.includes('ES') || v.lang.includes('CO') || v.lang.includes('MX'));
-        if (esVoice) utterance.voice = esVoice;
-        window.speechSynthesis.speak(utterance);
+
+        const applyVoiceAndSpeak = () => {
+          const voices = window.speechSynthesis.getVoices();
+          const esVoice = voices.find(v => v.lang.startsWith('es') || v.lang.includes('ES') || v.lang.includes('CO') || v.lang.includes('MX'));
+          if (esVoice) utterance.voice = esVoice;
+          window.speechSynthesis.speak(utterance);
+        };
+
+        const currentVoices = window.speechSynthesis.getVoices();
+        if (currentVoices && currentVoices.length > 0) {
+          applyVoiceAndSpeak();
+        } else {
+          window.speechSynthesis.onvoiceschanged = () => {
+            applyVoiceAndSpeak();
+          };
+          window.speechSynthesis.speak(utterance);
+        }
       } catch (e) {
         console.warn("Falla en reproducción TTS: ", e);
       }

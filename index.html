@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260904_1235 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v17.7 [GLOBAL-AUDIO-BROADCAST-ALL]</title>
+  <!-- build:20260904_1245 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v17.8 [MANDATORY-GLOBAL-VOICE-PRO]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10819,14 +10819,14 @@
               </button>
             </div>
 
-            <!-- Transmisión de Voz / Megáfono General -->
-            <div style="display:flex; align-items:center; gap:8px; background:rgba(30, 41, 59, 0.85); padding:6px 10px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); box-sizing:border-box;">
-              <span style="font-size:1.1rem; flex-shrink:0;">🎙️</span>
-              <input type="text" id="demo-voice-text" placeholder="Escribe un anuncio general para todos los operadores..." style="
-                background:transparent !important; background-color:transparent !important; border:none; outline:none; color:#f8fafc; font-size:0.8rem; flex:1; min-width:0; padding:4px 6px; font-family:inherit;
+            <!-- Transmisión de Voz / Megáfono General (Solo Monitores y Admin) -->
+            <div style="display:flex; align-items:center; gap:8px; background:rgba(15, 23, 42, 0.85); padding:6px 8px; border-radius:12px; border:1px solid rgba(56, 189, 248, 0.25); box-sizing:border-box;">
+              <span style="font-size:1.15rem; flex-shrink:0; filter: drop-shadow(0 0 6px #38bdf8);">🎙️</span>
+              <input type="text" id="demo-voice-text" placeholder="Escribe un anuncio obligatorio para todos los operadores..." style="
+                background:#0b1329 !important; background-color:#0b1329 !important; border:1px solid rgba(56,189,248,0.3) !important; border-radius:8px !important; outline:none !important; color:#ffffff !important; font-size:0.8rem !important; flex:1; min-width:0; padding:8px 10px; font-family:inherit; box-sizing:border-box;
               " onkeydown="if(event.key==='Enter') window.playCustomVoiceDemo()" />
               <button onclick="window.playCustomVoiceDemo()" style="
-                background:linear-gradient(135deg, #0ea5e9, #2563eb); border:1px solid #38bdf8; color:#ffffff; border-radius:10px; padding:6px 14px; font-size:0.72rem; cursor:pointer; font-weight:800; transition:all 0.2s; white-space:nowrap; box-shadow:0 0 10px rgba(14, 165, 233, 0.4); display:flex; align-items:center; gap:4px;
+                background:linear-gradient(135deg, #0ea5e9, #2563eb); border:1px solid #38bdf8; color:#ffffff; border-radius:8px; padding:8px 14px; font-size:0.75rem; cursor:pointer; font-weight:900; transition:all 0.2s; white-space:nowrap; box-shadow:0 0 12px rgba(14, 165, 233, 0.5); display:flex; align-items:center; gap:5px;
               ">📢 Transmitir</button>
             </div>
           </div>`;
@@ -34341,23 +34341,34 @@ CONFIGURACIÓN DE CONTEXTO:
       window._playedAnnouncements = window._playedAnnouncements || new Set();
       if (window._playedAnnouncements.has(annId)) return;
       
-      const isFresh = ann.ts ? (Math.abs(Date.now() - ann.ts) < 120000) : true;
+      const isFresh = ann.ts ? (Math.abs(Date.now() - ann.ts) < 180000) : true;
       if (!isFresh) return;
 
       window._playedAnnouncements.add(annId);
 
-      // 1. Sonido de campana nítida de alerta
+      // 1. Sonido obligatorio de alta atención (Doble campana + Tono de alerta)
       if (typeof playBeep === 'function') {
         playBeep('coin');
-        setTimeout(() => playBeep('bell'), 180);
+        setTimeout(() => playBeep('bell'), 150);
+        setTimeout(() => playBeep('bell'), 350);
       }
 
-      // 2. Vibración háptica en móviles
+      // 2. Vibración háptica obligatoria en dispositivos móviles
       try {
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 300]);
+        if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 600]);
       } catch(e) {}
 
-      // 3. Crear Alerta Visual Destacada (Full-view banner superior con luz neón)
+      // 3. Reproducción por voz hablada OBLIGATORIA e inmediata (TTS)
+      setTimeout(() => {
+        const fullSpeech = "Atención operadores. Comunicado oficial: " + ann.text;
+        if (typeof speakText === 'function') {
+          speakText(fullSpeech);
+        } else if (typeof window.speakText === 'function') {
+          window.speakText(fullSpeech);
+        }
+      }, 250);
+
+      // 4. Crear Alerta Visual Invasiva Obligatoria (Modal Neón Full-View)
       let banner = document.getElementById('rr-global-voice-banner');
       if (banner) banner.remove();
 
@@ -34368,35 +34379,34 @@ CONFIGURACIÓN DE CONTEXTO:
         top: 15px;
         left: 50%;
         transform: translateX(-50%);
-        width: 92%;
+        width: 94%;
         max-width: 480px;
-        z-index: 99999999;
+        z-index: 999999999;
         background: linear-gradient(135deg, #0f172a, #1e1b4b);
         border: 2px solid #38bdf8;
-        box-shadow: 0 10px 40px rgba(56, 189, 248, 0.7), 0 0 25px rgba(99, 102, 241, 0.5);
+        box-shadow: 0 10px 45px rgba(56, 189, 248, 0.75), 0 0 30px rgba(99, 102, 241, 0.6);
         border-radius: 18px;
         padding: 16px 18px;
         color: #ffffff;
         box-sizing: border-box;
+        animation: pulseAlert 1.5s infinite alternate;
       `;
 
       const safeText = String(ann.text).replace(/"/g, '&quot;');
-      const cleanSpeakText = String(ann.text).replace(/'/g, "\\'");
 
       banner.innerHTML = `
         <div style="display:flex; align-items:flex-start; gap:12px;">
-          <div style="background:rgba(56,189,248,0.2); border:1.5px solid #38bdf8; width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; flex-shrink:0; box-shadow:0 0 14px rgba(56,189,248,0.5);">📢</div>
+          <div style="background:rgba(56,189,248,0.25); border:1.5px solid #38bdf8; width:46px; height:46px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.7rem; flex-shrink:0; box-shadow:0 0 16px rgba(56,189,248,0.6);">📢</div>
           <div style="flex:1; min-width:0;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:0.72rem; font-weight:900; color:#38bdf8; letter-spacing:0.8px; text-transform:uppercase;">COMUNICADO GENERAL</span>
-              <span style="font-size:0.65rem; color:#94a3b8;">${new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})}</span>
+              <span style="font-size:0.72rem; font-weight:900; color:#38bdf8; letter-spacing:0.8px; text-transform:uppercase;">🚨 COMUNICADO OFICIAL DE MONITOREO</span>
+              <span style="font-size:0.65rem; color:#94a3b8; font-weight:700;">${new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'})}</span>
             </div>
-            <div style="font-size:1rem; font-weight:800; color:#f8fafc; margin-top:5px; line-height:1.35; word-break:break-word;">${safeText}</div>
+            <div style="font-size:1.05rem; font-weight:900; color:#f8fafc; margin-top:6px; line-height:1.4; word-break:break-word;">${safeText}</div>
           </div>
         </div>
-        <div style="display:flex; gap:10px; margin-top:14px; justify-content:flex-end;">
-          <button onclick="window.speakText('${cleanSpeakText}'); event.stopPropagation();" style="background:rgba(56,189,248,0.18); border:1px solid #38bdf8; color:#38bdf8; padding:7px 14px; border-radius:10px; font-size:0.75rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:5px;">🔊 Escuchar Voz</button>
-          <button onclick="document.getElementById('rr-global-voice-banner').remove()" style="background:linear-gradient(135deg, #0ea5e9, #2563eb); border:none; color:#ffffff; padding:7px 18px; border-radius:10px; font-size:0.75rem; font-weight:900; cursor:pointer; box-shadow:0 0 10px rgba(14,165,233,0.4);">✓ Entendido</button>
+        <div style="display:flex; margin-top:14px; justify-content:flex-end;">
+          <button onclick="document.getElementById('rr-global-voice-banner').remove()" style="width:100%; background:linear-gradient(135deg, #0ea5e9, #2563eb); border:none; color:#ffffff; padding:10px 18px; border-radius:12px; font-size:0.82rem; font-weight:900; cursor:pointer; box-shadow:0 0 14px rgba(14,165,233,0.5); text-transform:uppercase; letter-spacing:0.5px;">✓ Entendido (Cerrar Alerta)</button>
         </div>
       `;
 
@@ -34409,19 +34419,15 @@ CONFIGURACIÓN DE CONTEXTO:
           banner.style.transform = 'translateX(-50%) translateY(-20px)';
           setTimeout(() => banner.remove(), 400);
         }
-      }, 14000);
-
-      // 4. Reproducción por voz TTS (hablado)
-      setTimeout(() => {
-        if (typeof speakText === 'function') {
-          speakText("Atención equipo: " + ann.text);
-        } else if (typeof window.speakText === 'function') {
-          window.speakText("Atención equipo: " + ann.text);
-        }
-      }, 300);
+      }, 16000);
     };
 
     window.playCustomVoiceDemo = function() {
+      if (typeof currentRole !== 'undefined' && currentRole !== 'monitor' && currentRole !== 'admin') {
+        alert('Solo el Monitor o Administrador pueden emitir comunicados generales a los operadores.');
+        return;
+      }
+
       const inputEl = document.getElementById('demo-voice-text');
       let text = inputEl ? inputEl.value.trim() : '';
       if (!text) text = 'Atención operadores, mensaje general de monitoreo';

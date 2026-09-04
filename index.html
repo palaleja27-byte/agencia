@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260904_1245 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v17.8 [MANDATORY-GLOBAL-VOICE-PRO]</title>
+  <!-- build:20260904_1310 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v17.9 [REALTIME-UNIVERSAL-VOICE-BROADCAST]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13697,7 +13697,8 @@
       try {
         _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { global: { headers: { 'ngrok-skip-browser-warning': 'true' } } });
         _sbSyncOnLoad();
-        // _sbRealtime() se inicializa en _bootDone para evitar suscripciones duplicadas y cuelgues
+        if (typeof _sbRealtime === 'function') _sbRealtime();
+        if (typeof _initMasterRealtime === 'function') _initMasterRealtime();
       } catch (e) {
         console.warn('[Supabase] Error al inicializar:', e.message);
       }
@@ -14405,7 +14406,8 @@
               const msSinceLocalSave = Date.now() - (_localSaveTs[row.key] || 0);
               const _isAsistenciaDraft = row.key.startsWith('rr_prime_asistencia_draft');
               const _isChatKey = row.key.startsWith('rr_chat_') || row.key.startsWith('rr_solicitudes_contenido');
-              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && !_isAsistenciaDraft && !_isChatKey) return;
+              const _isVoiceKey = row.key === 'rr_last_voice_announcement';
+              if (msSinceLocalSave < 3000 && row.key !== 'rr_prime_cortes' && !_isAsistenciaDraft && !_isChatKey && !_isVoiceKey) return;
               if (row.key === 'primeOperatorsData2026' && msSinceLocalSave < 8000) return;
               
               if (row.key === 'primeOperatorsData2026') {
@@ -33493,9 +33495,20 @@ PT._logKey = function (opName) {
     async function sincronizarChatGlobalLive() {
       if (typeof _sb === 'undefined' || !_sb) return;
       const role = (typeof currentRole !== 'undefined') ? currentRole : '';
+
+      // 1. Sincronizar anuncios de voz generales (Megáfono) para todos los usuarios y pantallas
+      try {
+        const { data: annData } = await _sb.from('kv_store').select('value').eq('key', 'rr_last_voice_announcement').maybeSingle();
+        if (annData && annData.value) {
+          if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+            window.reproducirAnuncioVozGlobal(annData.value);
+          }
+        }
+      } catch(e) {}
+
       if (!role) return;
 
-      // 1. Sincronizar mensajes de chat
+      // 2. Sincronizar mensajes de chat
       if (role === 'operador') {
         if (!currentOpName) return;
         const key = `rr_chat_${currentOpName.toLowerCase()}`;
@@ -33515,16 +33528,6 @@ PT._logKey = function (opName) {
           }
         } catch(e) {}
       }
-
-      // 2. Sincronizar anuncios de voz generales (Megáfono)
-      try {
-        const { data: annData } = await _sb.from('kv_store').select('value').eq('key', 'rr_last_voice_announcement').maybeSingle();
-        if (annData && annData.value) {
-          if (typeof window.reproducirAnuncioVozGlobal === 'function') {
-            window.reproducirAnuncioVozGlobal(annData.value);
-          }
-        }
-      } catch(e) {}
     }
 
     function procesarMensajeChatRealtime(row) {

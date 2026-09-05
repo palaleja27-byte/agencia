@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260904_1310 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v17.9 [REALTIME-UNIVERSAL-VOICE-BROADCAST]</title>
+  <!-- build:20260904_1920 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v18.0 [AUTO-SYNC-OPERATOR-PROFILES]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14416,11 +14416,12 @@
                     const remoteTsVal = tsData ? tsData.value : '0';
                     if (typeof syncMergeOperatorsData === 'function') syncMergeOperatorsData(row.value, remoteTsVal);
                     if (typeof loadData === 'function') loadData();
+                    if (typeof asiRender === 'function') asiRender();
+                    if (typeof renderRanking === 'function') renderRanking();
+                    if (typeof renderOperators === 'function') renderOperators();
+                    if (typeof window.populateImgModels === 'function') window.populateImgModels();
                     if (currentRole === 'operador' && currentOpName && typeof renderOpDashboard === 'function') {
                       renderOpDashboard(currentOpName);
-                    } else {
-                      if (typeof renderRanking === 'function') renderRanking();
-                      if (typeof renderOperators === 'function') renderOperators();
                     }
                   });
               } else if (row.key.startsWith('rr_profile_')) {
@@ -14429,6 +14430,13 @@
                 const _rtVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
                 if (typeof _origSetItem === 'function') _origSetItem(row.key, _rtVal);
                 _sbMemCache[row.key] = _rtVal;
+                if (typeof asiRender === 'function') asiRender();
+                if (typeof renderRanking === 'function') renderRanking();
+                if (typeof renderOperators === 'function') renderOperators();
+                if (typeof window.populateImgModels === 'function') window.populateImgModels();
+                if (currentRole === 'operador' && currentOpName && typeof renderOpDashboard === 'function') {
+                  renderOpDashboard(currentOpName);
+                }
               } else if (row.key.startsWith('rr_chat_')) {
                 const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
                 if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
@@ -19560,7 +19568,20 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         if (form) form.style.display = form.style.display === 'flex' ? 'none' : 'flex';
       }
     };
-
+    window.opToggleTipoPerfil = function (pIdx) {
+      if (typeof currentOpName !== 'undefined' && currentOpName) {
+        const op = operatorsData.find(o => _normName(o.name) === _normName(currentOpName));
+        if (!op?.profiles?.[pIdx]) return;
+        const currentTipo = op.profiles[pIdx].tipo || 'propio';
+        const nextTipo = currentTipo === 'cobertura' ? 'propio' : 'cobertura';
+        asiPerfilSetTipo(currentOpName, pIdx, nextTipo);
+      }
+    };
+    window.opSetCubrePerfil = function (pIdx, cubreA) {
+      if (typeof currentOpName !== 'undefined' && currentOpName) {
+        asiPerfilSetCubre(currentOpName, pIdx, cubreA);
+      }
+    };
 
     window.asiPerfilSetTipo = function (opName, pIdx, tipo) {
       const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
@@ -19574,6 +19595,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
       }
       asiRender();
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
+        renderOpDashboard(currentOpName);
+      }
     };
 
     window.asiPerfilSetCubre = function (opName, pIdx, cubreA) {
@@ -19585,7 +19609,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' });
       }
-      // no re-render completo — solo actualizar visual del select
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
+        renderOpDashboard(currentOpName);
+      }
     };
 
     window.toggleCubreField = function (globalIndex) {
@@ -21142,18 +21168,39 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       // Profiles
       const profiles = op.profiles || [];
+      const otherOpsOptions = (typeof operatorsData !== 'undefined')
+        ? operatorsData
+          .filter(o => _normName(o.name) !== _normName(name) && o.group !== 'SP' && o.group !== 'N/A')
+          .map(o => `<option value="${o.name}">${o.name}</option>`)
+          .join('')
+        : '';
+
       const profilesListHTML = profiles.length
         ? profiles.map((p, pi) => {
           const isCov = p.tipo === 'cobertura';
-          return `<div class="op-profile-item" style="display:flex; align-items:center; gap:10px; padding:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:12px; margin-bottom:6px; transition:0.3s;">
-            <div style="font-size:1.2rem;">${isCov ? '🔴' : '🟢'}</div>
-            <div style="flex:1;">
-              <div style="font-size:0.85rem; font-weight:700; color:#e2e8f0;">${p.model}</div>
-              <div style="font-size:0.65rem; color:#64748b;">ID: ${p.id} ${isCov ? `· Cubriendo: ${p.cubreA}` : ''}</div>
+          const snqCubre = (p.cubreA || '').replace(/'/g, "\\'");
+          return `<div class="op-profile-item" style="display:flex; flex-direction:column; gap:6px; padding:10px 12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:12px; margin-bottom:8px; transition:0.3s;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="font-size:1.2rem; cursor:pointer;" onclick="opToggleTipoPerfil(${pi})" title="Clic para alternar Propio / Cobertura">${isCov ? '🔴' : '🟢'}</div>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                  <span style="font-size:0.85rem; font-weight:800; color:#e2e8f0;">${p.model}</span>
+                  <span onclick="opToggleTipoPerfil(${pi})" style="cursor:pointer; font-size:0.62rem; font-weight:800; padding:2px 6px; border-radius:6px; border:1px solid ${isCov ? 'rgba(248,113,113,0.3)' : 'rgba(52,211,153,0.3)'}; background:${isCov ? 'rgba(248,113,113,0.15)' : 'rgba(52,211,153,0.15)'}; color:${isCov ? '#f87171' : '#34d399'}; user-select:none;">${isCov ? '🔴 Cobertura' : '🟢 Propio'}</span>
+                </div>
+                <div style="font-size:0.65rem; color:#64748b; margin-top:2px;">ID: ${p.id}</div>
+              </div>
+              <button onclick="opEliminarPerfil(${pi})" 
+                      style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.75rem; transition:0.2s;"
+                      onmouseover="this.style.background='rgba(248,113,113,0.3)'" onmouseout="this.style.background='rgba(248,113,113,0.1)'" title="Eliminar Perfil">🗑️</button>
             </div>
-            <button onclick="opEliminarPerfil(${pi})" 
-                    style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); color:#f87171; width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.75rem; transition:0.2s;"
-                    onmouseover="this.style.background='rgba(248,113,113,0.3)'" onmouseout="this.style.background='rgba(248,113,113,0.1)'">🗑️</button>
+            ${isCov ? `
+            <div style="display:flex; align-items:center; gap:6px; font-size:0.65rem; color:#f87171; background:rgba(248,113,113,0.06); padding:4px 8px; border-radius:6px; border:1px solid rgba(248,113,113,0.15);">
+              <span>↳ Cubriendo a:</span>
+              <select onchange="opSetCubrePerfil(${pi}, this.value)" style="font-size:0.65rem; padding:2px 6px; border-radius:4px; border:1px solid rgba(248,113,113,0.3); background:#0d1526; color:#f87171; flex:1; outline:none;">
+                <option value="">— ¿A quién cubre? —</option>
+                ${otherOpsOptions.replace(new RegExp('value="' + snqCubre + '"'), 'value="' + snqCubre + '" selected')}
+              </select>
+            </div>` : ''}
           </div>`;
         }).join('')
         : '<div style="color:#475569;font-size:.82rem;padding:20px;text-align:center;border:1px dashed rgba(255,255,255,0.05);border-radius:12px;">Sin perfiles asignados.</div>';

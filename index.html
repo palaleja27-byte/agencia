@@ -10807,13 +10807,13 @@
             <!-- Header: Operadores en Turno + Toggle Alertas de Voz -->
             <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
               <div id="badge-active-ops-content"></div>
-              <button id="toggle-voice-alerts-btn" onclick="toggleVoiceAlerts()" style="
+              <button id="toggle-voice-alerts-btn" class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="
                 display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
-                font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${window._enableVoiceAlerts ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'};
-                background:${window._enableVoiceAlerts ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};
-                color:${window._enableVoiceAlerts ? '#34d399' : '#ef4444'}; transition: all 0.3s ease; white-space:nowrap;
+                font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'};
+                background:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};
+                color:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '#34d399' : '#ef4444'}; transition: all 0.3s ease; white-space:nowrap;
               ">
-                ${window._enableVoiceAlerts ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
+                ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
               </button>
             </div>
 
@@ -14002,6 +14002,14 @@
 
       globalChannel.on('broadcast', { event: 'voice_alert' }, (payload) => {
          window.dispatchEvent(new CustomEvent('rr_voice_alert', { detail: payload }));
+      });
+
+      globalChannel.on('broadcast', { event: 'op_activity' }, (payload) => {
+         const p = payload?.payload;
+         if (p && p.opName) {
+           window._opLastActivityMap = window._opLastActivityMap || {};
+           window._opLastActivityMap[p.opName.toUpperCase()] = p.ts || Date.now();
+         }
       });
       
       // Nueva integración de rr_media al canal global unificado
@@ -20394,8 +20402,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
       
-      // Habilitar alertas de voz por defecto para todas las vistas en el login (interacción humana)
-      window._enableVoiceAlerts = true;
+      // Respetar estado guardado de alertas de voz (ON por defecto)
+      window._enableVoiceAlerts = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      window.voiceAlertsEnabled = window._enableVoiceAlerts;
+      if (typeof window.updateVoiceAlertBtnUI === 'function') {
+        window.updateVoiceAlertBtnUI();
+      }
 
       // Aplicar permisos de UI según rol (admin/monitor/operador)
       applyRolePermissions(role);
@@ -34374,39 +34386,94 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
-    // GHOST PROTOCOL: Monitoreo inteligente de inactividad por Operador
+    // GHOST PROTOCOL & TELEMETRÍA: Monitoreo inteligente de inactividad (Clicks, Teclado y Puntos)
     const ghostVars = {
       lastInteraction: Date.now(),
       lastPoints: -1,
       flatlineMinutes: 0
     };
 
-    document.addEventListener('mousemove', () => ghostVars.lastInteraction = Date.now());
-    document.addEventListener('keydown', () => ghostVars.lastInteraction = Date.now());
-    document.addEventListener('click', () => {
-      ghostVars.lastInteraction = Date.now();
-      if (audioCtx && audioCtx.state === 'suspended') {
+    let _lastActivityHeartbeatSent = 0;
+    function registrarActividadOperadorGlobal() {
+      const now = Date.now();
+      ghostVars.lastInteraction = now;
+      ghostVars.flatlineMinutes = 0;
+
+      // Si es rol operador, transmitir pulso de interacción (teclas/clicks/mouse) a monitores vía Realtime
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
+        if (now - _lastActivityHeartbeatSent >= 15000) {
+          _lastActivityHeartbeatSent = now;
+          try {
+            if (typeof _sb !== 'undefined' && _sb) {
+              const chan = _sb.channel('agencia_global_rt');
+              chan.send({
+                type: 'broadcast',
+                event: 'op_activity',
+                payload: { opName: currentOpName, ts: now }
+              });
+            }
+          } catch(e) {}
+        }
+      }
+    }
+
+    // Capturar Clicks, Puntero, Teclado y Movimiento de mouse
+    window.addEventListener('click', () => {
+      registrarActividadOperadorGlobal();
+      if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
-    });
+    }, { passive: true });
+    window.addEventListener('pointerdown', registrarActividadOperadorGlobal, { passive: true });
+    window.addEventListener('mousedown', registrarActividadOperadorGlobal, { passive: true });
+    window.addEventListener('keydown', registrarActividadOperadorGlobal, { passive: true });
+    window.addEventListener('mousemove', registrarActividadOperadorGlobal, { passive: true });
 
-    // --- SISTEMA DE ALERTAS HABLADAS (TTS) PARA MONITORES (TV) ---
-    window._enableVoiceAlerts = false;
+    // --- SISTEMA DE ALERTAS HABLADAS (TTS) PARA MONITORES Y OPERADORES ---
+    window._enableVoiceAlerts = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+    window.voiceAlertsEnabled = window._enableVoiceAlerts;
     let _inactivityAlertsLastTime = {};
     let _streakCongratsLastTime = {};
     let _voiceAlertsInterval = null;
 
-    window.toggleVoiceAlerts = function() {
-      window._enableVoiceAlerts = !window._enableVoiceAlerts;
-      const btn = document.getElementById('toggle-voice-alerts-btn');
-      if (btn) {
-        btn.style.border = window._enableVoiceAlerts ? '1px solid rgba(52,211,153,.25)' : '1px solid rgba(239,68,68,.25)';
-        btn.style.background = window._enableVoiceAlerts ? 'rgba(52,211,153,.12)' : 'rgba(239,68,68,.12)';
-        btn.style.color = window._enableVoiceAlerts ? '#34d399' : '#ef4444';
-        btn.innerHTML = window._enableVoiceAlerts ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF';
+    window.updateVoiceAlertBtnUI = function() {
+      const enabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      window._enableVoiceAlerts = enabled;
+      window.voiceAlertsEnabled = enabled;
+
+      // 1. Botón principal del ranking / panel de control
+      const mainBtn = document.getElementById('toggle-voice-alerts-btn');
+      if (mainBtn) {
+        mainBtn.innerHTML = enabled ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF';
+        mainBtn.style.border = enabled ? '1px solid rgba(52,211,153,.3)' : '1px solid rgba(239,68,68,.3)';
+        mainBtn.style.background = enabled ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)';
+        mainBtn.style.color = enabled ? '#34d399' : '#ef4444';
       }
-      if (window._enableVoiceAlerts) {
+
+      // 2. Cualquier botón secundario con la clase .rr-voice-toggle-btn
+      const btns = document.querySelectorAll('.rr-voice-toggle-btn');
+      btns.forEach(btn => {
+        if (btn !== mainBtn) {
+          btn.innerHTML = enabled ? '🔊 Alertas Voz: ON' : '🔇 Alertas Voz: OFF';
+          btn.style.background = enabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+          btn.style.borderColor = enabled ? '#10b981' : '#ef4444';
+          btn.style.color = enabled ? '#34d399' : '#f87171';
+        }
+      });
+    };
+
+    window.toggleVoiceAlerts = function() {
+      const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      const next = !current;
+      localStorage.setItem('rr_voice_alerts_enabled', next ? 'true' : 'false');
+      window._enableVoiceAlerts = next;
+      window.voiceAlertsEnabled = next;
+      window.updateVoiceAlertBtnUI();
+      
+      if (next) {
         speakText("Alertas de voz activadas");
+      } else {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
       }
     };
 
@@ -34555,33 +34622,9 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
-    window.toggleVoiceAlerts = function() {
-      const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
-      const next = !current;
-      localStorage.setItem('rr_voice_alerts_enabled', next ? 'true' : 'false');
-      window._enableVoiceAlerts = next;
-      window.updateVoiceAlertBtnUI();
-      if (next) {
-        speakText("Alertas de voz activadas");
-      } else {
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-      }
-    };
-
-    window.updateVoiceAlertBtnUI = function() {
-      const enabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
-      window._enableVoiceAlerts = enabled;
-      const btns = document.querySelectorAll('.rr-voice-toggle-btn');
-      btns.forEach(btn => {
-        btn.innerHTML = enabled ? '🔊 Alertas Voz: ON' : '🔇 Alertas Voz: OFF';
-        btn.style.background = enabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
-        btn.style.borderColor = enabled ? '#10b981' : '#ef4444';
-        btn.style.color = enabled ? '#34d399' : '#f87171';
-      });
-    };
-
     function speakText(text) {
       if (!window.speechSynthesis) return;
+      if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
       
       try {
         window.speechSynthesis.cancel();
@@ -34613,6 +34656,7 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     }
     window.speakText = speakText;
+    window.speakAlertVoice = speakText;
 
     function getShiftStartTs(opName) {
       const op = typeof operatorsData !== 'undefined' ? operatorsData.find(o => o.name === opName) : null;
@@ -34633,11 +34677,13 @@ CONFIGURACIÓN DE CONTEXTO:
       return d.getTime();
     }
 
+    // Monitoreo de Alertas de Voz por Inactividad (3 Minutos sin clicks, teclado ni puntos)
     window.iniciarMonitoreoAlertasVoz = function() {
       if (_voiceAlertsInterval) clearInterval(_voiceAlertsInterval);
       
       _voiceAlertsInterval = setInterval(() => {
         if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
+        if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
 
         const activeOps = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : null;
         if (!activeOps || activeOps.size === 0) return;
@@ -34649,22 +34695,26 @@ CONFIGURACIÓN DE CONTEXTO:
           const todayStr = (typeof localDateStr === 'function') ? localDateStr() : new Date().toISOString().slice(0,10);
           const todayCuts = cuts.filter(c => c.fecha === todayStr && c.ts);
           
-          let lastActivityTs = 0;
+          let lastCutTs = 0;
           if (todayCuts.length > 0) {
-            lastActivityTs = todayCuts[todayCuts.length - 1].ts;
+            lastCutTs = todayCuts[todayCuts.length - 1].ts;
           } else {
             const key = opName + '||operador';
             const asiInfo = (typeof asiEstados !== 'undefined') ? asiEstados[key] : null;
-            lastActivityTs = asiInfo?.entradaTS || getShiftStartTs(opName);
+            lastCutTs = asiInfo?.entradaTS || getShiftStartTs(opName);
           }
 
-          // Inactividad de 5 minutos (300,000 ms)
-          if (now - lastActivityTs >= 300000) {
+          // Telemetría en tiempo real: última actividad de clicks / teclado recibida por Realtime
+          const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
+          const lastActivityTs = Math.max(lastCutTs, lastInteractionTs);
+
+          // Umbral de 3 minutos (180,000 ms) sin recibir ninguna señal (puntos, teclas ni clicks)
+          if (now - lastActivityTs >= 180000) {
             const lastAlert = _inactivityAlertsLastTime[opName] || 0;
-            // Alertar cada 5 minutos
-            if (now - lastAlert >= 300000) {
+            // Alertar con cooldown de 3 minutos
+            if (now - lastAlert >= 180000) {
               const opShortName = opName.split(' ')[0];
-              speakText(`${opShortName}, llevas 5 minutos sin escribir o sin generar puntos.`);
+              speakText(`${opShortName}, llevas 3 minutos sin escribir, sin clicks o sin generar puntos.`);
               _inactivityAlertsLastTime[opName] = now;
             }
           } else {
@@ -34689,10 +34739,9 @@ CONFIGURACIÓN DE CONTEXTO:
     // Desbloquear audio engine al primer tap (Móviles / TV autoplay policy)
     function unlockAudioEngine() {
       if (window.speechSynthesis) {
-        // iOS y TVs a veces ignoran volume=0 o strings vacíos. Usamos un espacio con volumen ínfimo.
         const silentUtterance = new SpeechSynthesisUtterance('.');
         silentUtterance.volume = 0.01;
-        silentUtterance.rate = 10; // muy rápido
+        silentUtterance.rate = 10;
         window.speechSynthesis.speak(silentUtterance);
         
         // Mantener activo el engine
@@ -34702,7 +34751,7 @@ CONFIGURACIÓN DE CONTEXTO:
                keepAlive.volume = 0.01;
                window.speechSynthesis.speak(keepAlive);
            }
-        }, 10000); // 10 segundos
+        }, 10000);
         console.log("Audio engine desbloqueado y keep-alive iniciado");
       }
       document.removeEventListener('click', unlockAudioEngine);
@@ -34711,15 +34760,7 @@ CONFIGURACIÓN DE CONTEXTO:
     document.addEventListener('click', unlockAudioEngine);
     document.addEventListener('touchstart', unlockAudioEngine);
 
-
     function iniciarMonitoreoGhost() {
-      // Registrar click global para Web Audio API
-      document.addEventListener('click', () => {
-        if (audioCtx && audioCtx.state === 'suspended') {
-          audioCtx.resume();
-        }
-      }, { once: false });
-
       setInterval(() => {
         if (typeof currentRole === 'undefined' || currentRole !== 'operador' || !currentOpName) return;
 
@@ -34735,6 +34776,8 @@ CONFIGURACIÓN DE CONTEXTO:
         }
 
         const delta = ptsActuales - ghostVars.lastPoints;
+        const now = Date.now();
+        const timeSinceLastInteraction = now - (ghostVars.lastInteraction || now);
 
         if (delta > 0) {
           // 🎉 ¡INCREMENTO DE FACTURACIÓN DETECTADO! 🎉
@@ -34745,31 +34788,27 @@ CONFIGURACIÓN DE CONTEXTO:
           }
 
           ghostVars.flatlineMinutes = 0;
-          ghostVars.lastInteraction = Date.now();
-        } else {
-          ghostVars.flatlineMinutes += 1;
+          ghostVars.lastInteraction = now;
+        } else if (timeSinceLastInteraction >= 180000) {
+          // 🚨 3 Minutos sin interacción (sin clicks, sin teclado) ni facturación 🚨
+          const consejos = [
+            "Intenta cambiar la música de tu transmisión para refrescar el ambiente y subir la energía. 🎵",
+            "Los VIPs responden mejor cuando les envías una ronda rápida de guiños o una carta manuscrita. ✉️",
+            "Revisa la iluminación de tu cámara y actualiza la foto de portada del perfil para llamar más la atención. 📸✨",
+            "Inicia una conversación privada por chat de audio o video con tus seguidores recurrentes para asegurar tracción. 🎙️📹",
+            "Revisa los mensajes pendientes en tu bandeja de entrada; responder en menos de 2 minutos duplica la conversión. 📥⚡",
+            "Saluda cordialmente con un mensaje personalizado a los nuevos usuarios que acaban de entrar a la sala. 👋💡"
+          ];
+          const consejoAleatorio = consejos[Math.floor(Math.random() * consejos.length)];
           
-          if (ghostVars.flatlineMinutes >= 3) {
-            // 🚨 3 Minutos sin facturación: smart coaching advice 🚨
-            const consejos = [
-              "Intenta cambiar la música de tu transmisión para refrescar el ambiente y subir la energía. 🎵",
-              "Los VIPs responden mejor cuando les envías una ronda rápida de guiños o una carta manuscrita. ✉️",
-              "Revisa la iluminación de tu cámara y actualiza la foto de portada del perfil para llamar más la atención. 📸✨",
-              "Inicia una conversación privada por chat de audio o video con tus seguidores recurrentes para asegurar tracción. 🎙️📹",
-              "Revisa los mensajes pendientes en tu bandeja de entrada; responder en menos de 2 minutos duplica la conversión. 📥⚡",
-              "Saluda cordialmente con un mensaje personalizado a los nuevos usuarios que acaban de entrar a la sala. 👋💡"
-            ];
-            const consejoAleatorio = consejos[Math.floor(Math.random() * consejos.length)];
-            
-            lanzarAlertaMonitor("WARNING", `⚠️ Baja actividad detectada. Llevas 3 minutos sin reportar nuevos puntos. \n\n💡 TIP PARA SUBIR RITMO: ${consejoAleatorio}`);
-            
-            // Reset para evitar spamming
-            ghostVars.flatlineMinutes = 0;
-          }
+          lanzarAlertaMonitor("WARNING", `⚠️ Baja actividad detectada. Llevas 3 minutos sin clicks, sin escribir ni reportar nuevos puntos. \n\n💡 TIP PARA SUBIR RITMO: ${consejoAleatorio}`);
+          
+          // Reset interaction timer para evitar spamming continuo
+          ghostVars.lastInteraction = now;
         }
 
         ghostVars.lastPoints = ptsActuales;
-      }, 60000); // Revisión minuciosa cada minuto
+      }, 30000);
     }
 
     function crearEfectoConfeti() {

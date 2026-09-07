@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260907_1115 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v18.5 [REAL-DATA-GROWTH-ANALYTICS]</title>
+  <!-- build:20260907_1238 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v18.6 [PRO-DELTA-SHIFT-PRECISION-FIX]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30004,68 +30004,59 @@ PT._logKey = function (opName) {
             const rec = regs[i];
             let nuevoBase = rec.puntos_baseline;
             
-            if (rec.jornada === 'Mañana') {
-              if (i === 0) {
-                const { data: ultimo } = await _sb.from('operaciones')
-                  .select('puntos_total, fecha_dia')
-                  .eq('id_perfil', id)
-                  .lt('fecha_dia', hoy)
-                  .order('fecha_dia', { ascending: false })
-                  .order('fecha_corte', { ascending: false })
-                  .limit(1).maybeSingle();
-                
-                const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
+            // Buscar el último registro previo (ayer o antes) para determinar la herencia exacta del baseline
+            const { data: ultimo } = await _sb.from('operaciones')
+              .select('puntos_total, fecha_dia')
+              .eq('id_perfil', id)
+              .lt('fecha_dia', hoy)
+              .order('fecha_dia', { ascending: false })
+              .order('fecha_corte', { ascending: false })
+              .limit(1).maybeSingle();
+            
+            const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
 
-                if (esNuevoMes) {
-                  nuevoBase = 0; // En inicio de mes Datame reinicia el total mensual a 0
-                } else if (rec.puntos_baseline > 0) {
-                  nuevoBase = rec.puntos_baseline;
-                } else {
-                  nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
-                }
+            if (rec.jornada === 'Mañana' || i === 0) {
+              if (esNuevoMes) {
+                nuevoBase = 0; // En inicio de mes Datame reinicia el total mensual a 0
+              } else if (ultimo && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
+                // 🧠 EXACTITUD DELTA-SHIFT™: Usar el cierre real del día anterior como baseline del inicio del día
+                nuevoBase = ultimo.puntos_total;
+              } else if (rec.puntos_baseline > 0 && rec.puntos_baseline <= rec.puntos_total) {
+                nuevoBase = rec.puntos_baseline;
+              } else {
+                nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
               }
             } else {
-              // Si no es Mañana (Tarde, Noche, Auto, etc.)
-              if (lastTotal !== null) {
+              // Si no es el primer registro de hoy (Tarde, Noche, Auto despues de Mañana)
+              if (lastTotal !== null && lastTotal <= rec.puntos_total) {
                 nuevoBase = lastTotal;
+              } else if (ultimo && !esNuevoMes && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
+                nuevoBase = ultimo.puntos_total;
               } else {
-                // Es el primer registro de hoy para este perfil (no se trabajó en Mañana/Tarde)
-                // Si la base actual es 0, intentamos caer de vuelta en el último total de ayer (siempre que no sea inicio de mes)
-                let fallbackBase = rec.puntos_baseline;
-                if (fallbackBase === 0) {
-                  const { data: ultimo } = await _sb.from('operaciones')
-                    .select('puntos_total, fecha_dia')
-                    .eq('id_perfil', id)
-                    .lt('fecha_dia', hoy)
-                    .order('fecha_dia', { ascending: false })
-                    .order('fecha_corte', { ascending: false })
-                    .limit(1).maybeSingle();
-                  
-                  const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
-                  if (ultimo && !esNuevoMes) {
-                    fallbackBase = ultimo.puntos_total || 0;
-                  }
-                }
-                nuevoBase = fallbackBase;
+                nuevoBase = (rec.puntos_baseline > 0 && rec.puntos_baseline <= rec.puntos_total) ? rec.puntos_baseline : 0;
               }
             }
             
-            // Sanidad: El baseline no puede ser mayor que el total (si bajó, es reinicio)
-            if (nuevoBase > rec.puntos_total) nuevoBase = 0;
-
-            // Calcular el neto tentativo
-            let nuevoNeto = rec.puntos_neto;
-            if (nuevoBase > 0 || rec.jornada === 'Mañana') {
-              nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+            // 🛡️ SANIDAD DE BASELINE: El baseline nunca puede exceder el total actual.
+            // Si el baseline supera el total (p.ej. ajuste ligero de Datame), topar baseline al total actual para que neto = 0
+            if (nuevoBase > rec.puntos_total) {
+              nuevoBase = rec.puntos_total;
             }
 
-            // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
-            // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
-            // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
-            if (nuevoNeto > rec.puntos_total * 0.60 && rec.puntos_total > 10 && nuevoBase === 0) {
-              // Establecer baseline al 97% del total (3% neto asumido) según la especificación técnica
-              nuevoBase = Number((rec.puntos_total * 0.97).toFixed(2));
-              nuevoNeto = Number((rec.puntos_total - nuevoBase).toFixed(2));
+            // Calcular el neto tentativo exacto
+            let nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+
+            // 🔬 DELTA-SHIFT™ SANITY AUTO-HEAL:
+            // Si el neto calculado representa > 60% del total (para totales > 10 pts) o > 300 pts en 1 sola jornada,
+            // verificar si el baseline previo de ayer corregiría la anomalía.
+            if (rec.puntos_total > 10 && (nuevoNeto > rec.puntos_total * 0.60 || nuevoNeto > 300)) {
+              if (ultimo && !esNuevoMes && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
+                nuevoBase = ultimo.puntos_total;
+                nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+              } else if (nuevoNeto > 300) {
+                nuevoBase = Number((rec.puntos_total * 0.97).toFixed(2));
+                nuevoNeto = Number((rec.puntos_total - nuevoBase).toFixed(2));
+              }
               console.warn(`[DELTA-SHIFT™ SANITY] Corregido baseline corrupto para perfil ${rec.id_perfil}. Nuevo base: ${nuevoBase}, Neto: ${nuevoNeto}`);
             }
             

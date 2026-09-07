@@ -2,452 +2,389 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>RYR Titan Apex Monitor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Bebas+Neue&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <title>RYR TITAN APEX - SUPERVISIÓN LIVE</title>
   <style>
-    :root {
-      --bg-main: #06060a;
-      --bg-card: #0d0d15;
-      --bg-nested: #12121e;
-      --neon-cyan: #00ffcc;
-      --neon-magenta: #ff00ff;
-      --neon-red: #ff003c;
-      --neon-green: #33ff33;
-      --neon-orange: #ffaa00;
-      --text-main: #ffffff;
-      --text-muted: #64748b;
-      --border-color: rgba(0, 255, 204, 0.15);
-      --font-outfit: 'Outfit', sans-serif;
-    }
+    :root { --bg-main: #060913; --bg-card: #0e1526; --accent-green: #10b981; --accent-cyan: #00ffcc; --accent-red: #ef4444; --accent-gold: #f59e0b; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg-main); color: #fff; font-family: system-ui, sans-serif; padding: 12px; }
+    header { display: flex; justify-content: space-between; align-items: center; background: #0b132b; border: 1px solid #1e293b; border-left: 4px solid var(--accent-cyan); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; }
+    .btn-action { background: #1e293b; color: #fff; border: 1px solid #3a506b; padding: 5px 11px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+    .btn-action:hover { border-color: var(--accent-green); color: var(--accent-green); }
+    .btn-fines { border-color: var(--accent-gold); color: var(--accent-gold); background: rgba(245, 158, 11, 0.15); }
+    .btn-productivity { border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.15); }
+    .grid-operators { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .operator-card { background: var(--bg-card); border: 1px solid #1e293b; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; }
+    .profile-live-box { background: #060913; border: 1px solid #1e293b; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+    .live-timers-container { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .live-chat-timer-badge { font-size: 10px; font-weight: bold; font-family: monospace; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
+    .timer-ok { background: #064e3b; color: #34d399; border: 1px solid #10b981; }
+    .timer-expired { background: #450a0a; color: #f87171; border: 1px solid #ef4444; }
+    
+    .btn-chat-op { background: #1e1b4b; border: 1px solid #8b5cf6; color: #c4b5fd; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; margin-top: 6px; }
+    .btn-chat-op:hover { background: #8b5cf6; color: #060913; }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      background-color: var(--bg-main);
-      color: var(--text-main);
-      font-family: 'Inter', sans-serif;
-      padding: 24px;
-      overflow-x: hidden;
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: var(--bg-main);
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #1e1e2f;
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--neon-cyan);
-    }
-
-    /* Core Panel */
-    .monitor-wrapper {
-      max-width: 1200px;
-      margin: 0 auto;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 8px 32px rgba(0, 255, 204, 0.05);
-    }
-
-    /* Header */
-    .monitor-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      padding-bottom: 20px;
-      margin-bottom: 24px;
-    }
-
-    .monitor-title-area h1 {
-      font-family: var(--font-outfit);
-      font-size: 1.6rem;
-      font-weight: 800;
-      letter-spacing: 1.5px;
-      background: linear-gradient(135deg, #fff 0%, var(--neon-cyan) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .monitor-title-area p {
-      color: var(--text-muted);
-      font-size: 0.78rem;
-      margin-top: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(51, 255, 51, 0.1);
-      border: 1px solid var(--neon-green);
-      color: var(--neon-green);
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      animation: pulse-border 2s infinite alternate;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      background-color: var(--neon-green);
-      border-radius: 50%;
-      box-shadow: 0 0 8px var(--neon-green);
-      animation: blink 1s infinite alternate;
-    }
-
-    /* KPIs */
-    .kpis-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .kpi-card {
-      background: var(--bg-nested);
-      border: 1px solid rgba(255, 255, 255, 0.03);
-      border-left: 4px solid var(--neon-cyan);
-      padding: 16px 20px;
-      border-radius: 10px;
-      position: relative;
-      transition: all 0.3s ease;
-    }
-
-    .kpi-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(0, 255, 204, 0.05);
-    }
-
-    .kpi-card.magenta { border-left-color: var(--neon-magenta); }
-    .kpi-card.orange { border-left-color: var(--neon-orange); }
-    .kpi-card.red { border-left-color: var(--neon-red); }
-
-    .kpi-label {
-      font-size: 0.65rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1.2px;
-      margin-bottom: 6px;
-    }
-
-    .kpi-value {
-      font-family: var(--font-outfit);
-      font-size: 1.8rem;
-      font-weight: 800;
-      color: #fff;
-    }
-
-    /* Columns Layout */
-    .monitor-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 768px) {
-      .monitor-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .panel-box {
-      background: var(--bg-nested);
-      border: 1px solid rgba(255, 255, 255, 0.03);
-      border-radius: 12px;
-      padding: 20px;
-    }
-
-    .panel-box h2 {
-      font-family: var(--font-outfit);
-      font-size: 0.95rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 16px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      color: #fff;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .panel-count-badge {
-      font-size: 0.68rem;
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--text-muted);
-      padding: 2px 8px;
-      border-radius: 10px;
-    }
-
-    /* Tables */
-    .table-container {
-      max-height: 380px;
-      overflow-y: auto;
-    }
-
-    .monitor-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.78rem;
-    }
-
-    .monitor-table th {
-      text-align: left;
-      padding: 8px 12px;
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .monitor-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-      color: #cbd5e1;
-    }
-
-    .monitor-table tr:hover td {
-      background: rgba(0, 255, 204, 0.03);
-      color: #fff;
-    }
-
-    /* Utility badges */
-    .id-badge {
-      font-family: monospace;
-      background: rgba(0, 255, 204, 0.08);
-      color: var(--neon-cyan);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 0.7rem;
-    }
-
-    .model-badge {
-      background: rgba(255, 0, 255, 0.08);
-      color: var(--neon-magenta);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 0.7rem;
-    }
-
-    .btn-sync {
-      background: linear-gradient(135deg, var(--neon-cyan) 0%, #00b38c 100%);
-      color: #000;
-      border: none;
-      font-family: var(--font-outfit);
-      font-weight: 700;
-      font-size: 0.78rem;
-      padding: 8px 16px;
-      border-radius: 20px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.3s ease;
-      box-shadow: 0 4px 10px rgba(0, 255, 204, 0.2);
-    }
-
-    .btn-sync:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 15px rgba(0, 255, 204, 0.35);
-    }
-
-    /* Animations */
-    @keyframes blink {
-      0% { opacity: 0.3; }
-      100% { opacity: 1; }
-    }
-
-    @keyframes pulse-border {
-      0% { box-shadow: 0 0 2px rgba(51, 255, 51, 0.2); }
-      100% { box-shadow: 0 0 10px rgba(51, 255, 51, 0.4); }
-    }
-
-    .loading-state {
-      padding: 40px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.88); backdrop-filter: blur(5px); z-index: 99999; justify-content: center; align-items: center; }
+    .modal-content { background: #0e1526; border: 1px solid var(--accent-cyan); border-radius: 10px; width: 940px; max-width: 95%; max-height: 88vh; padding: 20px; display: flex; flex-direction: column; gap: 12px; color: #fff; }
+    .chat-transcript { background: #0b132b; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 250px; overflow-y: auto; line-height: 1.6; color: #cbd5e1; }
+    
+    table.prod-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+    table.prod-table th, table.prod-table td { padding: 8px 10px; border-bottom: 1px solid #1e293b; }
+    table.prod-table th { background: #060913; color: var(--accent-cyan); font-weight: bold; }
   </style>
 </head>
 <body>
+  <header>
+    <div style="font-size:14px; font-weight:900; color:var(--accent-cyan);">⚡ RYR TITAN APEX - SUPERVISIÓN LIVE & RENDIMIENTO</div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-action" style="border-color:#8b5cf6; color:#c4b5fd;" onclick="openAllHandoversModal()">📑 Relevos de Turno (IA) (<span id="total-handovers-count">0</span>)</button>
+      <button class="btn-action btn-productivity" onclick="openProductivityModal()">📊 Productividad & Tiempos</button>
+      <button class="btn-action btn-fines" onclick="openFinesModal()">💰 Multas ($10.000 COP) (<span id="total-fines-count">0</span>)</button>
+      <button class="btn-action" onclick="openChatAuditsModal()">📄 Historial de Chats (MD)</button>
+      <button class="btn-action" onclick="openBannedWordsModal()">🛡️ Palabras Prohibidas</button>
+    </div>
+  </header>
+  <div id="operators-grid" class="grid-operators"></div>
 
-  <div class="monitor-wrapper">
-    <!-- Header -->
-    <header class="monitor-header">
-      <div class="monitor-title-area">
-        <h1>⚡ RYR TITAN APEX MONITOR</h1>
-        <p>Sistema de Telemetría y Mapeo de Identidades de Operación</p>
+  <!-- MODAL PRODUCTIVIDAD Y TIEMPOS DE RESPUESTA -->
+  <div id="modal-productivity" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
+        <span style="font-weight:bold; color:#38bdf8;">📊 PANEL DE PRODUCTIVIDAD Y TIEMPOS DE RESPUESTA EN VIVO</span>
+        <button class="btn-action" onclick="closeModals()">✕</button>
       </div>
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <button class="btn-sync" onclick="fetchData()">
-          ↻ Recargar Datos
-        </button>
-        <div class="status-badge">
-          <span class="status-dot"></span>
-          SYS-CONNECTED
-        </div>
+      <div style="overflow-y:auto; flex:1;">
+        <table class="prod-table">
+          <thead>
+            <tr>
+              <th>Operador</th>
+              <th>Turno</th>
+              <th>Perfiles</th>
+              <th>Cartas (Read)</th>
+              <th>Chats Pendientes</th>
+              <th>Seguimiento (Tráfico)</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="productivity-table-body">
+            <tr><td colspan="7" style="color:#64748b; text-align:center;">Cargando métricas...</td></tr>
+          </tbody>
+        </table>
       </div>
-    </header>
+    </div>
+  </div>
 
-    <!-- KPIs -->
-    <section class="kpis-grid">
-      <div class="kpi-card">
-        <div class="kpi-label">👥 Operadores en Base</div>
-        <div class="kpi-value" id="kpi-ops-count">—</div>
+  <!-- MODAL RELEVOS DE TURNO SUPERVISOR -->
+  <div id="modal-handovers-sup" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
+        <span style="font-weight:bold; color:var(--accent-cyan);">📑 HISTORIAL DE RELEVOS DE TURNO CON IA (ENTREGAS)</span>
+        <button class="btn-action" onclick="closeModals()">✕</button>
       </div>
-      <div class="kpi-card magenta">
-        <div class="kpi-label">🎭 Perfiles Asignados</div>
-        <div class="kpi-value" id="kpi-perfs-count">—</div>
-      </div>
-      <div class="kpi-card orange">
-        <div class="kpi-label">⏱️ Latencia de Conexión</div>
-        <div class="kpi-value" id="kpi-ping">0 ms</div>
-      </div>
-      <div class="kpi-card red">
-        <div class="kpi-label">📡 Nodos del Clúster</div>
-        <div class="kpi-value">1 Activo</div>
-      </div>
-    </section>
+      <div id="handovers-list-container" style="overflow-y:auto; flex:1;"></div>
+    </div>
+  </div>
 
-    <!-- Content Layout -->
-    <main class="monitor-layout">
-      <!-- Left Column: Operadores -->
-      <div class="panel-box">
-        <h2>
-          Operadores Activos
-          <span class="panel-count-badge" id="ops-badge">0</span>
-        </h2>
-        <div class="table-container">
-          <table class="monitor-table">
-            <thead>
-              <tr>
-                <th style="width: 25%">ID</th>
-                <th>Nombre del Operador</th>
-              </tr>
-            </thead>
-            <tbody id="ops-table-body">
-              <tr>
-                <td colspan="2" class="loading-state">Cargando operadores...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+  <!-- MODAL CHAT SUPERVISOR -> OPERADOR -->
+  <div id="modal-supervisor-chat" class="modal-overlay">
+    <div class="modal-content" style="width:500px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
+        <span id="sup-chat-title" style="font-weight:bold; color:var(--accent-cyan);">💬 COMUNICACIÓN DIRECTA CON OPERADOR</span>
+        <button class="btn-action" onclick="closeModals()">✕</button>
       </div>
+      <div id="sup-chat-history" style="background:#060913; border:1px solid #1e293b; border-radius:6px; padding:10px; height:200px; overflow-y:auto; font-size:12px;"></div>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="input-msg-to-op" placeholder="Escribe un mensaje o advertencia directa..." style="flex:1; padding:8px; background:#0b132b; border:1px solid #3a506b; color:#fff; border-radius:6px; outline:none; font-size:12px;">
+        <button class="btn-action" style="background:#8b5cf6; color:#060913;" onclick="sendSupervisorMsg()">Enviar</button>
+      </div>
+    </div>
+  </div>
 
-      <!-- Right Column: Perfiles -->
-      <div class="panel-box">
-        <h2>
-          Perfiles del Sistema
-          <span class="panel-count-badge" id="perfs-badge">0</span>
-        </h2>
-        <div class="table-container">
-          <table class="monitor-table">
-            <thead>
-              <tr>
-                <th style="width: 35%">ID Datame</th>
-                <th>Modelo</th>
-              </tr>
-            </thead>
-            <tbody id="perfs-table-body">
-              <tr>
-                <td colspan="2" class="loading-state">Cargando perfiles...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+  <!-- MODAL MULTAS -->
+  <div id="modal-fines" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
+        <span style="font-weight:bold; color:var(--accent-gold);">💰 HISTORIAL DE MULTAS GENERADAS ($10.000 COP)</span>
+        <button class="btn-action" onclick="closeModals()">✕</button>
       </div>
-    </main>
+      <div id="fines-list-container" style="overflow-y:auto; flex:1;"></div>
+    </div>
+  </div>
+
+  <div id="modal-chats" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
+        <span style="font-weight:bold; color:var(--accent-cyan);">📄 HISTORIAL DE CHATS</span>
+        <button class="btn-action" onclick="closeModals()">✕</button>
+      </div>
+      <div id="chat-audits-list" style="overflow-y:auto; flex:1;"></div>
+    </div>
+  </div>
+
+  <div id="modal-banned" class="modal-overlay">
+    <div class="modal-content" style="width:550px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
+        <span style="font-weight:bold; color:var(--accent-cyan);">🛡️ PALABRAS PROHIBIDAS</span>
+        <button class="btn-action" onclick="closeModals()">✕</button>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="input-new-word" placeholder="Nueva palabra..." style="flex:1; padding:8px; background:#060913; border:1px solid #3a506b; color:#fff; border-radius:6px;">
+        <button class="btn-action" style="background:#10b981; color:#000;" onclick="addBannedWord()">+ Agregar</button>
+      </div>
+      <div id="banned-words-list" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;"></div>
+    </div>
   </div>
 
   <script>
-    const BACKEND_URL = 'https://ryr-titan-backend.onrender.com';
+    const API_URL = window.location.origin;
+    let activeChatOperator = '';
+    let supChatPollingInterval = null;
+    let cachedLiveOperators = [];
 
-    async function fetchData() {
-      const t0 = performance.now();
+    async function fetchLive() {
       try {
-        // Fetch Operadores
-        const resOps = await fetch(`${BACKEND_URL}/api/operadores`);
-        const dataOps = await resOps.json();
-        
-        // Fetch Perfiles
-        const resPerfs = await fetch(`${BACKEND_URL}/api/perfiles`);
-        const dataPerfs = await resPerfs.json();
+        const res = await fetch(API_URL + '/api/telemetry/live');
+        const data = await res.json();
+        cachedLiveOperators = data.operators || [];
+        const grid = document.getElementById('operators-grid');
+        grid.innerHTML = cachedLiveOperators.map(op => {
+          const profilesHtml = op.profiles.map(p => {
+            const timersHtml = (p.activeChatTimersList || []).map(t => {
+              const min = Math.floor(t.remaining / 60);
+              const sec = t.remaining % 60;
+              const timeStr = (min < 10 ? '0' : '') + min + ':' + (sec < 10 ? '0' : '') + sec;
+              return '<span class="live-chat-timer-badge ' + (t.isExpired ? 'timer-expired' : 'timer-ok') + '">💬 ' + t.contact + ': ' + (t.isExpired ? '00:00 (VENCIDO)' : timeStr) + '</span>';
+            }).join('');
 
-        // Update KPIs
-        document.getElementById('kpi-ops-count').textContent = dataOps.operadores ? dataOps.operadores.length : 0;
-        document.getElementById('kpi-perfs-count').textContent = dataPerfs.perfiles ? dataPerfs.perfiles.length : 0;
-        
-        document.getElementById('ops-badge').textContent = dataOps.operadores ? dataOps.operadores.length : 0;
-        document.getElementById('perfs-badge').textContent = dataPerfs.perfiles ? dataPerfs.perfiles.length : 0;
+            let trackingHtml = '';
+            if (p.prospectingProgress) {
+              const pr = p.prospectingProgress;
+              const min = Math.floor(pr.remainingSeconds / 60);
+              const sec = pr.remainingSeconds % 60;
+              const timeStr = (min < 10 ? '0' : '') + min + ':' + (sec < 10 ? '0' : '') + sec;
+              trackingHtml = pr.isCompleted
+                ? '<div style="font-size:10px; font-weight:bold; color:#10b981; margin-top:4px;">🎯 Seguimiento: OK [' + pr.count + '/' + pr.quota + ']</div>'
+                : '<div style="font-size:10px; font-weight:bold; color:#f59e0b; margin-top:4px;">🎯 Seguimiento: ' + timeStr + ' [' + pr.count + '/' + pr.quota + ']</div>';
+            }
 
-        // Render Operadores Table
-        const opsBody = document.getElementById('ops-table-body');
-        if (dataOps.operadores && dataOps.operadores.length > 0) {
-          opsBody.innerHTML = dataOps.operadores.map(op => `
-            <tr>
-              <td><span class="id-badge">${op.id}</span></td>
-              <td style="font-weight: 600;">${op.name}</td>
-            </tr>
-          `).join('');
-        } else {
-          opsBody.innerHTML = `<tr><td colspan="2" class="loading-state">Sin operadores registrados</td></tr>`;
-        }
+            return '<div class="profile-live-box">' +
+              '<div style="display:flex; justify-content:space-between;">' +
+                '<span style="font-weight:bold; color:#00ffcc;">🎯 ' + p.profileName + '</span>' +
+                '<span style="font-size:11px; color:#38bdf8;">✉️ ' + p.pendingReadLetters + ' cartas</span>' +
+              '</div>' +
+              trackingHtml +
+              (timersHtml ? '<div class="live-timers-container">' + timersHtml + '</div>' : '<div style="font-size:10px; color:#10b981; margin-top:4px;">⏱️ Todos los chats al día</div>') +
+            '</div>';
+          }).join('');
 
-        // Render Perfiles Table
-        const perfsBody = document.getElementById('perfs-table-body');
-        if (dataPerfs.perfiles && dataPerfs.perfiles.length > 0) {
-          perfsBody.innerHTML = dataPerfs.perfiles.map(p => `
-            <tr>
-              <td><span class="id-badge">${p.id}</span></td>
-              <td><span class="model-badge">${p.name}</span></td>
-            </tr>
-          `).join('');
-        } else {
-          perfsBody.innerHTML = `<tr><td colspan="2" class="loading-state">Sin perfiles registrados</td></tr>`;
-        }
-
-        // Calculate Ping Latency
-        const t1 = performance.now();
-        document.getElementById('kpi-ping').textContent = Math.round(t1 - t0) + ' ms';
-      } catch (err) {
-        console.error('Error fetching telemetry data:', err);
-        const errHtml = `<tr><td colspan="2" class="loading-state" style="color:var(--neon-red);">⚠️ Error de comunicación con la API</td></tr>`;
-        document.getElementById('ops-table-body').innerHTML = errHtml;
-        document.getElementById('perfs-table-body').innerHTML = errHtml;
-        document.getElementById('kpi-ping').textContent = 'Error';
-      }
+          return '<div class="operator-card">' +
+            '<div>' +
+              '<div style="display:flex; justify-content:space-between; font-weight:bold; border-bottom:1px solid #1e293b; padding-bottom:6px; margin-bottom:8px;">' +
+                '<span>👤 ' + op.operatorName + ' (' + op.profiles.length + ' Perfiles)</span>' +
+                '<span style="font-size:10px; color:#38bdf8;">' + op.shift + '</span>' +
+              '</div>' +
+              profilesHtml +
+            '</div>' +
+            '<button class="btn-chat-op" onclick="openSupervisorChat(\'' + op.operatorName + '\')">💬 Chatear con ' + op.operatorName + '</button>' +
+          '</div>';
+        }).join('');
+        fetchFinesCount();
+        fetchHandoversCount();
+      } catch (e) {}
     }
 
-    // Auto-fetch data initially and every 30 seconds
-    fetchData();
-    setInterval(fetchData, 30000);
+    async function openProductivityModal() {
+      document.getElementById('modal-productivity').style.display = 'flex';
+      const tbody = document.getElementById('productivity-table-body');
+      if (cachedLiveOperators.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#64748b; text-align:center;">No hay operadores conectados en este momento.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = cachedLiveOperators.map(op => {
+        const profileNames = op.profiles.map(p => p.profileName).join(', ');
+        const totalPending = op.profiles.reduce((acc, p) => acc + (p.pendingReadLetters || 0), 0);
+        const unansweredChats = op.profiles.reduce((acc, p) => acc + (p.unansweredChatsCount || 0), 0);
+        const trackingStatus = op.profiles.map(p => {
+          if (!p.prospectingProgress) return 'N/A';
+          return p.profileName + ': [' + p.prospectingProgress.count + '/' + p.prospectingProgress.quota + ']';
+        }).join('<br>');
+
+        return '<tr>' +
+          '<td style="font-weight:bold; color:#fff;">👤 ' + op.operatorName + '</td>' +
+          '<td><span style="color:#38bdf8;">' + op.shift + '</span></td>' +
+          '<td style="color:#00ffcc;">' + profileNames + '</td>' +
+          '<td style="color:#34d399; font-weight:bold;">' + totalPending + '</td>' +
+          '<td style="color:' + (unansweredChats > 0 ? '#ef4444' : '#10b981') + '; font-weight:bold;">' + unansweredChats + '</td>' +
+          '<td style="font-size:11px;">' + trackingStatus + '</td>' +
+          '<td>' + (op.isAfkGlobal ? '<span style="color:#a855f7;">💤 Inactivo</span>' : '<span style="color:#10b981;">⚡ Activo</span>') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    async function fetchHandoversCount() {
+      try {
+        const res = await fetch(API_URL + '/api/handover/all');
+        const data = await res.json();
+        document.getElementById('total-handovers-count').innerText = data.handovers ? data.handovers.length : 0;
+      } catch (e) {}
+    }
+
+    async function openAllHandoversModal() {
+      document.getElementById('modal-handovers-sup').style.display = 'flex';
+      const container = document.getElementById('handovers-list-container');
+      container.innerHTML = '<p style="color:#c4b5fd;">Cargando relevos de turno...</p>';
+
+      const res = await fetch(API_URL + '/api/handover/all');
+      const data = await res.json();
+      const handovers = data.handovers || [];
+
+      if (handovers.length === 0) {
+        container.innerHTML = '<p style="color:#94a3b8;">No hay relevos generados aún. Los operadores pueden presionar "📋 Entregar Turno" en Talkytimes.</p>';
+        return;
+      }
+
+      container.innerHTML = handovers.map(h => {
+        return '<div style="background:#060913; border:1px solid #8b5cf6; border-radius:6px; padding:12px; margin-bottom:8px;">' +
+          '<div style="font-size:11px; font-weight:bold; color:#c4b5fd; margin-bottom:4px;">👤 Entregado por: ' + h.operator_name + ' [' + h.shift + '] - Perfil: ' + h.profile_name + '</div>' +
+          '<div class="chat-transcript">' + (h.report_markdown || h.reportMarkdown) + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function openSupervisorChat(operatorName) {
+      activeChatOperator = operatorName;
+      document.getElementById('sup-chat-title').innerText = '💬 COMUNICACIÓN DIRECTA CON: ' + operatorName.toUpperCase();
+      document.getElementById('modal-supervisor-chat').style.display = 'flex';
+      loadSupervisorChatHistory();
+
+      if (supChatPollingInterval) clearInterval(supChatPollingInterval);
+      supChatPollingInterval = setInterval(loadSupervisorChatHistory, 1500);
+    }
+
+    async function loadSupervisorChatHistory() {
+      if (!activeChatOperator) return;
+      try {
+        const res = await fetch(API_URL + '/api/supervisor/messages/' + activeChatOperator);
+        const data = await res.json();
+        const container = document.getElementById('sup-chat-history');
+        if (!data.messages || data.messages.length === 0) {
+          container.innerHTML = '<p style="color:#64748b;">No hay mensajes previos. Escribe para llamar la atención del operador.</p>';
+          return;
+        }
+        container.innerHTML = data.messages.map(m => {
+          return '<div style="margin-bottom:6px; text-align:' + (m.sender === 'SUPERVISOR' ? 'right' : 'left') + ';">' +
+            '<span style="background:' + (m.sender === 'SUPERVISOR' ? '#1e1b4b' : '#064e3b') + '; border:1px solid ' + (m.sender === 'SUPERVISOR' ? '#8b5cf6' : '#10b981') + '; padding:4px 8px; border-radius:6px; display:inline-block; font-size:11px;">' +
+              '<b>' + m.sender + ':</b> ' + m.text +
+            '</span>' +
+          '</div>';
+        }).join('');
+        container.scrollTop = container.scrollHeight;
+      } catch (e) {}
+    }
+
+    async function sendSupervisorMsg() {
+      const input = document.getElementById('input-msg-to-op');
+      const text = input.value.trim();
+      if (!text || !activeChatOperator) return;
+
+      await fetch(API_URL + '/api/supervisor/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operatorName: activeChatOperator, text: text })
+      });
+
+      input.value = '';
+      loadSupervisorChatHistory();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const supInput = document.getElementById('input-msg-to-op');
+      if (supInput) {
+        supInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') sendSupervisorMsg();
+        });
+      }
+    });
+
+    async function fetchFinesCount() {
+      try {
+        const res = await fetch(API_URL + '/api/fines');
+        const data = await res.json();
+        document.getElementById('total-fines-count').innerText = data.fines ? data.fines.length : 0;
+      } catch (e) {}
+    }
+
+    async function openFinesModal() {
+      document.getElementById('modal-fines').style.display = 'flex';
+      const res = await fetch(API_URL + '/api/fines');
+      const data = await res.json();
+      const container = document.getElementById('fines-list-container');
+      if (!data.fines || data.fines.length === 0) {
+        container.innerHTML = '<p style="color:#10b981;">✅ No hay multas registradas en este turno.</p>';
+        return;
+      }
+      container.innerHTML = data.fines.map(f => {
+        return '<div style="background:#060913; border:1px solid #f59e0b; border-radius:6px; padding:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">' +
+          '<div>' +
+            '<div style="font-weight:bold; color:#fde68a;">👤 ' + f.operator_name + ' [' + f.shift + '] - 🎯 ' + f.profile_name + '</div>' +
+            '<div style="font-size:11px; color:#94a3b8;">Cliente: ' + f.client_name + ' | Motivo: ' + f.reason + '</div>' +
+            '<div style="font-size:9px; color:#64748b;">' + new Date(f.created_at).toLocaleString() + '</div>' +
+          '</div>' +
+          '<div style="font-size:14px; font-weight:900; color:#ef4444;">-$' + Number(f.amount).toLocaleString('es-CO') + ' COP</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function openChatAuditsModal() {
+      document.getElementById('modal-chats').style.display = 'flex';
+      const res = await fetch(API_URL + '/api/chats/audits');
+      const data = await res.json();
+      const container = document.getElementById('chat-audits-list');
+      if (!data.audits || data.audits.length === 0) {
+        container.innerHTML = '<p style="color:#94a3b8;">No hay conversaciones en Supabase aún. Presiona ⚡ en Talkytimes.</p>';
+        return;
+      }
+      container.innerHTML = data.audits.map(a => {
+        return '<div style="background:#060913; border:1px solid #1e293b; border-radius:6px; padding:12px; margin-bottom:10px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+            '<span style="font-weight:bold; color:var(--accent-cyan);">👤 Op: ' + a.operator + ' | 🎯 Perfil: ' + a.profile + ' | 💬 Cliente: ' + a.clientName + ' (ID: ' + a.clientId + ')</span>' +
+            '<a href="data:text/markdown;charset=utf-8,' + encodeURIComponent(a.markdown) + '" download="chat_' + a.profile + '_' + a.clientId + '.md" class="btn-action" style="text-decoration:none;">📥 Descargar .MD</a>' +
+          '</div>' +
+          '<div class="chat-transcript">' + a.markdown + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function openBannedWordsModal() {
+      document.getElementById('modal-banned').style.display = 'flex';
+      const res = await fetch(API_URL + '/api/banned-words');
+      const data = await res.json();
+      document.getElementById('banned-words-list').innerHTML = (data.words || []).map(w => {
+        return '<div style="background:#1c2541; border:1px solid #ef4444; color:#fca5a5; padding:3px 6px; border-radius:4px; font-size:11px;">' +
+          w + ' <span style="cursor:pointer; font-weight:bold; margin-left:4px;" onclick="delWord(\'' + w + '\')">✕</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function addBannedWord() {
+      const word = document.getElementById('input-new-word').value.trim();
+      if (!word) return;
+      await fetch(API_URL + '/api/banned-words', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word: word }) });
+      document.getElementById('input-new-word').value = '';
+      openBannedWordsModal();
+    }
+
+    async function delWord(word) {
+      await fetch(API_URL + '/api/banned-words/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word: word }) });
+      openBannedWordsModal();
+    }
+
+    function closeModals() {
+      if (supChatPollingInterval) clearInterval(supChatPollingInterval);
+      document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    }
+
+    setInterval(fetchLive, 2000);
+    fetchLive();
   </script>
 </body>
 </html>

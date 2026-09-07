@@ -24,14 +24,18 @@ let estadoDB = { texto: "🔍 RADAR", color: "#aaa", bg: "#333" };
 let memoriaConversacion = [];
 let bufferMensaje = { es: "", en: "" };
 
-// 📡 SENSOR DE RED (CAPTURADOR DE SOCKETS PARA AUTOPILOT)
+// 📡 SENSOR DE RED (CAPTURADOR DE SOCKETS Y ENDPOINTS PARA AUTOPILOT Y TELEMETRÍA DE CLICKS)
 const ryrHook = document.createElement('script');
 ryrHook.textContent = `
     (function() {
         const originalFetch = window.fetch;
         window.fetch = async function(...args) {
+            const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+            if (url) {
+                window.postMessage({ type: 'RYR_ENDPOINT_ACTIVITY', url: url, ts: Date.now() }, '*');
+            }
             const response = await originalFetch(...args);
-            if (typeof args[0] === 'string' && (args[0].includes('message') || args[0].includes('history'))) {
+            if (typeof args[0] === 'string' && (args[0].includes('message') || args[0].includes('history') || args[0].includes('chat'))) {
                 const clone = response.clone();
                 clone.json().then(rawData => {
                     let msjs = Array.isArray(rawData) ? rawData : (rawData.messages || rawData.data || rawData.items || []);
@@ -40,12 +44,59 @@ ryrHook.textContent = `
             }
             return response;
         };
+
+        const originalXhrOpen = XMLHttpRequest.prototype.open;
+        const originalXhrSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            this._ryrUrl = url;
+            return originalXhrOpen.apply(this, [method, url, ...rest]);
+        };
+        XMLHttpRequest.prototype.send = function(...args) {
+            if (this._ryrUrl) {
+                window.postMessage({ type: 'RYR_ENDPOINT_ACTIVITY', url: this._ryrUrl, ts: Date.now() }, '*');
+            }
+            return originalXhrSend.apply(this, args);
+        };
     })();
 `;
 (document.head || document.documentElement).appendChild(ryrHook);
 ryrHook.remove();
 
+let _lastContentActivitySent = 0;
+function notificarActividadOperadorExt(origen) {
+    const now = Date.now();
+    if (now - _lastContentActivitySent < 3000) return; // evitar saturación innecesaria
+    _lastContentActivitySent = now;
+    try {
+        chrome.runtime.sendMessage({
+            accion: "reportar_actividad_click",
+            payload: {
+                operador: nombreOperadorGlobal || "Operador",
+                origen: origen || "click_interaccion",
+                ts: now
+            }
+        }).catch(() => {});
+    } catch(e) {}
+}
+
+// Capturar Clicks, Teclado e Interacción de Usuario en la pestaña de trabajo
+['click', 'pointerdown', 'mousedown', 'keydown', 'input', 'change'].forEach(evt => {
+    window.addEventListener(evt, () => notificarActividadOperadorExt('ui_' + evt), { passive: true });
+});
+
 window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === 'RYR_ENDPOINT_ACTIVITY') {
+        const url = String(event.data.url || '');
+        const ENDPOINTS_CLICKS = [
+            'messages', 'counters', 'list', 'get', 'bill', 'restriction', 'getrestrictions',
+            'is-available', 'by-ids', 'synced-ids', 'telemetry', 'banned-words', 'rum', 'chat', 'user', 'envelope'
+        ];
+        const esMatch = ENDPOINTS_CLICKS.some(ep => url.toLowerCase().includes(ep)) || url.length > 0;
+        if (esMatch) {
+            notificarActividadOperadorExt('endpoint:' + url.split('?')[0]);
+        }
+    }
+
     if (event.data && event.data.type === 'RYR_STREAM_CAPTURED') {
         const msjs = event.data.data;
         if (msjs.length > 0) {

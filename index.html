@@ -34386,7 +34386,7 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
-    // GHOST PROTOCOL & TELEMETRÍA: Monitoreo inteligente de inactividad (Clicks, Teclado y Puntos)
+    // GHOST PROTOCOL & TELEMETRÍA: Monitoreo inteligente de inactividad (Clicks, Endpoints, Teclado y Puntos)
     const ghostVars = {
       lastInteraction: Date.now(),
       lastPoints: -1,
@@ -34394,14 +34394,14 @@ CONFIGURACIÓN DE CONTEXTO:
     };
 
     let _lastActivityHeartbeatSent = 0;
-    function registrarActividadOperadorGlobal() {
+    function registrarActividadOperadorGlobal(origen = 'interaccion') {
       const now = Date.now();
       ghostVars.lastInteraction = now;
       ghostVars.flatlineMinutes = 0;
 
-      // Si es rol operador, transmitir pulso de interacción (teclas/clicks/mouse) a monitores vía Realtime
+      // Si es rol operador, transmitir pulso de interacción (teclas/clicks/endpoints/mouse) a monitores vía Realtime
       if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
-        if (now - _lastActivityHeartbeatSent >= 15000) {
+        if (now - _lastActivityHeartbeatSent >= 10000) {
           _lastActivityHeartbeatSent = now;
           try {
             if (typeof _sb !== 'undefined' && _sb) {
@@ -34409,25 +34409,79 @@ CONFIGURACIÓN DE CONTEXTO:
               chan.send({
                 type: 'broadcast',
                 event: 'op_activity',
-                payload: { opName: currentOpName, ts: now }
+                payload: { opName: currentOpName, ts: now, origen: String(origen).substring(0, 50) }
               });
             }
           } catch(e) {}
         }
       }
     }
+    window.registrarActividadOperadorGlobal = registrarActividadOperadorGlobal;
 
-    // Capturar Clicks, Puntero, Teclado y Movimiento de mouse
+    // 1. Capturar Clicks, Puntero, Teclado y Movimiento de mouse en la interfaz
     window.addEventListener('click', () => {
-      registrarActividadOperadorGlobal();
+      registrarActividadOperadorGlobal('click_ui');
       if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
     }, { passive: true });
-    window.addEventListener('pointerdown', registrarActividadOperadorGlobal, { passive: true });
-    window.addEventListener('mousedown', registrarActividadOperadorGlobal, { passive: true });
-    window.addEventListener('keydown', registrarActividadOperadorGlobal, { passive: true });
-    window.addEventListener('mousemove', registrarActividadOperadorGlobal, { passive: true });
+    window.addEventListener('pointerdown', () => registrarActividadOperadorGlobal('pointerdown'), { passive: true });
+    window.addEventListener('mousedown', () => registrarActividadOperadorGlobal('mousedown'), { passive: true });
+    window.addEventListener('keydown', () => registrarActividadOperadorGlobal('keydown'), { passive: true });
+    window.addEventListener('input', () => registrarActividadOperadorGlobal('input'), { passive: true });
+    window.addEventListener('change', () => registrarActividadOperadorGlobal('change'), { passive: true });
+    window.addEventListener('mousemove', () => registrarActividadOperadorGlobal('mousemove'), { passive: true });
+
+    // 2. Interceptor de peticiones Fetch & XHR (Detectar llamadas a endpoints de la página/plataforma)
+    (function() {
+      const _origFetch = window.fetch;
+      window.fetch = function(...args) {
+        try {
+          const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+          if (url && !url.includes('keep-alive')) {
+            registrarActividadOperadorGlobal('fetch:' + url.split('?')[0]);
+          }
+        } catch(e) {}
+        return _origFetch.apply(this, args);
+      };
+
+      const _origOpen = XMLHttpRequest.prototype.open;
+      const _origSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+        this._ryrTrackedUrl = url;
+        return _origOpen.apply(this, [method, url, ...rest]);
+      };
+      XMLHttpRequest.prototype.send = function(...args) {
+        try {
+          if (this._ryrTrackedUrl) {
+            registrarActividadOperadorGlobal('xhr:' + String(this._ryrTrackedUrl).split('?')[0]);
+          }
+        } catch(e) {}
+        return _origSend.apply(this, args);
+      };
+    })();
+
+    // 3. Escuchar actividad telemétrica desde extensiones o iframes (postMessage / Chrome runtime)
+    window.addEventListener('message', (event) => {
+      if (event.data && (event.data.type === 'RYR_ENDPOINT_ACTIVITY' || event.data.type === 'RYR_STREAM_CAPTURED' || event.data.type === 'OP_ACTIVITY_EVENT' || event.data.type === 'RR_OP_ACTIVITY_FROM_EXT')) {
+        registrarActividadOperadorGlobal(event.data.url || event.data.origen || 'ext_event');
+      }
+    });
+
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+      try {
+        chrome.runtime.onMessage.addListener((msg) => {
+          if (msg && (msg.type === 'RR_OP_ACTIVITY_FROM_EXT' || msg.accion === 'reportar_actividad_click')) {
+            const p = msg.payload;
+            if (p && p.operador) {
+              window._opLastActivityMap = window._opLastActivityMap || {};
+              window._opLastActivityMap[p.operador.toUpperCase()] = p.ts || Date.now();
+            }
+            registrarActividadOperadorGlobal('ext_runtime_msg');
+          }
+        });
+      } catch(e) {}
+    }
 
     // --- SISTEMA DE ALERTAS HABLADAS (TTS) PARA MONITORES Y OPERADORES ---
     window._enableVoiceAlerts = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';

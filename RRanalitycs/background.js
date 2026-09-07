@@ -24,4 +24,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         .then(r => r.json()).then(data => sendResponse(data)).catch(err => sendResponse({ actualizado: false }));
         return true;
     }
+
+    if (request.accion === "reportar_actividad_click") {
+        // Enviar a todas las pestañas abiertas (incluyendo el dashboard de AgenciaRR)
+        chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(t => {
+                if (t.id) {
+                    chrome.tabs.sendMessage(t.id, { type: 'RR_OP_ACTIVITY_FROM_EXT', payload: request.payload }).catch(() => {});
+                }
+            });
+        });
+        sendResponse({ success: true });
+        return true;
+    }
 });

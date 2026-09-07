@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20260905_1320 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v18.1 [CORTE-12PM-CONSOLIDATION-EXACT]</title>
+  <!-- build:20260907_0945 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v18.2 [DELTA-SHIFT-CORTE8AM-SYNC-RT]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10331,9 +10331,9 @@
           localStorage.getItem(ASI_KEY + '_draft_' + fecha + '_' + sh) || '{}'
         );
         const entries = Object.entries(draft);
-        totalEntries += entries.length;
-        entries.forEach(([k, v]) => {
-          if (!k.endsWith('||operador')) return;
+        const opEntries = entries.filter(([k]) => k.endsWith('||operador'));
+        totalEntries += opEntries.length;
+        opEntries.forEach(([k, v]) => {
           if (v?.estado !== 'P' && v?.estado !== 'T') return;
 
           const opNameUpper = k.replace('||operador', '').toUpperCase();
@@ -13956,6 +13956,7 @@
     // Dynamic Live Stats reflected on the Login Screen
     function updateLoginLiveStats() {
       try {
+        if (typeof currentRole !== 'undefined' && currentRole !== null) return;
         const opsCount = typeof operatorsData !== 'undefined' ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').length : 38;
         const countEl = document.getElementById('login-stat-ops');
         if (countEl) countEl.innerText = opsCount + ' Activos';
@@ -14240,6 +14241,12 @@
               _origSetItem(row.key, strVal);
               _sbMemCache[row.key] = strVal;
             });
+            if (typeof renderConnectedOps === 'function') renderConnectedOps();
+            if (typeof renderRanking === 'function') renderRanking();
+            if (typeof asiRender === 'function') asiRender();
+            if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName && typeof renderOpDashboard === 'function') {
+              renderOpDashboard(currentOpName);
+            }
           }
         } catch (de) {
           console.warn('[Supabase] Error cargando asistencia de hoy:', de.message);
@@ -14390,6 +14397,19 @@
       }, 5000); // 5s debounce: esperar a que el scraper termine su ráfaga
     }
 
+    let _renderConnectedTimer = null;
+    function _debouncedRenderConnectedOps() {
+      if (_renderConnectedTimer) clearTimeout(_renderConnectedTimer);
+      _renderConnectedTimer = setTimeout(() => {
+        if (typeof renderConnectedOps === 'function') renderConnectedOps();
+        if (typeof renderRanking === 'function') renderRanking();
+        if (typeof asiRender === 'function') asiRender();
+        if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName && typeof renderOpDashboard === 'function') {
+          renderOpDashboard(currentOpName);
+        }
+      }, 300);
+    }
+
     function _sbRealtime() {
       if (!_sb) return;
       
@@ -14450,6 +14470,17 @@
                 _sbMemCache[row.key] = finalVal;
                 if (typeof window.reproducirAnuncioVozGlobal === 'function') {
                   window.reproducirAnuncioVozGlobal(finalVal);
+                }
+              } else if (row.key.startsWith('rr_prime_asistencia_draft_')) {
+                const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
+                if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
+                _sbMemCache[row.key] = finalVal;
+                if (typeof _debouncedRenderConnectedOps === 'function') {
+                  _debouncedRenderConnectedOps();
+                } else {
+                  if (typeof renderConnectedOps === 'function') renderConnectedOps();
+                  if (typeof renderRanking === 'function') renderRanking();
+                  if (typeof asiRender === 'function') asiRender();
                 }
               } else {
                 const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;

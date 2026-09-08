@@ -34474,6 +34474,7 @@ CONFIGURACIÓN DE CONTEXTO:
     window._enableVoiceAlerts = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
     window.voiceAlertsEnabled = window._enableVoiceAlerts;
     let _inactivityAlertsLastTime = {};
+    let _inactivityAlertCount = {};   // cuántas alertas consecutivas ha recibido cada op sin mejorar
     let _streakCongratsLastTime = {};
     let _voiceAlertsInterval = null;
 
@@ -34751,17 +34752,28 @@ CONFIGURACIÓN DE CONTEXTO:
           const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
           const lastActivityTs = Math.max(lastCutTs, lastInteractionTs);
 
-          // Umbral de 3 minutos (180,000 ms) sin recibir ninguna señal (puntos, teclas ni clicks)
-          if (now - lastActivityTs >= 180000) {
+          // Umbral de 5 minutos (300,000 ms) sin recibir ninguna señal (puntos, teclas ni clicks)
+          if (now - lastActivityTs >= 300000) {
             const lastAlert = _inactivityAlertsLastTime[opName] || 0;
-            // Alertar con cooldown de 3 minutos
-            if (now - lastAlert >= 180000) {
+            // Alertar con cooldown de 5 minutos
+            if (now - lastAlert >= 300000) {
               const opShortName = opName.split(' ')[0];
-              speakText(`${opShortName}, llevas 3 minutos sin escribir, sin clicks o sin generar puntos.`);
+              const alertCount = (_inactivityAlertCount[opName] || 0) + 1;
+              _inactivityAlertCount[opName] = alertCount;
+
+              if (alertCount === 1) {
+                // Primera alerta: aviso neutral
+                speakText(`${opShortName}, llevas 5 minutos sin escribir, sin clicks o sin generar puntos.`);
+              } else {
+                // Segunda alerta en adelante: mensaje motivacional
+                speakText(`${opShortName}, responde rápido. Cada mensaje que tardas es un replay o una propina que se pierde. Mientras más rápido respondas, más vuelven a escribirte y más facturamos todos.`);
+              }
               _inactivityAlertsLastTime[opName] = now;
             }
           } else {
+            // Operador activo: reiniciar contador
             _inactivityAlertsLastTime[opName] = 0;
+            _inactivityAlertCount[opName] = 0;
 
             // Racha de puntos (3 cortes o más en los últimos 5 minutos)
             const recentCuts = todayCuts.filter(c => now - c.ts < 300000);

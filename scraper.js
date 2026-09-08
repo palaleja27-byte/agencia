@@ -11,7 +11,7 @@ const WebSocket = require('ws');
 // ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)
 // ═══════════════════════════════════════════════════════════════
 
-const { getFallbackPanels, FALLBACK_PERFILES } = require('./fallback_perfiles');
+const { getFallbackPanels, FALLBACK_PERFILES, CORTE_MANUAL_BASELINES } = require('./fallback_perfiles');
 
 function sbQueryWithTimeout(queryPromise, timeoutMs = 10000) {
   return Promise.race([
@@ -167,6 +167,17 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const fechaDia = fechaHoyColombia();
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
+
+  // 🎯 PRIORIDAD 1: Corte manual configurado para hoy (2026-09-08)
+  if (fechaDia === '2026-09-08' && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil]) {
+    const cm = CORTE_MANUAL_BASELINES[idPerfil];
+    if (jornada === 'Mañana') {
+      shiftBaselines[key] = cm.baseline;
+    } else if (jornada === 'Tarde' && shiftBaselines[key] === undefined) {
+      shiftBaselines[key] = cm.total > 0 ? cm.total : monthlyTotal;
+      log(`  🎯 Baseline Tarde fijado en cierre de Mañana: ${modelo} = ${shiftBaselines[key]} pts`);
+    }
+  }
 
   // Si no tenemos baseline en memoria, buscar en Supabase (watcher se reinició)
   if (shiftBaselines[key] === undefined) {
@@ -491,7 +502,7 @@ async function watchPanel(panel, perfiles) {
       log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
 
       await Promise.all(panels.map(panel => {
-        const perfiles = (allPerfiles || []).filter(p => p.activo);
+        const perfiles = (allPerfiles || []).filter(p => p.activo && (!p.panel_id || Number(p.panel_id) === Number(panel.id)));
         if (!perfiles.length) { log(`[SKIP] ${panel.nombre} — Sin perfiles registrados para este panel`); return Promise.resolve(); }
         log(`  📋 ${panel.nombre}: Escaneando ${perfiles.length} perfiles activos`);
         return watchPanel(panel, perfiles);

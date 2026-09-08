@@ -14,7 +14,7 @@ const WebSocket = require('ws');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { getFallbackPanels, FALLBACK_PERFILES } = require('./fallback_perfiles');
+const { getFallbackPanels, FALLBACK_PERFILES, CORTE_MANUAL_BASELINES } = require('./fallback_perfiles');
 
 function sbQueryWithTimeout(queryPromise, timeoutMs = 10000) {
   return Promise.race([
@@ -184,18 +184,33 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // Re-sincronizar siempre con el baseline de la DB si ya existe
-  const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
-  if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
-    // Si la DB tiene un baseline antiguo pre-reset (ej: 14794 pts) pero Datame ya reinició el mes (ej: 119 pts), corregir la DB a 0 SOLO el día 1 en Colombia
-    if (rec.puntos_baseline > monthlyTotal && diaHoyColombia() === 1 && (monthlyTotal < rec.puntos_baseline * 0.5 || monthlyTotal < 100)) {
-      log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
-      shiftBaselines[key] = 0;
-      await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);
-    } else {
-      shiftBaselines[key] = rec.puntos_baseline;
+  // 🎯 PRIORIDAD 1: Corte manual configurado para hoy (2026-09-08)
+  if (fechaDia === '2026-09-08' && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil]) {
+    const cm = CORTE_MANUAL_BASELINES[idPerfil];
+    if (jornada === 'Mañana') {
+      shiftBaselines[key] = cm.baseline;
+    } else if (jornada === 'Tarde' && shiftBaselines[key] === undefined) {
+      shiftBaselines[key] = cm.total > 0 ? cm.total : monthlyTotal;
+      log(`  🎯 Baseline Tarde fijado en cierre de Mañana: ${modelo} = ${shiftBaselines[key]} pts`);
     }
-  } else if (shiftBaselines[key] === undefined) {
+  }
+
+  // Re-sincronizar con el baseline de la DB si no está en corte manual y ya existe en DB
+  if (shiftBaselines[key] === undefined) {
+    const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
+    if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
+      if (rec.puntos_baseline > monthlyTotal && diaHoyColombia() === 1 && (monthlyTotal < rec.puntos_baseline * 0.5 || monthlyTotal < 100)) {
+        log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
+        shiftBaselines[key] = 0;
+        await dbUpdateBaseline(idPerfil, fechaDia, jornada, 0, monthlyTotal);
+      } else {
+        shiftBaselines[key] = rec.puntos_baseline;
+      }
+    }
+  }
+
+  if (shiftBaselines[key] === undefined) {
+    const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
     if (rec) {
       shiftBaselines[key] = monthlyTotal;
       log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
@@ -584,7 +599,7 @@ async function watchPanel(panel, perfiles) {
       // Asignar cada perfil a su respectivo watcher/navegador
       log(`🔘 Preparando Watchers...`);
       const panelsPromise = Promise.all(panels.map(panel => {
-        const perfiles = (allPerfiles || []).filter(p => p.activo);
+        const perfiles = (allPerfiles || []).filter(p => p.activo && (!p.panel_id || Number(p.panel_id) === Number(panel.id)));
       
         if (perfiles.length === 0) {
           log(`📋 PANEL-${panel.id}: 0 perfiles (Omitiendo)`);

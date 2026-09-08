@@ -30126,7 +30126,16 @@ PT._logKey = function (opName) {
 
       // PASO 4: Sincronizar UI una sola vez al final (no múltiples veces)
       // Pequeño delay para dejar que los UPDATEs de Supabase asienten
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 1200));
+
+      // 🔄 CRÍTICO: Recargar _dpTurnosData desde Supabase con los baselines corregidos
+      // Sin esto la UI sigue mostrando los valores en caché aunque la DB ya esté bien
+      if (typeof sincronizarDatamePaneles === 'function') {
+        try {
+          await sincronizarDatamePaneles();
+          console.log('✅ [DELTA-SHIFT] sincronizarDatamePaneles completado — UI actualizada');
+        } catch(e) { console.warn('[DELTA-SHIFT] Error en sincronizarDatamePaneles:', e); }
+      }
 
       if (typeof renderRanking === 'function') renderRanking();
       if (typeof _opRtSync === 'function' && window._opRtOpName) {

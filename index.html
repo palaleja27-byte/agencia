@@ -13985,7 +13985,8 @@
     window._masterGlobalChannel = null;
     function _initMasterRealtime(role) {
       if (typeof _sb === 'undefined' || !_sb || _globalRealtimeActive) return;
-      
+      _globalRealtimeActive = true; // ← FIX: marcar SINCRÓNICAMENTE para evitar race condition de doble suscripción
+
       console.log('[MASTER-RT] Iniciando canal global unificado en tiempo real para todos los roles (Admin/Monitor/Operador)...');
       window._masterGlobalChannel = _sb.channel('agencia_global_rt', { config: { broadcast: { ack: true, self: true } } });
       const globalChannel = window._masterGlobalChannel;
@@ -14025,6 +14026,8 @@
            if (!_sbOnline) { _sbOnline = true; if(typeof _toastSync === 'function') _toastSync('🟢 Realtime Unificado Activo'); }
            console.log('[MASTER-RT] 🚀 Suscrito exitosamente a agencia_global_rt');
          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+           _globalRealtimeActive = false; // permitir re-init si es necesario
+           window._masterGlobalChannel = null;
            if (_sbOnline) { _sbOnline = false; if(typeof _toastSync === 'function') _toastSync('🔴 Realtime desconectado', true); }
          }
       });

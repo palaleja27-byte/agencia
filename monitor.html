@@ -142,10 +142,15 @@
     let supChatPollingInterval = null;
     let cachedLiveOperators = [];
 
+    let _renderBackendOffline = false;
+    let _renderOfflineRetryCount = 0;
     async function fetchLive() {
       try {
-        const res = await fetch(API_URL + '/api/telemetry/live');
+        const res = await fetch(API_URL + '/api/telemetry/live', { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
+        _renderBackendOffline = false;
+        _renderOfflineRetryCount = 0;
         cachedLiveOperators = data.operators || [];
         const grid = document.getElementById('operators-grid');
         
@@ -391,7 +396,7 @@
       document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
     }
 
-    setInterval(fetchLive, 2000);
+    setInterval(fetchLive, 15000);
     fetchLive();
   </script>
 </body>

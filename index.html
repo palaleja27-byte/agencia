@@ -13982,11 +13982,13 @@
     // ── MASTER REALTIME ENGINE (OPTIMIZATION) ──
     // Unifies all Supabase WebSocket connections into ONE single channel
     let _globalRealtimeActive = false;
+    window._masterGlobalChannel = null;
     function _initMasterRealtime(role) {
       if (typeof _sb === 'undefined' || !_sb || _globalRealtimeActive) return;
       
       console.log('[MASTER-RT] Iniciando canal global unificado en tiempo real para todos los roles (Admin/Monitor/Operador)...');
-      const globalChannel = _sb.channel('agencia_global_rt', { config: { broadcast: { ack: true, self: true } } });
+      window._masterGlobalChannel = _sb.channel('agencia_global_rt', { config: { broadcast: { ack: true, self: true } } });
+      const globalChannel = window._masterGlobalChannel;
       
       globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'operaciones' }, (payload) => {
          window.dispatchEvent(new CustomEvent('rr_op_change', { detail: payload }));
@@ -20037,17 +20039,18 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     }
 
     async function loginVerify() {
-      // Sincronizar op_pins desde Supabase SIEMPRE antes de verificar
-      // Cubre: admin asignó PIN después de que el operador abrió la app
+      // Sincronizar op_pins desde Supabase con timeout ultra rápido (500ms) y fallback a caché local
       if (loginRole === 'operador' && _sb) {
         try {
-          const { data, error } = await _sb.from('kv_store')
+          const fetchPinsPromise = _sb.from('kv_store')
             .select('value').eq('key', 'rr_prime_op_pins').single();
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('PIN Timeout')), 500));
+          const { data, error } = await Promise.race([fetchPinsPromise, timeoutPromise]);
           if (!error && data?.value) {
             const strVal = typeof data.value === 'object' ? JSON.stringify(data.value) : data.value;
             _origSetItem('rr_prime_op_pins', strVal);
           }
-        } catch (e) { /* sin conexión — usa cache local */ }
+        } catch (e) { /* sin conexión o timeout — usa cache local instantáneo */ }
       }
 
       const pins = loginGetPins();
@@ -34399,13 +34402,13 @@ CONFIGURACIÓN DE CONTEXTO:
       ghostVars.lastInteraction = now;
       ghostVars.flatlineMinutes = 0;
 
-      // Si es rol operador, transmitir pulso de interacción (teclas/clicks/endpoints/mouse) a monitores vía Realtime
+      // Si es rol operador, transmitir pulso telemétrico usando el canal maestro global existente
       if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
-        if (now - _lastActivityHeartbeatSent >= 10000) {
+        if (now - _lastActivityHeartbeatSent >= 20000) {
           _lastActivityHeartbeatSent = now;
           try {
-            if (typeof _sb !== 'undefined' && _sb) {
-              const chan = _sb.channel('agencia_global_rt');
+            const chan = window._masterGlobalChannel || (_sb ? _sb.channel('agencia_global_rt') : null);
+            if (chan && typeof chan.send === 'function') {
               chan.send({
                 type: 'broadcast',
                 event: 'op_activity',
@@ -34418,7 +34421,7 @@ CONFIGURACIÓN DE CONTEXTO:
     }
     window.registrarActividadOperadorGlobal = registrarActividadOperadorGlobal;
 
-    // 1. Capturar Clicks, Puntero, Teclado y Movimiento de mouse en la interfaz
+    // 1. Capturar Clicks, Puntero, Teclado y Movimiento de mouse en la interfaz del usuario
     window.addEventListener('click', () => {
       registrarActividadOperadorGlobal('click_ui');
       if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
@@ -34432,36 +34435,7 @@ CONFIGURACIÓN DE CONTEXTO:
     window.addEventListener('change', () => registrarActividadOperadorGlobal('change'), { passive: true });
     window.addEventListener('mousemove', () => registrarActividadOperadorGlobal('mousemove'), { passive: true });
 
-    // 2. Interceptor de peticiones Fetch & XHR (Detectar llamadas a endpoints de la página/plataforma)
-    (function() {
-      const _origFetch = window.fetch;
-      window.fetch = function(...args) {
-        try {
-          const url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
-          if (url && !url.includes('keep-alive')) {
-            registrarActividadOperadorGlobal('fetch:' + url.split('?')[0]);
-          }
-        } catch(e) {}
-        return _origFetch.apply(this, args);
-      };
-
-      const _origOpen = XMLHttpRequest.prototype.open;
-      const _origSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        this._ryrTrackedUrl = url;
-        return _origOpen.apply(this, [method, url, ...rest]);
-      };
-      XMLHttpRequest.prototype.send = function(...args) {
-        try {
-          if (this._ryrTrackedUrl) {
-            registrarActividadOperadorGlobal('xhr:' + String(this._ryrTrackedUrl).split('?')[0]);
-          }
-        } catch(e) {}
-        return _origSend.apply(this, args);
-      };
-    })();
-
-    // 3. Escuchar actividad telemétrica desde extensiones o iframes (postMessage / Chrome runtime)
+    // 2. Escuchar actividad telemétrica y clicks desde extensiones o iframes de la plataforma
     window.addEventListener('message', (event) => {
       if (event.data && (event.data.type === 'RYR_ENDPOINT_ACTIVITY' || event.data.type === 'RYR_STREAM_CAPTURED' || event.data.type === 'OP_ACTIVITY_EVENT' || event.data.type === 'RR_OP_ACTIVITY_FROM_EXT')) {
         registrarActividadOperadorGlobal(event.data.url || event.data.origen || 'ext_event');
@@ -34648,12 +34622,14 @@ CONFIGURACIÓN DE CONTEXTO:
         // 2. Transmitir por canal de WebSocket broadcast en tiempo real
         if (typeof _sb !== 'undefined' && _sb) {
           try {
-            const rtChan = _sb.channel('agencia_global_rt');
-            rtChan.send({
-              type: 'broadcast',
-              event: 'voice_alert',
-              payload: annPayload
-            });
+            const rtChan = window._masterGlobalChannel || _sb.channel('agencia_global_rt');
+            if (rtChan && typeof rtChan.send === 'function') {
+              rtChan.send({
+                type: 'broadcast',
+                event: 'voice_alert',
+                payload: annPayload
+              });
+            }
           } catch(e){}
 
           // 3. Guardar en Supabase para que TODOS los operadores conectados lo reciban al instante

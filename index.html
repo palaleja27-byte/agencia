@@ -30386,12 +30386,17 @@ PT._logKey = function (opName) {
           while (hasMore) {
             const from = page * pageSize;
             const to = (page + 1) * pageSize - 1;
-            const { data, error: fetchErr } = await _sb
+            const fetchPromise = _sb
               .from('operaciones')
               .select('id_perfil, puntos, puntos_neto, puntos_total, puntos_baseline, fecha_corte, fecha_dia, jornada, agencia')
               .gte('fecha_dia', FECHA_INICIO)
               .order('id', { ascending: false })
               .range(from, to);
+            
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Timeout operaciones (8s)')), 8000)
+            );
+            const { data, error: fetchErr } = await Promise.race([fetchPromise, timeoutPromise]);
             
             if (fetchErr) {
               errNuevo = fetchErr;
@@ -30429,12 +30434,17 @@ PT._logKey = function (opName) {
             while (hasMore) {
               const from = page * pageSize;
               const to = (page + 1) * pageSize - 1;
-              const { data, error: fetchErr } = await _sb
+              const fetchPromise = _sb
                 .from('operaciones')
                 .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
                 .gte('fecha_dia', FECHA_INICIO)
                 .order('id', { ascending: false })
                 .range(from, to);
+              
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout operaciones fallback (8s)')), 8000)
+              );
+              const { data, error: fetchErr } = await Promise.race([fetchPromise, timeoutPromise]);
               
               if (fetchErr) {
                 errFallback = fetchErr;

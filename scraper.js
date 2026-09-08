@@ -11,6 +11,15 @@ const WebSocket = require('ws');
 // ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)
 // ═══════════════════════════════════════════════════════════════
 
+const { getFallbackPanels, FALLBACK_PERFILES } = require('./fallback_perfiles');
+
+function sbQueryWithTimeout(queryPromise, timeoutMs = 10000) {
+  return Promise.race([
+    queryPromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out (' + timeoutMs + 'ms)')), timeoutMs))
+  ]);
+}
+
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').trim();
 const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || '').trim();
 
@@ -82,63 +91,69 @@ function bKey(id, fecha, jornada) { return `${id}__${fecha}__${jornada}`; }
 // ─────────────────────────────────────────────────────────────────
 async function dbSelectBaseline(idPerfil, fechaDia, jornada) {
   let attempt = 0;
-  while (attempt < 5) {
-    const res = await supabase.from('operaciones')
-      .select('puntos_total, puntos_baseline, puntos_neto')
-      .eq('id_perfil', idPerfil)
-      .eq('fecha_dia', fechaDia)
-      .eq('jornada', jornada)
-      .maybeSingle();
-    
-    if (!res.error) return res;
-    
-    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
+  while (attempt < 3) {
+    try {
+      const res = await sbQueryWithTimeout(
+        supabase.from('operaciones')
+          .select('puntos_total, puntos_baseline, puntos_neto')
+          .eq('id_perfil', idPerfil)
+          .eq('fecha_dia', fechaDia)
+          .eq('jornada', jornada)
+          .maybeSingle(),
+        10000
+      );
+      if (!res.error) return res;
       attempt++;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    } else {
-      return res;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+    } catch (e) {
+      attempt++;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
     }
   }
-  return { error: { message: 'Max retries reached (fetch failed)' }, data: null };
+  return { error: { message: 'Max retries reached (timeout o fallo de red)' }, data: null };
 }
 
 async function dbUpsertTurno(payload) {
   let attempt = 0;
-  while (attempt < 5) {
-    const res = await supabase.from('operaciones')
-      .upsert(payload, { onConflict: 'id_perfil,fecha_dia,jornada' });
-      
-    if (!res.error) return res;
-    
-    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
+  while (attempt < 3) {
+    try {
+      const res = await sbQueryWithTimeout(
+        supabase.from('operaciones')
+          .upsert(payload, { onConflict: 'id_perfil,fecha_dia,jornada' }),
+        10000
+      );
+      if (!res.error) return res;
       attempt++;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    } else {
-      return res;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+    } catch (e) {
+      attempt++;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
     }
   }
-  return { error: { message: 'Max retries reached (fetch failed)' } };
+  return { error: { message: 'Max retries reached (timeout o fallo de red)' } };
 }
 
 async function dbUpdateBaseline(idPerfil, fechaDia, jornada, baselineCorr, netoCorr) {
   let attempt = 0;
-  while (attempt < 5) {
-    const res = await supabase.from('operaciones')
-      .update({ puntos_baseline: baselineCorr, puntos_neto: netoCorr })
-      .eq('id_perfil', idPerfil)
-      .eq('fecha_dia', fechaDia)
-      .eq('jornada', jornada);
-      
-    if (!res.error) return res;
-    
-    if (res.error.message.includes('fetch') || res.error.message.includes('502') || res.error.message.includes('timeout') || res.error.message.includes('Gateway')) {
+  while (attempt < 3) {
+    try {
+      const res = await sbQueryWithTimeout(
+        supabase.from('operaciones')
+          .update({ puntos_baseline: baselineCorr, puntos_neto: netoCorr })
+          .eq('id_perfil', idPerfil)
+          .eq('fecha_dia', fechaDia)
+          .eq('jornada', jornada),
+        10000
+      );
+      if (!res.error) return res;
       attempt++;
-      await new Promise(r => setTimeout(r, 3000 * attempt));
-    } else {
-      return res;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+    } catch (e) {
+      attempt++;
+      await new Promise(r => setTimeout(r, 2000 * attempt));
     }
   }
-  return { error: { message: 'Max retries reached (fetch failed)' } };
+  return { error: { message: 'Max retries reached (timeout o fallo de red)' } };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -415,16 +430,46 @@ async function watchPanel(panel, perfiles) {
   while (Date.now() - startTime < MAX_RUNTIME_MS) {
     const cycleStart = Date.now();
     
-    let { data: panels, error: panelsErr } = await supabase.from('datame_panels').select('*').eq('activo', true).order('id');
-    
-    // 🧠 DELTA-SHIFT™: Cargar perfiles activos, incluyendo aquellos sin panel_id asignado (panel_id is null)
-    const { data: allPerfiles, error: perfErr } = await supabase.from('datame_perfiles')
-      .select('*')
-      .eq('activo', true)
-      .order('id');
+    let panels = null;
+    let panelsErr = null;
+    let allPerfiles = null;
+    let perfErr = null;
 
-    if (panelsErr) log(`❌ Error consultando paneles: ${panelsErr.message}`);
-    if (perfErr) log(`❌ Error consultando perfiles: ${perfErr.message}`);
+    try {
+      const pRes = await sbQueryWithTimeout(
+        supabase.from('datame_panels').select('*').eq('activo', true).order('id'),
+        8000
+      );
+      panels = pRes.data;
+      panelsErr = pRes.error;
+    } catch (e) {
+      panelsErr = e;
+    }
+
+    try {
+      const perfRes = await sbQueryWithTimeout(
+        supabase.from('datame_perfiles').select('*').eq('activo', true).order('id'),
+        8000
+      );
+      allPerfiles = perfRes.data;
+      perfErr = perfRes.error;
+    } catch (e) {
+      perfErr = e;
+    }
+
+    if (panelsErr) log(`⚠️ Supabase paneles: ${panelsErr.message}`);
+    if (perfErr) log(`⚠️ Supabase perfiles: ${perfErr.message}`);
+
+    // Si Supabase falla o no responde por Error 522/Timeout, usar fallback local
+    if (!panels || panels.length === 0) {
+      log('🛡️ [RESILIENCIA-DATAME] Activando paneles de respaldo configurados en GitHub Secrets / Entorno...');
+      panels = getFallbackPanels();
+    }
+
+    if (!allPerfiles || allPerfiles.length === 0) {
+      log('🛡️ [RESILIENCIA-DATAME] Activando catálogo maestro de perfiles de respaldo...');
+      allPerfiles = FALLBACK_PERFILES;
+    }
 
     if (panels?.length) {
       // Mapear y sobreescribir con las variables de entorno de GitHub Actions (si existen)
@@ -453,7 +498,7 @@ async function watchPanel(panel, perfiles) {
       }));
 
     } else {
-      log('❌ Sin paneles activos en Supabase (o tabla vacía/inactiva)');
+      log('❌ Sin paneles con credenciales disponibles para escanear');
     }
 
     const elapsed = Date.now() - cycleStart;

@@ -6744,34 +6744,51 @@
       // 🛡️ SHIELD GLOBAL DE PERSISTENCIA (Evita QuotaExceededError en navegadores saturados)
       (function() {
         try {
+          window._mediaMemoryCache = window._mediaMemoryCache || {};
           const originalSetItem = localStorage.setItem;
           localStorage.setItem = function(key, value) {
+            // Si es imagen pesada (banner o avatar), respaldar siempre en RAM
+            if (typeof key === 'string' && (key.startsWith('rr_op_banner_') || key.startsWith('rr_prime_avatar_'))) {
+              window._mediaMemoryCache[key] = value;
+            }
             try {
               originalSetItem.call(localStorage, key, value);
             } catch (e) {
               if (e.name === 'QuotaExceededError' || e.code === 22 || e.message.includes('quota') || e.message.includes('Quota')) {
+                // Si la clave que falló es un banner o avatar grande, mantener en memoria y no reventar
+                if (typeof key === 'string' && (key.startsWith('rr_op_banner_') || key.startsWith('rr_prime_avatar_'))) {
+                  window._mediaMemoryCache[key] = value;
+                  console.info(`[Storage] Imagen '${key}' preservada en memoria RAM (cuota 5MB protegida).`);
+                  return;
+                }
+
                 console.warn('[Storage] QuotaExceededError detectado. Liberando espacio de caché no crítica...');
                 
+                const today = typeof localDateStr === 'function' ? localDateStr() : new Date().toISOString().slice(0, 10);
                 const keysToRemove = [];
                 for(let i=0; i<localStorage.length; i++) {
                   const k = localStorage.key(i);
                   if (!k) continue;
-                  // Limpiar TODOS los drafts anteriores, historiales de mapas de calor y logs viejos
-                  if ((k.includes('_draft_') && k !== key) || 
+                  // Liberar banners viejos en localStorage (ya que se cargan de Supabase) y heatmaps
+                  if (k.startsWith('rr_op_banner_') || 
                       k.includes('_history') || 
-                      k.includes('rr_logs_entrada') ||
-                      k.includes('rr_prime_logs_entrada')) {
+                      k.includes('rr_heatmap_') ||
+                      (k.includes('_draft_') && !k.includes(today) && k !== key)) {
                     keysToRemove.push(k);
                   }
                 }
-                keysToRemove.forEach(k => localStorage.removeItem(k));
+                keysToRemove.forEach(k => {
+                  try { localStorage.removeItem(k); } catch(re){}
+                });
                 
                 // Intentar re-guardar
                 try {
                   originalSetItem.call(localStorage, key, value);
-                  console.info(`[Storage] Guardado exitoso tras liberar espacio agresivamente para clave: ${key} ✅`);
+                  console.info(`[Storage] Guardado exitoso tras liberar espacio para clave: ${key} ✅`);
                 } catch (finalError) {
-                  console.error('[Storage] Capacidad máxima alcanzada persistentemente:', finalError.message);
+                  // Respaldo seguro en memoria para cualquier dato que no quepa
+                  window._mediaMemoryCache[key] = value;
+                  console.warn('[Storage] Clave retenida en memoria RAM por límite de cuota:', key);
                 }
               } else {
                 throw e; // lanzar otros errores normalmente
@@ -11935,14 +11952,29 @@
     });
 
     // ==================== AVATARES Y BANNERS — SYNC SUPABASE ====================
+    window._mediaMemoryCache = window._mediaMemoryCache || {};
     const AVATAR_PREFIX = 'rr_prime_avatar_';
     function avatarKey(name) { return AVATAR_PREFIX + name.replace(/\s+/g, '_').toLowerCase(); }
-    function getAvatar(name) { return localStorage.getItem(avatarKey(name)) || null; }
-    function saveAvatar(name, b64) { localStorage.setItem(avatarKey(name), b64); }
+    function getAvatar(name) { 
+      const k = avatarKey(name);
+      return (window._mediaMemoryCache && window._mediaMemoryCache[k]) || localStorage.getItem(k) || null; 
+    }
+    function saveAvatar(name, b64) { 
+      const k = avatarKey(name);
+      window._mediaMemoryCache[k] = b64;
+      try { localStorage.setItem(k, b64); } catch(e){}
+    }
 
     function bannerKey(name) { return 'rr_op_banner_' + name.replace(/\s+/g, '_').toUpperCase(); }
-    function getBanner(name) { return localStorage.getItem(bannerKey(name)) || null; }
-    function saveBanner(name, data) { localStorage.setItem(bannerKey(name), data); }
+    function getBanner(name) { 
+      const k = bannerKey(name);
+      return (window._mediaMemoryCache && window._mediaMemoryCache[k]) || localStorage.getItem(k) || null; 
+    }
+    function saveBanner(name, data) { 
+      const k = bannerKey(name);
+      window._mediaMemoryCache[k] = data;
+      try { localStorage.setItem(k, data); } catch(e){}
+    }
 
     // ── Sync a Supabase (upsert en tabla rr_media) ─────────────────────
     async function _mediaUpsert(name, tipo, data) {
@@ -11955,8 +11987,11 @@
         );
         // Guardar localmente de inmediato para evitar recarga
         const cacheKey = tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
-        localStorage.setItem(cacheKey, data);
-        localStorage.setItem(cacheKey + '_ts', nowIso);
+        window._mediaMemoryCache[cacheKey] = data;
+        try {
+          localStorage.setItem(cacheKey, data);
+          localStorage.setItem(cacheKey + '_ts', nowIso);
+        } catch(e){}
       } catch(e) { console.warn('[MEDIA] upsert error:', e); }
     }
 
@@ -11977,11 +12012,12 @@
           const cacheKey = row.tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
           const tsKey = cacheKey + '_ts';
 
-          const cachedVal = localStorage.getItem(cacheKey);
+          const cachedVal = (window._mediaMemoryCache && window._mediaMemoryCache[cacheKey]) || localStorage.getItem(cacheKey);
           const cachedTs  = localStorage.getItem(tsKey);
 
           // Si el archivo ya está en local y la marca de tiempo coincide, usar caché
           if (cachedVal && cachedTs === row.updated_at) {
+            window._mediaMemoryCache[cacheKey] = cachedVal;
             cacheHits++;
             continue;
           }
@@ -11995,8 +12031,11 @@
             .maybeSingle();
 
           if (!errDetail && detail && detail.data) {
-            localStorage.setItem(cacheKey, detail.data);
-            localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+            window._mediaMemoryCache[cacheKey] = detail.data;
+            try {
+              localStorage.setItem(cacheKey, detail.data);
+              localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+            } catch(e){}
             downloadCount++;
           }
         }
@@ -12013,8 +12052,12 @@
       const cacheKey = row.tipo === 'avatar' ? avatarKey(name) : bannerKey(name);
       const tsKey = cacheKey + '_ts';
       
-      localStorage.setItem(cacheKey, row.data);
-      localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+      window._mediaMemoryCache[cacheKey] = row.data;
+      try {
+        localStorage.setItem(cacheKey, row.data);
+        localStorage.setItem(tsKey, row.updated_at || new Date().toISOString());
+      } catch(e){}
+
 
       if (row.tipo === 'avatar') {
         const target = name.trim().toUpperCase();
@@ -31216,20 +31259,24 @@ PT._logKey = function (opName) {
       if (btn) { btn.textContent = '↻ Sync'; btn.disabled = false; btn.style.opacity = '1'; }
     }
 
-    async function loadTableauData() {
+    let _tableauTablesNotFound = false;
+
+    async function loadTableauData(force = false) {
       if (typeof _sb === 'undefined' || !_sb) {
         if (typeof tableauLog === 'function') tableauLog('⚠️ Supabase no disponible — esperando conexion', 'warn');
         return;
       }
 
+      if (_tableauTablesNotFound && !force) {
+        return;
+      }
+
       const TABLES_TO_TRY = ['tableau_data', 'tableau_perfiles'];
       let data = null;
-      const TABLEAU_TIMEOUT_MS = 15000;
+      const TABLEAU_TIMEOUT_MS = 6000;
 
       for (const tbl of TABLES_TO_TRY) {
         try {
-          if (typeof tableauLog === 'function') tableauLog(`🔍 Consultando tabla '${tbl}'...`, 'info');
-
           const fetchPromise = _sb.from(tbl).select('perfil_id, valor, updated_at, data_json');
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error(`Timeout tabla ${tbl}`)), TABLEAU_TIMEOUT_MS)
@@ -31240,8 +31287,9 @@ PT._logKey = function (opName) {
           if (res.error) {
             const errCode = res.error.code || '';
             const errMsg  = res.error.message || res.error.toString();
-            if (errCode === '42P01' || errMsg.includes('does not exist')) {
-              if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' no existe en Supabase`, 'warn');
+            if (errCode === '42P01' || errCode === 'PGRST205' || errMsg.includes('does not exist') || errMsg.includes('schema cache')) {
+              _tableauTablesNotFound = true;
+              if (typeof tableauLog === 'function') tableauLog(`ℹ️ Tabla '${tbl}' no configurada en Supabase`, 'info');
             } else if (errCode === '42501' || errMsg.includes('permission')) {
               if (typeof tableauLog === 'function') tableauLog(`🔐 Tabla '${tbl}': sin permisos RLS`, 'warn');
             } else {
@@ -31252,6 +31300,7 @@ PT._logKey = function (opName) {
 
           if (res.data && res.data.length > 0) {
             data = res.data;
+            _tableauTablesNotFound = false;
             if (typeof tableauLog === 'function') tableauLog(`✅ Tabla '${tbl}' OK — ${data.length} filas`, 'success');
             break;
           } else {

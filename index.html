@@ -14286,7 +14286,12 @@
           const todayStr = localDateStr();
           const { data: todayDrafts, error: draftErr } = await _sb.from('kv_store')
             .select('key, value')
-            .like('key', `rr_prime_asistencia_draft_${todayStr}%`);
+            .in('key', [
+              `rr_prime_asistencia_draft_${todayStr}_manana`,
+              `rr_prime_asistencia_draft_${todayStr}_tarde`,
+              `rr_prime_asistencia_draft_${todayStr}_noche`,
+              'rr_asi_horas_dia'  // ← cross-device: ingresoTS de operadores conectados
+            ]);
           if (!draftErr && todayDrafts) {
             todayDrafts.forEach(row => {
               const strVal = typeof row.value === 'object' ? JSON.stringify(row.value) : row.value;
@@ -20325,6 +20330,7 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         draft[k].estado = 'P';
         draft[k].salidaManual = false;
         if (!draft[k].horaIngreso) draft[k].horaIngreso = hora;
+        if (!draft[k].ingresoTS) draft[k].ingresoTS = horaObj.getTime(); // ← timestamp cross-device
         // Solo sobrescribir perfiles y nota si el operador seleccionó explícitamente en el login
         if (chosenProfiles.length > 0) {
           draft[k].perfiles = finalProfiles;
@@ -20335,7 +20341,9 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         draft[k] = { 
           estado: 'P', 
           nota: chosenProfiles.length ? 'Perfiles auto-seleccionados' : '', 
-          horaIngreso: hora, 
+          horaIngreso: hora,
+          ingresoTS: horaObj.getTime(),  // ← timestamp cross-device
+          turnoHoras: op?.turno_horas || 8, // ← horas del turno cross-device
           autoMarcado: true,
           perfiles: finalProfiles,
           salidaManual: false
@@ -20348,10 +20356,25 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       // 🔥 FIX: Limpiar salidaTS si existía, para que no queden ocultos si se loguean después de su turno
       if (typeof ASI_HORAS_KEY !== 'undefined') {
         const allHoras = JSON.parse(localStorage.getItem(ASI_HORAS_KEY) || '{}');
-        const normName = Object.keys(allHoras).find(k => k.toUpperCase().trim() === opName.toUpperCase().trim());
+        const normName = Object.keys(allHoras).find(hk => hk.toUpperCase().trim() === opName.toUpperCase().trim());
         if (normName && allHoras[normName].salidaTS) {
           delete allHoras[normName].salidaTS;
           localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+        }
+        // Guardar ingresoTS en allHoras local también
+        const hKey = normName || opName;
+        if (!allHoras[hKey]) allHoras[hKey] = {};
+        allHoras[hKey].ingresoTS = horaObj.getTime();
+        allHoras[hKey].horas = op?.turno_horas || 8;
+        allHoras[hKey].fecha = fecha;
+        localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+
+        // 🌐 Sincronizar ASI_HORAS_KEY a Supabase para que todos los dispositivos lo lean
+        if (typeof _sb !== 'undefined' && _sb) {
+          _sb.from('kv_store').upsert(
+            { key: ASI_HORAS_KEY, value: JSON.stringify(allHoras) },
+            { onConflict: 'key' }
+          ).catch(err => console.warn('[AutoAsi] Error sync horas:', err));
         }
       }
 
@@ -27371,19 +27394,24 @@ PT._logKey = function (opName) {
         operatorsData.forEach(op => {
           if (!op.turno || op.group === 'SP' || op.group === 'N/A') return;
           const k = (typeof asiKey === 'function') ? asiKey(op.name, 'operador') : op.name + '||operador';
-          const inPresente = typeof asiEstados !== 'undefined' && (asiEstados[k]?.estado === 'P' || asiEstados[k]?.estado === 'T');
+          const curEntry = typeof asiEstados !== 'undefined' ? asiEstados[k] : null;
+          const inPresente = curEntry && (curEntry.estado === 'P' || curEntry.estado === 'T');
           if (!inPresente) return;
 
           const infoHoras = allHoras[op.name] || {};
-          const es12h = infoHoras.horas === 12;
+          const es12h = infoHoras.horas === 12 || curEntry?.turnoHoras === 12;
           const maxDuracionMs = (es12h ? 12.5 : 8.5) * 3600 * 1000;
 
-          // Solo auto-liberar si transcurrió la jornada completa (8.5h o 12.5h) desde la hora exacta de ingreso (ingresoTS)
-          if (infoHoras.ingresoTS && (now >= infoHoras.ingresoTS + maxDuracionMs)) {
+          // Usar ingresoTS del allHoras local, o del draft si está disponible (cross-device)
+          const ingresoTS = infoHoras.ingresoTS || curEntry?.ingresoTS || null;
+
+          // Solo auto-liberar si tenemos ingresoTS y transcurrió la jornada completa
+          if (ingresoTS && (now >= ingresoTS + maxDuracionMs)) {
             infoHoras.salidaTS = Date.now() - 1;
             allHoras[op.name] = infoHoras;
             localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
           }
+          // Sin ingresoTS → no liberar (evita borrar operadores en dispositivos admin sin datos locales)
         });
       }
 

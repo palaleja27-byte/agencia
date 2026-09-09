@@ -14187,12 +14187,11 @@
         
         // Subir la lista fusionada a Supabase para que otros clientes también la reciban
         if (_sb && mergedArr.length > remoteArr.length) {
-          const stripped = mergedArr.map(op => { const c = {...op}; delete c.profiles; return c; });
           const newTs = String(Date.now());
           _origSetItem('primeOperatorsData2026_ts', newTs);
           _sbMemCache['primeOperatorsData2026_ts'] = newTs;
           Promise.all([
-            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(stripped) }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(mergedArr) }, { onConflict: 'key' }),
             _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: newTs }, { onConflict: 'key' })
           ]).then(() => console.info('[Sync] Lista fusionada subida a Supabase con operadores nuevos.'));
         }
@@ -14603,27 +14602,6 @@
       if (key === 'primeOperatorsData2026') {
         const tsVal = String(Date.now());
 
-        // ─────────────────────────────────────────────────────────────────────
-        // REGLA DE ORO: Los perfiles manuales viven ÚNICAMENTE en rr_profile_*
-        // Antes de subir primeOperatorsData2026 a Supabase, eliminamos el campo
-        // "profiles" de cada operador para que nunca pueda sobreescribir los
-        // perfiles manuales que el admin ha asignado via forceSaveProfile.
-        // ─────────────────────────────────────────────────────────────────────
-        let opsWithoutProfiles = value;
-        try {
-          const arr = JSON.parse(value);
-          if (Array.isArray(arr)) {
-            // Quitar profiles del JSON que va a Supabase (primeOperatorsData2026)
-            // Los perfiles solo se leen de rr_profile_* al cargar
-            const stripped = arr.map(op => {
-              const c = { ...op };
-              delete c.profiles;
-              return c;
-            });
-            opsWithoutProfiles = JSON.stringify(stripped);
-          }
-        } catch(e) { /* usar value original si falla */ }
-
         // Si el rol es operador, realizar una fusión (merge) segura para no machacar a otros
         if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName && _sb) {
           _sb.from('kv_store').select('value').eq('key', 'primeOperatorsData2026').single().then(({ data, error }) => {
@@ -14636,59 +14614,54 @@
               try { localOps = JSON.parse(value); } catch(e){}
               const myLocalOp = localOps.find(o => o.name.toLowerCase() === currentOpName.toLowerCase());
               if (myLocalOp) {
-                // Encontrar el operador en la lista remota
                 const idx = remoteOps.findIndex(o => o.name.toLowerCase() === currentOpName.toLowerCase());
                 if (idx !== -1) {
-                  // Actualizar SOLO turno y plataforma del operador actual — NUNCA profiles
-                  // Los profiles son territorio exclusivo del admin y se guardan en rr_profile_*
                   remoteOps[idx].turno = myLocalOp.turno || remoteOps[idx].turno;
                   remoteOps[idx].plataforma = myLocalOp.plataforma || remoteOps[idx].plataforma;
+                  if (Array.isArray(myLocalOp.profiles) && myLocalOp.profiles.length > 0) {
+                    remoteOps[idx].profiles = myLocalOp.profiles;
+                  }
                 } else {
-                  // Si no existe remotamente, lo añadimos (sin profiles)
-                  const opCopy = { ...myLocalOp };
-                  delete opCopy.profiles;
-                  remoteOps.push(opCopy);
+                  remoteOps.push({ ...myLocalOp });
                 }
-                // Quitar profiles antes de subir a Supabase
-                const mergedStripped = JSON.stringify(remoteOps.map(op => { const c = { ...op }; delete c.profiles; return c; }));
-
-                // Actualizar localmente con la lista remota fusionada
-                _origSetItem('primeOperatorsData2026', mergedStripped);
-                _sbMemCache['primeOperatorsData2026'] = mergedStripped;
+                const mergedFull = JSON.stringify(remoteOps);
+                _origSetItem('primeOperatorsData2026', mergedFull);
+                _sbMemCache['primeOperatorsData2026'] = mergedFull;
                 _origSetItem('primeOperatorsData2026_ts', tsVal);
                 _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
 
-                // Upsert a Supabase
-                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedStripped }, { onConflict: 'key' }).then(() => {
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: mergedFull }, { onConflict: 'key' }).then(() => {
                   _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }).then(()=>{});
                 });
               }
             } else {
-              // Si no hay remoto o da error, upsert directo (sin profiles)
+              _origSetItem('primeOperatorsData2026', value);
+              _sbMemCache['primeOperatorsData2026'] = value;
               _origSetItem('primeOperatorsData2026_ts', tsVal);
               _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
               Promise.all([
-                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
+                _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: value }, { onConflict: 'key' }),
                 _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
               ]);
             }
           });
           return; // Detener el flujo para evitar el upsert directo redundante
         } else {
-          // Admin o Monitor: upsert directo del valor (sin profiles) y timestamp
-          _origSetItem('primeOperatorsData2026', opsWithoutProfiles);
-          _sbMemCache['primeOperatorsData2026'] = opsWithoutProfiles;
+          // Admin o Monitor: upsert directo del valor completo (con profiles)
+          _origSetItem('primeOperatorsData2026', value);
+          _sbMemCache['primeOperatorsData2026'] = value;
           _origSetItem('primeOperatorsData2026_ts', tsVal);
           _sbMemCache['primeOperatorsData2026_ts'] = tsVal;
           if (_sb) {
             Promise.all([
-              _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
+              _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: value }, { onConflict: 'key' }),
               _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' })
             ]).then(()=>{});
           }
           return;
         }
       }
+
 
       // 3. Supabase — fuente de verdad compartida (async)
       if (_sb && !_sbShouldExclude(key)) {
@@ -17990,22 +17963,9 @@ function exportarDatos() {
 
       // 2. FORZAR inserción directa en Supabase kv_store
       if (typeof _sb !== 'undefined' && _sb) {
-        let opsWithoutProfiles = newValue;
-        try {
-          const arr = JSON.parse(newValue);
-          if (Array.isArray(arr)) {
-            const stripped = arr.map(op => {
-              const c = { ...op };
-              delete c.profiles;
-              return c;
-            });
-            opsWithoutProfiles = JSON.stringify(stripped);
-          }
-        } catch(e) {}
-
         const normKey = (typeof _normName === 'function' ? _normName(name) : name.replace(/[^A-Z0-9]/g, ''));
         Promise.all([
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: opsWithoutProfiles }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'rr_profile_' + normKey, value: '[]' }, { onConflict: 'key' })
         ]).then(() => {

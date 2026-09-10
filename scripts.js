@@ -16327,12 +16327,6 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       const perfiles_activos = operatorsData.flatMap(op => (op.profiles || []).map(p => String(p.id)));
 
       try {
-        const fetchCat = _sb.from('operadores_v3').select('*').range(0, 1000);
-        const { data: catOperadores } = await Promise.race([
-          fetchCat, 
-          new Promise((_, reject) => setTimeout(() => reject(new Error("Supabase Timeout - Laser Sync (Cat)")), 25000))
-        ]);
-        
         // FIX CUOTA: Limitar a los últimos 45 días (1 mes y medio) para no descargar todo el histórico
         const START_DATE = localDateStr(45) + 'T00:00:00';
         const fetchOps = _sb.from('operaciones')

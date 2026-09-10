@@ -596,19 +596,17 @@ async function watchPanel(panel, perfiles) {
 
       log(`📡 ${panels.length} paneles activos | ${allPerfiles?.length || 0} perfiles`);
 
-      // Asignar cada perfil a su respectivo watcher/navegador
+      // Asignar cada perfil a su respectivo watcher/navegador de forma secuencial (evita OOM en GitHub Actions)
       log(`🔘 Preparando Watchers...`);
-      const panelsPromise = Promise.all(panels.map(panel => {
+      for (const panel of panels) {
         const perfiles = (allPerfiles || []).filter(p => p.activo && (!p.panel_id || Number(p.panel_id) === Number(panel.id)));
-      
         if (perfiles.length === 0) {
           log(`📋 PANEL-${panel.id}: 0 perfiles (Omitiendo)`);
-          return Promise.resolve();
+          continue;
         }
         log(`📋 PANEL-${panel.id}: Escaneando ${perfiles.length} perfiles activos`);
-        return watchPanel(panel, perfiles);
-      }));
-      await panelsPromise;
+        await watchPanel(panel, perfiles);
+      }
 
     } else {
       log('❌ Sin paneles con credenciales disponibles para escanear');

@@ -184,14 +184,14 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // 🎯 PRIORIDAD 1: Corte manual configurado para hoy (2026-09-08)
-  if (fechaDia === '2026-09-08' && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil]) {
+  // 🎯 PRIORIDAD 1: Corte manual configurado (12:00 AM)
+  if ((fechaDia === '2026-09-09' || fechaDia === '2026-09-10') && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil]) {
     const cm = CORTE_MANUAL_BASELINES[idPerfil];
-    if (jornada === 'Mañana') {
+    if (jornada === 'Noche') {
       shiftBaselines[key] = cm.baseline;
-    } else if (jornada === 'Tarde' && shiftBaselines[key] === undefined) {
+    } else if (jornada === 'Mañana' && shiftBaselines[key] === undefined) {
       shiftBaselines[key] = cm.total > 0 ? cm.total : monthlyTotal;
-      log(`  🎯 Baseline Tarde fijado en cierre de Mañana: ${modelo} = ${shiftBaselines[key]} pts`);
+      log(`  🎯 Baseline Mañana fijado en cierre de Noche: ${modelo} = ${shiftBaselines[key]} pts`);
     }
   }
 

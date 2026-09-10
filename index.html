@@ -10948,31 +10948,30 @@
         // --- 1. Lógica Datame Realtime (Supabase) ---
         let datamePts = 0;
         const estaLogueado = Array.from(opsEnTurnoDraft).some(n => _n(n) === _n(op.name));
-        // 🔬 DELTA-SHIFT™ PRO FIX: Sumar la producción de la jornada actual si está logueado o en draft
-        // además de su turno oficial, evitando restringirse si trabaja en jornada cruzada.
-        const turnosSet = new Set();
-        if (op.turno && op.turno !== 'Completo') {
-          turnosSet.add(op.turno);
-        }
-        if (estaLogueado && jornadaActual) {
-          turnosSet.add(jornadaActual);
-        }
-        if (turnosSet.size === 0) {
-          turnosSet.add(jornadaActual || 'Mañana');
-        }
-
-        // ⏱️ 12H SHIFT™: Si el operador tiene turno de 12h registrado hoy, sumar las 2 jornadas de su turno
         const _normOpNameForHoras = _n(op.name);
         const _foundHorasKey = Object.keys(_horasHoyAll).find(k => _n(k) === _normOpNameForHoras);
         const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === _hoy;
-        
+
+        // 🔬 DELTA-SHIFT™ EXACT SHIFT SELECTION FIX:
+        // Operadores de 8h NUNCA deben sumar múltiples jornadas pasadas del mismo día (evita puntos duplicados/elevados).
+        const turnosSet = new Set();
         if (op.turno === 'Completo') {
           ['Mañana', 'Tarde', 'Noche'].forEach(t => turnosSet.add(t));
         } else if (_es12h) {
           if (op.turno === 'Mañana') { turnosSet.add('Mañana'); turnosSet.add('Tarde'); }
           else if (op.turno === 'Tarde') { turnosSet.add('Mañana'); turnosSet.add('Tarde'); }
           else if (op.turno === 'Noche') { turnosSet.add('Tarde'); turnosSet.add('Noche'); }
+          else { turnosSet.add('Mañana'); turnosSet.add('Tarde'); turnosSet.add('Noche'); }
+        } else {
+          // Operador 8h: Si está logueado en este momento, lee jornadaActual. Sino, su op.turno oficial.
+          if (estaLogueado && jornadaActual) {
+            turnosSet.add(jornadaActual);
+          } else if (op.turno && op.turno !== 'Completo') {
+            turnosSet.add(op.turno);
+          } else {
+            turnosSet.add(jornadaActual || 'Mañana');
+          }
         }
 
         let turnosLeer = Array.from(turnosSet);
@@ -15623,28 +15622,26 @@
             const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op?.turno === 'Completo' ? { horas: 12, fecha: hoyStr } : { horas: 8, fecha: hoyStr });
             const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoyStr;
 
-            // 🔬 PRO FIX: Respetar su turno oficial o su actividad en jornada cruzada
+            // 🔬 DELTA-SHIFT™ EXACT SHIFT SELECTION FIX:
+            // Operadores de 8h NUNCA deben sumar múltiples jornadas pasadas del mismo día (evita puntos duplicados/elevados).
             const turnosSet2 = new Set();
             if (shiftFilter) {
               turnosSet2.add(shiftFilter);
+            } else if (op?.turno === 'Completo') {
+              ['Mañana', 'Tarde', 'Noche'].forEach(t => turnosSet2.add(t));
             } else if (_es12h) {
               if (op?.turno === 'Mañana') { turnosSet2.add('Mañana'); turnosSet2.add('Tarde'); }
               else if (op?.turno === 'Tarde') { turnosSet2.add('Mañana'); turnosSet2.add('Tarde'); }
               else if (op?.turno === 'Noche') { turnosSet2.add('Tarde'); turnosSet2.add('Noche'); }
               else { turnosSet2.add('Mañana'); turnosSet2.add('Tarde'); turnosSet2.add('Noche'); }
             } else {
-              if (op?.turno && op.turno !== 'Completo') {
-                turnosSet2.add(op.turno);
-              }
               if (estaLogueado2 && jornadaActual) {
                 turnosSet2.add(jornadaActual);
-              }
-              if (turnosSet2.size === 0) {
+              } else if (op?.turno && op.turno !== 'Completo') {
+                turnosSet2.add(op.turno);
+              } else {
                 turnosSet2.add(jornadaActual || 'Mañana');
               }
-            }
-            if (op?.turno === 'Completo') {
-              ['Mañana', 'Tarde', 'Noche'].forEach(t => turnosSet2.add(t));
             }
 
             let ptsSup = 0;
@@ -34922,11 +34919,11 @@ CONFIGURACIÓN DE CONTEXTO:
               _inactivityAlertCount[opName] = alertCount;
 
               if (alertCount === 1) {
-                // Primera alerta: aviso con nombre del operador
-                speakText(`${opShortName}, llevas 5 minutos sin chatear y sin dar clic. Por favor enfocate.`);
+                // Primera alerta: aviso con nombre del operador e instrucción de 2 perfiles
+                speakText(`${opShortName}, por favor enfocate, llevas 5 minutos sin hacer click ni chatear, si tienes 2 perfiles interactua con los 2.`);
               } else {
-                // Segunda alerta en adelante: refuerzo de concentración
-                speakText(`${opShortName}, por favor enfocate. Llevas más de 5 minutos sin chatear y sin dar clic.`);
+                // Segunda alerta en adelante: refuerzo de concentración con instrucción de 2 perfiles
+                speakText(`${opShortName}, por favor enfocate, llevas 5 minutos sin hacer click ni chatear, si tienes 2 perfiles interactua con los 2.`);
               }
               _inactivityAlertsLastTime[opName] = now;
             }

@@ -393,25 +393,24 @@ async function watchPanel(panel, perfiles) {
         let list = Array.isArray(json) ? json : (json.data || json.result || json.items || [json]);
         if (!Array.isArray(list)) list = [list];
         for (const item of list) {
-          // Buscar el valor de puntos en todos los campos conocidos de Datame
-          const rawPts = item.total_en_curso ||
-                         item.total_usd      ||
-                         item.amount_usd     ||
-                         item.current_total  ||
-                         item.bonuses        ||
-                         item.total          ||
-                         item.total_points   ||
-                         item.bonuses_total  ||
-                         item.points         ||
-                         item.amount         ||
-                         item.tokens         ||
-                         item.score          || 0;
+          const itemJson = JSON.stringify(item);
+          
+          // Buscar el valor de puntos en todos los campos conocidos de Datame (excluyendo amount/tokens para evitar tasas unitarias)
+          const rawPts = item.total_en_curso !== undefined ? item.total_en_curso :
+                         (item.bonuses !== undefined ? item.bonuses :
+                         (item.total !== undefined ? item.total :
+                         (item.total_points !== undefined ? item.total_points :
+                         (item.current_total !== undefined ? item.current_total :
+                         (item.total_usd !== undefined ? item.total_usd :
+                         (item.amount_usd !== undefined ? item.amount_usd :
+                         (item.bonuses_total !== undefined ? item.bonuses_total :
+                         (item.points !== undefined ? item.points : 0))))))));
           const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
           if (pts <= 0 || pts > 1000000) continue;
 
           // Extraer ID del perfil con prioridad a campos específicos
           let id = (response.url().match(/\d{7,10}/) || [])[0];
-          if (!id) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
+          if (!id) id = (itemJson.match(/\d{7,10}/) || [])[0];
           if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
           
           let perfil = null;
@@ -495,40 +494,37 @@ async function watchPanel(panel, perfiles) {
         try {
           activePerfil = perfil;
 
-          // Limpiar selecciones previas si hay botón clear / remove chip
-          const clearIcon = page.locator('.q-field__append .q-icon, .q-chip__icon--remove, i:has-text("cancel"), i:has-text("clear"), .q-field__focusable-action').first();
+          // 1. Limpiar tags previamente seleccionados en vue-multiselect
+          try {
+            await page.$$eval('.multiselect__tag-icon, .multiselect__clear', icons => icons.forEach(i => i.click()));
+            await page.waitForTimeout(200);
+          } catch (_) {}
+
+          const clearIcon = page.locator('.multiselect__tag-icon, .multiselect__clear, .q-field__append .q-icon, i:has-text("cancel"), i:has-text("clear")').first();
           if (await clearIcon.isVisible().catch(() => false)) {
             await clearIcon.click().catch(() => {});
             await page.waitForTimeout(200);
           }
 
-          // Probar buscar tanto por MODELO (nombre) como por ID Datame
+          // 2. Probar buscar tanto por MODELO (nombre) como por ID Datame en vue-multiselect
           const searchTerms = [perfil.modelo, perfil.id_datame].filter(Boolean);
           let termSelected = false;
 
           for (const term of searchTerms) {
-            const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
+            const multiselectInput = page.locator('input.multiselect__input, input[placeholder="Select option"], label:has-text("Search") input, .q-field input').first();
             
-            let targetInput = null;
-            if (await searchLocator.isVisible().catch(() => false)) {
-              targetInput = searchLocator;
-            } else {
-              const inputs = await page.$$('input');
-              if (inputs.length >= 3) targetInput = inputs[2];
-            }
-
-            if (targetInput) {
-              await targetInput.click().catch(() => {});
+            if (await multiselectInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+              await multiselectInput.click().catch(() => {});
               await page.keyboard.press('Control+A');
               await page.keyboard.press('Backspace');
-              await targetInput.type(term, { delay: 30 });
+              await multiselectInput.type(term, { delay: 35 });
               await page.waitForTimeout(500);
 
-              // Si apareció opción en dropdown (.q-menu o .q-item), clickearla
-              const optionLocator = page.locator('.q-menu .q-item, .q-virtual-scroll__content .q-item, div[role="option"]').first();
-              if (await optionLocator.isVisible({ timeout: 1000 }).catch(() => false)) {
+              // 3. Seleccionar la opción en vue-multiselect
+              const optionLocator = page.locator('.multiselect__option--highlight, .multiselect__content .multiselect__option, .multiselect__element span, .q-menu .q-item').first();
+              if (await optionLocator.isVisible({ timeout: 1500 }).catch(() => false)) {
                 const optText = await optionLocator.innerText().catch(() => '');
-                log(`  ✨ Opción dropdown para ${term}: "${optText.trim().replace(/\s+/g, ' ').slice(0, 40)}"`);
+                log(`  ✨ Opción seleccionada para ${term}: "${optText.trim().replace(/\s+/g, ' ').slice(0, 40)}"`);
                 await optionLocator.click().catch(() => {});
                 termSelected = true;
                 break;
@@ -540,7 +536,7 @@ async function watchPanel(panel, perfiles) {
           }
 
           await page.waitForTimeout(400);
-          await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
+          await page.click('button.ui-btn, button:has-text("SHOW"), .ui-btn:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
 
           const domDebug = await page.evaluate((targetId) => {

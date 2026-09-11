@@ -393,44 +393,49 @@ async function watchPanel(panel, perfiles) {
 
       for (const perfil of perfiles) {
         try {
-          let filled = false;
-          const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
-          
-          if (await searchLocator.isVisible().catch(() => false)) {
-            await searchLocator.fill('');
-            await searchLocator.type(perfil.id_datame, { delay: 30 });
-            await searchLocator.press('Enter');
-            filled = true;
+          // 1. Limpiar tags previamente seleccionados en vue-multiselect
+          try {
+            await page.$$eval('.multiselect__tag-icon, .multiselect__clear', icons => icons.forEach(i => i.click()));
+            await page.waitForTimeout(200);
+          } catch (_) {}
+
+          const clearIcon = page.locator('.multiselect__tag-icon, .multiselect__clear, .q-field__append .q-icon, i:has-text("cancel"), i:has-text("clear")').first();
+          if (await clearIcon.isVisible().catch(() => false)) {
+            await clearIcon.click().catch(() => {});
+            await page.waitForTimeout(200);
           }
 
-          if (!filled) {
-            const searchInputSelector = await page.evaluate(() => {
-              const ins = Array.from(document.querySelectorAll('input'));
-              let t = ins.find(i =>
-                (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
-                (i.placeholder || '').toLowerCase().includes('profile') ||
-                (i.placeholder || '').toLowerCase().includes('search') ||
-                (i.placeholder || '').toLowerCase().includes('buscar')
-              );
-              if (!t && ins.length >= 3) t = ins[2];
-              if (t) {
-                t.id = t.id || 'temp-profile-search-input';
-                return '#' + t.id;
-              }
-              return null;
-            });
+          // 2. Probar buscar tanto por MODELO (nombre) como por ID Datame en vue-multiselect
+          const searchTerms = [perfil.modelo, perfil.id_datame].filter(Boolean);
+          let termSelected = false;
 
-            if (searchInputSelector) {
-              await page.click(searchInputSelector).catch(() => {});
-              await page.fill(searchInputSelector, '');
-              await page.type(searchInputSelector, perfil.id_datame, { delay: 30 });
-              await page.press(searchInputSelector, 'Enter');
-              filled = true;
+          for (const term of searchTerms) {
+            const multiselectInput = page.locator('input.multiselect__input, input[placeholder="Select option"], label:has-text("Search") input, .q-field input').first();
+            
+            if (await multiselectInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+              await multiselectInput.click().catch(() => {});
+              await page.keyboard.press('Control+A');
+              await page.keyboard.press('Backspace');
+              await multiselectInput.type(term, { delay: 35 });
+              await page.waitForTimeout(500);
+
+              // 3. Seleccionar la opción en vue-multiselect
+              const optionLocator = page.locator('.multiselect__option--highlight, .multiselect__content .multiselect__option, .multiselect__element span, .q-menu .q-item').first();
+              if (await optionLocator.isVisible({ timeout: 1500 }).catch(() => false)) {
+                const optText = await optionLocator.innerText().catch(() => '');
+                log(`  ✨ Opción seleccionada para ${term}: "${optText.trim().replace(/\s+/g, ' ').slice(0, 40)}"`);
+                await optionLocator.click().catch(() => {});
+                termSelected = true;
+                break;
+              } else {
+                await page.keyboard.press('ArrowDown');
+                await page.keyboard.press('Enter');
+              }
             }
           }
 
           await page.waitForTimeout(400);
-          await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
+          await page.click('button.ui-btn, button:has-text("SHOW"), .ui-btn:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
         } catch (e) {
           log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);

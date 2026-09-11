@@ -30566,7 +30566,8 @@ PT._logKey = function (opName) {
         return;
       }
       _dpSyncRunning = true;
-      _dpSyncLastRun = ahora;
+      // ⚠️ _dpSyncLastRun se actualiza DESPUÉS de la query — solo si Supabase responde OK
+      // Si usa fallback local, el cooldown es 30s (no 5min) para reintentar Supabase pronto
 
       // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
       // Esto asegura que las asignaciones hechas por monitores se distribuyan a todos los usuarios
@@ -30707,12 +30708,75 @@ PT._logKey = function (opName) {
             if (!errFallback && resultsFallback.length > 0) {
               ops = resultsFallback;
             } else {
-              console.log('Error crítico Supabase: ' + (errFallback ? errFallback.message : 'No data found'), 'error');
-              return;
+              // 🆘 FALLBACK DE EMERGENCIA: Supabase bloqueado → usar localStorage
+              console.log('[SYNC] ⚠️ Supabase no disponible — usando caché local de cortes para mostrar puntos', 'warn');
+              try {
+                const _emergKey = typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes';
+                const _emergRaw = localStorage.getItem(_emergKey);
+                const _emergCortes = _emergRaw ? JSON.parse(_emergRaw) : {};
+                const _emergOps = [];
+                const _hoyEmerg = hoyStr;
+                // Construir registros sintéticos desde cortes del día de hoy en localStorage
+                if (typeof operatorsData !== 'undefined') {
+                  operatorsData.forEach(o => {
+                    const cortesList = _emergCortes[o.name] || [];
+                    const cortesHoy = cortesList.filter(c => c.fecha === _hoyEmerg);
+                    cortesHoy.forEach(c => {
+                      // Buscar el id_perfil que corresponde a la jornada
+                      const pid = c.perfil || (o.profiles && o.profiles[0] && String(o.profiles[0].id));
+                      if (!pid) return;
+                      const pts = Number(c.puntos) || 0;
+                      if (pts > 0 && pts <= 5000) {
+                        _emergOps.push({
+                          id_perfil: pid,
+                          puntos_neto: pts,
+                          puntos_total: pts,
+                          puntos_baseline: 0,
+                          puntos: pts,
+                          jornada: c.jornada || 'Mañana',
+                          fecha_dia: _hoyEmerg,
+                          agencia: o.name,
+                          _fromLocalCache: true
+                        });
+                      }
+                    });
+                  });
+                }
+                if (_emergOps.length > 0) {
+                  ops = _emergOps;
+                  modoCompleto = true;
+                  console.log(`[SYNC] ✅ Fallback emergencia: ${ops.length} registros desde caché local`);
+                } else {
+                  console.log('[SYNC] ❌ Sin datos en caché local tampoco. Esperando reconexión...', 'error');
+                  return;
+                }
+              } catch(_fe) {
+                console.log('[SYNC] ❌ Error en fallback de emergencia: ' + _fe.message, 'error');
+                return;
+              }
             }
           } catch(e) {
-            console.log('Error crítico Supabase en Fallback: ' + e.message, 'error');
-            return;
+            // 🆘 FALLBACK DE EMERGENCIA también en catch externo
+            console.log('[SYNC] ⚠️ Excepción en fallback — intentando caché local', 'warn');
+            try {
+              const _emergKey2 = typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes';
+              const _emergCortes2 = JSON.parse(localStorage.getItem(_emergKey2) || '{}');
+              const _emergOps2 = [];
+              if (typeof operatorsData !== 'undefined') {
+                operatorsData.forEach(o => {
+                  const cl = (_emergCortes2[o.name] || []).filter(c => c.fecha === hoyStr);
+                  cl.forEach(c => {
+                    const pid = c.perfil || (o.profiles && o.profiles[0] && String(o.profiles[0].id));
+                    const pts = Number(c.puntos) || 0;
+                    if (pid && pts > 0 && pts <= 5000) {
+                      _emergOps2.push({ id_perfil: pid, puntos_neto: pts, puntos_total: pts, puntos_baseline: 0, puntos: pts, jornada: c.jornada || 'Mañana', fecha_dia: hoyStr, agencia: o.name, _fromLocalCache: true });
+                    }
+                  });
+                });
+              }
+              if (_emergOps2.length > 0) { ops = _emergOps2; modoCompleto = true; }
+              else return;
+            } catch(_fe2) { return; }
           }
         }
 
@@ -30954,6 +31018,17 @@ PT._logKey = function (opName) {
         const now2 = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
         const modo = modoCompleto ? '🛰️' : '⚠️';
         if (tsEl) tsEl.textContent = `${modo} Sync: ${now2}${modoCompleto ? '' : ' (modo básico)'}`;
+
+        // ✅ COOLDOWN UPDATE: Se actualiza AQUÍ (al final del try exitoso), no al inicio
+        // Si los datos vinieron de Supabase real → cooldown completo 5min
+        // Si vinieron del fallback local → cooldown corto 30s para reintentar Supabase pronto
+        const _usedLocalFallback = ops && ops.length > 0 && ops[0]._fromLocalCache === true;
+        if (_usedLocalFallback) {
+          _dpSyncLastRun = Date.now() - (_DP_SYNC_COOLDOWN_MS - 30000); // reintentar en 30s
+          console.log('[SYNC] Modo fallback local — reintentará Supabase en 30s');
+        } else {
+          _dpSyncLastRun = Date.now(); // cooldown 5min completo si vino de Supabase
+        }
 
       } catch(e) { console.error('[DP] Excepción:', e); }
       finally { _dpSyncRunning = false; } // 🛡️ EGRESS GUARD: liberar mutex

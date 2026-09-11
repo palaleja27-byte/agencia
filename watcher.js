@@ -14,7 +14,7 @@ const WebSocket = require('ws');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { getFallbackPanels, FALLBACK_PERFILES, CORTE_MANUAL_BASELINES } = require('./fallback_perfiles');
+const { getFallbackPanels, FALLBACK_PERFILES } = require('./fallback_perfiles');
 
 function sbQueryWithTimeout(queryPromise, timeoutMs = 10000) {
   return Promise.race([
@@ -113,6 +113,55 @@ function log(msg) {
   }
 }
 
+const CORTE_MANUAL_BASELINES = {
+  // Romero / General
+  '98540781': { baseline: 186.94, total: 187.28 },
+  '95956014': { baseline: 408.80, total: 410.83 },
+  '91360720': { baseline: 196.41, total: 196.41 },
+  '91733663': { baseline: 3683.16, total: 3684.82 },
+  '79679899': { baseline: 382.97, total: 384.29 },
+  '99766806': { baseline: 774.43, total: 783.89 },
+  '168486464': { baseline: 998.05, total: 1009.60 },
+  '108018336': { baseline: 1068.71, total: 1078.94 },
+  '103289167': { baseline: 1270.04, total: 1289.57 },
+  '118179794': { baseline: 777.76, total: 793.27 },
+  '98389135': { baseline: 104.96, total: 104.96 },
+  '120720195': { baseline: 1952.90, total: 1973.74 },
+  '139247498': { baseline: 883.59, total: 885.78 },
+  '157112125': { baseline: 129.47, total: 133.97 },
+  '130338853': { baseline: 402.75, total: 404.18 },
+  '130431310': { baseline: 372.99, total: 381.24 },
+  '139245989': { baseline: 733.61, total: 735.37 },
+  '188143166': { baseline: 0.55, total: 0.55 },
+  '156881990': { baseline: 181.26, total: 181.92 },
+  '143017065': { baseline: 437.82, total: 447.39 },
+  '138130329': { baseline: 912.25, total: 912.25 },
+  '120275229': { baseline: 53.13, total: 53.13 },
+  '143014129': { baseline: 388.35, total: 392.86 },
+  '95955130': { baseline: 433.45, total: 433.84 },
+  '145844971': { baseline: 1858.13, total: 1867.15 },
+  '170740935': { baseline: 1486.56, total: 1491.34 },
+  '187684981': { baseline: 12.76, total: 12.87 },
+  '130422416': { baseline: 1442.40, total: 1446.47 },
+  '160352260': { baseline: 10.63, total: 10.63 },
+  '103291980': { baseline: 85.75, total: 86.86 },
+  '187538072': { baseline: 3.52, total: 3.52 },
+  '187536756': { baseline: 0.00, total: 0.00 },
+  '187536112': { baseline: 0.00, total: 0.00 },
+
+  // Camilo
+  '158644203': { baseline: 98.39, total: 105.88 },
+  '128062998': { baseline: 1222.25, total: 1225.77 },
+  '174069335': { baseline: 333.29, total: 334.50 },
+  '101245945': { baseline: 1166.92, total: 1184.30 },
+  '167493871': { baseline: 182.76, total: 182.88 },
+  '113579174': { baseline: 17.77, total: 17.77 },
+  '145839775': { baseline: 577.56, total: 580.20 },
+  '113752797': { baseline: 103.00, total: 104.00 },
+  '153037229': { baseline: 339.77, total: 349.84 },
+  '93461947': { baseline: 114.33, total: 115.65 }
+};
+
 // ─────────────────────────────────────────────────────────────────
 // BASELINES EN MEMORIA
 // Clave: `${id_perfil}__${fecha_dia}__${jornada}`
@@ -205,15 +254,10 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // 🎯 PRIORIDAD 1: Corte manual configurado (12:00 AM)
-  if ((fechaDia === '2026-09-09' || fechaDia === '2026-09-10') && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil]) {
+  // 🎯 PRIORIDAD 1: Corte manual configurado (4:00 PM Tarde)
+  if (fechaDia === '2026-09-11' && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil] && jornada === 'Tarde') {
     const cm = CORTE_MANUAL_BASELINES[idPerfil];
-    if (jornada === 'Noche') {
-      shiftBaselines[key] = cm.baseline;
-    } else if (jornada === 'Mañana' && shiftBaselines[key] === undefined) {
-      shiftBaselines[key] = cm.total > 0 ? cm.total : monthlyTotal;
-      log(`  🎯 Baseline Mañana fijado en cierre de Noche: ${modelo} = ${shiftBaselines[key]} pts`);
-    }
+    shiftBaselines[key] = cm.baseline;
   }
 
   let currentDbRec = null;

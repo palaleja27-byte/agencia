@@ -488,14 +488,24 @@ async function watchPanel(panel, perfiles) {
         try {
           activePerfil = perfil;
 
+          // Limpiar selecciones previas si hay botón clear / remove chip
+          const clearIcon = page.locator('.q-field__append .q-icon, .q-chip__icon--remove, i:has-text("cancel"), i:has-text("clear"), .q-field__focusable-action').first();
+          if (await clearIcon.isVisible().catch(() => false)) {
+            await clearIcon.click().catch(() => {});
+          }
+
           // Inyectar ID del perfil en el buscador de Quasar usando typing real de Playwright
           let filled = false;
           const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
           
           if (await searchLocator.isVisible().catch(() => false)) {
-            await searchLocator.fill('');
+            await searchLocator.click().catch(() => {});
+            await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await searchLocator.type(perfil.id_datame, { delay: 30 });
-            await searchLocator.press('Enter');
+            await page.waitForTimeout(300);
+            await page.keyboard.press('ArrowDown');
+            await page.keyboard.press('Enter');
             filled = true;
           }
 
@@ -518,16 +528,34 @@ async function watchPanel(panel, perfiles) {
 
             if (searchInputSelector) {
               await page.click(searchInputSelector).catch(() => {});
-              await page.fill(searchInputSelector, '');
+              await page.keyboard.press('Control+A');
+              await page.keyboard.press('Backspace');
               await page.type(searchInputSelector, perfil.id_datame, { delay: 30 });
-              await page.press(searchInputSelector, 'Enter');
+              await page.waitForTimeout(300);
+              await page.keyboard.press('ArrowDown');
+              await page.keyboard.press('Enter');
               filled = true;
             }
+          }
+
+          // Si se desplegó una opción en el menú (.q-menu o .q-item), clickearla
+          const optionLocator = page.locator('.q-menu .q-item, .q-virtual-scroll__content .q-item, div[role="option"]').first();
+          if (await optionLocator.isVisible().catch(() => false)) {
+            await optionLocator.click().catch(() => {});
           }
 
           await page.waitForTimeout(400);
           await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
+
+          const domDebug = await page.evaluate((targetId) => {
+            const table = document.querySelector('.q-table, table');
+            if (!table) return 'no-table';
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            const matched = rows.find(r => r.innerText.includes(targetId));
+            return matched ? matched.innerText.replace(/\s+/g, ' ').slice(0, 80) : `tabla (${rows.length} filas, 1ra: ${rows[0]?.innerText.replace(/\s+/g, ' ').slice(0, 60) || 'vacia'})`;
+          }, perfil.id_datame);
+          log(`  🔍 [${perfil.modelo}]: ${domDebug}`);
 
           // 🛡️ FALLBACK DOM: Si por alguna razón el XHR no capturó, leer tabla en pantalla
           try {

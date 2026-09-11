@@ -375,6 +375,7 @@ async function watchPanel(panel, perfiles) {
   log(`🟢 Iniciando watcher: ${nombre} (${email})`);
 
   let browser;
+  let activePerfil = null;
   try {
     browser = await chromium.launch({
       headless: true,
@@ -410,23 +411,19 @@ async function watchPanel(panel, perfiles) {
 
           // Extraer ID del perfil con prioridad a campos específicos
           let id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
-          // Si el ID extraído no es válido o está vacío, intentar sacarlo de la URL o del JSON
           if (!id || id.length < 4) id = (response.url().match(/\d{5,10}/) || [])[0];
           if (!id || id.length < 4) id = (JSON.stringify(item).match(/\d{5,10}/) || [])[0];
-          if (!id || id.length < 4) continue;
+          if (!id || id.length < 4) id = activePerfil ? activePerfil.id_datame : null;
+          if (!id) continue;
 
-          const perfil = perfiles.find(p => p.id_datame === id);
-          if (!perfil) {
-            // Perfil no registrado — ignorar silenciosamente.
-            // El registro de perfiles se hace UNA SOLA VEZ via scripts/insert_profiles_prod.js
-            // (GitHub Actions workflow: db_insert.yml → workflow_dispatch)
-            continue;
-          }
+          const perfil = perfiles.find(p => p.id_datame === id) || (activePerfil && activePerfil.id_datame === id ? activePerfil : null);
+          if (!perfil) continue;
 
+          log(`  🎯 Puntos detectados via XHR para ${perfil.modelo} (${id}): ${pts.toFixed(2)} pts`);
           await upsertTurno(id, pts, perfil.modelo, nombre);
         }
       } catch (err) {
-        // Ignorar errores silenciosos de JSON parsing pero reportar si hay algo inusual
+        // Ignorar errores silenciosos de JSON parsing
       }
     });
 
@@ -456,77 +453,59 @@ async function watchPanel(panel, perfiles) {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
 
-      // Inyectar rango del mes de forma nativa para actualizar el v-model de Quasar
-      const dateInputsIds = await page.evaluate(() => {
-        const ins = Array.from(document.querySelectorAll('input[type="text"],input.q-field__native'));
-        let dateInputs = ins.filter(i => i.value && /^\\d{4}-\\d{2}-\\d{2}$/.test(i.value.trim()));
-        if (dateInputs.length < 2) dateInputs = ins.slice(0, 2);
-        
-        if (dateInputs.length >= 2) {
-          dateInputs[0].id = dateInputs[0].id || 'temp-start-date';
-          dateInputs[1].id = dateInputs[1].id || 'temp-end-date';
-          return ['#' + dateInputs[0].id, '#' + dateInputs[1].id];
-        }
-        return [];
-      });
-
-      if (dateInputsIds.length === 2) {
-        await page.fill(dateInputsIds[0], ''); // Limpiar
-        await page.type(dateInputsIds[0], start, { delay: 50 });
-        await page.press(dateInputsIds[0], 'Enter');
-        await page.waitForTimeout(300);
-        
-        await page.fill(dateInputsIds[1], ''); // Limpiar
-        await page.type(dateInputsIds[1], end, { delay: 50 });
-        await page.press(dateInputsIds[1], 'Enter');
-        await page.waitForTimeout(800);
-      }
+      // Inyectar rango del mes de forma nativa compatible con Quasar
+      await page.evaluate(({ s, e }) => {
+        const ins = document.querySelectorAll('input[type="text"],input.q-field__native');
+        if (ins[0]) { ins[0].value = s; ins[0].dispatchEvent(new Event('input', { bubbles: true })); ins[0].dispatchEvent(new Event('change', { bubbles: true })); }
+        if (ins[1]) { ins[1].value = e; ins[1].dispatchEvent(new Event('input', { bubbles: true })); ins[1].dispatchEvent(new Event('change', { bubbles: true })); }
+      }, { s: start, e: end }).catch(() => {});
+      await page.waitForTimeout(1000);
 
       for (const perfil of perfiles) {
         try {
-          // Playwright robust locator for Quasar (where label text is in a sibling/parent element)
-          const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
-          
-          let filled = false;
-          if (await searchLocator.isVisible().catch(() => false)) {
-            await searchLocator.fill('');
-            await searchLocator.type(perfil.id_datame, { delay: 30 });
-            await searchLocator.press('Enter');
-            filled = true;
-          }
-          
-          if (!filled) {
-            // Fallback: try standard DOM attributes
-            const backupSelectors = ['input[type="search"]', 'input[placeholder*="search" i]', 'input[placeholder*="buscar" i]', 'input[aria-label*="search" i]'];
-            for (const sel of backupSelectors) {
-              if (await page.isVisible(sel).catch(() => false)) {
-                await page.fill(sel, '');
-                await page.type(sel, perfil.id_datame, { delay: 30 });
-                await page.press(sel, 'Enter');
-                filled = true;
-                break;
-              }
+          activePerfil = perfil;
+
+          // Inyectar ID del perfil en el buscador de Quasar
+          await page.evaluate((v) => {
+            const ins = Array.from(document.querySelectorAll('input'));
+            let t = ins.find(i =>
+              (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
+              (i.placeholder || '').toLowerCase().includes('profile') ||
+              (i.placeholder || '').toLowerCase().includes('search') ||
+              (i.placeholder || '').toLowerCase().includes('buscar')
+            );
+            if (!t && ins.length >= 3) t = ins[2];
+            if (t) {
+              t.value = v;
+              t.dispatchEvent(new Event('input',  { bubbles: true }));
+              t.dispatchEvent(new Event('change', { bubbles: true }));
             }
-          }
-          
-          if (!filled) {
-            // Fallback: try to type in the 3rd input using native Playwright locator
-            try {
-              const inputs = await page.$$('input');
-              if (inputs.length >= 3) {
-                await inputs[2].fill('');
-                await inputs[2].type(perfil.id_datame, { delay: 30 });
-                await inputs[2].press('Enter');
-                filled = true;
-              }
-            } catch (e) {
-              log(`  ⚠️ Fallback input error: ${e.message}`);
-            }
-          }
-          
-          await page.waitForTimeout(500);
+          }, perfil.id_datame);
+
+          await page.waitForTimeout(400);
           await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
+
+          // 🛡️ FALLBACK DOM: Si por alguna razón el XHR no capturó, leer tabla en pantalla
+          try {
+            const domPts = await page.evaluate(() => {
+              const cells = Array.from(document.querySelectorAll('.q-table tbody td, table tbody td'));
+              for (const td of cells) {
+                const text = td.innerText.trim();
+                const num = parseFloat(text.replace(/[^\d.]/g, ''));
+                if (num > 0 && num < 500000 && (text.includes('.') || num > 10)) return num;
+              }
+              return 0;
+            });
+            if (domPts > 0) {
+              const currentRec = shiftBaselines[bKey(perfil.id_datame, fechaHoyColombia(), detectarJornada())];
+              if (currentRec === undefined) {
+                log(`  🔎 Puntos capturados via DOM para ${perfil.modelo}: ${domPts.toFixed(2)} pts`);
+                await upsertTurno(perfil.id_datame, domPts, perfil.modelo, nombre);
+              }
+            }
+          } catch (_) {}
+
         } catch (e) {
           log(`  ⚠️ ${perfil.modelo}: ${e.message.slice(0, 60)}`);
         }

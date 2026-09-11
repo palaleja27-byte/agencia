@@ -506,37 +506,58 @@ async function watchPanel(panel, perfiles) {
             await page.waitForTimeout(200);
           }
 
-          // 2. Probar buscar tanto por MODELO (nombre) como por ID Datame en vue-multiselect
+          // 2. Abrir el multiselect haciendo click en el contenedor
+          await page.click('.multiselect, .multiselect__tags, input.multiselect__input').catch(() => {});
+          await page.waitForTimeout(300);
+
+          // 3. Obtener todas las opciones disponibles en el multiselect
+          const availableOptions = await page.evaluate(() => {
+            const elements = Array.from(document.querySelectorAll('.multiselect__option, .multiselect__element span, .multiselect__element li'));
+            return elements.map(e => e.innerText.trim()).filter(Boolean);
+          });
+
+          // 4. Buscar la opción que coincida con el perfil
           const searchTerms = [perfil.modelo, perfil.id_datame].filter(Boolean);
           let termSelected = false;
 
-          for (const term of searchTerms) {
-            const multiselectInput = page.locator('input.multiselect__input, input[placeholder="Select option"], label:has-text("Search") input, .q-field input').first();
-            
-            if (await multiselectInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+          let matchedIdx = -1;
+          for (let i = 0; i < availableOptions.length; i++) {
+            const opt = availableOptions[i].toLowerCase();
+            if (searchTerms.some(t => opt.includes(t.toLowerCase()))) {
+              matchedIdx = i;
+              break;
+            }
+          }
+
+          if (matchedIdx >= 0) {
+            log(`  ✨ Match en multiselect para ${perfil.modelo}: "${availableOptions[matchedIdx]}"`);
+            await page.evaluate((idx) => {
+              const elements = Array.from(document.querySelectorAll('.multiselect__option, .multiselect__element span, .multiselect__element li')).filter(e => e.innerText.trim().length > 0);
+              if (elements[idx]) elements[idx].click();
+            }, matchedIdx);
+            termSelected = true;
+          } else {
+            // Fallback: teclear en el input de multiselect
+            const multiselectInput = page.locator('input.multiselect__input, input[placeholder="Select option"]').first();
+            if (await multiselectInput.isVisible().catch(() => false)) {
               await multiselectInput.click().catch(() => {});
               await page.keyboard.press('Control+A');
               await page.keyboard.press('Backspace');
-              await multiselectInput.type(term, { delay: 35 });
+              await multiselectInput.type(perfil.modelo || perfil.id_datame, { delay: 35 });
               await page.waitForTimeout(500);
 
-              // 3. Seleccionar la opción en vue-multiselect
-              const optionLocator = page.locator('.multiselect__option--highlight, .multiselect__content .multiselect__option, .multiselect__element span, .q-menu .q-item').first();
-              if (await optionLocator.isVisible({ timeout: 1500 }).catch(() => false)) {
-                const optText = await optionLocator.innerText().catch(() => '');
-                log(`  ✨ Opción seleccionada para ${term}: "${optText.trim().replace(/\s+/g, ' ').slice(0, 40)}"`);
-                await optionLocator.click().catch(() => {});
+              const highlighted = page.locator('.multiselect__option--highlight, .multiselect__option').first();
+              if (await highlighted.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await highlighted.click().catch(() => {});
                 termSelected = true;
-                break;
               } else {
-                await page.keyboard.press('ArrowDown');
                 await page.keyboard.press('Enter');
               }
             }
           }
 
           await page.waitForTimeout(400);
-          await page.click('button.ui-btn, button:has-text("SHOW"), .ui-btn:has-text("SHOW"), .q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
+          await page.click('button.ui-btn, button:has-text("SHOW"), .ui-btn:has-text("SHOW"), button.is-big', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
 
           const domDebug = await page.evaluate((targetId) => {

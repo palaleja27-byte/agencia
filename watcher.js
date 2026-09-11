@@ -320,11 +320,10 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     }
   }
 
-  // FIX CUOTA: Ignorar si los puntos no han cambiado desde el último upsert
+  // FIX CUOTA: Ignorar si los puntos no han cambiado desde el último upsert exitoso
   if (lastUpsertTotals[key] === monthlyTotal) {
     return;
   }
-  lastUpsertTotals[key] = monthlyTotal;
 
   const { error } = await dbUpsertTurno({
     id_perfil:       idPerfil,
@@ -340,7 +339,9 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
 
   if (error) {
     log(`  ❌ DB Error ${modelo}: ${error.message}`);
+    delete lastUpsertTotals[key];
   } else {
+    lastUpsertTotals[key] = monthlyTotal;
     log(`  ✅ ${modelo} [${jornada}] mes:${monthlyTotal.toFixed(1)} baseline:${baseline.toFixed(1)} turno:+${netoTurno.toFixed(2)} pts`);
   }
 }

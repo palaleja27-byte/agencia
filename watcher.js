@@ -87,9 +87,30 @@ function rangoMesActual() {
   return { start: `${y}-${m}-01`, end: `${eY}-${eM}-${eD}` };
 }
 
+const _logHistory = [];
+let _logTimer = null;
+
 function log(msg) {
   const ts = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour12: false });
-  console.log(`[${ts}] ${msg}`);
+  const line = `[${ts}] ${msg}`;
+  console.log(line);
+  _logHistory.push(line);
+  if (_logHistory.length > 80) _logHistory.shift();
+
+  if (!_logTimer && typeof supabase !== 'undefined' && supabase) {
+    _logTimer = setTimeout(async () => {
+      _logTimer = null;
+      try {
+        await supabase.from('kv_store').upsert({
+          key: 'watcher_live_status',
+          value: JSON.stringify({
+            updated_at: new Date().toISOString(),
+            last_lines: _logHistory.slice(-30)
+          })
+        }, { onConflict: 'key' });
+      } catch (_) {}
+    }, 2500);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -421,6 +442,7 @@ async function watchPanel(panel, perfiles) {
       log(`✅ Login OK: ${nombre}`);
     } catch (err) {
       log(`❌ Login FAILED ${nombre}: ${err.message}`);
+      await page.screenshot({ path: `debug_login_${nombre}.png` }).catch(() => {});
       await browser.close();
       return;
     }

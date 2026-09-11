@@ -30292,7 +30292,7 @@ PT._logKey = function (opName) {
       // Sin esto la UI sigue mostrando los valores en caché aunque la DB ya esté bien
       if (typeof sincronizarDatamePaneles === 'function') {
         try {
-          await sincronizarDatamePaneles();
+          await sincronizarDatamePaneles(true); // forceRefresh=true tras corrección de baselines
           console.log('✅ [DELTA-SHIFT] sincronizarDatamePaneles completado — UI actualizada');
         } catch(e) { console.warn('[DELTA-SHIFT] Error en sincronizarDatamePaneles:', e); }
       }
@@ -30484,9 +30484,28 @@ PT._logKey = function (opName) {
     // Reconstruye TODOS los baselines de hoy usando herencia continua
 
 
-    async function sincronizarDatamePaneles() {
+    // 🛡️ EGRESS GUARD: caché de 5 min para no re-descargar datos si ya se cargaron recientemente
+    let _dpSyncLastRun = 0;
+    const _DP_SYNC_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
+    let _dpSyncRunning = false;
+
+    async function sincronizarDatamePaneles(forceRefresh = false) {
       if (typeof _sb === 'undefined' || !_sb) return;
       if (!_sbBootReady) return; // Esperar boot de Supabase
+
+      // 🛡️ EGRESS GUARD: si ya corrió hace menos de 5 min y no es forzado, salir
+      const ahora = Date.now();
+      if (!forceRefresh && (ahora - _dpSyncLastRun) < _DP_SYNC_COOLDOWN_MS) {
+        console.log(`[SYNC] Skipped — última sync hace ${Math.round((ahora - _dpSyncLastRun)/1000)}s (cooldown 5min)`);
+        return;
+      }
+      // 🛡️ EGRESS GUARD: evitar ejecuciones paralelas
+      if (_dpSyncRunning) {
+        console.log('[SYNC] Skipped — ya hay una sync en progreso');
+        return;
+      }
+      _dpSyncRunning = true;
+      _dpSyncLastRun = ahora;
 
       // 🧠 DELTA-SHIFT™: Sincronizar el "Draft" de asistencia antes de procesar puntos
       // Esto asegura que las asignaciones hechas por monitores se distribuyan a todos los usuarios
@@ -30528,21 +30547,15 @@ PT._logKey = function (opName) {
       if (tsEl) tsEl.textContent = '⏳ Cargando...';
 
       try {
-        // FIX CUOTA: Habilitar consulta histórica dinámica (desde mes anterior por defecto para ahorrar ancho de banda)
-        const FECHA_INICIO = (() => {
-          if (window._loadFullHistory) return '2026-01-01';
-          const d = new Date();
-          d.setMonth(d.getMonth() - 1);
-          d.setDate(1);
-          const yyyy = d.getFullYear();
-          const mm = String(d.getMonth() + 1).padStart(2, '0');
-          const dd = String(d.getDate()).padStart(2, '0');
-          return `${yyyy}-${mm}-${dd}`;
-        })();
+        // 🛡️ EGRESS GUARD: Solo descargar registros de HOY para el ranking en tiempo real.
+        // Los datos históricos del mes se cargan por separado (rkFetchSupabaseTotals) con caché.
+        // Descargar el mes completo cada vez genera >80GB/día de egress — inaceptable.
         const hoy = localDateStr();
+        const FECHA_INICIO = hoy; // ← SOLO HOY (no el mes completo)
         console.log('Iniciando sincronización dinámica...', 'info');
 
-        // ── Intento 1: columnas nuevas (Buscamos TODOS los perfiles activos del mes) - Paginado para evitar límite de 1,000 del servidor
+        // ── Intento 1: columnas nuevas (SOLO registros de HOY) — sin paginado necesario (máx ~200 rows)
+
         let ops = null;
         let modoCompleto = false;
         let errNuevo = null;
@@ -30856,70 +30869,10 @@ PT._logKey = function (opName) {
         _dpTurnosData    = turnosHoy;
         _dpHistorialData = historialMap;
 
-        // --- RECALCULO DINÁMICO DE ACUMULADOS MENSUALES DESDE SUPABASE ---
-        try {
-          const { prev: prevMonthKey, curr: currMonthKey } = getActivePair();
-          const currYM = getMesActualStr(); // e.g. "2026-07"
-          const prevYM = getMesAnteriorStr(); // e.g. "2026-06"
-          const hoy = localDateStr();
-
-          // Inicializar en 0 para evitar acumulaciones duplicadas en memoria
-          operatorsData.forEach(op => {
-            op[currMonthKey] = 0;
-            op[prevMonthKey] = 0;
-          });
-
-          (ops || []).forEach(r => {
-            if (!r.fecha_dia || !r.id_perfil) return;
-            const pts = Number(r.puntos_neto) || 0;
-            if (pts <= 0 || pts > 400) return; // Omitir datos corruptos
-
-            // Encontrar todos los operadores que tengan este perfil o agencia
-            const opsMatching = operatorsData.filter(o => 
-              (o.profiles || []).some(p => String(p.id) === String(r.id_perfil)) ||
-              (r.agencia && o.name.toUpperCase().startsWith(r.agencia.trim().toUpperCase()))
-            );
-
-            opsMatching.forEach(op => {
-              const mesKey = r.fecha_dia.slice(0, 7);
-              if (mesKey === currYM) {
-                // Excluir hoy para evitar dobles conteos con las cortes de hoy en tiempo real
-                if (r.fecha_dia !== hoy) {
-                  op[currMonthKey] += pts;
-                }
-              } else if (mesKey === prevYM) {
-                op[prevMonthKey] += pts;
-              }
-            });
-          });
-
-          // Redondear a 1 decimal
-          operatorsData.forEach(op => {
-            op[currMonthKey] = Math.round(op[currMonthKey] * 10) / 10;
-            op[prevMonthKey] = Math.round(op[prevMonthKey] * 10) / 10;
-          });
-
-          // Persistir en localStorage — re-aplicar profiles manuales antes de guardar
-          // para no sobreescribir las asignaciones manuales con los perfiles "viejos"
-          if (typeof _applyManualProfiles === 'function') _applyManualProfiles();
-          const _opsStr = JSON.stringify(operatorsData);
-          // Guardar localmente usando el método original para evitar que este recálculo automático
-          // de acumulados de puntos suba la lista completa de operadores a Supabase
-          if (typeof _origSetItem === 'function') {
-            _origSetItem(STORAGE_KEY, _opsStr);
-            // NO actualizar primeOperatorsData2026_ts aquí — usar un key separado para evitar
-            // desincronización de timestamps con Supabase que causa borrado de operadores
-            _origSetItem('primeOperatorsData2026_datame_recalc_ts', String(Date.now()));
-            _sbMemCache[STORAGE_KEY] = _opsStr;
-          } else {
-            localStorage.setItem(STORAGE_KEY, _opsStr);
-          }
-          if (typeof _localSaveTs !== 'undefined') _localSaveTs[STORAGE_KEY] = Date.now();
-          console.log(`[SYNC-TOTALS] Acumulados mensuales recalculados: ${currMonthKey} y ${prevMonthKey}`, 'info');
-        } catch (errTotals) {
-          console.error('[SYNC-TOTALS] Error al calcular acumulados mensuales:', errTotals);
-        }
-        
+        // 🛡️ EGRESS GUARD: El recálculo de acumulados mensuales fue desactivado aquí porque
+        // ops ahora solo contiene datos de HOY. Los totales del mes se calculan por separado
+        // en rkFetchSupabaseTotals() con su propio cache de 30 minutos.
+        // (Bloque anterior de recalculo mensual eliminado para evitar poner 0 en operatorsData)
         const count = Object.keys(nuevosDatos).length;
         console.log(`Procesados ${count} perfiles. Hoy: ${Object.keys(turnosHoy).length} activos.`, 'info');
         
@@ -30942,6 +30895,7 @@ PT._logKey = function (opName) {
         if (tsEl) tsEl.textContent = `${modo} Sync: ${now2}${modoCompleto ? '' : ' (modo básico)'}`;
 
       } catch(e) { console.error('[DP] Excepción:', e); }
+      finally { _dpSyncRunning = false; } // 🛡️ EGRESS GUARD: liberar mutex
     }
 
     window._rrLiveFeed = [];

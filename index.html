@@ -10412,13 +10412,59 @@
       return presentes;
     }
     // ════════════════════════════════════════════════════════════════════════
+    // _applyRkTotalsToUI -- Aplica totales pre-calculados al DOM (usado por caché)
+    // ════════════════════════════════════════════════════════════════════════
+    function _applyRkTotalsToUI(t) {
+      if (!t) return;
+      const nombresMeses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+      const elTotal = document.getElementById('rk-val-total');
+      const elCop   = document.getElementById('rk-val-cop');
+      const elAvg   = document.getElementById('rk-val-avg');
+      const elCrec  = document.getElementById('rk-val-growth');
+      const elRange = document.getElementById('rk-val-range');
+      const m2Total = t.m2Total || 0;
+      const m1Total = t.m1Total || 0;
+      const m1Name  = t.m1Name || '';
+      const m2Name  = t.m2Name || '';
+      const paceCrec = t.paceCrec || 0;
+      const m1PromDia = t.m1PromDia || 0;
+      const m2PromDia = t.m2PromDia || 0;
+      if (elTotal) elTotal.textContent = m2Total.toLocaleString('es-CO', {minimumFractionDigits: 1});
+      if (elCop)   elCop.textContent   = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
+      if (elAvg)   elAvg.textContent   = (m2Total / Math.max((operatorsData||[]).length, 1)).toFixed(1);
+      if (elCrec) {
+        const c = paceCrec >= 0 ? '#34d399' : '#f87171';
+        const i = paceCrec >= 0 ? '📈' : '📉';
+        const s = paceCrec > 0 ? '+' : '';
+        elCrec.style.color = c;
+        elCrec.textContent = i + ' ' + s + paceCrec.toFixed(1) + '% ritmo/día';
+      }
+      if (elRange) elRange.textContent = `${m1Name}: ${m1PromDia.toFixed(0)} pts/día → ${m2Name}: ${m2PromDia.toFixed(0)} pts/día`;
+      if (t.historial)       window._rkHistorial    = t.historial;
+      if (t.extHist)         window._rkHistorialExt = t.extHist;
+    }
+    // ════════════════════════════════════════════════════════════════════════
     // rkFetchSupabaseTotals -- DELTA-SHIFT(tm) Dashboard Engine
     // Actualiza Global Total, Promedio y Crecimiento con datos REALES de Supabase
     // ════════════════════════════════════════════════════════════════════════
     async function rkFetchSupabaseTotals() {
       if (typeof _sb === 'undefined' || !_sb) return;
       if (typeof _sbBootReady !== 'undefined' && !_sbBootReady) return;
-      
+
+      // 🛡️ EGRESS GUARD: caché de 30 min en localStorage — los totales históricos cambian poco
+      const _RK_CACHE_KEY = '_rk_sb_totals_cache_v2';
+      const _RK_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+      try {
+        const cached = JSON.parse(localStorage.getItem(_RK_CACHE_KEY) || 'null');
+        if (cached && cached.ts && (Date.now() - cached.ts) < _RK_CACHE_TTL) {
+          // Usar caché — aplicar directamente a la UI sin tocar Supabase
+          if (cached.totals) {
+            try { _applyRkTotalsToUI(cached.totals); return; } catch(e) {}
+          }
+        }
+      } catch(e) {}
+
+
       const formatMes = (d) => {
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         return `${d.getFullYear()}-${mm}`;
@@ -10717,6 +10763,21 @@
         }
         if (_elTotal) _elTotal.textContent = m2Total.toLocaleString('es-CO', {minimumFractionDigits: 1});
         if (_elCop) _elCop.textContent = '💰 $' + Math.round(m2Total * 1400).toLocaleString('es-CO') + ' COP';
+
+        // 🛡️ EGRESS GUARD: Guardar resultado en caché 30min para próximas llamadas
+        try {
+          localStorage.setItem('_rk_sb_totals_cache_v2', JSON.stringify({
+            ts: Date.now(),
+            totals: {
+              m0Total, m1Total, m2Total,
+              m0Name, m1Name, m2Name,
+              paceCrec, m1PromDia, m2PromDia, projectedM2,
+              historial: window._rkHistorial,
+              extHist: window._rkHistorialExt
+            }
+          }));
+          console.log('[RK-SUPABASE] Caché 30min guardado correctamente');
+        } catch(cacheErr) { console.warn('[RK-SUPABASE] No se pudo guardar caché:', cacheErr); }
 
       } catch(e) { console.warn('[RK-SUPABASE]', e); }
     }

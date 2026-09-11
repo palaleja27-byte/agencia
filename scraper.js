@@ -393,20 +393,43 @@ async function watchPanel(panel, perfiles) {
 
       for (const perfil of perfiles) {
         try {
-          await page.evaluate((v) => {
-            const ins = Array.from(document.querySelectorAll('input'));
-            let t = ins.find(i =>
-              (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
-              (i.placeholder || '').toLowerCase().includes('profile')
-            );
-            if (!t && ins.length >= 3) t = ins[2];
-            if (t) {
-              t.value = v;
-              t.dispatchEvent(new Event('input',  { bubbles: true }));
-              t.dispatchEvent(new Event('change', { bubbles: true }));
+          let filled = false;
+          const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
+          
+          if (await searchLocator.isVisible().catch(() => false)) {
+            await searchLocator.fill('');
+            await searchLocator.type(perfil.id_datame, { delay: 30 });
+            await searchLocator.press('Enter');
+            filled = true;
+          }
+
+          if (!filled) {
+            const searchInputSelector = await page.evaluate(() => {
+              const ins = Array.from(document.querySelectorAll('input'));
+              let t = ins.find(i =>
+                (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
+                (i.placeholder || '').toLowerCase().includes('profile') ||
+                (i.placeholder || '').toLowerCase().includes('search') ||
+                (i.placeholder || '').toLowerCase().includes('buscar')
+              );
+              if (!t && ins.length >= 3) t = ins[2];
+              if (t) {
+                t.id = t.id || 'temp-profile-search-input';
+                return '#' + t.id;
+              }
+              return null;
+            });
+
+            if (searchInputSelector) {
+              await page.click(searchInputSelector).catch(() => {});
+              await page.fill(searchInputSelector, '');
+              await page.type(searchInputSelector, perfil.id_datame, { delay: 30 });
+              await page.press(searchInputSelector, 'Enter');
+              filled = true;
             }
-          }, perfil.id_datame);
-          await page.waitForTimeout(500);
+          }
+
+          await page.waitForTimeout(400);
           await page.click('button:has-text("SHOW"),.q-btn:has-text("SHOW")', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);
         } catch (e) {

@@ -30930,8 +30930,8 @@ PT._logKey = function (opName) {
                   });
                   cortesChanged = true;
                 }
-              } else {
-                // Si netoReal es 0 o inválido, asegurar que no queden cortes inflados de hoy en allCortes
+              } else if (netoReal > 5000) {
+                // Solo limpiar cortes si el dato es corrupto (>5000)
                 if (typeof operatorsData !== 'undefined') {
                   operatorsData.forEach(o => {
                     if (o.profiles && o.profiles.some(p => String(p.id) === String(id)) && allCortes[o.name]) {
@@ -30949,7 +30949,15 @@ PT._logKey = function (opName) {
 
               const netoRealOk = netoReal >= 0 && netoReal <= 5000;
               if (netoRealOk) {
-                turnosHoy[id][op.jornada] = Math.max(turnosHoy[id][op.jornada] || 0, netoReal);
+                let pFinal = netoReal;
+                if (pFinal === 0 && typeof operatorsData !== 'undefined') {
+                  const opMatch = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === String(id)));
+                  if (opMatch && allCortes[opMatch.name]) {
+                    const cMatch = allCortes[opMatch.name].find(c => c.fecha === hoy && c.jornada === op.jornada && String(c.perfil || c.pid || '') === String(id));
+                    if (cMatch && cMatch.puntos > 0) pFinal = cMatch.puntos;
+                  }
+                }
+                turnosHoy[id][op.jornada] = Math.max(turnosHoy[id][op.jornada] || 0, pFinal);
               }
             }
             // Historial por día
@@ -31832,6 +31840,16 @@ PT._logKey = function (opName) {
 
         // 3. Neto de la sesión = suma de netos individuales de todos los perfiles
         _opRtPtosSesion = _opRtPerfilesNeto.reduce((s, p) => s + p.neto, 0);
+
+        // Fallback: Si _opRtPtosSesion es 0 pero el operador tiene cortes de hoy registrados, mostrar sus cortes
+        if (_opRtPtosSesion === 0) {
+          const _legacyCortes = typeof getCortesOp === 'function' ? getCortesOp(opName) : [];
+          const _hoyLegacy = (_legacyCortes || []).filter(c => c.fecha === hoy && (!c.jornada || c.jornada === _opRtJornada()));
+          const _sumLegacy = _hoyLegacy.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+          if (_sumLegacy > 0 && _sumLegacy <= 5000) {
+            _opRtPtosSesion = _sumLegacy;
+          }
+        }
 
         // 4. Actualizar historial de turnos del día (de registros ya cerrados)
         const turnos = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };

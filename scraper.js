@@ -455,6 +455,11 @@ async function watchPanel(panel, perfiles) {
             }
           }
 
+          if (!termSelected) {
+            log(`  ℹ️ Perfil ${perfil.modelo} (${perfil.id_datame}) no está en ${nombre}`);
+            continue;
+          }
+
           await page.waitForTimeout(400);
           await page.click('button.ui-btn, button:has-text("SHOW"), .ui-btn:has-text("SHOW"), button.is-big', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);

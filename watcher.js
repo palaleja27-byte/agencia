@@ -216,9 +216,12 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
     }
   }
 
+  let currentDbRec = null;
+
   // Re-sincronizar con el baseline de la DB si no está en corte manual y ya existe en DB
   if (shiftBaselines[key] === undefined) {
     const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
+    currentDbRec = rec;
     if (rec && rec.puntos_baseline !== undefined && rec.puntos_baseline !== null) {
       if (rec.puntos_baseline > monthlyTotal && diaHoyColombia() === 1 && (monthlyTotal < rec.puntos_baseline * 0.5 || monthlyTotal < 100)) {
         log(`  🔄 RESET EN DB DETECTADO ${modelo}: baseline DB era ${rec.puntos_baseline.toFixed(1)}, pero Datame reporta ${monthlyTotal.toFixed(1)} → Corrigiendo DB baseline a 0.0 pts`);
@@ -232,6 +235,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
 
   if (shiftBaselines[key] === undefined) {
     const { data: rec } = await dbSelectBaseline(idPerfil, fechaDia, jornada);
+    currentDbRec = currentDbRec || rec;
     if (rec) {
       shiftBaselines[key] = monthlyTotal;
       log(`  📍 Baseline nuevo (sin registro previo): ${modelo} [${jornada}] = ${monthlyTotal.toFixed(2)} pts`);
@@ -292,8 +296,8 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   let netoTurno   = Math.max(0, monthlyTotal - baseline);
 
   // 🛡️ MONOTONIC PROGRESSION: Los puntos acumulados en un turno NUNCA bajan por lecturas parciales
-  if (rec && rec.puntos_neto && Number(rec.puntos_neto) > netoTurno) {
-    netoTurno = Number(rec.puntos_neto);
+  if (currentDbRec && currentDbRec.puntos_neto && Number(currentDbRec.puntos_neto) > netoTurno) {
+    netoTurno = Number(currentDbRec.puntos_neto);
   }
 
   // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
@@ -492,7 +496,7 @@ async function watchPanel(panel, perfiles) {
 
       for (const perfil of perfiles) {
         try {
-          activePerfil = perfil;
+          activePerfil = null;
 
           // 1. Limpiar tags previamente seleccionados en vue-multiselect
           try {
@@ -556,6 +560,12 @@ async function watchPanel(panel, perfiles) {
             }
           }
 
+          if (!termSelected) {
+            log(`  ℹ️ Perfil ${perfil.modelo} (${perfil.id_datame}) no está en ${nombre}`);
+            continue;
+          }
+
+          activePerfil = perfil;
           await page.waitForTimeout(400);
           await page.click('button.ui-btn, button:has-text("SHOW"), .ui-btn:has-text("SHOW"), button.is-big', { timeout: 5000 }).catch(() => {});
           await page.waitForTimeout(PAUSA_PERFIL_MS);

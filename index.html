@@ -10103,34 +10103,38 @@
 
     window.forceSaveProfile = function(opName) {
       if (!opName) return;
-      const _fspSafe = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
-      const normN = _fspSafe(opName);
-      if (!normN) return;
-      const op = operatorsData.find(o => _fspSafe(o.name) === normN);
-      if (!op) return;
-      
-      const key = 'rr_profile_' + normN;
-      const val = JSON.stringify(op.profiles || []);
-      
-      // 1. Guardar en localStorage inmediatamente (sincrónico)
-      localStorage.setItem(key, val);
-      if (typeof _localSaveTs !== 'undefined') _localSaveTs[key] = Date.now();
-      
-      // 2. Actualizar también primeOperatorsData2026 en localStorage con el nuevo perfil
-      //    y un timestamp fresco para que el merge remoto nunca sobreescriba este cambio
-      const nowTs = String(Date.now());
-      localStorage.setItem('primeOperatorsData2026_ts', nowTs);
-      localStorage.setItem('primeOperatorsData2026', JSON.stringify(operatorsData));
-      if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
-      
-      // 3. Subir ambas claves a Supabase asincrónicamente
-      if (typeof _sb !== 'undefined' && _sb) {
-        _sb.from('kv_store').upsert({ key: key, value: val }, { onConflict: 'key' })
-          .catch(e => console.warn('[forceSaveProfile] Error rr_profile_*:', e));
-        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
-          .catch(e => console.warn('[forceSaveProfile] Error primeOperatorsData2026:', e));
-        _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
-          .catch(e => console.warn('[forceSaveProfile] Error ts:', e));
+      try {
+        const _fspSafe = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
+        const normN = _fspSafe(opName);
+        if (!normN) return;
+        const op = operatorsData.find(o => _fspSafe(o.name) === normN);
+        if (!op) return;
+        
+        const key = 'rr_profile_' + normN;
+        const val = JSON.stringify(op.profiles || []);
+        
+        // 1. Guardar en localStorage inmediatamente (sincrónico)
+        localStorage.setItem(key, val);
+        if (typeof _localSaveTs !== 'undefined') _localSaveTs[key] = Date.now();
+        
+        // 2. Actualizar también primeOperatorsData2026 en localStorage con el nuevo perfil
+        //    y un timestamp fresco para que el merge remoto nunca sobreescriba este cambio
+        const nowTs = String(Date.now());
+        localStorage.setItem('primeOperatorsData2026_ts', nowTs);
+        localStorage.setItem('primeOperatorsData2026', JSON.stringify(operatorsData));
+        if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
+        
+        // 3. Subir ambas claves a Supabase asincrónicamente
+        if (typeof _sb !== 'undefined' && _sb) {
+          Promise.resolve(_sb.from('kv_store').upsert({ key: key, value: val }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[forceSaveProfile] Error rr_profile_*:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[forceSaveProfile] Error primeOperatorsData2026:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[forceSaveProfile] Error ts:', e));
+        }
+      } catch(err) {
+        console.warn('[forceSaveProfile] Exception caught:', err);
       }
     };
 
@@ -19659,13 +19663,15 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     // Leen el opName del atributo data-opname del form div en vez de recibirlo como string
     window.asiPerfilAddBySafeId = function(safeId) {
       const form = document.getElementById('asi-add-form-' + safeId);
-      if (!form) return;
+      if (!form) {
+        console.warn('[asiPerfilAddBySafeId] Form not found for safeId:', safeId);
+        return;
+      }
       let opName = form.getAttribute('data-opname') || '';
-      // Resolver __OP_CURRENT__
       if (opName === '__OP_CURRENT__' && typeof currentOpName !== 'undefined' && currentOpName) {
         opName = currentOpName;
       }
-      asiPerfilAdd(opName);
+      asiPerfilAdd(opName, safeId);
     };
     window.asiPerfilToggleBySafeId = function(safeId) {
       const form = document.getElementById('asi-add-form-' + safeId);
@@ -19678,22 +19684,23 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (cubreEl) cubreEl.style.display = tipo === 'cobertura' ? 'block' : 'none';
     };
 
-    window.asiPerfilAdd = async function (opName) {
+    window.asiPerfilAdd = async function (opName, explicitSafeId) {
       // Resolver __OP_CURRENT__ para la vista de operador (evita escaping de nombres especiales)
       if (opName === '__OP_CURRENT__' && typeof currentOpName !== 'undefined' && currentOpName) {
         opName = currentOpName;
       }
-      const safeId = opName.replace(/[^a-zA-Z0-9]/g, '_');
-      const idVal = document.getElementById('asi-nid-' + safeId)?.value.trim();
-      const modVal = document.getElementById('asi-nmod-' + safeId)?.value.trim();
+      const safeId = explicitSafeId || (opName ? opName.replace(/[^a-zA-Z0-9]/g, '_') : '');
+      const idVal = document.getElementById('asi-nid-' + safeId)?.value?.trim();
+      const modVal = document.getElementById('asi-nmod-' + safeId)?.value?.trim();
       const tipo = document.getElementById('asi-tipo-' + safeId)?.value || 'propio';
-      const cubreA = tipo === 'cobertura' ? (document.getElementById('asi-cubre-' + safeId)?.value || '') : '';
+      const cubreA = tipo === 'cobertura' ? (document.getElementById('asi-cubre-' + safeId)?.value?.trim() || '') : '';
 
       if (!idVal || !modVal) return alert('Completa ID y Nombre del modelo');
       if (tipo === 'cobertura' && !cubreA) return alert('Selecciona a quién está cubriendo');
 
-      const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
-      if (!op) return alert('Operador no encontrado');
+      const _fSafe = (s) => (typeof _normName === 'function' ? _normName(s) : String(s || '').toUpperCase().trim());
+      const op = operatorsData.find(o => _fSafe(o.name) === _fSafe(opName) || (safeId && o.name.replace(/[^a-zA-Z0-9]/g, '_') === safeId));
+      if (!op) return alert('Operador no encontrado: ' + opName);
       if (!op.profiles) op.profiles = [];
 
       // Evitar ID duplicado
@@ -19761,11 +19768,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         try {
           const val = JSON.stringify(operatorsData);
           const nowTs = String(Date.now());
-          _sb.from('datame_perfiles').upsert({ id_datame: String(idVal).trim(), modelo: String(modVal).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(e=>console.warn(e));
-          Promise.all([
-            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }),
-            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
-          ]).catch(e=>console.warn('[asiPerfilAdd] Supabase error:', e));
+          Promise.resolve(_sb.from('datame_perfiles').upsert({ id_datame: String(idVal).trim(), modelo: String(modVal).trim(), panel_id: null, activo: true }, { onConflict: 'id_datame' }))
+            .then(() => {}, e => console.warn('[asiPerfilAdd] datame_perfiles error:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[asiPerfilAdd] kv error:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[asiPerfilAdd] kv_ts error:', e));
         } catch(e) {
           console.warn('[asiPerfilAdd] Sync error:', e.message);
         }
@@ -19798,11 +19806,14 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         try {
           const val = JSON.stringify(operatorsData);
           const nowTs = String(Date.now());
-          if (removed && removed.id) { _sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()).catch(e=>console.warn(e)); }
-          Promise.all([
-            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }),
-            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' })
-          ]).catch(e=>console.warn('[asiPerfilRemove] Supabase error:', e));
+          if (removed && removed.id) {
+            Promise.resolve(_sb.from('datame_perfiles').update({ activo: false }).eq('id_datame', String(removed.id).trim()))
+              .then(() => {}, e => console.warn('[asiPerfilRemove] datame_perfiles error:', e));
+          }
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[asiPerfilRemove] kv error:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[asiPerfilRemove] kv_ts error:', e));
         } catch(e) {
           console.warn('[asiPerfilRemove] Sync error:', e.message);
         }
@@ -19883,9 +19894,12 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         try {
           const val = JSON.stringify(operatorsData);
           const nowTs = String(Date.now());
-          _sb.from('datame_perfiles').upsert({ id_datame: idVal, modelo: modelVal, panel_id: null, activo: true }, { onConflict: 'id_datame' }).catch(console.warn);
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }).catch(console.warn);
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }).catch(console.warn);
+          Promise.resolve(_sb.from('datame_perfiles').upsert({ id_datame: idVal, modelo: modelVal, panel_id: null, activo: true }, { onConflict: 'id_datame' }))
+            .then(() => {}, e => console.warn('[guardarNuevoPerfilDatame] datame_perfiles error:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[guardarNuevoPerfilDatame] kv error:', e));
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }))
+            .then(() => {}, e => console.warn('[guardarNuevoPerfilDatame] kv_ts error:', e));
         } catch(e) {
           console.warn('[guardarNuevoPerfilDatame] Supabase sync error:', e);
         }

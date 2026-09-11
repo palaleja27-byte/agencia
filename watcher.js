@@ -413,15 +413,15 @@ async function watchPanel(panel, perfiles) {
           let id = (response.url().match(/\d{7,10}/) || [])[0];
           if (!id) id = (JSON.stringify(item).match(/\d{7,10}/) || [])[0];
           if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
-          if (!id || id.length < 7) {
-            if (activePerfil && (response.url().includes('statistic') || response.url().includes('report') || response.url().includes('member'))) {
-              id = activePerfil.id_datame;
-            } else {
-              continue;
-            }
+          
+          let perfil = null;
+          if (id && id.length >= 6) {
+            perfil = perfiles.find(p => p.id_datame === id);
           }
-
-          const perfil = perfiles.find(p => p.id_datame === id) || (activePerfil && activePerfil.id_datame === id ? activePerfil : null);
+          if (!perfil && activePerfil && (response.url().includes('statistic') || response.url().includes('report') || response.url().includes('member'))) {
+            perfil = activePerfil;
+            id = activePerfil.id_datame;
+          }
           if (!perfil) continue;
 
           log(`  🎯 Puntos detectados via XHR para ${perfil.modelo} (${id}): ${pts.toFixed(2)} pts`);
@@ -458,6 +458,13 @@ async function watchPanel(panel, perfiles) {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
 
+      const debugInputs = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('input, button, .q-field')).map(el => {
+          return `${el.tagName} [class="${el.className.slice(0,30)}"] [placeholder="${el.placeholder||''}"] [aria-label="${el.getAttribute('aria-label')||''}"]`;
+        }).slice(0, 10);
+      });
+      log(`  🧩 DOM Inputs: ${JSON.stringify(debugInputs)}`);
+
       // Inyectar rango del mes de forma nativa para actualizar el v-model de Quasar
       const dateInputsIds = await page.evaluate(() => {
         const ins = Array.from(document.querySelectorAll('input[type="text"],input.q-field__native'));
@@ -492,56 +499,44 @@ async function watchPanel(panel, perfiles) {
           const clearIcon = page.locator('.q-field__append .q-icon, .q-chip__icon--remove, i:has-text("cancel"), i:has-text("clear"), .q-field__focusable-action').first();
           if (await clearIcon.isVisible().catch(() => false)) {
             await clearIcon.click().catch(() => {});
+            await page.waitForTimeout(200);
           }
 
-          // Inyectar ID del perfil en el buscador de Quasar usando typing real de Playwright
-          let filled = false;
-          const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
-          
-          if (await searchLocator.isVisible().catch(() => false)) {
-            await searchLocator.click().catch(() => {});
-            await page.keyboard.press('Control+A');
-            await page.keyboard.press('Backspace');
-            await searchLocator.type(perfil.id_datame, { delay: 30 });
-            await page.waitForTimeout(300);
-            await page.keyboard.press('ArrowDown');
-            await page.keyboard.press('Enter');
-            filled = true;
-          }
+          // Probar buscar tanto por MODELO (nombre) como por ID Datame
+          const searchTerms = [perfil.modelo, perfil.id_datame].filter(Boolean);
+          let termSelected = false;
 
-          if (!filled) {
-            const searchInputSelector = await page.evaluate(() => {
-              const ins = Array.from(document.querySelectorAll('input'));
-              let t = ins.find(i =>
-                (i.getAttribute('aria-label') || '').toLowerCase().includes('profile') ||
-                (i.placeholder || '').toLowerCase().includes('profile') ||
-                (i.placeholder || '').toLowerCase().includes('search') ||
-                (i.placeholder || '').toLowerCase().includes('buscar')
-              );
-              if (!t && ins.length >= 3) t = ins[2];
-              if (t) {
-                t.id = t.id || 'temp-profile-search-input';
-                return '#' + t.id;
-              }
-              return null;
-            });
+          for (const term of searchTerms) {
+            const searchLocator = page.locator('label:has-text("Search"), label:has-text("Buscar"), label:has-text("Perfil"), label:has-text("Profile"), label:has-text("ID"), .q-field:has-text("Search"), .q-field:has-text("Buscar"), .q-field:has-text("Perfil")').locator('input').first();
+            
+            let targetInput = null;
+            if (await searchLocator.isVisible().catch(() => false)) {
+              targetInput = searchLocator;
+            } else {
+              const inputs = await page.$$('input');
+              if (inputs.length >= 3) targetInput = inputs[2];
+            }
 
-            if (searchInputSelector) {
-              await page.click(searchInputSelector).catch(() => {});
+            if (targetInput) {
+              await targetInput.click().catch(() => {});
               await page.keyboard.press('Control+A');
               await page.keyboard.press('Backspace');
-              await page.type(searchInputSelector, perfil.id_datame, { delay: 30 });
-              await page.waitForTimeout(300);
-              await page.keyboard.press('ArrowDown');
-              await page.keyboard.press('Enter');
-              filled = true;
-            }
-          }
+              await targetInput.type(term, { delay: 30 });
+              await page.waitForTimeout(500);
 
-          // Si se desplegó una opción en el menú (.q-menu o .q-item), clickearla
-          const optionLocator = page.locator('.q-menu .q-item, .q-virtual-scroll__content .q-item, div[role="option"]').first();
-          if (await optionLocator.isVisible().catch(() => false)) {
-            await optionLocator.click().catch(() => {});
+              // Si apareció opción en dropdown (.q-menu o .q-item), clickearla
+              const optionLocator = page.locator('.q-menu .q-item, .q-virtual-scroll__content .q-item, div[role="option"]').first();
+              if (await optionLocator.isVisible({ timeout: 1000 }).catch(() => false)) {
+                const optText = await optionLocator.innerText().catch(() => '');
+                log(`  ✨ Opción dropdown para ${term}: "${optText.trim().replace(/\s+/g, ' ').slice(0, 40)}"`);
+                await optionLocator.click().catch(() => {});
+                termSelected = true;
+                break;
+              } else {
+                await page.keyboard.press('ArrowDown');
+                await page.keyboard.press('Enter');
+              }
+            }
           }
 
           await page.waitForTimeout(400);

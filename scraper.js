@@ -349,6 +349,15 @@ async function watchPanel(panel, perfiles) {
       await page.click('button.q-btn,button:has-text("LOG IN")')
                 .catch(() => page.press('input[type="password"]', 'Enter'));
       await page.waitForTimeout(7000);
+
+      const currentUrl = page.url();
+      if (currentUrl.includes('/login') || currentUrl.endsWith('login')) {
+        const errorText = await page.evaluate(() => {
+          const el = document.querySelector('.q-notification, .error, .text-negative, .text-red, .alert');
+          return el ? el.innerText.trim() : '';
+        }).catch(() => '');
+        throw new Error(`Login no completado en ${nombre} (URL: ${currentUrl}). ${errorText || 'Credenciales incorrectas o sesión bloqueada'}`);
+      }
       log(`✅ Login OK: ${nombre}`);
     } catch (err) {
       log(`❌ Login FAILED ${nombre}: ${err.message}`);
@@ -364,6 +373,10 @@ async function watchPanel(panel, perfiles) {
     try {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
+
+      if (page.url().includes('/login')) {
+        throw new Error(`Acceso denegado a /statistics en ${nombre} (Sesión redirigida a Login). Verifica credenciales.`);
+      }
 
       // Inyectar rango del mes de forma nativa para actualizar el v-model de Quasar
       const dateInputsIds = await page.evaluate(() => {

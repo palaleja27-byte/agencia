@@ -457,19 +457,23 @@ async function watchPanel(panel, perfiles) {
           if (pts <= 0 || pts > 1000000) continue;
 
           // Extraer ID del perfil con prioridad a campos específicos
-          let id = (response.url().match(/\d{7,10}/) || [])[0];
-          if (!id) id = (itemJson.match(/\d{7,10}/) || [])[0];
-          if (!id) id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
+          let id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
+          if (!id || id.length < 4) id = (response.url().match(/\d{6,10}/) || [])[0];
+          if (!id || id.length < 4) id = (itemJson.match(/\d{6,10}/) || [])[0];
           
           let perfil = null;
           if (id && id.length >= 6) {
-            perfil = perfiles.find(p => p.id_datame === id);
+            perfil = perfiles.find(p => String(p.id_datame) === String(id));
           }
-          if (!perfil && activePerfil && (response.url().includes('statistic') || response.url().includes('report') || response.url().includes('member'))) {
-            perfil = activePerfil;
-            id = activePerfil.id_datame;
+          // Solo asociar a activePerfil si la respuesta XHR o URL contiene explícitamente su ID o modelo
+          if (!perfil && activePerfil) {
+            const urlOrBody = (response.url() + ' ' + itemJson).toLowerCase();
+            if (urlOrBody.includes(String(activePerfil.id_datame).toLowerCase()) || (activePerfil.modelo && urlOrBody.includes(activePerfil.modelo.toLowerCase()))) {
+              perfil = activePerfil;
+              id = activePerfil.id_datame;
+            }
           }
-          if (!perfil) continue;
+          if (!perfil || !id) continue;
 
           log(`  🎯 Puntos detectados via XHR para ${perfil.modelo} (${id}): ${pts.toFixed(2)} pts`);
           await upsertTurno(id, pts, perfil.modelo, nombre);
@@ -488,6 +492,15 @@ async function watchPanel(panel, perfiles) {
       await page.click('button.q-btn,button:has-text("LOG IN")')
                 .catch(() => page.press('input[type="password"]', 'Enter'));
       await page.waitForTimeout(7000);
+      
+      const currentUrl = page.url();
+      if (currentUrl.includes('/login') || currentUrl.endsWith('login')) {
+        const errorText = await page.evaluate(() => {
+          const el = document.querySelector('.q-notification, .error, .text-negative, .text-red, .alert');
+          return el ? el.innerText.trim() : '';
+        }).catch(() => '');
+        throw new Error(`Login no completado en ${nombre} (URL: ${currentUrl}). ${errorText || 'Credenciales incorrectas o sesión bloqueada'}`);
+      }
       log(`✅ Login OK: ${nombre}`);
     } catch (err) {
       log(`❌ Login FAILED ${nombre}: ${err.message}`);
@@ -504,6 +517,10 @@ async function watchPanel(panel, perfiles) {
     try {
       await page.goto('https://datame.cloud/statistics', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(4000);
+
+      if (page.url().includes('/login')) {
+        throw new Error(`Acceso denegado a /statistics en ${nombre} (Sesión redirigida a Login). Verifica credenciales.`);
+      }
 
       const debugInputs = await page.evaluate(() => {
         return Array.from(document.querySelectorAll('input, button, .q-field')).map(el => {

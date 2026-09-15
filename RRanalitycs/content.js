@@ -67,11 +67,25 @@ function notificarActividadOperadorExt(origen) {
     const now = Date.now();
     if (now - _lastContentActivitySent < 3000) return; // evitar saturación innecesaria
     _lastContentActivitySent = now;
+    
+    let activeAvatarId = "";
+    try {
+        const path = window.location.pathname;
+        const lastSegment = path.split('/').pop().split('?')[0];
+        if (lastSegment.includes('_')) {
+            activeAvatarId = lastSegment.split('_')[0];
+        } else if (path.includes('/my/profile')) {
+            const m = document.body.innerText.match(/Profile ID:\s*(\d+)/i);
+            if (m) activeAvatarId = m[1];
+        }
+    } catch(e) {}
+
     try {
         chrome.runtime.sendMessage({
             accion: "reportar_actividad_click",
             payload: {
                 operador: nombreOperadorGlobal || "Operador",
+                avatar_id: activeAvatarId || "",
                 origen: origen || "click_interaccion",
                 ts: now
             }

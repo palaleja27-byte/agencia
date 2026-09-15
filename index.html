@@ -34999,8 +34999,19 @@ CONFIGURACIÓN DE CONTEXTO:
     window.addEventListener('mousemove', () => registrarActividadOperadorGlobal('mousemove'), { passive: true });
 
     // 2. Escuchar actividad telemétrica y clicks desde extensiones o iframes de la plataforma
+    window._opLastActivityMap = window._opLastActivityMap || {};
+    window._profileLastActivityMap = window._profileLastActivityMap || {};
+
     window.addEventListener('message', (event) => {
       if (event.data && (event.data.type === 'RYR_ENDPOINT_ACTIVITY' || event.data.type === 'RYR_STREAM_CAPTURED' || event.data.type === 'OP_ACTIVITY_EVENT' || event.data.type === 'RR_OP_ACTIVITY_FROM_EXT')) {
+        const payload = event.data.payload || event.data;
+        if (payload && payload.operador) {
+          window._opLastActivityMap[payload.operador.toUpperCase()] = payload.ts || Date.now();
+        }
+        if (payload && (payload.avatar_id || payload.id_perfil || payload.perfil)) {
+          const pidKey = String(payload.avatar_id || payload.id_perfil || payload.perfil).trim();
+          window._profileLastActivityMap[pidKey] = payload.ts || Date.now();
+        }
         registrarActividadOperadorGlobal(event.data.url || event.data.origen || 'ext_event');
       }
     });
@@ -35011,8 +35022,11 @@ CONFIGURACIÓN DE CONTEXTO:
           if (msg && (msg.type === 'RR_OP_ACTIVITY_FROM_EXT' || msg.accion === 'reportar_actividad_click')) {
             const p = msg.payload;
             if (p && p.operador) {
-              window._opLastActivityMap = window._opLastActivityMap || {};
               window._opLastActivityMap[p.operador.toUpperCase()] = p.ts || Date.now();
+            }
+            if (p && (p.avatar_id || p.id_perfil || p.perfil)) {
+              const pidKey = String(p.avatar_id || p.id_perfil || p.perfil).trim();
+              window._profileLastActivityMap[pidKey] = p.ts || Date.now();
             }
             registrarActividadOperadorGlobal('ext_runtime_msg');
           }
@@ -35271,7 +35285,7 @@ CONFIGURACIÓN DE CONTEXTO:
       return d.getTime();
     }
 
-    // Monitoreo de Alertas de Voz por Inactividad (3 Minutos sin clicks, teclado ni puntos)
+    // Monitoreo de Alertas de Voz por Inactividad (Solución 1: Detección de Abandono de 1 de los 2 perfiles)
     window.iniciarMonitoreoAlertasVoz = function() {
       if (_voiceAlertsInterval) clearInterval(_voiceAlertsInterval);
       
@@ -35289,59 +35303,90 @@ CONFIGURACIÓN DE CONTEXTO:
           const todayStr = (typeof localDateStr === 'function') ? localDateStr() : new Date().toISOString().slice(0,10);
           const todayCuts = cuts.filter(c => c.fecha === todayStr && c.ts);
           
-          let lastCutTs = 0;
-          if (todayCuts.length > 0) {
-            lastCutTs = todayCuts[todayCuts.length - 1].ts;
-          } else {
-            const key = opName + '||operador';
-            const asiInfo = (typeof asiEstados !== 'undefined') ? asiEstados[key] : null;
-            lastCutTs = asiInfo?.entradaTS || getShiftStartTs(opName);
+          const opShortName = opName.split(' ')[0];
+          const opObj = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === opName) : null;
+          let assignedProfiles = (opObj && Array.isArray(opObj.profiles) && opObj.profiles.length > 0) ? opObj.profiles : [];
+          if (assignedProfiles.length === 0 && typeof asiAsignaciones !== 'undefined' && asiAsignaciones[opName]) {
+            assignedProfiles = asiAsignaciones[opName] || [];
           }
 
-          // Telemetría en tiempo real: última actividad de clicks / teclado recibida por Realtime
-          const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
-          const lastActivityTs = Math.max(lastCutTs, lastInteractionTs);
+          const shiftEntryTs = (() => {
+            const key = opName + '||operador';
+            const asiInfo = (typeof asiEstados !== 'undefined') ? asiEstados[key] : null;
+            return asiInfo?.entradaTS || getShiftStartTs(opName);
+          })();
 
-          // Umbral de 5 minutos (300,000 ms) sin recibir ninguna señal (puntos, teclas ni clicks)
-          if (now - lastActivityTs >= 300000) {
-            const lastAlert = _inactivityAlertsLastTime[opName] || 0;
-            // Alertar con cooldown de 5 minutos
-            if (now - lastAlert >= 300000) {
-              const opShortName = opName.split(' ')[0];
-              const alertCount = (_inactivityAlertCount[opName] || 0) + 1;
-              _inactivityAlertCount[opName] = alertCount;
+          if (assignedProfiles.length >= 2) {
+            // 🎯 SOLUCIÓN 1: Monitoreo Individual de los 2 Perfiles
+            assignedProfiles.forEach(p => {
+              const pId = String(p.id || p.id_perfil || '').trim();
+              const pName = p.model || p.modelo || ('Perfil ' + pId);
+              const pCuts = todayCuts.filter(c => String(c.perfil || c.pid || c.id_perfil || '').trim() === pId || (c.modelo && String(c.modelo).toUpperCase() === pName.toUpperCase()));
+              
+              let lastPCutTs = (pCuts.length > 0) ? (pCuts[pCuts.length - 1].ts || 0) : shiftEntryTs;
+              const pTelemetryTs = (window._profileLastActivityMap && (window._profileLastActivityMap[pId] || window._profileLastActivityMap[pName])) || 0;
+              const lastPActivityTs = Math.max(lastPCutTs, pTelemetryTs);
 
-              if (alertCount === 1) {
-                // Primera alerta: aviso con nombre del operador e instrucción de 2 perfiles
-                speakText(`${opShortName}, por favor enfocate, llevas 5 minutos sin hacer click ni chatear, si tienes 2 perfiles interactua con los 2.`);
+              if (now - lastPActivityTs >= 300000) {
+                const alertKey = opName + '__' + pId;
+                const lastAlert = _inactivityAlertsLastTime[alertKey] || 0;
+                if (now - lastAlert >= 300000) {
+                  speakText(`${opShortName}, por favor enfócate, llevas más de 5 minutos sin interactuar en el perfil ${pName}. Recuerda mantener activos ambos perfiles.`);
+                  _inactivityAlertsLastTime[alertKey] = now;
+                }
               } else {
-                // Segunda alerta en adelante: refuerzo de concentración con instrucción de 2 perfiles
-                speakText(`${opShortName}, por favor enfocate, llevas 5 minutos sin hacer click ni chatear, si tienes 2 perfiles interactua con los 2.`);
+                _inactivityAlertsLastTime[opName + '__' + pId] = 0;
               }
-              _inactivityAlertsLastTime[opName] = now;
+            });
+          } else if (assignedProfiles.length === 1) {
+            const p = assignedProfiles[0];
+            const pId = String(p.id || p.id_perfil || '').trim();
+            const pName = p.model || p.modelo || ('Perfil ' + pId);
+            const pCuts = todayCuts.filter(c => String(c.perfil || c.pid || c.id_perfil || '').trim() === pId || (c.modelo && String(c.modelo).toUpperCase() === pName.toUpperCase()));
+            
+            let lastPCutTs = (pCuts.length > 0) ? (pCuts[pCuts.length - 1].ts || 0) : shiftEntryTs;
+            const pTelemetryTs = (window._profileLastActivityMap && (window._profileLastActivityMap[pId] || window._profileLastActivityMap[pName])) || 0;
+            const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
+            const lastPActivityTs = Math.max(lastPCutTs, pTelemetryTs, lastInteractionTs);
+
+            if (now - lastPActivityTs >= 300000) {
+              const lastAlert = _inactivityAlertsLastTime[opName] || 0;
+              if (now - lastAlert >= 300000) {
+                speakText(`${opShortName}, por favor enfócate, llevas más de 5 minutos sin interactuar en tu perfil ${pName}.`);
+                _inactivityAlertsLastTime[opName] = now;
+              }
+            } else {
+              _inactivityAlertsLastTime[opName] = 0;
             }
           } else {
-            // Operador activo: reiniciar contador
-            _inactivityAlertsLastTime[opName] = 0;
-            _inactivityAlertCount[opName] = 0;
+            // Operador sin perfiles específicos registrados: chequeo global
+            let lastCutTs = (todayCuts.length > 0) ? (todayCuts[todayCuts.length - 1].ts || 0) : shiftEntryTs;
+            const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
+            const lastActivityTs = Math.max(lastCutTs, lastInteractionTs);
 
-            // Racha de puntos (3 cortes o más en los últimos 5 minutos con puntos positivos)
-            const recentCuts = todayCuts.filter(c => now - c.ts < 300000 && (Number(c.puntos) || 0) > 0);
-            if (recentCuts.length >= 3) {
-              const lastCongrats = _streakCongratsLastTime[opName] || 0;
-              // Felicitar máximo una vez cada 5 minutos
-              if (now - lastCongrats >= 300000) {
-                // 🧠 SMART STREAK: verificar que los puntos van en progresión (no solo 3 cortes aislados)
-                const totalRecentPts = recentCuts.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
-                const firstCutTs = recentCuts[0].ts;
-                const minutosTranscurridos = Math.max(1, Math.round((now - firstCutTs) / 60000));
-                
-                // Solo felicitar si hay puntos reales acumulados (no cortes de 0 pts)
-                if (totalRecentPts > 0) {
-                  const opShortName = opName.split(' ')[0];
-                  speakText(`¡Felicitaciones ${opShortName}! Llevas ${recentCuts.length} cortes en los últimos ${minutosTranscurridos} minuto${minutosTranscurridos !== 1 ? 's' : ''} acumulando ${totalRecentPts.toFixed(1)} puntos. ¡Sigue así!`);
-                  _streakCongratsLastTime[opName] = now;
-                }
+            if (now - lastActivityTs >= 300000) {
+              const lastAlert = _inactivityAlertsLastTime[opName] || 0;
+              if (now - lastAlert >= 300000) {
+                speakText(`${opShortName}, por favor enfócate, llevas 5 minutos sin hacer click ni chatear. Si tienes perfiles asignados interactúa con ellos.`);
+                _inactivityAlertsLastTime[opName] = now;
+              }
+            } else {
+              _inactivityAlertsLastTime[opName] = 0;
+            }
+          }
+
+          // Racha de felicitaciones por puntos
+          const recentCuts = todayCuts.filter(c => now - c.ts < 300000 && (Number(c.puntos) || 0) > 0);
+          if (recentCuts.length >= 3) {
+            const lastCongrats = _streakCongratsLastTime[opName] || 0;
+            if (now - lastCongrats >= 300000) {
+              const totalRecentPts = recentCuts.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+              const firstCutTs = recentCuts[0].ts;
+              const minutosTranscurridos = Math.max(1, Math.round((now - firstCutTs) / 60000));
+              
+              if (totalRecentPts > 0) {
+                speakText(`¡Felicitaciones ${opShortName}! Llevas ${recentCuts.length} cortes en los últimos ${minutosTranscurridos} minuto${minutosTranscurridos !== 1 ? 's' : ''} acumulando ${totalRecentPts.toFixed(1)} puntos. ¡Sigue así!`);
+                _streakCongratsLastTime[opName] = now;
               }
             }
           }

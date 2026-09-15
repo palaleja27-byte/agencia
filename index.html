@@ -11041,56 +11041,66 @@
 
         let turnosLeer = Array.from(turnosSet);
 
-        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA
+        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA de TODOS los turnos
         let combinedProfiles = [...(op.profiles || [])];
-        const draftEntry = _draftFull[op.name + '||operador'] || Object.values(_draftFull).find(d => d.autoMarcado && _n(d.name || '') === _n(op.name));
-        
-        if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
-          // 🔬 PRO FIX: Eliminada la regla turnosLeer = [jornadaActual] porque si el operador
-          // entraba temprano y tenía perfiles dinámicos, esto redirigía erróneamente todos
-          // los puntos de sus perfiles estáticos al turno actual en lugar de su turno oficial.
-          
-          draftEntry.perfiles.forEach(dp => {
-            if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
-              combinedProfiles.push(dp);
+        const _safeNLocal = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
+        const _opNameNorm = _safeNLocal(op.name);
+
+        ['manana', 'tarde', 'noche'].forEach(shKey => {
+          const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoy + '_' + shKey;
+          try {
+            const draftObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
+            Object.values(draftObj).forEach(d => {
+              if (d && _safeNLocal(d.name || d.operador || '') === _opNameNorm && Array.isArray(d.perfiles)) {
+                d.perfiles.forEach(dp => {
+                  if (dp && dp.id && !combinedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
+                    combinedProfiles.push(dp);
+                  }
+                });
+              }
+            });
+          } catch(e) {}
+        });
+
+        if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
+          combinedProfiles.forEach(p => {
+            const pid = String(p.id || '').trim();
+            const turnosPerfil = _dpTurnosData[pid] || _dpTurnosData[p.id] || _dpTurnosData[Number(pid)];
+            if (turnosPerfil) {
+              let pts = 0;
+              turnosLeer.forEach(t => {
+                const keyLower = t.toLowerCase();
+                const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);
+                const vCapital = Number(turnosPerfil[keyCapital]) || 0;
+                const vLower   = Number(turnosPerfil[keyLower])   || 0;
+                pts += Math.max(vCapital, vLower);
+              });
+              // Si no hubo match exacto de shift pero el perfil tiene producción hoy en Datame
+              if (pts === 0) {
+                const sumHoy = Object.entries(turnosPerfil).reduce((s, [k, v]) => {
+                  const kNorm = String(k).toLowerCase();
+                  if (kNorm !== 'auto' && kNorm !== 'localfallback' && !kNorm.includes('total')) {
+                    return s + (Number(v) || 0);
+                  }
+                  return s;
+                }, 0);
+                if (sumHoy > 0 && sumHoy <= 5000) {
+                  pts = sumHoy;
+                }
+              }
+              if (op.turno === 'Completo' && pts === 0) {
+                pts += (Number(turnosPerfil['Auto']) || 0);
+              }
+              if (pts > 5000) pts = 0;
+              datamePts += pts;
             }
           });
         }
-
-         if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
-            combinedProfiles.forEach(p => {
-               const turnosPerfil = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)];
-               if (turnosPerfil) {
-                  // DELTA-SHIFT™: sumar únicamente los turnos correspondientes a la jornada/12h del operador
-                  let pts = 0;
-                  turnosLeer.forEach(t => {
-                     // 🔬 DELTA-SHIFT™ FIX: usar SOLO keyCapital (la DB siempre guarda con mayúscula inicial)
-                     // NO usar keyLower porque duplicaría el valor si ambas claves existen
-                     const keyLower = t.toLowerCase();
-                     const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);
-                     const vCapital = Number(turnosPerfil[keyCapital]) || 0;
-                     const vLower   = Number(turnosPerfil[keyLower])   || 0;
-                     // Usar el mayor de los dos para no perder datos legacy, pero nunca sumarlos
-                     pts += Math.max(vCapital, vLower);
-                  });
-                  // ❌ NO sumar 'Auto' ni 'LocalFallback' incondicionalmente:
-                  // 'Auto' puede contener el total mensual de Tableau que NO es el neto del turno.
-                  // Solo sumar si el operador es 'Completo' (cubre los 3 turnos) y no hay registro real.
-                  if (op.turno === 'Completo' && pts === 0) {
-                    pts += (Number(turnosPerfil['Auto']) || 0);
-                  }
-                  if (pts > 5000) pts = 0; // 🛡️ SANIDAD DELTA-SHIFT™: ignora totales mensuales corruptos
-                  datamePts += pts;
-               }
-            });
-         }
 
         // --- 2. Lógica Legacy (localStorage) ---
         const cortes = getCortesOp(op.name);
         const hoyCortes = cortes.filter(c => c.fecha === _hoy);
         
-        // 🔬 DELTA-SHIFT™ FIX: Solo sumar la jornada del operador (o la actual si está logueado).
-        // ⏱️ 12H SHIFT™: Si es 12h, 'jornadaParaLegacy' será 'Completo', lo que permitirá sumar todo.
         const jornadaParaLegacy = op.turno && op.turno !== 'Completo' ? op.turno : (op.turno === 'Completo' ? 'Completo' : jornadaActual);
         
         const cortesDeTurno = (jornadaParaLegacy === 'Completo') 
@@ -11102,6 +11112,14 @@
           if (val > 5000) return s;
           return s + val;
         }, 0);
+
+        if (legacyPts === 0 && hoyCortes.length > 0) {
+          legacyPts = hoyCortes.reduce((s, c) => {
+            const val = (Number(c.puntos) || 0);
+            return (val > 0 && val <= 5000) ? s + val : s;
+          }, 0);
+        }
+
         const fallbackPts = (typeof getPuntosHoy === 'function' ? getPuntosHoy(op.name) : 0);
         _ptsHoyMap[op.name] = (datamePts > 0) ? datamePts : (legacyPts > 0 ? legacyPts : fallbackPts);
         _connectedMap[op.name.toUpperCase()] = estaLogueado;
@@ -14451,6 +14469,29 @@
           }).catch(e => console.warn('[Tableau] carga inicial falló:', e.message));
         }
         if (typeof tableauIniciarRealtime === 'function') tableauIniciarRealtime();
+
+        // ── Sincronizar perfiles maestros de Datame desde Supabase ──
+        try {
+          _sb.from('datame_perfiles').select('id_datame, modelo, panel_id, activo').eq('activo', true)
+            .then(({ data: perfsDb }) => {
+              if (perfsDb && perfsDb.length > 0) {
+                if (!window.DP_PERFILES_MAP) window.DP_PERFILES_MAP = { 1: [], 2: [], 3: [], 4: [] };
+                perfsDb.forEach(p => {
+                  const pid = String(p.id_datame).trim();
+                  const pMod = p.modelo || ('ID ' + pid);
+                  const pan = Number(p.panel_id) || 2;
+                  if (!window.DP_PERFILES_MAP[pan]) window.DP_PERFILES_MAP[pan] = [];
+                  const idx = window.DP_PERFILES_MAP[pan].findIndex(x => String(x.id).trim() === pid);
+                  if (idx >= 0) {
+                    window.DP_PERFILES_MAP[pan][idx] = { id: pid, modelo: pMod };
+                  } else {
+                    window.DP_PERFILES_MAP[pan].push({ id: pid, modelo: pMod });
+                  }
+                });
+                localStorage.setItem('rr_datame_perfiles_cache', JSON.stringify(window.DP_PERFILES_MAP));
+              }
+            }).catch(e => console.warn('[Boot] error cargando datame_perfiles:', e));
+        } catch(e) {}
 
         // Recargar memoria y corregir mes activo
         if (typeof loadData === 'function') loadData();
@@ -19598,9 +19639,57 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
     // ══════════════════════════════════════════════════════════════
     // GESTIÓN DE PERFILES DESDE ASISTENCIA — por nombre de operador
     // ══════════════════════════════════════════════════════════════
-    // --- GESTIÓN DE PERFILES MAESTROS (v8.6.27) ---
+    // --- GESTIÓN DE PERFILES MAESTROS (v8.6.28) ---
+    window.getAllMasterProfiles = function() {
+      const seen = new Set();
+      const list = [];
+      
+      // 1. From window.DP_PERFILES_MAP / DP_PERFILES_MAP
+      const map = (typeof window !== 'undefined' && window.DP_PERFILES_MAP) || (typeof DP_PERFILES_MAP !== 'undefined' ? DP_PERFILES_MAP : {});
+      Object.values(map).flat().forEach(p => {
+        if (p && p.id) {
+          const idStr = String(p.id).trim();
+          if (!seen.has(idStr)) {
+            seen.add(idStr);
+            list.push({ id: idStr, modelo: p.modelo || p.model || p.nombre || ('ID ' + idStr), panel: p.panel || 2 });
+          }
+        }
+      });
+
+      // 2. From cached localStorage
+      try {
+        const cached = JSON.parse(localStorage.getItem('rr_datame_perfiles_cache') || '{}');
+        Object.values(cached).flat().forEach(p => {
+          if (p && p.id) {
+            const idStr = String(p.id).trim();
+            if (!seen.has(idStr)) {
+              seen.add(idStr);
+              list.push({ id: idStr, modelo: p.modelo || p.model || p.nombre || ('ID ' + idStr), panel: p.panel || 2 });
+            }
+          }
+        });
+      } catch(e) {}
+
+      // 3. From operatorsData profiles
+      if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+        operatorsData.forEach(op => {
+          (op.profiles || []).forEach(p => {
+            if (p && p.id) {
+              const idStr = String(p.id).trim();
+              if (!seen.has(idStr)) {
+                seen.add(idStr);
+                list.push({ id: idStr, modelo: p.model || p.modelo || p.nombre || ('ID ' + idStr), panel: 2 });
+              }
+            }
+          });
+        });
+      }
+
+      return list.sort((a, b) => (a.modelo || '').localeCompare(b.modelo || ''));
+    };
+
     window.renderAsiProfileForm = function(safeId, opName) {
-      const allMasterPerfs = Object.values(DP_PERFILES_MAP).flat();
+      const allMasterPerfs = window.getAllMasterProfiles();
       const options = allMasterPerfs.map(p => `<option value="${p.id}">${p.modelo} (${p.id})</option>`).join('');
       
       return `
@@ -19635,8 +19724,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
     window.handleAsiProfileSelect = function(safeId, val) {
       if(!val) return;
-      const allMasterPerfs = Object.values(DP_PERFILES_MAP).flat();
-      const p = allMasterPerfs.find(x => x.id === val);
+      const allMasterPerfs = window.getAllMasterProfiles();
+      const p = allMasterPerfs.find(x => String(x.id).trim() === String(val).trim());
       if(p) {
         const idInp = document.getElementById('asi-nid-' + safeId);
         const modInp = document.getElementById('asi-nmod-' + safeId);
@@ -19825,10 +19914,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       if (!modal) return;
       const inpId = document.getElementById('new-dp-id');
       const inpMod = document.getElementById('new-dp-model');
-      const inpPan = document.getElementById('new-dp-panel');
       if (inpId) inpId.value = '';
       if (inpMod) inpMod.value = '';
-      if (inpPan) inpPan.value = 'PANEL-2';
       
       const opSel = document.getElementById('new-dp-op');
       if (opSel && typeof operatorsData !== 'undefined') {
@@ -19851,23 +19938,36 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
     window.guardarNuevoPerfilDatame = async function() {
       const idVal = document.getElementById('new-dp-id')?.value.trim();
-      const modelVal = document.getElementById('new-dp-model')?.value.trim();
-      const panelVal = document.getElementById('new-dp-panel')?.value || 'PANEL-2';
+      const modelVal = document.getElementById('new-dp-model')?.value.trim().toUpperCase();
       const opVal = document.getElementById('new-dp-op')?.value || '';
       const tipoVal = document.getElementById('new-dp-tipo')?.value || 'propio';
 
       if (!idVal) return alert('Por favor ingresa el ID numérico de Datame.');
       if (!modelVal) return alert('Por favor ingresa el nombre del modelo.');
 
-      // 1. Agregar a DP_PERFILES_MAP si existe
-      if (typeof DP_PERFILES_MAP !== 'undefined') {
-        if (!DP_PERFILES_MAP[panelVal]) DP_PERFILES_MAP[panelVal] = [];
-        if (!DP_PERFILES_MAP[panelVal].some(p => String(p.id).trim() === idVal)) {
-          DP_PERFILES_MAP[panelVal].push({ id: idVal, modelo: modelVal });
-        }
+      // Auto-detección inteligente del panel
+      let autoPanel = 2;
+      const allPerfs = typeof window.getAllMasterProfiles === 'function' ? window.getAllMasterProfiles() : [];
+      const found = allPerfs.find(p => String(p.id).trim() === idVal);
+      if (found && found.panel) {
+        autoPanel = Number(found.panel) || 2;
       }
 
-      // 2. Si se seleccionó operador, asignárselo
+      if (!window.DP_PERFILES_MAP) window.DP_PERFILES_MAP = { 1: [], 2: [], 3: [], 4: [] };
+      if (!window.DP_PERFILES_MAP[autoPanel]) window.DP_PERFILES_MAP[autoPanel] = [];
+      const existingIdx = window.DP_PERFILES_MAP[autoPanel].findIndex(p => String(p.id).trim() === idVal);
+      if (existingIdx >= 0) {
+        window.DP_PERFILES_MAP[autoPanel][existingIdx] = { id: idVal, modelo: modelVal };
+      } else {
+        window.DP_PERFILES_MAP[autoPanel].push({ id: idVal, modelo: modelVal });
+      }
+
+      // Guardar en caché local inmediato
+      try {
+        localStorage.setItem('rr_datame_perfiles_cache', JSON.stringify(window.DP_PERFILES_MAP));
+      } catch(e) {}
+
+      // 2. Si se seleccionó operador, asignárselo de inmediato
       if (opVal && typeof operatorsData !== 'undefined') {
         const targetOp = operatorsData.find(o => _normName(o.name) === _normName(opVal));
         if (targetOp) {
@@ -19883,18 +19983,21 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
 
       // 3. Re-render inmediato
       cerrarModalNuevoPerfilDatame();
-      asiRender();
+      if (typeof asiRender === 'function') asiRender();
       if (typeof renderRanking === 'function') renderRanking();
       if (typeof renderOperators === 'function') renderOperators();
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
+        if (typeof renderOpDashboard === 'function') renderOpDashboard(currentOpName);
+      }
 
-      alert(`✅ Perfil [${idVal}] ${modelVal} registrado exitosamente${opVal ? ' y asignado a ' + opVal : ''}.`);
+      alert(`✅ Perfil [${idVal}] ${modelVal} registrado exitosamente${opVal ? ' y asignado a ' + opVal : ' en la lista de perfiles'}.`);
 
       // 4. Sincronizar en segundo plano con Supabase datame_perfiles y kv_store
       if (typeof _sb !== 'undefined' && _sb) {
         try {
           const val = JSON.stringify(operatorsData);
           const nowTs = String(Date.now());
-          Promise.resolve(_sb.from('datame_perfiles').upsert({ id_datame: idVal, modelo: modelVal, panel_id: null, activo: true }, { onConflict: 'id_datame' }))
+          Promise.resolve(_sb.from('datame_perfiles').upsert({ id_datame: idVal, modelo: modelVal, panel_id: autoPanel, activo: true }, { onConflict: 'id_datame' }))
             .then(() => {}, e => console.warn('[guardarNuevoPerfilDatame] datame_perfiles error:', e));
           Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: val }, { onConflict: 'key' }))
             .then(() => {}, e => console.warn('[guardarNuevoPerfilDatame] kv error:', e));
@@ -24772,14 +24875,8 @@ PT._logKey = function (opName) {
           <label style="display:block;font-size:.7rem;color:#94a3b8;font-weight:700;margin-bottom:4px;text-transform:uppercase;">Nombre del Modelo</label>
           <input type="text" id="new-dp-model" placeholder="Ej: ALEX" style="width:100%;padding:10px;background:rgba(0,0,0,.3);border:1px solid rgba(56,189,248,.3);border-radius:10px;color:#fff;font-size:.85rem;box-sizing:border-box;outline:none;">
         </div>
-        <div>
-          <label style="display:block;font-size:.7rem;color:#94a3b8;font-weight:700;margin-bottom:4px;text-transform:uppercase;">Panel / Agencia</label>
-          <select id="new-dp-panel" style="width:100%;padding:10px;background:#0b1329;border:1px solid rgba(56,189,248,.3);border-radius:10px;color:#fff;font-size:.85rem;box-sizing:border-box;outline:none;">
-            <option value="PANEL-2">PANEL 2</option>
-            <option value="PANEL-1">PANEL 1</option>
-            <option value="PANEL-3">PANEL 3</option>
-            <option value="PANEL-4">PANEL 4</option>
-          </select>
+        <div style="font-size:.72rem;color:#38bdf8;font-weight:700;display:flex;align-items:center;gap:6px;background:rgba(56,189,248,.1);padding:8px 12px;border-radius:10px;border:1px solid rgba(56,189,248,.25);">
+          <span>🔍</span> <span>Detección automática de panel en tiempo real</span>
         </div>
         <div>
           <label style="display:block;font-size:.7rem;color:#94a3b8;font-weight:700;margin-bottom:4px;text-transform:uppercase;">Asignar a Operador</label>
@@ -28325,7 +28422,7 @@ PT._logKey = function (opName) {
       { id: 3, nombre: 'PANEL-3', color: '#818cf8' },
       { id: 4, nombre: 'PANEL-4', color: '#f472b6' },
     ];
-    // Mapa local de perfiles (sincronizado con datame_perfiles en Supabase — Jul 2026)
+    // Mapa local de perfiles (sincronizado con datame_perfiles en Supabase)
     const DP_PERFILES_MAP = {
       1: [{ id:'91360720', modelo:'SANDRA MARIA' }],
       2: [
@@ -28364,6 +28461,20 @@ PT._logKey = function (opName) {
         { id:'145211163', modelo:'FERMIN B' },      { id:'95955130',  modelo:'HECTOR B' },
       ],
     };
+    window.DP_PERFILES_MAP = DP_PERFILES_MAP;
+
+    // Merge con cache local guardada
+    try {
+      const cachedMap = JSON.parse(localStorage.getItem('rr_datame_perfiles_cache') || '{}');
+      Object.entries(cachedMap).forEach(([pId, arr]) => {
+        if (!window.DP_PERFILES_MAP[pId]) window.DP_PERFILES_MAP[pId] = [];
+        (arr || []).forEach(p => {
+          if (p && p.id && !window.DP_PERFILES_MAP[pId].some(x => String(x.id).trim() === String(p.id).trim())) {
+            window.DP_PERFILES_MAP[pId].push(p);
+          }
+        });
+      });
+    } catch(e) {}
 
     let _dpActivePanelId = 2;
     let _dpPuntosData    = {}; // { id_perfil: { puntos, puntos_neto, fecha_corte } }
@@ -30968,25 +31079,21 @@ PT._logKey = function (opName) {
         });
 
         (ops || []).forEach(op => {
-          const id = op.id_perfil;
+          const id = String(op.id_perfil || '').trim();
+          if (!id) return;
 
           // Registro más reciente por perfil (solo metadata: fecha, agencia)
           if (!nuevosDatos[id]) {
             nuevosDatos[id] = {
-              puntos_total: 0,       // se acumula abajo con los netos del mes
+              puntos_total: 0,
               puntos_neto:  op.puntos_neto || 0,
               fecha_corte:  op.fecha_corte,
               agencia:      op.agencia
             };
           }
 
-          // ── Cifra grande = `puntos` del registro más reciente (acumulado real de Datame)
-          // `puntos` = "En Curso" del Excel = total mensual real mantenido por Datame.
-          // Solo se toma del primer registro (el más reciente, ya que ordenamos desc),
-          // evitando sumar deltas que pueden tener historial incompleto.
           if (!nuevosDatos[id]._puntosSet) {
-            const puntosReales = op.puntos || 0;
-            // Sanidad: ignora valores absurdos (>500000 = dato corrupto de migración)
+            const puntosReales = Number(op.puntos_total || op.puntos) || 0;
             if (puntosReales > 0 && puntosReales < 500000) {
               nuevosDatos[id].puntos_total = puntosReales;
               nuevosDatos[id]._puntosSet = true;
@@ -30994,56 +31101,81 @@ PT._logKey = function (opName) {
           }
 
           if (modoCompleto) {
-            const netoSano = op.puntos_neto || 0;
-            // Filtro de sanidad para TURNO: un turno real nunca supera 400 pts por jornada
-            const netoOkTurno = netoSano >= 0 && netoSano <= 400;
-            // Filtro más amplio para historial (puede haber días con más producción)
+            const netoSano = Number(op.puntos_neto) || 0;
             const netoOk = netoSano >= 0 && netoSano <= 10000;
-            // Turnos del día de hoy — recalcular neto usando puntos_total - puntos_baseline
+
+            // Normalizar jornada
+            let jClean = 'Mañana';
+            const jRaw = String(op.jornada || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            if (jRaw.includes('tard')) jClean = 'Tarde';
+            else if (jRaw.includes('noch')) jClean = 'Noche';
+            else if (jRaw.includes('manan')) jClean = 'Mañana';
+
+            // Turnos del día de hoy — recalcular neto usando puntos_total - puntos_baseline y puntos_neto
             if (op.fecha_dia === hoy && op.jornada) {
-              if (!turnosHoy[id]) turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
+              if (!turnosHoy[id]) {
+                turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'manana': 0, 'tarde': 0, 'noche': 0, 'Manana': 0, 'Auto': 0, 'LocalFallback': 0 };
+              }
               
-              let netoReal = Number(op.puntos_neto);
-              const pt = Number(op.puntos_total || op.puntos) || 0;
-              const pb = Number(op.puntos_baseline) || 0;
-              
+              let pt = Number(op.puntos_total || op.puntos) || 0;
+              let pb = Number(op.puntos_baseline) || 0;
+              let pn = Number(op.puntos_neto);
+              if (isNaN(pn)) pn = 0;
+
+              let netoReal = 0;
               if (pt > 0 && pb > 0 && pt >= pb) {
                 netoReal = pt - pb;
-              } else if (isNaN(netoReal) || netoReal <= 0) {
-                netoReal = Number(netoSano) || 0;
+              }
+              if (pn > 0) {
+                netoReal = (netoReal > 0) ? Math.max(netoReal, pn) : pn;
+              } else if (netoReal === 0 && pt > 0 && pb === 0) {
+                netoReal = pn > 0 ? pn : pt;
               }
 
-              // 🛡️ SANIDAD DELTA-SHIFT™: solo ignorar si netoReal es ridículamente corrupto (>5000 pts)
-              if (netoReal > 5000) {
+              if (netoReal > 5000 || isNaN(netoReal)) {
                 netoReal = 0;
               }
 
+              // Guardar en turnosHoy con todas las variantes de nombres de turnos
+              turnosHoy[id][jClean] = Math.max(turnosHoy[id][jClean] || 0, netoReal);
+              turnosHoy[id][jClean.toLowerCase()] = turnosHoy[id][jClean];
+              if (jClean === 'Mañana') {
+                turnosHoy[id]['manana'] = turnosHoy[id]['Mañana'];
+                turnosHoy[id]['Manana'] = turnosHoy[id]['Mañana'];
+              }
+
               // Sync into localStorage for getCortesOp fallback
-              if (netoReal > 0 && netoReal <= 400) {
-                // --- MAPPING FIX v2: Match operator by profile ID AND jornada ---
+              if (netoReal > 0 && netoReal <= 5000) {
+                // --- MAPPING FIX: Match operator by profile ID across operatorsData and attendance drafts ---
                 let opName = op.agencia;
                 let srcOp = null;
                 if (typeof operatorsData !== 'undefined') {
-                  const candidatos = operatorsData.filter(o =>
-                    o.profiles && o.profiles.some(p => String(p.id) === String(id))
+                  let candidatos = operatorsData.filter(o =>
+                    o.profiles && o.profiles.some(p => String(p.id).trim() === id)
                   );
+
+                  // Si no está en profiles estáticos, buscar en borradores de asistencia de hoy
+                  if (candidatos.length === 0) {
+                    ['manana', 'tarde', 'noche'].forEach(shKey => {
+                      const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoy + '_' + shKey;
+                      try {
+                        const dObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
+                        Object.values(dObj).forEach(de => {
+                          if (de && Array.isArray(de.perfiles) && de.perfiles.some(p => String(p.id).trim() === id)) {
+                            const opObj = operatorsData.find(o => _n(o.name) === _n(de.name || de.operador || ''));
+                            if (opObj && !candidatos.some(c => c.name === opObj.name)) {
+                              candidatos.push(opObj);
+                            }
+                          }
+                        });
+                      } catch(e) {}
+                    });
+                  }
+
                   if (candidatos.length === 1) {
                     srcOp = candidatos[0];
                   } else if (candidatos.length > 1) {
-                    const _horasHoyAll = JSON.parse(localStorage.getItem(typeof ASI_HORAS_KEY !== 'undefined' ? ASI_HORAS_KEY : 'rr_asi_horas_dia') || '{}');
-                    const opCoversJornada12h = (o, j) => {
-                      const _normO = _n(o.name);
-                      const _foundK = Object.keys(_horasHoyAll).find(k => _n(k) === _normO);
-                      const _horasOp = _foundK ? _horasHoyAll[_foundK] : null;
-                      const es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === hoy;
-                      if (!es12h) return false;
-                      if (o.turno === j) return true;
-                      if (o.turno === 'Mañana') return j === 'Tarde';
-                      if (o.turno === 'Tarde') return j === 'Mañana' || j === 'Noche';
-                      if (o.turno === 'Noche') return j === 'Tarde' || j === 'Mañana';
-                      return false;
-                    };
-                    srcOp = candidatos.find(o => opCoversJornada12h(o, op.jornada)) || candidatos.find(o => o.turno === op.jornada) || candidatos[0];
+                    srcOp = candidatos.find(o => o.turno === jClean) || candidatos[0];
                   }
                   if (!srcOp && op.agencia && op.agencia.trim().length > 1) {
                     srcOp = operatorsData.find(o =>
@@ -31059,7 +31191,7 @@ PT._logKey = function (opName) {
 
                 // FIX ANTI-DUPLICADO: 1 corte por PERFIL por JORNADA por DIA.
                 const existingIdx = allCortes[opName].findIndex(
-                  c => c.fecha === hoy && c.jornada === op.jornada && String(c.perfil || c.pid || '') === String(id)
+                  c => c.fecha === hoy && c.jornada === jClean && String(c.perfil || c.pid || '').trim() === id
                 );
 
                 if (existingIdx >= 0) {
@@ -31071,47 +31203,19 @@ PT._logKey = function (opName) {
                     cortesChanged = true;
                   }
                 } else {
-                  const legacyIdx = allCortes[opName].findIndex(c => c.fecha === hoy && c.jornada === op.jornada && !c.perfil && !c.pid);
+                  const legacyIdx = allCortes[opName].findIndex(c => c.fecha === hoy && c.jornada === jClean && !c.perfil && !c.pid);
                   if (legacyIdx >= 0) allCortes[opName].splice(legacyIdx, 1);
 
                   allCortes[opName].push({
                     fecha: hoy,
                     puntos: netoReal,
-                    jornada: op.jornada,
-                    perfil: String(id),
+                    jornada: jClean,
+                    perfil: id,
                     hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
                     ts: Date.now()
                   });
                   cortesChanged = true;
                 }
-              } else if (netoReal > 5000) {
-                // Solo limpiar cortes si el dato es corrupto (>5000)
-                if (typeof operatorsData !== 'undefined') {
-                  operatorsData.forEach(o => {
-                    if (o.profiles && o.profiles.some(p => String(p.id) === String(id)) && allCortes[o.name]) {
-                      const existingIdx = allCortes[o.name].findIndex(
-                        c => c.fecha === hoy && c.jornada === op.jornada && String(c.perfil || c.pid || '') === String(id)
-                      );
-                      if (existingIdx >= 0) {
-                        allCortes[o.name].splice(existingIdx, 1);
-                        cortesChanged = true;
-                      }
-                    }
-                  });
-                }
-              }
-
-              const netoRealOk = netoReal >= 0 && netoReal <= 5000;
-              if (netoRealOk) {
-                let pFinal = netoReal;
-                if (pFinal === 0 && typeof operatorsData !== 'undefined') {
-                  const opMatch = operatorsData.find(o => o.profiles && o.profiles.some(p => String(p.id) === String(id)));
-                  if (opMatch && allCortes[opMatch.name]) {
-                    const cMatch = allCortes[opMatch.name].find(c => c.fecha === hoy && c.jornada === op.jornada && String(c.perfil || c.pid || '') === String(id));
-                    if (cMatch && cMatch.puntos > 0) pFinal = cMatch.puntos;
-                  }
-                }
-                turnosHoy[id][op.jornada] = Math.max(turnosHoy[id][op.jornada] || 0, pFinal);
               }
             }
             // Historial por día
@@ -31902,39 +32006,55 @@ PT._logKey = function (opName) {
           .eq('fecha_dia', hoy)
           .neq('jornada', 'Auto');
 
-        if (!is12h) {
-          query = query.eq('jornada', _opRtJornada()); // Solo el turno activo para operadores de 8h
-        }
-
         const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 12000));
-        const { data: ops, error } = await Promise.race([query, timeoutPromise]);
+        const { data: rawOps, error } = await Promise.race([query, timeoutPromise]);
         
         if (error) { console.warn('[_opRtSync] Timeout/Error:', error.message); return; }
 
-        if (!ops?.length) return;
+        if (!rawOps?.length) return;
+
+        const jAct = _opRtJornada();
+        // Para 8h, filtrar por jornada activa si existe, o usar los registros del turno del operador
+        let ops = rawOps;
+        if (!is12h) {
+          const opsCurrent = rawOps.filter(r => {
+            const jNorm = String(r.jornada || '').toLowerCase();
+            return jNorm.includes(jAct.toLowerCase().slice(0, 4));
+          });
+          if (opsCurrent.length > 0) {
+            ops = opsCurrent;
+          } else if (opData?.turno) {
+            const opsTurno = rawOps.filter(r => {
+              const jNorm = String(r.jornada || '').toLowerCase();
+              return jNorm.includes(String(opData.turno).toLowerCase().slice(0, 4));
+            });
+            if (opsTurno.length > 0) ops = opsTurno;
+          }
+        }
 
         // 2. Construir mapa por perfil con total, baseline (6am), neto del watcher
         const porPerfil = {};
         ops.forEach(r => {
-          const pt = r.puntos_total || 0;
-          const bl = r.puntos_baseline || 0;
+          const pid = String(r.id_perfil || '').trim();
+          const pt = Number(r.puntos_total || r.puntos) || 0;
+          const bl = Number(r.puntos_baseline) || 0;
+          const pn = Number(r.puntos_neto) || 0;
           
-          if (!porPerfil[r.id_perfil]) {
-            porPerfil[r.id_perfil] = {
+          if (!porPerfil[pid]) {
+            porPerfil[pid] = {
               total:    pt,
               baseline: bl,
-              neto:     r.puntos_neto || 0,
-              agencia:  r.agencia || r.id_perfil
+              neto:     pn,
+              agencia:  r.agencia || pid
             };
           } else {
-            if (pt > porPerfil[r.id_perfil].total) {
-              porPerfil[r.id_perfil].total = pt;
+            if (pt > porPerfil[pid].total) {
+              porPerfil[pid].total = pt;
             }
-            if (bl > 0 && (porPerfil[r.id_perfil].baseline === 0 || bl < porPerfil[r.id_perfil].baseline)) {
-              porPerfil[r.id_perfil].baseline = bl;
+            if (bl > 0 && (porPerfil[pid].baseline === 0 || bl < porPerfil[pid].baseline)) {
+              porPerfil[pid].baseline = bl;
             }
-            // ⏱️ 12H SHIFT™: Sumar los netos de todas las jornadas del día (Mañana + Tarde)
-            porPerfil[r.id_perfil].neto += (r.puntos_neto || 0);
+            porPerfil[pid].neto += pn;
           }
         });
         const sumaTotal    = Object.values(porPerfil).reduce((s, v) => s + v.total,    0);
@@ -31942,25 +32062,21 @@ PT._logKey = function (opName) {
         const sumaNeto     = Object.values(porPerfil).reduce((s, v) => s + v.neto,     0);
 
         // 2b. Neto por perfil usando baseline del TURNO (6am), no del momento del login
-        //     opData ya fue declarado al inicio del try{} — reutilizamos el mismo objeto
         _opRtPerfilesNeto = Object.entries(porPerfil).map(([id, v]) => {
-          // DELTA-SHIFT™: Priorizar siempre el baseline que viene de Supabase (calibrado)
-          // Si el baseline en DB es > 0, lo usamos; si no, inicializamos con el total actual.
           if (v.baseline > 0) {
             _opRtBaselineMap[id] = v.baseline;
           } else if (_opRtBaselineMap[id] === undefined) {
             _opRtBaselineMap[id] = v.total;
           }
           
-          // DELTA-SHIFT™: Usar puntos_neto calibrado de la BD
           let neto = Math.max(0, v.neto);
           if (v.baseline > 0 && v.total >= v.baseline) {
             neto = Math.max(neto, v.total - v.baseline);
           }
           if (neto > 5000) neto = 0;
           
-          const matchedProfile = opData?.profiles?.find(p => String(p.id) === String(id));
-          const nombrePerfil = (matchedProfile ? matchedProfile.model : null) || v.agencia || id;
+          const matchedProfile = (opData?.profiles || []).find(p => String(p.id).trim() === String(id).trim());
+          const nombrePerfil = (matchedProfile ? (matchedProfile.model || matchedProfile.modelo) : null) || v.agencia || id;
           return { id, nombre: nombrePerfil, total: v.total, baseline: _opRtBaselineMap[id], neto };
         }).sort((a, b) => b.neto - a.neto);
 

@@ -11065,29 +11065,24 @@
         if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
           combinedProfiles.forEach(p => {
             const pid = String(p.id || '').trim();
-            const turnosPerfil = _dpTurnosData[pid] || _dpTurnosData[p.id] || _dpTurnosData[Number(pid)];
+            let turnosPerfil = _dpTurnosData[pid] || _dpTurnosData[p.id] || _dpTurnosData[Number(pid)];
+            if (!turnosPerfil) {
+              const matchKey = Object.keys(_dpTurnosData).find(k => String(k).trim() === pid);
+              if (matchKey) turnosPerfil = _dpTurnosData[matchKey];
+            }
             if (turnosPerfil) {
               let pts = 0;
               turnosLeer.forEach(t => {
-                const keyLower = t.toLowerCase();
-                const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);
-                const vCapital = Number(turnosPerfil[keyCapital]) || 0;
-                const vLower   = Number(turnosPerfil[keyLower])   || 0;
-                pts += Math.max(vCapital, vLower);
-              });
-              // Si no hubo match exacto de shift pero el perfil tiene producción hoy en Datame
-              if (pts === 0) {
-                const sumHoy = Object.entries(turnosPerfil).reduce((s, [k, v]) => {
-                  const kNorm = String(k).toLowerCase();
-                  if (kNorm !== 'auto' && kNorm !== 'localfallback' && !kNorm.includes('total')) {
-                    return s + (Number(v) || 0);
-                  }
-                  return s;
-                }, 0);
-                if (sumHoy > 0 && sumHoy <= 5000) {
-                  pts = sumHoy;
+                if (typeof getShiftPtsSafe === 'function') {
+                  pts += getShiftPtsSafe(turnosPerfil, t);
+                } else {
+                  const keyLower = t.toLowerCase();
+                  const keyCapital = t.charAt(0).toUpperCase() + keyLower.slice(1);
+                  const vCapital = Number(turnosPerfil[keyCapital]) || 0;
+                  const vLower   = Number(turnosPerfil[keyLower])   || 0;
+                  pts += Math.max(vCapital, vLower);
                 }
-              }
+              });
               if (op.turno === 'Completo' && pts === 0) {
                 pts += (Number(turnosPerfil['Auto']) || 0);
               }
@@ -12428,7 +12423,7 @@
       const turnoHoras = op?.turno_horas || 8;
       // Fijar jornada al momento del login para detectar cambio de turno
       _jornadaAlLogin = typeof _opRtJornada === 'function' ? _opRtJornada() : null;
-      iniciarAutoLogout(turnoHoras, now);
+      iniciarAutoLogout(turnoHoras, now, op?.turno);
 
       // Now render the dashboard
       renderOpDashboard(currentOpName);
@@ -12440,36 +12435,52 @@
     let _autoLogoutInterval = null;
     let _opDashInterval = null;   // refresh en tiempo real para operador
 
-    function calcularMsRestantesJornada(horas) {
+    function calcularMsRestantesJornada(horas, opTurno) {
       const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
       const h = d.getHours();
-      let endH = 0;
       
-      if (horas === 8 || !horas) {
-        if (h >= 6 && h < 14) endH = 14;
-        else if (h >= 14 && h < 22) endH = 22;
-        else endH = 30; // 06:00 del día siguiente
-      } else if (horas === 12) {
-        if (h >= 6 && h < 18) endH = 18;
-        else endH = 30; // 06:00 del día siguiente
+      const tNorm = String(opTurno || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const es12h = horas === 12 || tNorm.includes('completo') || tNorm.includes('12');
+
+      let endD = new Date(d);
+
+      if (es12h) {
+        // Turno extendido 12h
+        if (tNorm.includes('noche') || h >= 18 || h < 6) {
+          endD.setHours(6, 0, 0, 0);
+          if (h >= 18) endD.setDate(endD.getDate() + 1);
+        } else {
+          endD.setHours(18, 0, 0, 0);
+        }
       } else {
-        return horas * 60 * 60 * 1000;
+        // Turnos fijos 8h de la operación:
+        // Mañana: 06:00 -> 14:00 (2 PM)
+        // Tarde:  14:00 -> 22:00 (10 PM)
+        // Noche:  22:00 -> 06:00 (6 AM)
+        if (tNorm.includes('manan') || (!opTurno && h >= 6 && h < 14)) {
+          endD.setHours(14, 0, 0, 0);
+        } else if (tNorm.includes('tard') || (!opTurno && h >= 14 && h < 22)) {
+          endD.setHours(22, 0, 0, 0);
+        } else {
+          // Noche
+          endD.setHours(6, 0, 0, 0);
+          if (h >= 22) endD.setDate(endD.getDate() + 1);
+        }
       }
 
-      const endD = new Date(d);
-      endD.setHours(endH % 24, 0, 0, 0);
-      if (endH >= 24 && h >= (endH - 24)) {
-        endD.setDate(endD.getDate() + 1);
-      }
-      
       const diff = endD.getTime() - d.getTime();
-      return diff > 0 ? diff : (horas * 60 * 60 * 1000);
+      return diff > 0 ? diff : 0;
     }
 
-    function iniciarAutoLogout(horas, loginTime) {
+    function iniciarAutoLogout(horas, loginTime, opTurno) {
       clearAutoLogoutTimers();
 
-      const msTotal = calcularMsRestantesJornada(horas);
+      const msTotal = calcularMsRestantesJornada(horas, opTurno);
+      if (msTotal <= 0) {
+        console.warn('[AUTO-LOGOUT] Turno finalizado. Cerrando sesión inmediatamente.');
+        ejecutarAutoLogout();
+        return;
+      }
       const msWarning = msTotal - (5 * 60 * 1000); // aviso 5 min antes
 
       // Warning 5 min antes
@@ -12479,8 +12490,7 @@
         }, msWarning);
       } else {
         // Si faltan menos de 5 min ya al login, mostrar cuenta regresiva inmediata
-        const remaining = msTotal;
-        if (remaining > 0) mostrarContadorFinal(remaining);
+        mostrarContadorFinal(msTotal);
       }
 
       // Logout final
@@ -12490,10 +12500,25 @@
       
       // Guardar en sessionStorage para rehydrate si recarga (nunca en localStorage compartido)
       sessionStorage.setItem('rr_autologout_timer', JSON.stringify({
-        loginTs: loginTime.getTime(),
-        turnoHoras: horas
+        loginTs: loginTime ? loginTime.getTime() : Date.now(),
+        turnoHoras: horas,
+        turno: opTurno || ''
       }));
     }
+
+    // 🛡️ Watchdog periódico de cierre de turno fijo (revisa cada 20 segundos)
+    if (window._shiftEndWatchdog) clearInterval(window._shiftEndWatchdog);
+    window._shiftEndWatchdog = setInterval(() => {
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador' && typeof currentOpName !== 'undefined' && currentOpName) {
+        const op = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => _n(o.name) === _n(currentOpName));
+        const horas = op?.turno_horas || 8;
+        const msRest = calcularMsRestantesJornada(horas, op?.turno);
+        if (msRest <= 0) {
+          console.warn(`[WATCHDOG] El turno de ${currentOpName} ha expirado. Forzando cierre de sesión.`);
+          ejecutarAutoLogout();
+        }
+      }
+    }, 20000);
 
     function mostrarContadorFinal(msRestantes) {
       const modal = document.getElementById('modal-auto-logout');
@@ -21239,8 +21264,8 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       renderOpDashboard(opName);
       // Iniciar auto-logout basado en turno
       if (op) {
-        const horas = op.turno_horas || 6;
-        iniciarAutoLogout(horas, new Date());
+        const horas = op.turno_horas || 8;
+        iniciarAutoLogout(horas, new Date(), op.turno);
       }
       // Log de entrada
       registrarLogEntrada(opName);
@@ -22347,18 +22372,16 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
               loadData();
               _autoFixActivePair();
               loginSuccess('operador', opName);
-              // Restore auto-logout timer using sessionStorage
+              // Restore auto-logout timer using fixed shift calculation
               try {
-                const timerRaw = sessionStorage.getItem('rr_autologout_timer');
-                if (timerRaw) {
-                  const timer = JSON.parse(timerRaw);
-                  if (timer.loginTs && timer.turnoHoras) {
-                    const elapsed = Date.now() - timer.loginTs;
-                    const msTotal = timer.turnoHoras * 60 * 60 * 1000;
-                    const msLeft = msTotal - elapsed;
-                    if (msLeft > 0) iniciarAutoLogout(msLeft / 3600000, new Date(Date.now() - elapsed));
-                    else ejecutarAutoLogout();
-                  }
+                const opObj = (typeof operatorsData !== 'undefined' ? operatorsData : []).find(o => _n(o.name) === _n(opName));
+                const hOp = opObj?.turno_horas || 8;
+                const msLeft = calcularMsRestantesJornada(hOp, opObj?.turno);
+                if (msLeft > 0) {
+                  iniciarAutoLogout(hOp, new Date(), opObj?.turno);
+                } else {
+                  console.warn('[SESSION-RESTORE] Turno culminado. Cerrando sesión.');
+                  ejecutarAutoLogout();
                 }
               } catch (e) { }
             } else if (role === 'monitor' || role === 'admin') {
@@ -28163,28 +28186,44 @@ PT._logKey = function (opName) {
       const now = Date.now();
       let changed = false;
 
+      const bogota = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+      const curH = bogota.getHours();
+
       if (typeof operatorsData !== 'undefined') {
         operatorsData.forEach(op => {
-          if (!op.turno || op.group === 'SP' || op.group === 'N/A') return;
+          if (op.group === 'SP' || op.group === 'N/A') return;
           const k = (typeof asiKey === 'function') ? asiKey(op.name, 'operador') : op.name + '||operador';
           const curEntry = typeof asiEstados !== 'undefined' ? asiEstados[k] : null;
           const inPresente = curEntry && (curEntry.estado === 'P' || curEntry.estado === 'T');
           if (!inPresente) return;
 
           const infoHoras = allHoras[op.name] || {};
-          const es12h = infoHoras.horas === 12 || curEntry?.turnoHoras === 12;
-          const maxDuracionMs = (es12h ? 12.5 : 8.5) * 3600 * 1000;
+          const es12h = infoHoras.horas === 12 || curEntry?.turnoHoras === 12 || op.turno === 'Completo';
+          const tNorm = String(op.turno || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-          // Usar ingresoTS del allHoras local, o del draft si está disponible (cross-device)
-          const ingresoTS = infoHoras.ingresoTS || curEntry?.ingresoTS || null;
-
-          // Solo auto-liberar si tenemos ingresoTS y transcurrió la jornada completa
-          if (ingresoTS && (now >= ingresoTS + maxDuracionMs)) {
-            infoHoras.salidaTS = Date.now() - 1;
-            allHoras[op.name] = infoHoras;
-            localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
+          // Verificar si el turno fijo ya finalizó según la hora de Colombia
+          let turnoVencido = false;
+          if (!es12h) {
+            if (tNorm.includes('manan') && (curH >= 14 || curH < 6)) turnoVencido = true;
+            else if (tNorm.includes('tard') && (curH >= 22 || curH < 14)) turnoVencido = true;
+            else if (tNorm.includes('noch') && (curH >= 6 && curH < 22)) turnoVencido = true;
+          } else {
+            if (!tNorm.includes('noche') && (curH >= 18 || curH < 6)) turnoVencido = true;
+            else if (tNorm.includes('noche') && (curH >= 6 && curH < 18)) turnoVencido = true;
           }
-          // Sin ingresoTS → no liberar (evita borrar operadores en dispositivos admin sin datos locales)
+
+          const ingresoTS = infoHoras.ingresoTS || curEntry?.ingresoTS || null;
+          const maxDuracionMs = (es12h ? 12.5 : 8.5) * 3600 * 1000;
+          if (ingresoTS && (now >= ingresoTS + maxDuracionMs)) turnoVencido = true;
+
+          if (turnoVencido) {
+            console.log(`[AutoRelease] Turno fijo finalizado para ${op.name}. Liberando estado de presencia.`);
+            if (curEntry) curEntry.estado = '';
+            infoHoras.salidaTS = now - 1;
+            delete infoHoras.ingresoTS;
+            allHoras[op.name] = infoHoras;
+            changed = true;
+          }
         });
       }
 
@@ -28203,11 +28242,11 @@ PT._logKey = function (opName) {
           delete info.salidaTS;
           delete info.ingresoTS;
           allHoras[name] = info;
-          localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
         }
       }
+      localStorage.setItem(ASI_HORAS_KEY, JSON.stringify(allHoras));
 
-      if (changed) {
+      if (changed && typeof asiSaveDraft === 'function') {
         asiSaveDraft();
       }
     }

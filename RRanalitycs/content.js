@@ -63,22 +63,41 @@ ryrHook.textContent = `
 ryrHook.remove();
 
 let _lastContentActivitySent = 0;
-function notificarActividadOperadorExt(origen) {
+function notificarActividadOperadorExt(origen, explicitAvatarId = "") {
     const now = Date.now();
-    if (now - _lastContentActivitySent < 3000) return; // evitar saturación innecesaria
+    if (now - _lastContentActivitySent < 1500) return; // Debounce suave
     _lastContentActivitySent = now;
     
-    let activeAvatarId = "";
-    try {
-        const path = window.location.pathname;
-        const lastSegment = path.split('/').pop().split('?')[0];
-        if (lastSegment.includes('_')) {
-            activeAvatarId = lastSegment.split('_')[0];
-        } else if (path.includes('/my/profile')) {
-            const m = document.body.innerText.match(/Profile ID:\s*(\d+)/i);
-            if (m) activeAvatarId = m[1];
-        }
-    } catch(e) {}
+    let activeAvatarId = explicitAvatarId || "";
+    if (!activeAvatarId) {
+        try {
+            const path = window.location.pathname;
+            const search = window.location.search || "";
+            
+            // 1. Extraer desde query string (?profile=HORACIO, ?idRegularUser=...)
+            const mProfile = search.match(/[?&](?:profile|avatar_id|idRegularUser|user_id|target_id)=([^&]+)/i);
+            if (mProfile) activeAvatarId = decodeURIComponent(mProfile[1]);
+
+            // 2. Extraer desde pathname (/chats/120720195_...)
+            if (!activeAvatarId) {
+                const lastSegment = path.split('/').pop().split('?')[0];
+                if (lastSegment.includes('_')) {
+                    activeAvatarId = lastSegment.split('_')[0];
+                } else if (path.includes('/my/profile') || path.includes('/profile/')) {
+                    const m = document.body.innerText.match(/Profile ID:\s*(\d+)/i) || path.match(/\/profile\/(\d+)/i);
+                    if (m) activeAvatarId = m[1];
+                }
+            }
+
+            // 3. Extraer desde elementos activos en pantalla (nombre de modelo o ID)
+            if (!activeAvatarId) {
+                const avatarEl = document.querySelector('[data-profile-id], [data-avatar-id], .active-profile-name, .profile-header-name, .chat-header-user');
+                if (avatarEl) {
+                    activeAvatarId = avatarEl.getAttribute('data-profile-id') || avatarEl.getAttribute('data-avatar-id') || avatarEl.innerText.trim();
+                }
+            }
+        } catch(e) {}
+    }
 
     try {
         chrome.runtime.sendMessage({
@@ -86,6 +105,7 @@ function notificarActividadOperadorExt(origen) {
             payload: {
                 operador: nombreOperadorGlobal || "Operador",
                 avatar_id: activeAvatarId || "",
+                perfil_id: activeAvatarId || "",
                 origen: origen || "click_interaccion",
                 ts: now
             }
@@ -93,8 +113,8 @@ function notificarActividadOperadorExt(origen) {
     } catch(e) {}
 }
 
-// Capturar Clicks, Teclado e Interacción de Usuario en la pestaña de trabajo
-['click', 'pointerdown', 'mousedown', 'keydown', 'input', 'change'].forEach(evt => {
+// Capturar Clicks, Puntero, Teclado, Inputs, Ruedita y Movimientos en la pestaña de trabajo
+['click', 'pointerdown', 'mousedown', 'keydown', 'keyup', 'input', 'change', 'wheel', 'scroll'].forEach(evt => {
     window.addEventListener(evt, () => notificarActividadOperadorExt('ui_' + evt), { passive: true });
 });
 
@@ -103,11 +123,15 @@ window.addEventListener("message", (event) => {
         const url = String(event.data.url || '');
         const ENDPOINTS_CLICKS = [
             'messages', 'counters', 'list', 'get', 'bill', 'restriction', 'getrestrictions',
-            'is-available', 'by-ids', 'synced-ids', 'telemetry', 'banned-words', 'rum', 'chat', 'user', 'envelope'
+            'is-available', 'by-ids', 'synced-ids', 'telemetry', 'banned-words', 'rum', 'chat', 'user', 'envelope',
+            'findconnectionsbythreshold', 'getuniquegiftbyconnection', 'avatar-type-for-interlocutor'
         ];
         const esMatch = ENDPOINTS_CLICKS.some(ep => url.toLowerCase().includes(ep)) || url.length > 0;
         if (esMatch) {
-            notificarActividadOperadorExt('endpoint:' + url.split('?')[0]);
+            let extractedPid = "";
+            const m = url.match(/[?&](?:profile|idRegularUser|avatar_id)=([^&]+)/i);
+            if (m) extractedPid = decodeURIComponent(m[1]);
+            notificarActividadOperadorExt('endpoint:' + url.split('?')[0], extractedPid);
         }
     }
 

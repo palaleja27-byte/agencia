@@ -11041,25 +11041,36 @@
 
         let turnosLeer = Array.from(turnosSet);
 
-        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA de TODOS los turnos
+        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA de TODOS los turnos y fechas de hoy
         let combinedProfiles = [...(op.profiles || [])];
         const _safeNLocal = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
         const _opNameNorm = _safeNLocal(op.name);
 
-        ['manana', 'tarde', 'noche'].forEach(shKey => {
-          const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + _hoy + '_' + shKey;
-          try {
-            const draftObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
-            Object.values(draftObj).forEach(d => {
-              if (d && _safeNLocal(d.name || d.operador || '') === _opNameNorm && Array.isArray(d.perfiles)) {
-                d.perfiles.forEach(dp => {
-                  if (dp && dp.id && !combinedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
-                    combinedProfiles.push(dp);
-                  }
-                });
-              }
-            });
-          } catch(e) {}
+        const _calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const datesToCheck = new Set([
+          _hoy,
+          _calHoy,
+          (typeof localDateStr === 'function' ? localDateStr(1) : ''),
+          (typeof localDateStr === 'function' ? localDateStr(-1) : '')
+        ]);
+
+        datesToCheck.forEach(dStr => {
+          if (!dStr) return;
+          ['manana', 'tarde', 'noche', 'todos'].forEach(shKey => {
+            const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shKey;
+            try {
+              const draftObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
+              Object.values(draftObj).forEach(d => {
+                if (d && _safeNLocal(d.name || d.operador || '') === _opNameNorm && Array.isArray(d.perfiles)) {
+                  d.perfiles.forEach(dp => {
+                    if (dp && dp.id && !combinedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
+                      combinedProfiles.push(dp);
+                    }
+                  });
+                }
+              });
+            } catch(e) {}
+          });
         });
 
         if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
@@ -11083,6 +11094,9 @@
                   pts += Math.max(vCapital, vLower);
                 }
               });
+              if (pts === 0 && op.turno) {
+                pts += (typeof getShiftPtsSafe === 'function' ? getShiftPtsSafe(turnosPerfil, op.turno) : 0);
+              }
               if (op.turno === 'Completo' && pts === 0) {
                 pts += (Number(turnosPerfil['Auto']) || 0);
               }
@@ -11094,7 +11108,7 @@
 
         // --- 2. Lógica Legacy (localStorage) ---
         const cortes = getCortesOp(op.name);
-        const hoyCortes = cortes.filter(c => c.fecha === _hoy);
+        const hoyCortes = cortes.filter(c => c.fecha === _hoy || c.fecha === _calHoy);
         
         const jornadaParaLegacy = op.turno && op.turno !== 'Completo' ? op.turno : (op.turno === 'Completo' ? 'Completo' : jornadaActual);
         
@@ -31597,7 +31611,11 @@ PT._logKey = function (opName) {
             else if (jRaw.includes('manan')) jClean = 'Mañana';
 
             // Turnos del día de hoy — recalcular neto usando puntos_total - puntos_baseline y puntos_neto
-            if (op.fecha_dia === hoy && op.jornada) {
+            const logicalHoy = (typeof localDateStr === 'function') ? localDateStr() : hoy;
+            const calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            const isMatchDay = op.fecha_dia === logicalHoy || op.fecha_dia === calHoy || (jClean === 'Noche' && op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(1) : ''));
+
+            if (isMatchDay && op.jornada) {
               if (!turnosHoy[id]) {
                 turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'manana': 0, 'tarde': 0, 'noche': 0, 'Manana': 0, 'Auto': 0, 'LocalFallback': 0 };
               }
@@ -35786,14 +35804,47 @@ CONFIGURACIÓN DE CONTEXTO:
         activeOps.forEach(opName => {
           const cuts = (typeof getCortesOp === 'function') ? getCortesOp(opName) : [];
           const todayStr = (typeof localDateStr === 'function') ? localDateStr() : new Date().toISOString().slice(0,10);
-          const todayCuts = cuts.filter(c => c.fecha === todayStr && c.ts);
+          const calHoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+          const todayCuts = cuts.filter(c => (c.fecha === todayStr || c.fecha === calHoyStr) && c.ts);
           
           const opShortName = opName.split(' ')[0];
           const opObj = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === opName) : null;
-          let assignedProfiles = (opObj && Array.isArray(opObj.profiles) && opObj.profiles.length > 0) ? opObj.profiles : [];
-          if (assignedProfiles.length === 0 && typeof asiAsignaciones !== 'undefined' && asiAsignaciones[opName]) {
-            assignedProfiles = asiAsignaciones[opName] || [];
+          let assignedProfiles = (opObj && Array.isArray(opObj.profiles) && opObj.profiles.length > 0) ? [...opObj.profiles] : [];
+          if (typeof asiAsignaciones !== 'undefined' && Array.isArray(asiAsignaciones[opName])) {
+            asiAsignaciones[opName].forEach(ap => {
+              if (ap && ap.id && !assignedProfiles.some(p => String(p.id).trim() === String(ap.id).trim())) {
+                assignedProfiles.push(ap);
+              }
+            });
           }
+
+          // Resolver también desde borradores de asistencia multifecha
+          const _safeNLocal = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
+          const _opNameNorm = _safeNLocal(opName);
+          const datesToCheck = new Set([
+            todayStr,
+            calHoyStr,
+            (typeof localDateStr === 'function' ? localDateStr(1) : ''),
+            (typeof localDateStr === 'function' ? localDateStr(-1) : '')
+          ]);
+          datesToCheck.forEach(dStr => {
+            if (!dStr) return;
+            ['manana', 'tarde', 'noche', 'todos'].forEach(shKey => {
+              const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shKey;
+              try {
+                const draftObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
+                Object.values(draftObj).forEach(d => {
+                  if (d && _safeNLocal(d.name || d.operador || '') === _opNameNorm && Array.isArray(d.perfiles)) {
+                    d.perfiles.forEach(dp => {
+                      if (dp && dp.id && !assignedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
+                        assignedProfiles.push(dp);
+                      }
+                    });
+                  }
+                });
+              } catch(e) {}
+            });
+          });
 
           const shiftEntryTs = (() => {
             const key = opName + '||operador';

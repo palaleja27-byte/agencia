@@ -20158,6 +20158,80 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
       const seen = new Set();
       const list = [];
       
+      // 0. Catálogo Maestro Oficial (28 Perfiles Oficiales + Perfiles Activos)
+      const CATALOGO_MAESTRO_OFICIAL = [
+        { id: '91733663',  modelo: 'DANIEL 68',    panel: 2 },
+        { id: '79679899',  modelo: 'NORBERTO',     panel: 2 },
+        { id: '99766806',  modelo: 'EDUARDO',      panel: 2 },
+        { id: '168486464', modelo: 'GUSTAVO',      panel: 2 },
+        { id: '108018336', modelo: 'LUCAS',        panel: 2 },
+        { id: '103289167', modelo: 'LUIS DAROSA',  panel: 2 },
+        { id: '118179794', modelo: 'HORACIO',      panel: 2 },
+        { id: '98389135',  modelo: 'RAUL',         panel: 2 },
+        { id: '91360720',  modelo: 'SANDRA MARIA', panel: 1 },
+        { id: '120720195', modelo: 'MARCOS',       panel: 2 },
+        { id: '139247498', modelo: 'DAMIAN',       panel: 2 },
+        { id: '157112125', modelo: 'LUIZ',         panel: 2 },
+        { id: '130338853', modelo: 'IVALDO',       panel: 2 },
+        { id: '130431310', modelo: 'RAFAEL',       panel: 2 },
+        { id: '139245989', modelo: 'ALFREDO',      panel: 2 },
+        { id: '188143166', modelo: 'ALEX',         panel: 2 },
+        { id: '156881990', modelo: 'RALPH',        panel: 2 },
+        { id: '143017065', modelo: 'MARIO',        panel: 2 },
+        { id: '138130329', modelo: 'AGUSTIN',      panel: 2 },
+        { id: '95956014',  modelo: 'PABLO',        panel: 2 },
+        { id: '98540781',  modelo: 'LEANDRO',      panel: 2 },
+        { id: '143014129', modelo: 'RENEE',        panel: 2 },
+        { id: '95955130',  modelo: 'HECTOR',       panel: 2 },
+        { id: '145844971', modelo: 'RODRIGO',      panel: 2 },
+        { id: '170740935', modelo: 'ROBERTO',      panel: 2 },
+        { id: '187684981', modelo: 'CARLOS',       panel: 2 },
+        { id: '130422416', modelo: 'RAONI',        panel: 2 },
+        { id: '120275229', modelo: 'GERMAN',       panel: 2 },
+        // Perfiles Adicionales / Paneles Secundarios
+        { id: '101245945', modelo: 'PABLO B',      panel: 2 },
+        { id: '103291980', modelo: 'ARMANDO',      panel: 2 },
+        { id: '113579174', modelo: 'RONALDO',      panel: 2 },
+        { id: '113752797', modelo: 'ROMARIO',      panel: 2 },
+        { id: '114851358', modelo: 'JOHANNA',      panel: 2 },
+        { id: '132062039', modelo: 'BEATRIZ',      panel: 2 },
+        { id: '145839775', modelo: 'BRUNO',        panel: 2 },
+        { id: '151070498', modelo: 'VALQUIMAR',    panel: 2 },
+        { id: '151410237', modelo: 'EZEQUIEL',     panel: 2 },
+        { id: '153037229', modelo: 'HORACIO B',    panel: 2 },
+        { id: '153039388', modelo: 'AGUSTIN FERNANDO', panel: 2 },
+        { id: '156716207', modelo: 'AGNALDO',      panel: 2 },
+        { id: '157067734', modelo: 'VALDEMIR',     panel: 2 },
+        { id: '158644203', modelo: 'SERGIO',       panel: 2 },
+        { id: '160352260', modelo: 'JUVENAL',      panel: 2 },
+        { id: '164812184', modelo: 'MARCO',        panel: 2 },
+        { id: '166575347', modelo: 'MAX',          panel: 2 },
+        { id: '167273716', modelo: 'ARIEL HERNAN', panel: 2 },
+        { id: '167279664', modelo: 'JOSE ROBERTO', panel: 2 },
+        { id: '171638277', modelo: 'RONALT',       panel: 2 },
+        { id: '174069335', modelo: 'Federico',     panel: 2 },
+        { id: '93461947',  modelo: 'MARIANO',      panel: 2 },
+        { id: '99611942',  modelo: 'PAOLA',        panel: 2 },
+        { id: '101652076', modelo: 'CARINA',       panel: 3 },
+        { id: '109551682', modelo: 'RENATO',       panel: 3 },
+        { id: '118692242', modelo: 'FRANCISCO',    panel: 3 },
+        { id: '137163229', modelo: 'SEBASTIAN',    panel: 3 },
+        { id: '145834230', modelo: 'MURILO',       panel: 3 },
+        { id: '88243516',  modelo: 'RICARDO',      panel: 3 },
+        { id: '131130713', modelo: 'LUIS JOAO',    panel: 4 },
+        { id: '133085188', modelo: 'MARCOS ANTONIO', panel: 4 },
+        { id: '144863124', modelo: 'FERNANDO',     panel: 4 },
+        { id: '145211163', modelo: 'FERMIN B',     panel: 4 },
+      ];
+
+      CATALOGO_MAESTRO_OFICIAL.forEach(p => {
+        const idStr = String(p.id).trim();
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          list.push({ id: idStr, modelo: p.modelo, panel: p.panel || 2 });
+        }
+      });
+
       // 1. From window.DP_PERFILES_MAP / DP_PERFILES_MAP
       const map = (typeof window !== 'undefined' && window.DP_PERFILES_MAP) || (typeof DP_PERFILES_MAP !== 'undefined' ? DP_PERFILES_MAP : {});
       Object.values(map).flat().forEach(p => {
@@ -20166,6 +20240,11 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
           if (!seen.has(idStr)) {
             seen.add(idStr);
             list.push({ id: idStr, modelo: p.modelo || p.model || p.nombre || ('ID ' + idStr), panel: p.panel || 2 });
+          } else {
+            const existing = list.find(x => x.id === idStr);
+            if (existing && p.modelo && (!existing.modelo || existing.modelo.includes('ID '))) {
+              existing.modelo = p.modelo;
+            }
           }
         }
       });

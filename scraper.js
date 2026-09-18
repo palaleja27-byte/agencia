@@ -428,34 +428,48 @@ async function watchPanel(panel, perfiles) {
             return elements.map(e => e.innerText.trim()).filter(Boolean);
           });
 
-          // 4. Buscar la opción que coincida con el perfil
-          const searchTerms = [perfil.modelo, perfil.id_datame].filter(Boolean);
+          // 4. Buscar la opción que coincida con el perfil (PRIORIDAD: ID EXACTO)
+          const targetId = String(perfil.id_datame || '').trim();
+          const targetModel = String(perfil.modelo || '').trim().toLowerCase();
           let termSelected = false;
 
           let matchedIdx = -1;
-          for (let i = 0; i < availableOptions.length; i++) {
-            const opt = availableOptions[i].toLowerCase();
-            if (searchTerms.some(t => opt.includes(t.toLowerCase()))) {
-              matchedIdx = i;
-              break;
+          if (targetId) {
+            for (let i = 0; i < availableOptions.length; i++) {
+              const opt = availableOptions[i];
+              if (opt.includes(targetId) || opt.includes(`[ ${targetId} ]`) || opt.includes(`[${targetId}]`)) {
+                matchedIdx = i;
+                break;
+              }
+            }
+          }
+
+          if (matchedIdx === -1 && targetModel) {
+            for (let i = 0; i < availableOptions.length; i++) {
+              const opt = availableOptions[i].toLowerCase();
+              const regex = new RegExp(`\\b${targetModel}\\b`, 'i');
+              if (regex.test(opt)) {
+                matchedIdx = i;
+                break;
+              }
             }
           }
 
           if (matchedIdx >= 0) {
-            log(`  ✨ Match en multiselect para ${perfil.modelo}: "${availableOptions[matchedIdx]}"`);
+            log(`  ✨ Match en multiselect para ${perfil.modelo} (${targetId}): "${availableOptions[matchedIdx]}"`);
             await page.evaluate((idx) => {
               const elements = Array.from(document.querySelectorAll('.multiselect__option, .multiselect__element span, .multiselect__element li')).filter(e => e.innerText.trim().length > 0);
               if (elements[idx]) elements[idx].click();
             }, matchedIdx);
             termSelected = true;
           } else {
-            // Fallback: teclear en el input de multiselect
+            // Fallback: teclear ID de datame directamente en el input
             const multiselectInput = page.locator('input.multiselect__input, input[placeholder="Select option"]').first();
             if (await multiselectInput.isVisible().catch(() => false)) {
               await multiselectInput.click().catch(() => {});
               await page.keyboard.press('Control+A');
               await page.keyboard.press('Backspace');
-              await multiselectInput.type(perfil.modelo || perfil.id_datame, { delay: 35 });
+              await multiselectInput.type(targetId || perfil.modelo, { delay: 35 });
               await page.waitForTimeout(500);
 
               const highlighted = page.locator('.multiselect__option--highlight, .multiselect__option').first();

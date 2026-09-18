@@ -26,6 +26,7 @@ const FALLBACK_PERFILES = [
   // ═════════════════════════════════════════════════════════════════
   // 🌟 LISTADO OFICIAL 28 PERFILES AGENCIA RR (SEPTIEMBRE 2026)
   // ═════════════════════════════════════════════════════════════════
+  { id_datame: '91360720',  modelo: 'SANDRA MARIA', panel_id: 1, activo: true },
   { id_datame: '91733663',  modelo: 'DANIEL 68',    panel_id: 2, activo: true },
   { id_datame: '79679899',  modelo: 'NORBERTO',     panel_id: 2, activo: true },
   { id_datame: '99766806',  modelo: 'EDUARDO',      panel_id: 2, activo: true },
@@ -34,7 +35,6 @@ const FALLBACK_PERFILES = [
   { id_datame: '103289167', modelo: 'LUIS DAROSA',  panel_id: 2, activo: true },
   { id_datame: '118179794', modelo: 'HORACIO',      panel_id: 2, activo: true },
   { id_datame: '98389135',  modelo: 'RAUL',         panel_id: 2, activo: true },
-  { id_datame: '91360720',  modelo: 'SANDRA MARIA', panel_id: 1, activo: true },
   { id_datame: '120720195', modelo: 'MARCOS',       panel_id: 2, activo: true },
   { id_datame: '139247498', modelo: 'DAMIAN',       panel_id: 2, activo: true },
   { id_datame: '157112125', modelo: 'LUIZ',         panel_id: 2, activo: true },
@@ -53,41 +53,7 @@ const FALLBACK_PERFILES = [
   { id_datame: '170740935', modelo: 'ROBERTO',      panel_id: 2, activo: true },
   { id_datame: '187684981', modelo: 'CARLOS',       panel_id: 2, activo: true },
   { id_datame: '130422416', modelo: 'RAONI',        panel_id: 2, activo: true },
-  { id_datame: '120275229', modelo: 'GERMAN',       panel_id: 2, activo: true },
-
-  // Perfiles Adicionales / Paneles Secundarios
-  { id_datame: '101245945', modelo: 'PABLO B',      panel_id: 2, activo: true },
-  { id_datame: '103291980', modelo: 'ARMANDO',      panel_id: 2, activo: true },
-  { id_datame: '113579174', modelo: 'RONALDO',      panel_id: 2, activo: true },
-  { id_datame: '113752797', modelo: 'ROMARIO',      panel_id: 2, activo: true },
-  { id_datame: '114851358', modelo: 'JOHANNA',      panel_id: 2, activo: true },
-  { id_datame: '132062039', modelo: 'BEATRIZ',      panel_id: 2, activo: true },
-  { id_datame: '145839775', modelo: 'BRUNO',        panel_id: 2, activo: true },
-  { id_datame: '151070498', modelo: 'VALQUIMAR',    panel_id: 2, activo: true },
-  { id_datame: '151410237', modelo: 'EZEQUIEL',     panel_id: 2, activo: true },
-  { id_datame: '153037229', modelo: 'HORACIO B',    panel_id: 2, activo: true },
-  { id_datame: '153039388', modelo: 'AGUSTIN FERNANDO', panel_id: 2, activo: true },
-  { id_datame: '156716207', modelo: 'AGNALDO',      panel_id: 2, activo: true },
-  { id_datame: '157067734', modelo: 'VALDEMIR',     panel_id: 2, activo: true },
-  { id_datame: '158644203', modelo: 'SERGIO',       panel_id: 2, activo: true },
-  { id_datame: '160352260', modelo: 'JUVENAL',      panel_id: 2, activo: true },
-  { id_datame: '164812184', modelo: 'MARCO',        panel_id: 2, activo: true },
-  { id_datame: '166575347', modelo: 'MAX',          panel_id: 2, activo: true },
-  { id_datame: '167273716', modelo: 'ARIEL HERNAN', panel_id: 2, activo: true },
-  { id_datame: '167279664', modelo: 'JOSE ROBERTO', panel_id: 2, activo: true },
-  { id_datame: '171638277', modelo: 'RONALT',       panel_id: 2, activo: true },
-  { id_datame: '93461947',  modelo: 'MARIANO',      panel_id: 2, activo: true },
-  { id_datame: '99611942',  modelo: 'PAOLA',        panel_id: 2, activo: true },
-  { id_datame: '101652076', modelo: 'CARINA',       panel_id: 3, activo: true },
-  { id_datame: '109551682', modelo: 'RENATO',       panel_id: 3, activo: true },
-  { id_datame: '118692242', modelo: 'FRANCISCO',    panel_id: 3, activo: true },
-  { id_datame: '137163229', modelo: 'SEBASTIAN',    panel_id: 3, activo: true },
-  { id_datame: '145834230', modelo: 'MURILO',       panel_id: 3, activo: true },
-  { id_datame: '88243516',  modelo: 'RICARDO',      panel_id: 3, activo: true },
-  { id_datame: '131130713', modelo: 'LUIS JOAO',    panel_id: 4, activo: true },
-  { id_datame: '133085188', modelo: 'MARCOS ANTONIO', panel_id: 4, activo: true },
-  { id_datame: '144863124', modelo: 'FERNANDO',     panel_id: 4, activo: true },
-  { id_datame: '145211163', modelo: 'FERMIN B',     panel_id: 4, activo: true },
+  { id_datame: '120275229', modelo: 'GERMAN',       panel_id: 2, activo: true }
 ];
 
 // ── CORTE MANUAL 12:00 AM (Fuente Oficial) ──

@@ -35959,6 +35959,31 @@ CONFIGURACIÓN DE CONTEXTO:
     window.speakAlertVoice = speakText;
 
     // 📣 CICLO DE CONSEJOS INTERCALADOS PARA BAJA EN CONVERSACIONES ACTIVAS
+    const MANDATORY_TASK_VALIDATION_PHRASE = "Ve a hacer la tarea y cuando acabes envía captura de pantalla al monitor, ya que la tarea será validada.";
+
+    window.emitirFelicitacionConversaciones = function() {
+      const msg = "¡Excelente trabajo equipo! La mayoría de los operadores tienen mensajes activos y constantes en este momento. ¡Sigamos con este excelente ritmo y mantengamos la sala encendida!";
+      const payload = {
+        id: 'ann_felic_' + Date.now(),
+        text: msg,
+        ts: Date.now(),
+        sender: 'monitor_ia'
+      };
+      if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+        window.reproducirAnuncioVozGlobal(payload);
+      } else {
+        speakText(msg);
+      }
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const rtChan = window._masterGlobalChannel || _sb.channel('agencia_global_rt');
+          if (rtChan && typeof rtChan.send === 'function') {
+            rtChan.send({ type: 'broadcast', event: 'voice_alert', payload: payload });
+          }
+        } catch(e){}
+      }
+    };
+
     window.emitirConsejoBajaConversaciones = function(opsSinChat = []) {
       const opsSinChatStr = opsSinChat.length > 0
         ? opsSinChat.map(n => n.split(' ')[0]).join(', ')
@@ -35966,16 +35991,16 @@ CONFIGURACIÓN DE CONTEXTO:
 
       const consejos = [
         // Consejo 1: Online y Mensaje Personalizado
-        "Ya que vemos que están bajando las conversaciones activas, vamos a poner la opción de Online, y si hay usuarios conectados envía un buen mensaje personalizado para atraer su atención. ¡Vamos a ello, ya que eso nos ayudará a atraer usuarios nuevos!",
+        `Ya que vemos que están bajando las conversaciones activas, vamos a poner la opción de Online, y si hay usuarios conectados envía un buen mensaje personalizado para atraer su atención. ¡Vamos a ello, ya que eso nos ayudará a atraer usuarios nuevos! ${MANDATORY_TASK_VALIDATION_PHRASE}`,
         
         // Consejo 2: Barrido de cartas de límites activos
-        "Ya que revisamos que hay una baja en las conversaciones activas, vamos a iniciar con el barrido de cartas de límites activos. Debemos ver que todas las cartas estén en rojo y no en verde; si está en verde es una carta sin enviar y debemos enviar una buena carta para atraer la atención del usuario si la lee. Debes ser creativo y tratar de no usar ChatGPT para generar las cartas.",
+        `Ya que revisamos que hay una baja en las conversaciones activas, vamos a iniciar con el barrido de cartas de límites activos. Debemos ver que todas las cartas estén en rojo y no en verde; si está en verde es una carta sin enviar y debemos enviar una buena carta para atraer la atención del usuario si la lee. Debes ser creativo y tratar de no usar ChatGPT para generar las cartas. ${MANDATORY_TASK_VALIDATION_PHRASE}`,
         
         // Consejo 3: Barrido de cartas de Outbox
-        `Debido a que no hay muchas conversaciones activas en la última hora, vamos a hacer barrido de cartas de Outbox. Allí encontraremos usuarios potenciales a los cuales les hemos enviado cartas y no hemos seguido ni dado likes. Así que ${opsSinChatStr}, ustedes deben iniciar con el barrido de límites activos y de cartas de Outbox.`,
+        `Debido a que no hay muchas conversaciones activas en la última hora, vamos a hacer barrido de cartas de Outbox. Allí encontraremos usuarios potenciales a los cuales les hemos enviado cartas y no hemos seguido ni dado likes. Así que ${opsSinChatStr}, ustedes deben iniciar con el barrido de límites activos y de cartas de Outbox. ${MANDATORY_TASK_VALIDATION_PHRASE}`,
         
         // Consejo 4: Seguimiento manual y masivo de 50 perfiles
-        "Vamos a subir con un seguimiento manual y masivo de 50 perfiles. Filtren por países según su turno, busquen países que estén despiertos en ese horario para atraer usuarios nuevos. Realicemos esa tarea todos los operadores, eso no nos tomará más de 15 minutos. ¡Iniciemos y envíen captura de pantalla al monitor, revisaremos uno por uno!"
+        `Vamos a subir con un seguimiento manual y masivo de 50 perfiles. Filtren por países según su turno, busquen países que estén despiertos en ese horario para atraer usuarios nuevos. Realicemos esa tarea todos los operadores, eso no nos tomará más de 15 minutos. ${MANDATORY_TASK_VALIDATION_PHRASE}`
       ];
 
       const idx = window._voiceConsejoIndex % consejos.length;
@@ -36077,35 +36102,64 @@ CONFIGURACIÓN DE CONTEXTO:
         window.reproducirAnuncioVozGlobal({ id: shift100Key, text: msg, ts: Date.now() });
       }
 
-      // 4. Verificación de Conversaciones Activas cada hora o por detección de patrón de baja
+      // 4. Verificación Horaria de Mensajes / Conversaciones Activas
       const nowTs = Date.now();
       if (nowTs - (window._lastHourlyConvCheckTs || 0) >= 3600000) { // Cada 1 hora
         window._lastHourlyConvCheckTs = nowTs;
         
-        // Detectar operadores activos sin conversaciones o con baja
         const activeOps = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : null;
+        let opsConConversacion = [];
         let opsSinConversacion = [];
         
         if (activeOps && activeOps.size > 0) {
           activeOps.forEach(opName => {
             let tieneConversaciones = false;
-            if (window._profileLastActivityMap) {
-              const opObj = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === opName) : null;
-              if (opObj && opObj.profiles) {
-                opObj.profiles.forEach(p => {
-                  const pId = String(p.id || '').trim();
-                  const act = window._profileLastActivityMap[pId] || 0;
-                  if (nowTs - act < 3600000) tieneConversaciones = true;
-                });
-              }
+            const opObj = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === opName) : null;
+            let pIds = [];
+            if (opObj && opObj.profiles) {
+              pIds = opObj.profiles.map(p => String(p.id || '').trim());
             }
+            if (typeof asiAsignaciones !== 'undefined' && Array.isArray(asiAsignaciones[opName])) {
+              asiAsignaciones[opName].forEach(ap => {
+                if (ap && ap.id) pIds.push(String(ap.id).trim());
+              });
+            }
+
+            // 1. Actividad reciente registrada en perfiles (últimos 60 min)
+            if (window._profileLastActivityMap) {
+              pIds.forEach(pId => {
+                const act = window._profileLastActivityMap[pId] || 0;
+                if (nowTs - act < 3600000) tieneConversaciones = true;
+              });
+            }
+
+            // 2. Cortes recientes de puntos generados en la última hora
             if (!tieneConversaciones) {
+              const cuts = (typeof getCortesOp === 'function') ? getCortesOp(opName) : [];
+              const todayStr = (typeof localDateStr === 'function') ? localDateStr() : new Date().toISOString().slice(0, 10);
+              const calHoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+              const recentCut = cuts.find(c => (c.fecha === todayStr || c.fecha === calHoyStr) && c.ts && (nowTs - c.ts < 3600000));
+              if (recentCut) tieneConversaciones = true;
+            }
+
+            if (tieneConversaciones) {
+              opsConConversacion.push(opName);
+            } else {
               opsSinConversacion.push(opName);
             }
           });
         }
 
-        window.emitirConsejoBajaConversaciones(opsSinConversacion);
+        const totalOps = activeOps ? activeOps.size : 0;
+        const totalConChat = opsConConversacion.length;
+
+        // Si la mayoría (>= 50%) de operadores tienen mensajes activos y constantes -> Felicitación
+        if (totalOps > 0 && totalConChat >= Math.ceil(totalOps * 0.5)) {
+          window.emitirFelicitacionConversaciones();
+        } else {
+          // De lo contrario (pocos o ninguno con chats activos) -> Alerta con tareas intercaladas + validación con captura
+          window.emitirConsejoBajaConversaciones(opsSinConversacion);
+        }
       }
     };
 

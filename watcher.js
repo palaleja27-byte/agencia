@@ -443,16 +443,16 @@ async function watchPanel(panel, perfiles) {
         for (const item of list) {
           const itemJson = JSON.stringify(item);
           
-          // Buscar el valor de puntos en todos los campos conocidos de Datame (excluyendo amount/tokens para evitar tasas unitarias)
-          const rawPts = item.total_en_curso !== undefined ? item.total_en_curso :
-                         (item.bonuses !== undefined ? item.bonuses :
-                         (item.total !== undefined ? item.total :
-                         (item.total_points !== undefined ? item.total_points :
-                         (item.current_total !== undefined ? item.current_total :
-                         (item.total_usd !== undefined ? item.total_usd :
-                         (item.amount_usd !== undefined ? item.amount_usd :
-                         (item.bonuses_total !== undefined ? item.bonuses_total :
-                         (item.points !== undefined ? item.points : 0))))))));
+          // Buscar el valor de puntos en todos los campos conocidos de Datame (PRIORIDAD: TOTAL ACUMULADO MENSUAL)
+          const rawPts = (item.total_points !== undefined && parseFloat(item.total_points) > 0) ? item.total_points :
+                         (item.total !== undefined && parseFloat(item.total) > 0) ? item.total :
+                         (item.total_usd !== undefined && parseFloat(item.total_usd) > 0) ? item.total_usd :
+                         (item.amount_usd !== undefined && parseFloat(item.amount_usd) > 0) ? item.amount_usd :
+                         (item.bonuses !== undefined && parseFloat(item.bonuses) > 0) ? item.bonuses :
+                         (item.bonuses_total !== undefined && parseFloat(item.bonuses_total) > 0) ? item.bonuses_total :
+                         (item.current_total !== undefined && parseFloat(item.current_total) > 0) ? item.current_total :
+                         (item.total_en_curso !== undefined && parseFloat(item.total_en_curso) > 0) ? item.total_en_curso :
+                         (item.points !== undefined ? item.points : 0);
           const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
           if (pts <= 0 || pts > 1000000) continue;
 
@@ -465,13 +465,10 @@ async function watchPanel(panel, perfiles) {
           if (id && id.length >= 6) {
             perfil = perfiles.find(p => String(p.id_datame) === String(id));
           }
-          // Solo asociar a activePerfil si la respuesta XHR o URL contiene explícitamente su ID o modelo
+          // Si el ID en Datame difiere o la respuesta viene del perfil activo en el ciclo
           if (!perfil && activePerfil) {
-            const urlOrBody = (response.url() + ' ' + itemJson).toLowerCase();
-            if (urlOrBody.includes(String(activePerfil.id_datame).toLowerCase()) || (activePerfil.modelo && urlOrBody.includes(activePerfil.modelo.toLowerCase()))) {
-              perfil = activePerfil;
-              id = activePerfil.id_datame;
-            }
+            perfil = activePerfil;
+            id = activePerfil.id_datame;
           }
           if (!perfil || !id) continue;
 

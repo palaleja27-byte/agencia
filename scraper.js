@@ -303,36 +303,37 @@ async function watchPanel(panel, perfiles) {
         let list = Array.isArray(json) ? json : (json.data || json.result || json.items || [json]);
         if (!Array.isArray(list)) list = [list];
         for (const item of list) {
-          // Buscar el valor de puntos en todos los campos conocidos de Datame
-          const rawPts = item.total_en_curso ||
-                         item.total_usd      ||
-                         item.amount_usd     ||
-                         item.current_total  ||
-                         item.bonuses        ||
-                         item.total          ||
-                         item.total_points   ||
-                         item.bonuses_total  ||
-                         item.points         ||
-                         item.amount         ||
-                         item.tokens         ||
-                         item.score          || 0;
+          const itemJson = JSON.stringify(item);
+
+          // Buscar el valor de puntos en todos los campos conocidos de Datame (PRIORIDAD: TOTAL ACUMULADO MENSUAL)
+          const rawPts = (item.total_points !== undefined && parseFloat(item.total_points) > 0) ? item.total_points :
+                         (item.total !== undefined && parseFloat(item.total) > 0) ? item.total :
+                         (item.total_usd !== undefined && parseFloat(item.total_usd) > 0) ? item.total_usd :
+                         (item.amount_usd !== undefined && parseFloat(item.amount_usd) > 0) ? item.amount_usd :
+                         (item.bonuses !== undefined && parseFloat(item.bonuses) > 0) ? item.bonuses :
+                         (item.bonuses_total !== undefined && parseFloat(item.bonuses_total) > 0) ? item.bonuses_total :
+                         (item.current_total !== undefined && parseFloat(item.current_total) > 0) ? item.current_total :
+                         (item.total_en_curso !== undefined && parseFloat(item.total_en_curso) > 0) ? item.total_en_curso :
+                         (item.points !== undefined ? item.points : 0);
           const pts = parseFloat(String(rawPts).replace(/[^\d.]/g, '')) || 0;
           if (pts <= 0 || pts > 1000000) continue;
 
           // Extraer ID del perfil de la URL o del cuerpo del JSON
           let id = String(item.member_id || item.profile_id || item.studio_id || item.id || '');
           if (!id || id.length < 4) id = (response.url().match(/\d{5,10}/) || [])[0];
-          if (!id || id.length < 4) id = (JSON.stringify(item).match(/\d{5,10}/) || [])[0];
-          if (!id || id.length < 4) continue;
-
-          const perfil = perfiles.find(p => p.id_datame === id);
-          if (!perfil) {
-            // Perfil no registrado — ignorar silenciosamente.
-            // El registro de perfiles se hace UNA SOLA VEZ via scripts/insert_profiles_prod.js
-            // (GitHub Actions workflow: db_insert.yml → workflow_dispatch)
-            continue;
+          if (!id || id.length < 4) id = (itemJson.match(/\d{5,10}/) || [])[0];
+          
+          let perfil = null;
+          if (id && id.length >= 6) {
+            perfil = perfiles.find(p => String(p.id_datame) === String(id));
           }
+          if (!perfil && activePerfil) {
+            perfil = activePerfil;
+            id = activePerfil.id_datame;
+          }
+          if (!perfil || !id) continue;
 
+          log(`  🎯 Puntos detectados via XHR para ${perfil.modelo} (${id}): ${pts.toFixed(2)} pts`);
           await upsertTurno(id, pts, perfil.modelo, nombre);
         }
       } catch (err) {

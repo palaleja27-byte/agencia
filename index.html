@@ -10923,17 +10923,27 @@
             max-width: 1200px;
             box-sizing: border-box;
           ">
-            <!-- Header: Operadores en Turno + Toggle Alertas de Voz -->
+            <!-- Header: Operadores en Turno + Toggle Alertas de Voz & Tareas -->
             <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
               <div id="badge-active-ops-content"></div>
-              <button id="toggle-voice-alerts-btn" class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="
-                display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
-                font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'};
-                background:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};
-                color:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '#34d399' : '#ef4444'}; transition: all 0.3s ease; white-space:nowrap;
-              ">
-                ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
-              </button>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button id="toggle-voice-alerts-btn" class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="
+                  display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
+                  font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'};
+                  background:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};
+                  color:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '#34d399' : '#ef4444'}; transition: all 0.3s ease; white-space:nowrap;
+                ">
+                  ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
+                </button>
+                <button id="toggle-task-alerts-btn" class="rr-task-toggle-btn" onclick="window.toggleTaskAlerts()" style="
+                  display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
+                  font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${localStorage.getItem('rr_task_alerts_enabled') !== 'false' ? 'rgba(56,189,248,.3)' : 'rgba(239,68,68,.3)'};
+                  background:${localStorage.getItem('rr_task_alerts_enabled') !== 'false' ? 'rgba(56,189,248,.15)' : 'rgba(239,68,68,.15)'};
+                  color:${localStorage.getItem('rr_task_alerts_enabled') !== 'false' ? '#38bdf8' : '#ef4444'}; transition: all 0.3s ease; white-space:nowrap;
+                " title="Permite apagar o encender las alertas de voz con tareas y consejos operativos">
+                  ${localStorage.getItem('rr_task_alerts_enabled') !== 'false' ? '📋 Alertas Tareas: ON' : '⏸️ Alertas Tareas: OFF'}
+                </button>
+              </div>
             </div>
 
             <!-- Transmisión de Voz / Megáfono General (Solo Monitores y Admin) -->
@@ -21423,11 +21433,15 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         }
       }
       
-      // Respetar estado guardado de alertas de voz (ON por defecto)
+      // Respetar estado guardado de alertas de voz y tareas (ON por defecto)
       window._enableVoiceAlerts = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      window._enableTaskAlerts = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
       window.voiceAlertsEnabled = window._enableVoiceAlerts;
       if (typeof window.updateVoiceAlertBtnUI === 'function') {
         window.updateVoiceAlertBtnUI();
+      }
+      if (typeof window.updateTaskAlertBtnUI === 'function') {
+        window.updateTaskAlertBtnUI();
       }
 
       // Aplicar permisos de UI según rol (admin/monitor/operador)
@@ -34003,9 +34017,10 @@ PT._logKey = function (opName) {
         <span id="chat-status-dot" style="width:8px; height:8px; background:#10b981; border-radius:50%; box-shadow:0 0 8px #10b981; transition:0.3s;"></span>
         <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:0.5px;" id="rr-chat-header-title">MONITOR CENTRAL</span>
       </div>
-      <div style="display:flex; align-items:center; gap:8px;" onclick="event.stopPropagation()">
+      <div style="display:flex; align-items:center; gap:6px;" onclick="event.stopPropagation()">
         <!-- Botón para Activar/Desactivar Alertas de Voz -->
         <button class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#34d399; font-size:0.65rem; padding:3px 8px; border-radius:8px; font-weight:800; cursor:pointer; transition:0.2s;" title="Permite apagar o encender la voz de las alertas">🔊 Alertas Voz: ON</button>
+        <button class="rr-task-toggle-btn" onclick="window.toggleTaskAlerts()" style="background:rgba(56,189,248,0.2); border:1px solid #38bdf8; color:#38bdf8; font-size:0.65rem; padding:3px 8px; border-radius:8px; font-weight:800; cursor:pointer; transition:0.2s;" title="Permite apagar o encender las alertas de voz con tareas">📋 Tareas: ON</button>
         <button onclick="document.getElementById('rr-urgent-chat').classList.remove('open'); event.stopPropagation();" style="background:transparent; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#94a3b8'">✖</button>
       </div>
     </div>
@@ -35680,6 +35695,7 @@ CONFIGURACIÓN DE CONTEXTO:
 
     // --- SISTEMA DE ALERTAS HABLADAS (TTS) PARA MONITORES Y OPERADORES ---
     window._enableVoiceAlerts = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+    window._enableTaskAlerts = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
     window.voiceAlertsEnabled = window._enableVoiceAlerts;
     let _inactivityAlertsLastTime = {};
     let _inactivityAlertCount = {};   // cuántas alertas consecutivas ha recibido cada op sin mejorar
@@ -35691,7 +35707,7 @@ CONFIGURACIÓN DE CONTEXTO:
       window._enableVoiceAlerts = enabled;
       window.voiceAlertsEnabled = enabled;
 
-      // 1. Botón principal del ranking / panel de control
+      // 1. Botón principal de voz
       const mainBtn = document.getElementById('toggle-voice-alerts-btn');
       if (mainBtn) {
         mainBtn.innerHTML = enabled ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF';
@@ -35700,7 +35716,7 @@ CONFIGURACIÓN DE CONTEXTO:
         mainBtn.style.color = enabled ? '#34d399' : '#ef4444';
       }
 
-      // 2. Cualquier botón secundario con la clase .rr-voice-toggle-btn
+      // 2. Todos los botones con clase .rr-voice-toggle-btn
       const btns = document.querySelectorAll('.rr-voice-toggle-btn');
       btns.forEach(btn => {
         if (btn !== mainBtn) {
@@ -35708,6 +35724,31 @@ CONFIGURACIÓN DE CONTEXTO:
           btn.style.background = enabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
           btn.style.borderColor = enabled ? '#10b981' : '#ef4444';
           btn.style.color = enabled ? '#34d399' : '#f87171';
+        }
+      });
+    };
+
+    window.updateTaskAlertBtnUI = function() {
+      const enabled = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+      window._enableTaskAlerts = enabled;
+
+      // 1. Botón principal de tareas
+      const mainTaskBtn = document.getElementById('toggle-task-alerts-btn');
+      if (mainTaskBtn) {
+        mainTaskBtn.innerHTML = enabled ? '📋 Alertas Tareas: ON' : '⏸️ Alertas Tareas: OFF';
+        mainTaskBtn.style.border = enabled ? '1px solid rgba(56,189,248,.3)' : '1px solid rgba(239,68,68,.3)';
+        mainTaskBtn.style.background = enabled ? 'rgba(56,189,248,.15)' : 'rgba(239,68,68,.15)';
+        mainTaskBtn.style.color = enabled ? '#38bdf8' : '#ef4444';
+      }
+
+      // 2. Todos los botones con clase .rr-task-toggle-btn
+      const taskBtns = document.querySelectorAll('.rr-task-toggle-btn');
+      taskBtns.forEach(btn => {
+        if (btn !== mainTaskBtn) {
+          btn.innerHTML = enabled ? '📋 Tareas: ON' : '⏸️ Tareas: OFF';
+          btn.style.background = enabled ? 'rgba(56,189,248,0.2)' : 'rgba(239,68,68,0.2)';
+          btn.style.borderColor = enabled ? '#38bdf8' : '#ef4444';
+          btn.style.color = enabled ? '#38bdf8' : '#f87171';
         }
       });
     };
@@ -35721,9 +35762,27 @@ CONFIGURACIÓN DE CONTEXTO:
       window.updateVoiceAlertBtnUI();
       
       if (next) {
+        window._taskAlertsActivatedTs = Date.now();
+        window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000); // 1 hora de espera inicial
         speakText("Alertas de voz activadas");
       } else {
         if (window.speechSynthesis) window.speechSynthesis.cancel();
+      }
+    };
+
+    window.toggleTaskAlerts = function() {
+      const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+      const next = !current;
+      localStorage.setItem('rr_task_alerts_enabled', next ? 'true' : 'false');
+      window._enableTaskAlerts = next;
+      window.updateTaskAlertBtnUI();
+
+      if (next) {
+        window._taskAlertsActivatedTs = Date.now();
+        window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000); // 1 hora de espera inicial
+        speakText("Alertas de tareas activadas");
+      } else {
+        speakText("Alertas de tareas desactivadas");
       }
     };
 
@@ -35985,6 +36044,9 @@ CONFIGURACIÓN DE CONTEXTO:
     };
 
     window.emitirConsejoBajaConversaciones = function(opsSinChat = []) {
+      if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
+      if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+
       const opsSinChatStr = opsSinChat.length > 0
         ? opsSinChat.map(n => n.split(' ')[0]).join(', ')
         : 'los operadores que no tienen conversaciones activas';
@@ -36102,74 +36164,85 @@ CONFIGURACIÓN DE CONTEXTO:
         window.reproducirAnuncioVozGlobal({ id: shift100Key, text: msg, ts: Date.now() });
       }
 
-      // 4. Verificación Horaria de Mensajes / Conversaciones Activas
-      const nowTs = Date.now();
-      if (nowTs - (window._lastHourlyConvCheckTs || 0) >= 3600000) { // Cada 1 hora
-        window._lastHourlyConvCheckTs = nowTs;
-        
-        (async () => {
-          try {
-            let liveOps = window.cachedLiveOperators || [];
-            if (!liveOps || liveOps.length === 0) {
-              const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live', { signal: AbortSignal.timeout(6000) }).catch(() => null);
-              if (telemetryRes && telemetryRes.ok) {
-                const telemetryData = await telemetryRes.json();
-                liveOps = telemetryData.operators || [];
+      // 4. Verificación de Mensajes / Conversaciones Activas (Cada 1 hora y media [90 min], con inicio 1 hora [60 min] tras activación)
+      if (localStorage.getItem('rr_voice_alerts_enabled') !== 'false' && localStorage.getItem('rr_task_alerts_enabled') !== 'false') {
+        const nowTs = Date.now();
+        if (!window._taskAlertsActivatedTs) {
+          window._taskAlertsActivatedTs = nowTs;
+          window._lastHourlyConvCheckTs = nowTs - (5400000 - 3600000); // Se disparará exactamente en 60 minutos (1h)
+        }
+
+        const timeSinceActivation = nowTs - window._taskAlertsActivatedTs;
+        const timeSinceLastCheck = nowTs - (window._lastHourlyConvCheckTs || 0);
+
+        // Disparar solo si ya pasó 1 hora tras activación Y han pasado 90 minutos (1.5 horas) desde el último chequeo
+        if (timeSinceActivation >= 3600000 && timeSinceLastCheck >= 5400000) {
+          window._lastHourlyConvCheckTs = nowTs;
+          
+          (async () => {
+            try {
+              let liveOps = window.cachedLiveOperators || [];
+              if (!liveOps || liveOps.length === 0) {
+                const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live', { signal: AbortSignal.timeout(6000) }).catch(() => null);
+                if (telemetryRes && telemetryRes.ok) {
+                  const telemetryData = await telemetryRes.json();
+                  liveOps = telemetryData.operators || [];
+                }
               }
-            }
 
-            // Filtrar operadores que están realmente conectados y transmitiendo (vistos en los últimos 4 minutos)
-            const connectedOps = (liveOps || []).filter(op => {
-              const isRecent = op.lastSeen ? (nowTs - op.lastSeen < 240000) : true;
-              return isRecent && Array.isArray(op.profiles) && op.profiles.length > 0;
-            });
+              // Filtrar operadores que están realmente conectados y transmitiendo (vistos en los últimos 4 minutos)
+              const connectedOps = (liveOps || []).filter(op => {
+                const isRecent = op.lastSeen ? (nowTs - op.lastSeen < 240000) : true;
+                return isRecent && Array.isArray(op.profiles) && op.profiles.length > 0;
+              });
 
-            const totalConnectedOps = connectedOps.length;
-            let opsConTodosLosChats = [];
-            let opsSinTodosLosChats = [];
-            let totalChatsActivosGlobal = 0;
+              const totalConnectedOps = connectedOps.length;
+              let opsConTodosLosChats = [];
+              let opsSinTodosLosChats = [];
+              let totalChatsActivosGlobal = 0;
 
-            if (totalConnectedOps > 0) {
-              connectedOps.forEach(op => {
-                let profilesWithActiveChat = 0;
-                const totalProfiles = op.profiles.length;
+              if (totalConnectedOps > 0) {
+                connectedOps.forEach(op => {
+                  let profilesWithActiveChat = 0;
+                  const totalProfiles = op.profiles.length;
 
-                op.profiles.forEach(p => {
-                  const hasTimers = Array.isArray(p.activeChatTimersList) && p.activeChatTimersList.length > 0;
-                  const hasUnanswered = (p.unansweredChatsCount || 0) > 0;
-                  if (hasTimers || hasUnanswered) {
-                    profilesWithActiveChat++;
-                    totalChatsActivosGlobal += (p.activeChatTimersList && p.activeChatTimersList.length > 0) ? p.activeChatTimersList.length : 1;
+                  op.profiles.forEach(p => {
+                    const hasTimers = Array.isArray(p.activeChatTimersList) && p.activeChatTimersList.length > 0;
+                    const hasUnanswered = (p.unansweredChatsCount || 0) > 0;
+                    if (hasTimers || hasUnanswered) {
+                      profilesWithActiveChat++;
+                      totalChatsActivosGlobal += (p.activeChatTimersList && p.activeChatTimersList.length > 0) ? p.activeChatTimersList.length : 1;
+                    }
+                  });
+
+                  // El operador califica si TODOS los perfiles que maneja tienen chats/conversaciones activas
+                  if (profilesWithActiveChat >= totalProfiles && totalProfiles > 0) {
+                    opsConTodosLosChats.push(op.operatorName);
+                  } else {
+                    opsSinTodosLosChats.push(op.operatorName);
                   }
                 });
+              }
 
-                // El operador califica si TODOS los perfiles que maneja tienen chats/conversaciones activas
-                if (profilesWithActiveChat >= totalProfiles && totalProfiles > 0) {
-                  opsConTodosLosChats.push(op.operatorName);
-                } else {
-                  opsSinTodosLosChats.push(op.operatorName);
-                }
-              });
+              // CONDICIÓN ESTRICTA:
+              // Solo se felicita si hay operadores conectados, más de la mitad tienen chats en TODOS los perfiles que manejan,
+              // y existe un flujo global real y alto de chats activos en la sala.
+              const qualifiesForCongrats = (totalConnectedOps >= 2) && 
+                                           (opsConTodosLosChats.length > (totalConnectedOps / 2)) && 
+                                           (totalChatsActivosGlobal >= totalConnectedOps);
+
+              if (qualifiesForCongrats) {
+                window.emitirFelicitacionConversaciones();
+              } else {
+                // Si hay baja o solo pocos chats activos, emitir alerta con tareas intercaladas y solicitud de pantallazo
+                window.emitirConsejoBajaConversaciones(opsSinTodosLosChats);
+              }
+            } catch (e) {
+              console.warn('Error al verificar telemetría en vivo de conversaciones:', e);
+              window.emitirConsejoBajaConversaciones([]);
             }
-
-            // CONDICIÓN ESTRICTA:
-            // Solo se felicita si hay operadores conectados, más de la mitad tienen chats en TODOS los perfiles que manejan,
-            // y existe un flujo global real y alto de chats activos en la sala.
-            const qualifiesForCongrats = (totalConnectedOps >= 2) && 
-                                         (opsConTodosLosChats.length > (totalConnectedOps / 2)) && 
-                                         (totalChatsActivosGlobal >= totalConnectedOps);
-
-            if (qualifiesForCongrats) {
-              window.emitirFelicitacionConversaciones();
-            } else {
-              // Si hay baja o solo pocos chats activos, emitir alerta con tareas intercaladas y solicitud de pantallazo
-              window.emitirConsejoBajaConversaciones(opsSinTodosLosChats);
-            }
-          } catch (e) {
-            console.warn('Error al verificar telemetría en vivo de conversaciones:', e);
-            window.emitirConsejoBajaConversaciones([]);
-          }
-        })();
+          })();
+        }
       }
     };
 

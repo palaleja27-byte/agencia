@@ -35,7 +35,9 @@
 <body>
   <header>
     <div style="font-size:14px; font-weight:900; color:var(--accent-cyan);">⚡ RYR TITAN APEX - SUPERVISIÓN LIVE & RENDIMIENTO</div>
-    <div style="display:flex; gap:8px;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button id="mon-voice-toggle-btn" class="btn-action" onclick="toggleVoiceAlerts()" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#34d399;">🔊 Voz: ON</button>
+      <button id="mon-task-toggle-btn" class="btn-action" onclick="toggleTaskAlerts()" style="background:rgba(56,189,248,0.2); border:1px solid #38bdf8; color:#38bdf8;">📋 Tareas: ON</button>
       <button class="btn-action" style="border-color:#8b5cf6; color:#c4b5fd;" onclick="openAllHandoversModal()">📑 Relevos de Turno (IA) (<span id="total-handovers-count">0</span>)</button>
       <button class="btn-action btn-productivity" onclick="openProductivityModal()">📊 Productividad & Tiempos</button>
       <button class="btn-action btn-fines" onclick="openFinesModal()">💰 Multas ($10.000 COP) (<span id="total-fines-count">0</span>)</button>
@@ -391,13 +393,41 @@
       openBannedWordsModal();
     }
 
-    function closeModals() {
-      if (supChatPollingInterval) clearInterval(supChatPollingInterval);
-      document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    function updateVoiceAlertBtnUI() {
+      const vEnabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      const vBtn = document.getElementById('mon-voice-toggle-btn');
+      if (vBtn) {
+        vBtn.innerText = vEnabled ? '🔊 Voz: ON' : '🔇 Voz: OFF';
+        vBtn.style.background = vEnabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+        vBtn.style.borderColor = vEnabled ? '#10b981' : '#ef4444';
+        vBtn.style.color = vEnabled ? '#34d399' : '#ef4444';
+      }
+
+      const tEnabled = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+      const tBtn = document.getElementById('mon-task-toggle-btn');
+      if (tBtn) {
+        tBtn.innerText = tEnabled ? '📋 Tareas: ON' : '⏸️ Tareas: OFF';
+        tBtn.style.background = tEnabled ? 'rgba(56,189,248,0.2)' : 'rgba(239,68,68,0.2)';
+        tBtn.style.borderColor = tEnabled ? '#38bdf8' : '#ef4444';
+        tBtn.style.color = tEnabled ? '#38bdf8' : '#ef4444';
+      }
+    }
+
+    function toggleVoiceAlerts() {
+      const cur = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+      localStorage.setItem('rr_voice_alerts_enabled', !cur ? 'true' : 'false');
+      updateVoiceAlertBtnUI();
+    }
+
+    function toggleTaskAlerts() {
+      const cur = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+      localStorage.setItem('rr_task_alerts_enabled', !cur ? 'true' : 'false');
+      updateVoiceAlertBtnUI();
     }
 
     setInterval(fetchLive, 15000);
     fetchLive();
+    updateVoiceAlertBtnUI();
   </script>
 </body>
 </html>

@@ -328,8 +328,13 @@ async function watchPanel(panel, perfiles) {
             perfil = perfiles.find(p => String(p.id_datame) === String(id));
           }
           if (!perfil && activePerfil) {
-            perfil = activePerfil;
-            id = activePerfil.id_datame;
+            const m = String(activePerfil.modelo || '').toLowerCase().trim();
+            const targetId = String(activePerfil.id_datame || '').trim();
+            const itemText = (response.url() + ' ' + (item.name || '') + ' ' + itemJson).toLowerCase();
+            if ((targetId && targetId.length >= 6 && itemText.includes(targetId)) || (m && m.length >= 3 && new RegExp(`\\b${m}\\b`, 'i').test(itemText))) {
+              perfil = activePerfil;
+              id = activePerfil.id_datame;
+            }
           }
           if (!perfil || !id) continue;
 

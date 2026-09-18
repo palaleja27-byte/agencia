@@ -36107,59 +36107,69 @@ CONFIGURACIÓN DE CONTEXTO:
       if (nowTs - (window._lastHourlyConvCheckTs || 0) >= 3600000) { // Cada 1 hora
         window._lastHourlyConvCheckTs = nowTs;
         
-        const activeOps = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : null;
-        let opsConConversacion = [];
-        let opsSinConversacion = [];
-        
-        if (activeOps && activeOps.size > 0) {
-          activeOps.forEach(opName => {
-            let tieneConversaciones = false;
-            const opObj = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === opName) : null;
-            let pIds = [];
-            if (opObj && opObj.profiles) {
-              pIds = opObj.profiles.map(p => String(p.id || '').trim());
+        (async () => {
+          try {
+            let liveOps = window.cachedLiveOperators || [];
+            if (!liveOps || liveOps.length === 0) {
+              const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live', { signal: AbortSignal.timeout(6000) }).catch(() => null);
+              if (telemetryRes && telemetryRes.ok) {
+                const telemetryData = await telemetryRes.json();
+                liveOps = telemetryData.operators || [];
+              }
             }
-            if (typeof asiAsignaciones !== 'undefined' && Array.isArray(asiAsignaciones[opName])) {
-              asiAsignaciones[opName].forEach(ap => {
-                if (ap && ap.id) pIds.push(String(ap.id).trim());
+
+            // Filtrar operadores que están realmente conectados y transmitiendo (vistos en los últimos 4 minutos)
+            const connectedOps = (liveOps || []).filter(op => {
+              const isRecent = op.lastSeen ? (nowTs - op.lastSeen < 240000) : true;
+              return isRecent && Array.isArray(op.profiles) && op.profiles.length > 0;
+            });
+
+            const totalConnectedOps = connectedOps.length;
+            let opsConTodosLosChats = [];
+            let opsSinTodosLosChats = [];
+            let totalChatsActivosGlobal = 0;
+
+            if (totalConnectedOps > 0) {
+              connectedOps.forEach(op => {
+                let profilesWithActiveChat = 0;
+                const totalProfiles = op.profiles.length;
+
+                op.profiles.forEach(p => {
+                  const hasTimers = Array.isArray(p.activeChatTimersList) && p.activeChatTimersList.length > 0;
+                  const hasUnanswered = (p.unansweredChatsCount || 0) > 0;
+                  if (hasTimers || hasUnanswered) {
+                    profilesWithActiveChat++;
+                    totalChatsActivosGlobal += (p.activeChatTimersList && p.activeChatTimersList.length > 0) ? p.activeChatTimersList.length : 1;
+                  }
+                });
+
+                // El operador califica si TODOS los perfiles que maneja tienen chats/conversaciones activas
+                if (profilesWithActiveChat >= totalProfiles && totalProfiles > 0) {
+                  opsConTodosLosChats.push(op.operatorName);
+                } else {
+                  opsSinTodosLosChats.push(op.operatorName);
+                }
               });
             }
 
-            // 1. Actividad reciente registrada en perfiles (últimos 60 min)
-            if (window._profileLastActivityMap) {
-              pIds.forEach(pId => {
-                const act = window._profileLastActivityMap[pId] || 0;
-                if (nowTs - act < 3600000) tieneConversaciones = true;
-              });
-            }
+            // CONDICIÓN ESTRICTA:
+            // Solo se felicita si hay operadores conectados, más de la mitad tienen chats en TODOS los perfiles que manejan,
+            // y existe un flujo global real y alto de chats activos en la sala.
+            const qualifiesForCongrats = (totalConnectedOps >= 2) && 
+                                         (opsConTodosLosChats.length > (totalConnectedOps / 2)) && 
+                                         (totalChatsActivosGlobal >= totalConnectedOps);
 
-            // 2. Cortes recientes de puntos generados en la última hora
-            if (!tieneConversaciones) {
-              const cuts = (typeof getCortesOp === 'function') ? getCortesOp(opName) : [];
-              const todayStr = (typeof localDateStr === 'function') ? localDateStr() : new Date().toISOString().slice(0, 10);
-              const calHoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-              const recentCut = cuts.find(c => (c.fecha === todayStr || c.fecha === calHoyStr) && c.ts && (nowTs - c.ts < 3600000));
-              if (recentCut) tieneConversaciones = true;
-            }
-
-            if (tieneConversaciones) {
-              opsConConversacion.push(opName);
+            if (qualifiesForCongrats) {
+              window.emitirFelicitacionConversaciones();
             } else {
-              opsSinConversacion.push(opName);
+              // Si hay baja o solo pocos chats activos, emitir alerta con tareas intercaladas y solicitud de pantallazo
+              window.emitirConsejoBajaConversaciones(opsSinTodosLosChats);
             }
-          });
-        }
-
-        const totalOps = activeOps ? activeOps.size : 0;
-        const totalConChat = opsConConversacion.length;
-
-        // Si la mayoría (>= 50%) de operadores tienen mensajes activos y constantes -> Felicitación
-        if (totalOps > 0 && totalConChat >= Math.ceil(totalOps * 0.5)) {
-          window.emitirFelicitacionConversaciones();
-        } else {
-          // De lo contrario (pocos o ninguno con chats activos) -> Alerta con tareas intercaladas + validación con captura
-          window.emitirConsejoBajaConversaciones(opsSinConversacion);
-        }
+          } catch (e) {
+            console.warn('Error al verificar telemetría en vivo de conversaciones:', e);
+            window.emitirConsejoBajaConversaciones([]);
+          }
+        })();
       }
     };
 

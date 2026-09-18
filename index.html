@@ -31664,7 +31664,9 @@ PT._logKey = function (opName) {
             // Turnos del día de hoy — recalcular neto usando puntos_total - puntos_baseline y puntos_neto
             const logicalHoy = (typeof localDateStr === 'function') ? localDateStr() : hoy;
             const calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-            const isMatchDay = op.fecha_dia === logicalHoy || op.fecha_dia === calHoy || (jClean === 'Noche' && op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(1) : ''));
+            const isMatchDay = op.fecha_dia === logicalHoy || op.fecha_dia === calHoy || 
+              (jClean === 'Noche' && (op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(1) : '') || op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(-1) : ''))) ||
+              (op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(-1) : '') && jClean === 'Noche');
 
             if (isMatchDay && op.jornada) {
               if (!turnosHoy[id]) {
@@ -32562,10 +32564,11 @@ PT._logKey = function (opName) {
         const _horasOp = (_foundHorasKeyRt ? _horasHoyAll[_foundHorasKeyRt] : null) || (opData ? { horas: (opData.turno === 'Completo' ? 12 : 8) } : { horas: 8 });
         const is12h = _horasOp && _horasOp.horas === 12 && (!_horasOp.fecha || _horasOp.fecha === hoy);
 
+        const FECHA_MIN = (typeof localDateStr === 'function') ? localDateStr(-1) : hoy;
         let query = _sb.from('operaciones')
-          .select('id_perfil, puntos_total, puntos_baseline, puntos_neto, jornada, agencia')
+          .select('id_perfil, puntos_total, puntos_baseline, puntos_neto, jornada, agencia, fecha_dia')
           .in('id_perfil', ids)
-          .eq('fecha_dia', hoy)
+          .gte('fecha_dia', FECHA_MIN)
           .neq('jornada', 'Auto');
 
         const timeoutPromise = new Promise((_, r) => setTimeout(() => r({ data: null, error: new Error('Timeout') }), 12000));
@@ -35792,7 +35795,46 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
-    function speakText(text) {
+    // ══════════════════════════════════════════════════════════════
+    // SISTEMA AVANZADO DE ALERTAS DE VOZ & TAREAS OPERATIVAS (VOZ DE HOMBRE)
+    // ══════════════════════════════════════════════════════════════
+    window._lastShiftStartAlertKey = '';
+    window._lastShift15MinAlertKey = '';
+    window._lastShift100MinAlertKey = '';
+    window._lastHourlyConvCheckTs = 0;
+    window._voiceConsejoIndex = 0;
+
+    function getMaleSpanishVoice(voices) {
+      if (!voices || !voices.length) return null;
+      const maleVoiceNames = ['jorge', 'pablo', 'raul', 'diego', 'carlos', 'alvaro', 'mateo', 'enrique', 'male', 'hombre', 'castilian spanish'];
+      const femaleVoiceNames = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'francisca', 'female', 'mujer', 'victoria'];
+
+      // 1. Match estricto: español + nombre masculino
+      let v = voices.find(voice => {
+        const langOk = voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX');
+        if (!langOk) return false;
+        const nameLower = (voice.name || '').toLowerCase();
+        return maleVoiceNames.some(m => nameLower.includes(m)) && !femaleVoiceNames.some(f => nameLower.includes(f));
+      });
+
+      // 2. Match secundario: español que no sea explícitamente femenino
+      if (!v) {
+        v = voices.find(voice => {
+          const langOk = voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX');
+          if (!langOk) return false;
+          const nameLower = (voice.name || '').toLowerCase();
+          return !femaleVoiceNames.some(f => nameLower.includes(f));
+        });
+      }
+
+      // 3. Fallback a cualquier voz en español
+      if (!v) {
+        v = voices.find(voice => voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX'));
+      }
+      return v;
+    }
+
+    function speakText(text, options = {}) {
       if (!window.speechSynthesis) return;
       if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
       
@@ -35801,14 +35843,23 @@ CONFIGURACIÓN DE CONTEXTO:
         window.speechSynthesis.resume();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-ES';
-        utterance.volume = 1.0;
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+        utterance.volume = options.volume || 1.0;
+        utterance.rate = options.rate || 0.98;
+        utterance.pitch = options.pitch || 0.88; // Voz de hombre (timbre grave)
 
         const applyVoiceAndSpeak = () => {
           const voices = window.speechSynthesis.getVoices();
-          const esVoice = voices.find(v => v.lang.startsWith('es') || v.lang.includes('ES') || v.lang.includes('CO') || v.lang.includes('MX'));
-          if (esVoice) utterance.voice = esVoice;
+          const maleVoice = getMaleSpanishVoice(voices);
+          if (maleVoice) {
+            utterance.voice = maleVoice;
+            const nameLower = (maleVoice.name || '').toLowerCase();
+            const femaleKeywords = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'female', 'mujer'];
+            if (femaleKeywords.some(f => nameLower.includes(f))) {
+              utterance.pitch = 0.72; // Masculinizar si es voz neutra/femenina
+            } else {
+              utterance.pitch = 0.88;
+            }
+          }
           window.speechSynthesis.speak(utterance);
         };
 
@@ -35827,6 +35878,53 @@ CONFIGURACIÓN DE CONTEXTO:
     }
     window.speakText = speakText;
     window.speakAlertVoice = speakText;
+
+    // 📣 CICLO DE CONSEJOS INTERCALADOS PARA BAJA EN CONVERSACIONES ACTIVAS
+    window.emitirConsejoBajaConversaciones = function(opsSinChat = []) {
+      const opsSinChatStr = opsSinChat.length > 0
+        ? opsSinChat.map(n => n.split(' ')[0]).join(', ')
+        : 'los operadores que no tienen conversaciones activas';
+
+      const consejos = [
+        // Consejo 1: Online y Mensaje Personalizado
+        "Ya que vemos que están bajando las conversaciones activas, vamos a poner la opción de Online, y si hay usuarios conectados envía un buen mensaje personalizado para atraer su atención. ¡Vamos a ello, ya que eso nos ayudará a atraer usuarios nuevos!",
+        
+        // Consejo 2: Barrido de cartas de límites activos
+        "Ya que revisamos que hay una baja en las conversaciones activas, vamos a iniciar con el barrido de cartas de límites activos. Debemos ver que todas las cartas estén en rojo y no en verde; si está en verde es una carta sin enviar y debemos enviar una buena carta para atraer la atención del usuario si la lee. Debes ser creativo y tratar de no usar ChatGPT para generar las cartas.",
+        
+        // Consejo 3: Barrido de cartas de Outbox
+        `Debido a que no hay muchas conversaciones activas en la última hora, vamos a hacer barrido de cartas de Outbox. Allí encontraremos usuarios potenciales a los cuales les hemos enviado cartas y no hemos seguido ni dado likes. Así que ${opsSinChatStr}, ustedes deben iniciar con el barrido de límites activos y de cartas de Outbox.`,
+        
+        // Consejo 4: Seguimiento manual y masivo de 50 perfiles
+        "Vamos a subir con un seguimiento manual y masivo de 50 perfiles. Filtren por países según su turno, busquen países que estén despiertos en ese horario para atraer usuarios nuevos. Realicemos esa tarea todos los operadores, eso no nos tomará más de 15 minutos. ¡Iniciemos y envíen captura de pantalla al monitor, revisaremos uno por uno!"
+      ];
+
+      const idx = window._voiceConsejoIndex % consejos.length;
+      const textoElegido = consejos[idx];
+      window._voiceConsejoIndex = (window._voiceConsejoIndex + 1) % consejos.length;
+
+      const payload = {
+        id: 'ann_conv_' + Date.now() + '_' + idx,
+        text: textoElegido,
+        ts: Date.now(),
+        sender: 'monitor_ia'
+      };
+
+      if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+        window.reproducirAnuncioVozGlobal(payload);
+      } else {
+        speakText(textoElegido);
+      }
+
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const rtChan = window._masterGlobalChannel || _sb.channel('agencia_global_rt');
+          if (rtChan && typeof rtChan.send === 'function') {
+            rtChan.send({ type: 'broadcast', event: 'voice_alert', payload: payload });
+          }
+        } catch(e){}
+      }
+    };
 
     function getShiftStartTs(opName) {
       const op = typeof operatorsData !== 'undefined' ? operatorsData.find(o => o.name === opName) : null;
@@ -35847,11 +35945,101 @@ CONFIGURACIÓN DE CONTEXTO:
       return d.getTime();
     }
 
-    // Monitoreo de Alertas de Voz por Inactividad (Solución 1: Detección de Abandono de 1 de los 2 perfiles)
+    // 🕒 VERIFICACIÓN CRON DE HITOS DEL TURNO Y CONVERSACIONES ACTIVAS
+    window._verificarProgresoTurnosYConversaciones = function() {
+      if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
+
+      const now = new Date();
+      const bogotaTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'America/Bogota', hour12: false });
+      const parts = bogotaTimeStr.split(':');
+      const hour = parseInt(parts[0], 10);
+      const min = parseInt(parts[1], 10);
+      const dateStr = (typeof localDateStr === 'function') ? localDateStr() : now.toISOString().slice(0, 10);
+
+      let currentShift = 'Noche';
+      let minIntoShift = 0;
+
+      if (hour >= 6 && hour < 14) {
+        currentShift = 'Mañana';
+        minIntoShift = (hour - 6) * 60 + min;
+      } else if (hour >= 14 && hour < 22) {
+        currentShift = 'Tarde';
+        minIntoShift = (hour - 14) * 60 + min;
+      } else {
+        currentShift = 'Noche';
+        if (hour >= 22) {
+          minIntoShift = (hour - 22) * 60 + min;
+        } else {
+          minIntoShift = (hour + 2) * 60 + min; // 00:00 = 120 min de Noche
+        }
+      }
+
+      // 1. Alerta de INICIO de Turno (0 a 3 minutos desde el inicio)
+      const shiftStartKey = `${dateStr}_${currentShift}_start`;
+      if (minIntoShift >= 0 && minIntoShift <= 3 && window._lastShiftStartAlertKey !== shiftStartKey) {
+        window._lastShiftStartAlertKey = shiftStartKey;
+        const msg = `¡Atención equipo! Iniciamos el turno de ${currentShift}. Recuerden cumplir con sus tareas operativas y mantener todos sus perfiles activos con máxima energía.`;
+        window.reproducirAnuncioVozGlobal({ id: shiftStartKey, text: msg, ts: Date.now() });
+      }
+
+      // 2. Alerta a los 15 MINUTOS de haber iniciado el turno (15 a 18 minutos)
+      const shift15Key = `${dateStr}_${currentShift}_15min`;
+      if (minIntoShift >= 15 && minIntoShift <= 18 && window._lastShift15MinAlertKey !== shift15Key) {
+        window._lastShift15MinAlertKey = shift15Key;
+        const msg = `Saludos turno ${currentShift}, iniciemos con leer el empalme y el barrido de cartas de límites activos. Y hagan el barrido de chat con los 3 mensajes clave: 1 para usuarios nuevos, 2 para usuarios que todos los días les envías mensajes pero nunca contestan, y 3 para usuarios con los que ya hablamos, debemos saludarlos si no se les ha escrito.`;
+        window.reproducirAnuncioVozGlobal({ id: shift15Key, text: msg, ts: Date.now() });
+      }
+
+      // 3. Alerta a la 1 HORA Y 40 MINUTOS (100 minutos) de haber iniciado el turno (100 a 103 minutos)
+      const shift100Key = `${dateStr}_${currentShift}_100min`;
+      if (minIntoShift >= 100 && minIntoShift <= 103 && window._lastShift100MinAlertKey !== shift100Key) {
+        window._lastShift100MinAlertKey = shift100Key;
+        const msg = `Recuerden que deben hacer los rompehielos, pero antes de subirlos deben enviárselo al monitor para que lo valide.`;
+        window.reproducirAnuncioVozGlobal({ id: shift100Key, text: msg, ts: Date.now() });
+      }
+
+      // 4. Verificación de Conversaciones Activas cada hora o por detección de patrón de baja
+      const nowTs = Date.now();
+      if (nowTs - (window._lastHourlyConvCheckTs || 0) >= 3600000) { // Cada 1 hora
+        window._lastHourlyConvCheckTs = nowTs;
+        
+        // Detectar operadores activos sin conversaciones o con baja
+        const activeOps = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : null;
+        let opsSinConversacion = [];
+        
+        if (activeOps && activeOps.size > 0) {
+          activeOps.forEach(opName => {
+            let tieneConversaciones = false;
+            if (window._profileLastActivityMap) {
+              const opObj = (typeof operatorsData !== 'undefined') ? operatorsData.find(o => o.name === opName) : null;
+              if (opObj && opObj.profiles) {
+                opObj.profiles.forEach(p => {
+                  const pId = String(p.id || '').trim();
+                  const act = window._profileLastActivityMap[pId] || 0;
+                  if (nowTs - act < 3600000) tieneConversaciones = true;
+                });
+              }
+            }
+            if (!tieneConversaciones) {
+              opsSinConversacion.push(opName);
+            }
+          });
+        }
+
+        window.emitirConsejoBajaConversaciones(opsSinConversacion);
+      }
+    };
+
+    // Monitoreo de Alertas de Voz por Inactividad & Conversaciones
     window.iniciarMonitoreoAlertasVoz = function() {
       if (_voiceAlertsInterval) clearInterval(_voiceAlertsInterval);
       
       _voiceAlertsInterval = setInterval(() => {
+        // Ejecutar cron de turnos y conversaciones activas
+        if (typeof window._verificarProgresoTurnosYConversaciones === 'function') {
+          window._verificarProgresoTurnosYConversaciones();
+        }
+
         if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;
         if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
 
@@ -35912,7 +36100,7 @@ CONFIGURACIÓN DE CONTEXTO:
           })();
 
           if (assignedProfiles.length >= 2) {
-            // 🎯 SOLUCIÓN 1: Monitoreo Individual de los 2 Perfiles
+            // 🎯 Monitoreo Individual de los 2 Perfiles
             assignedProfiles.forEach(p => {
               const pId = String(p.id || p.id_perfil || '').trim();
               const pName = p.model || p.modelo || ('Perfil ' + pId);

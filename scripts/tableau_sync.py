@@ -106,6 +106,25 @@ def sb_rpc_upsert(records: list) -> bool:
     return True
 
 
+def sb_save_kv(key: str, val) -> bool:
+    """Guarda un registro estructurado en la tabla kv_store de Supabase."""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/kv_store"
+        headers = sb_headers()
+        headers["Prefer"] = "resolution=merge-duplicates"
+        val_str = json.dumps(val) if not isinstance(val, str) else val
+        payload = {"key": key, "value": val_str}
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        if resp.status_code in (200, 201):
+            print(f"   💾 kv_store ['{key}'] guardado exitosamente.")
+            return True
+        else:
+            print(f"   ⚠️ kv_store ['{key}'] status {resp.status_code}: {resp.text[:120]}")
+    except Exception as e:
+        print(f"   ⚠️ kv_store error ({key}): {e}")
+    return False
+
+
 def sb_log_error(msg: str):
     try:
         requests.post(
@@ -325,8 +344,11 @@ def sync_panel(panel: dict, token_secret: str, token_name: str = "Analytics") ->
         view_curl  = view.get('contentUrl', '')
 
         # Filtrado rápido para no descargar 1000 CSVs: solo vistas que parezcan relevantes
-        # Si el nombre tiene revenue, passport, kpi, usage, detail, etc.
-        if not any(k in view_name2.lower() or k in view_curl.lower() for k in ["revenue", "passport", "kpi", "usage", "detail", "score", "romero", "ice", "breaker", "source", "reply", "response"]):
+        if not any(k in view_name2.lower() or k in view_curl.lower() for k in [
+            "revenue", "passport", "kpi", "usage", "detail", "score", "romero", "ice",
+            "breaker", "source", "reply", "response", "limit", "pair", "connect", "retention",
+            "user", "activity", "speed", "mail"
+        ]):
             continue
 
         # Descargar CSV de la vista (con manejo de timeout robusto)
@@ -815,6 +837,24 @@ def sync_panel(panel: dict, token_secret: str, token_name: str = "Analytics") ->
     # ── Subir a Supabase ─────────────────────────────────────────
     print(f"\n   ⚡ CYBERPUNK UPSERT → {len(payload)} registros...")
     sb_rpc_upsert(payload)
+
+    # Respaldo de alta disponibilidad en kv_store (permite lectura inmediata en frontend)
+    try:
+        kv_payload = {}
+        for r in payload:
+            key_id = f"{r['perfil_id']}_{r['panel_id']}"
+            kv_payload[key_id] = r
+        sb_save_kv("tableau_data_v2", kv_payload)
+        sb_save_kv("tableau_sync_status", {
+            "updated_at": "now()",
+            "panel_id": panel_id,
+            "panel_nombre": panel_nombre,
+            "total_records": len(payload),
+            "status": "SYNC_OK"
+        })
+    except Exception as e:
+        print(f"   ⚠️ Error respaldando en kv_store: {e}")
+
     return len(payload)
 
 

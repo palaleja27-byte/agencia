@@ -16736,6 +16736,34 @@ Responde SOLO con el mensaje, sin comillas extra ni introducciones.`;
       }
 
       if (!data || data.length === 0) {
+        try {
+          const kvRes = await _sb.from('kv_store').select('key, value').in('key', ['tableau_data_v2', 'tableau_ballenas', 'tableau_icebreakers', 'tableau_sync_status']);
+          if (kvRes.data && kvRes.data.length > 0) {
+            const kvMap = {};
+            kvRes.data.forEach(item => {
+              try { kvMap[item.key] = JSON.parse(item.value); } catch(e) { kvMap[item.key] = item.value; }
+            });
+
+            if (kvMap['tableau_data_v2']) {
+              _dpTableauData = kvMap['tableau_data_v2'];
+              window._dpTableauBallenas = kvMap['tableau_ballenas'] || [];
+              window._dpTableauIcebreakers = kvMap['tableau_icebreakers'] || [];
+              
+              const count = Object.keys(_dpTableauData).length;
+              if (typeof tableauLog === 'function') {
+                tableauLog(`⚡ Datos cargados exitosamente (${count} perfiles, ${window._dpTableauBallenas.length} ballenas VIP detectadas)`, 'success');
+              }
+              const timeEl = document.getElementById('tableau-sync-time');
+              if (timeEl) {
+                timeEl.textContent = `Sync UK: OK (${count} perfiles)`;
+              }
+              return;
+            }
+          }
+        } catch(e) {
+          console.warn('[Tableau] Error cargando desde kv_store:', e);
+        }
+
         if (typeof tableauLog === 'function') {
           tableauLog('❌ Sin datos en ninguna tabla Tableau', 'error');
           tableauLog('💡 Verifica: 1) Tablas existen en Supabase  2) RLS permite anon  3) El sync de GitHub Actions corrió', 'info');

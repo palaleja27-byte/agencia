@@ -26779,52 +26779,6 @@ PT._logKey = function (opName) {
         ciaUpdateIbKpis();
       }
 
-        // Generar card IceBreaker
-        function ibCard(item, rank, isTop) {
-          const color     = isTop ? '#34d399' : '#f87171';
-          const bgColor   = isTop ? 'rgba(52,211,153,0.06)' : 'rgba(248,113,113,0.06)';
-          const border    = isTop ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)';
-          const pct       = maxVal > 0 ? (item.media / maxVal) * 100 : 0;
-          const medals    = ['🥇','🥈','🥉'];
-          const rankIcon  = isTop && rank < 3 ? medals[rank] : `#${rank+1}`;
-
-          // Sparkline 7 días para este perfil
-          const id = item.id;
-          const dayMap = {};
-          (hist7||[]).filter(r => String(r.id_perfil) === id).forEach(r => {
-            dayMap[r.fecha_dia] = (dayMap[r.fecha_dia]||0) + (Number(r.puntos_neto)||0);
-          });
-          const sparkVals = Object.values(dayMap).slice(-7);
-
-          return `
-          <div style="background:${bgColor};border:1px solid ${border};border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;transition:.2s;"
-               onmouseover="this.style.borderColor='${color}'" onmouseout="this.style.borderColor='${border}'">
-            <div style="font-size:${rank < 3 && isTop ? '1.2rem':'0.75rem'};color:${color};font-weight:900;min-width:24px;text-align:center;">${rankIcon}</div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:.68rem;color:#e2e8f0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.modelo}">${item.modelo}</div>
-              <div style="font-size:.52rem;color:#64748b;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.op}</div>
-              <div style="margin-top:4px;background:rgba(0,0,0,0.2);border-radius:3px;height:3px;overflow:hidden;">
-                <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:.6s;"></div>
-              </div>
-            </div>
-            <div style="text-align:right;flex-shrink:0;">
-              <div style="font-size:.75rem;color:${color};font-weight:900;">${item.media.toFixed(1)}<span style="font-size:.45rem;color:#64748b;"> pts/día</span></div>
-              <div style="font-size:.48rem;color:#475569;">${item.diasCount}d · ${item.suma.toFixed(0)} total</div>
-            </div>
-            <div style="flex-shrink:0;">${ciaSparkline(sparkVals.length > 1 ? sparkVals : [0, item.media], color, 60, 20)}</div>
-          </div>`;
-        }
-
-        // Call our new global campaign/VIP renderer to populate the columns
-        ciaRenderGlobalIcebreakers();
-
-        // Tendencia 7 días — gráfico de barras SVG
-        ciaRenderTrend7();
-
-        // Actualizar KPI bar con totales de Tableau
-        ciaUpdateIbKpis();
-      }
-
       function ciaRenderTrend7() {
         const hist7 = window._ciaData.hist7 || [];
         const ib = (window._ciaData.iceBreakers || []).slice(0, 5);

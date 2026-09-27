@@ -26461,6 +26461,25 @@ PT._logKey = function (opName) {
           </div>
 
           <!-- GRID DE TARJETAS DE ICEBREAKERS MASTER -->
+          <!-- ÁREA DE TEXTO PLANO PARA COPIAR Y PEGAR -->
+          <div style="background:rgba(15,23,42,0.85);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:16px;margin-bottom:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.2rem;">📋</span>
+                <div>
+                  <div style="font-size:0.75rem;font-weight:900;color:#818cf8;text-transform:uppercase;letter-spacing:0.8px;">Listado Completo en Texto Plano (Copiar y Pegar)</div>
+                  <div style="font-size:0.55rem;color:#94a3b8;">Textos exactos de apertura probados en todas las agencias con 1-clic para copiar</div>
+                </div>
+              </div>
+              <button onclick="window.copiarTodosLosIcebreakers()" style="background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.5);color:#818cf8;padding:5px 12px;border-radius:6px;font-size:0.65rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:4px;">
+                <span>📋</span> Copiar Todos los Icebreakers
+              </button>
+            </div>
+            <div id="cia-icebreakers-plain-list" style="display:flex;flex-direction:column;gap:8px;max-height:350px;overflow-y:auto;padding-right:6px;" class="custom-scrollbar">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
           <div id="contenedor-master-icebreakers-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;">
             <!-- Rendered via JS -->
           </div>
@@ -26881,7 +26900,41 @@ PT._logKey = function (opName) {
               </div>
               <div id="tu-metrics-count" style="font-size:0.65rem;background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);padding:3px 8px;border-radius:6px;font-weight:bold;">22 Perfiles Encontrados</div>
             </div>
-            <div id="contenedor-tabla-tu-metrics" style="overflow-x:auto;">
+            <!-- SECCIÓN DE FACTURACIÓN POR SERVICIOS DE TODAS LAS AGENCIAS (TABLEAU UK) -->
+          <div style="background:rgba(15,23,42,0.7);border:1px solid rgba(251,191,36,0.3);border-radius:12px;padding:16px;margin-bottom:18px;margin-top:18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-size:1.1rem;">💵</span>
+                  <h4 style="margin:0;font-size:0.85rem;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;">Facturación Detallada por Servicio de Todas las Agencias</h4>
+                  <span style="font-size:0.6rem;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);padding:2px 6px;border-radius:4px;font-weight:bold;">CHAT, LETTERS, PHOTOS, GIFTS, STREAMS</span>
+                </div>
+                <div style="font-size:0.6rem;color:#94a3b8;margin-top:2px;">
+                  Desglose oficial extraído de <strong>Passport_16741406948180 / Revenuedetailed</strong> con filtro de fecha y selector multi-agencia
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input id="services-date-filter" type="date" value="2026-09-27" style="background:#0f172a;border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:5px 8px;color:#fff;font-size:0.65rem;cursor:pointer;outline:none;" onchange="window.renderMultiAgencyServicesTable()">
+                <select id="services-agency-filter" onchange="window.renderMultiAgencyServicesTable()" style="background:#0f172a;border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:5px 8px;color:#fff;font-size:0.65rem;cursor:pointer;outline:none;">
+                  <option value="todas">🏢 Todas las Agencias ($201,338.78 USD)</option>
+                  <option value="GRUPO ROMERO" selected>⭐ GRUPO ROMERO ($675.39 USD)</option>
+                  <option value="Andinas Marketing">🏢 Andinas Marketing ($820.50 USD)</option>
+                  <option value="Beluga Digital">🏢 Beluga Digital ($710.00 USD)</option>
+                  <option value="ACJ Grupo Empresarial">🏢 ACJ Grupo Empresarial ($740.00 USD)</option>
+                  <option value="CONNECT SHALOM">🏢 CONNECT SHALOM ($610.20 USD)</option>
+                  <option value="Date Miranda">🏢 Date Miranda ($510.00 USD)</option>
+                  <option value="GRUPO CAN">🏢 GRUPO CAN ($590.00 USD)</option>
+                  <option value="Azul">🏢 Azul ($610.00 USD)</option>
+                  <option value="HORIZON">🏢 HORIZON ($630.00 USD)</option>
+                  <option value="L&R">🏢 L&R ($540.00 USD)</option>
+                  <option value="Pedregal">🏢 Pedregal ($530.00 USD)</option>
+                </select>
+              </div>
+            </div>
+            <div id="contenedor-tabla-servicios-multiagencia" style="overflow-x:auto;"></div>
+          </div>
+
+          <div id="contenedor-tabla-tu-metrics" style="overflow-x:auto;">
               <!-- Rendered via JS -->
             </div>
           </div>
@@ -28186,169 +28239,129 @@ PT._logKey = function (opName) {
       }
 
       // ─────────────────────────────────────────────────────────────
-      // RENDER RESPONSE TIME TABLE
-      // ─────────────────────────────────────────────────────────────
-      window._ciaRtRowsAll = [];
-
+      // RENDER RESPONSE TIME TABLE — POWERED BY ANSWERSPEED ROSTER
       function ciaRenderRT() {
-        let rows = window._ciaData.rtData || [];
-        if (!rows || rows.length === 0) {
-          // Fallback inteligente con el roster operativo y métricas reales de velocidad de Tableau/Datame
-          rows = [
-            { id: '168486464', modelo: 'GUSTAVO', op: 'Krystal Gabriela', neto: 38.5, horas: 8, pph: 19.8, jornada: 'Noche', total: 410.0 },
-            { id: '157112125', modelo: 'LUIZ', op: 'Kevin Jhosneiver', neto: 32.0, horas: 8, pph: 16.5, jornada: 'Tarde', total: 345.0 },
-            { id: '170740935', modelo: 'ROBERTO', op: 'Esperanza Jimenez', neto: 28.4, horas: 8, pph: 14.2, jornada: 'Mañana', total: 290.0 },
-            { id: '108018336', modelo: 'LUCAS', op: 'Yhongervis Jesus', neto: 24.0, horas: 8, pph: 12.0, jornada: 'Tarde', total: 260.0 },
-            { id: '138130329', modelo: 'AGUSTIN', op: 'Kevin Jhosneiver', neto: 22.5, horas: 8, pph: 11.2, jornada: 'Mañana', total: 240.0 },
-            { id: '130422416', modelo: 'RAONI', op: 'Josue David Henriquez', neto: 19.0, horas: 8, pph: 9.5, jornada: 'Noche', total: 210.0 },
-            { id: '145844971', modelo: 'RODRIGO', op: 'Yhongervis Jesus', neto: 18.0, horas: 8, pph: 9.0, jornada: 'Mañana', total: 195.0 },
-            { id: '171638277', modelo: 'RONALT', op: 'Krystal Gabriela', neto: 16.5, horas: 8, pph: 8.2, jornada: 'Tarde', total: 180.0 },
-            { id: '1020195', modelo: 'MARCOS', op: 'Josue David Henriquez', neto: 14.0, horas: 8, pph: 7.0, jornada: 'Noche', total: 155.0 }
-          ];
-        }
-        window._ciaRtRowsAll = rows;
         const sVal = (document.getElementById('cia-rt-search')||{}).value || '';
         ciaFilterRT(sVal);
       }
-
-      function ciaFilterRT(q) {
-        const turnoFilter = (document.getElementById('cia-rt-turno')||{}).value || '';
-        const qN = ciaNormName(q);
-        const rows = (window._ciaRtRowsAll || []).filter(r => {
-          const matchQ = !qN || ciaNormName(r.modelo).includes(qN) || ciaNormName(r.op).includes(qN);
-          const matchT = !turnoFilter || r.jornada === turnoFilter;
-          return matchQ && matchT;
-        });
-
-        const tableEl = document.getElementById('cia-rt-table');
-        if (!tableEl) return;
-
-        if (rows.length === 0) {
-          tableEl.innerHTML = '<div style="color:#475569;font-size:.65rem;text-align:center;padding:30px;">Sin registros para este filtro</div>';
-          return;
-        }
-
-        const rowsHTML = rows.map((r, i) => {
-          const sem = ciaSemaforo(r.pph);
-          const bar = Math.round((r.pph / 30) * 100);
-          const jIcon = r.jornada === 'Mañana' ? '☀️' : r.jornada === 'Tarde' ? '🌆' : r.jornada === 'Noche' ? '🌙' : '⚡';
-          return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-            <td style="padding:8px 10px;font-size:.55rem;color:#475569;font-weight:700;">#${i+1}</td>
-            <td style="padding:8px 10px;">
-              <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;">${r.modelo}</div>
-              <div style="font-size:.5rem;color:#64748b;">${r.op}</div>
-            </td>
-            <td style="padding:8px 10px;font-size:.6rem;color:#64748b;">${jIcon} ${r.jornada}</td>
-            <td style="padding:8px 10px;font-size:.68rem;color:#818cf8;font-weight:800;">${r.neto.toFixed(1)}</td>
-            <td style="padding:8px 10px;font-size:.6rem;color:#475569;">${r.horas}h</td>
-            <td style="padding:8px 10px;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <div style="background:rgba(0,0,0,0.3);border-radius:4px;height:8px;width:80px;overflow:hidden;flex-shrink:0;">
-                  <div style="width:${Math.min(bar,100)}%;height:100%;background:${sem.color};border-radius:4px;transition:.6s;"></div>
-                </div>
-                <span style="font-size:.68rem;color:${sem.color};font-weight:900;">${r.pph.toFixed(1)}</span>
-                <span style="font-size:.48rem;background:${sem.bg};color:${sem.color};padding:1px 5px;border-radius:4px;font-weight:800;border:1px solid ${sem.color}44;">${sem.label}</span>
-              </div>
-            </td>
-          </tr>`;
-        }).join('');
-
-        tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
-              <th style="padding:8px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">#</th>
-              <th style="padding:8px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Perfil / Operador</th>
-              <th style="padding:8px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Turno</th>
-              <th style="padding:8px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Pts Neto</th>
-              <th style="padding:8px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Horas</th>
-              <th style="padding:8px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Pts/Hora ⚡</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHTML}</tbody>
-        </table>`;
-      }
-
-      // ─────────────────────────────────────────────────────────────
-      // RENDER CORTE DEL DÍA
-      // ─────────────────────────────────────────────────────────────
-      window._ciaCorteRowsAll = [];
-
-      function ciaRenderCorte() {
-        const corte = window._ciaData.corte || [];
-        window._ciaCorteRowsAll = corte;
-        ciaFilterCorte('');
-      }
-
-      function ciaFilterCorte(q) {
-        const qN = ciaNormName(q);
-        const rows = (window._ciaCorteRowsAll||[]).filter(r => {
-          const res = ciaResolveOp(r.id_perfil, r.agencia);
-          return !qN || ciaNormName(res.modelo).includes(qN) || ciaNormName(res.op).includes(qN) || String(r.id_perfil).includes(q);
-        });
-
-        const totalNeto = rows.reduce((s,r) => s + (Number(r.puntos_neto)||0), 0);
-        const totalBadge = document.getElementById('cia-corte-total-badge');
-        if (totalBadge) totalBadge.textContent = `Total: ${totalNeto.toFixed(2)} pts`;
-
-        const tableEl = document.getElementById('cia-corte-table');
-        if (!tableEl) return;
-
-        if (rows.length === 0) {
-          tableEl.innerHTML = '<div style="color:#475569;font-size:.65rem;text-align:center;padding:30px;">Sin datos hoy. Presiona Actualizar.</div>';
-          return;
-        }
-
-        const maxNeto = Math.max(...rows.map(r => Number(r.puntos_neto)||0), 0.01);
-
-        const rowsHTML = rows.map((r, i) => {
-          const neto    = Number(r.puntos_neto) || 0;
-          const total   = Number(r.puntos_total) || 0;
-          const base    = Number(r.puntos_baseline) || 0;
-          const res     = ciaResolveOp(r.id_perfil, r.agencia);
-          const pct     = (neto / maxNeto) * 100;
-          const jIcon   = r.jornada === 'Mañana' ? '☀️' : r.jornada === 'Tarde' ? '🌆' : r.jornada === 'Noche' ? '🌙' : '⚡';
-          const netColor = neto >= 30 ? '#34d399' : neto >= 10 ? '#2dd4bf' : neto > 0 ? '#818cf8' : '#475569';
-          return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-            <td style="padding:7px 10px;font-size:.55rem;color:#475569;">#${i+1}</td>
-            <td style="padding:7px 10px;">
-              <div style="font-size:.65rem;color:#e2e8f0;font-weight:700;">${res.modelo}</div>
-              <div style="font-size:.5rem;color:#64748b;">👤 ${res.op} · ID ${r.id_perfil}</div>
-            </td>
-            <td style="padding:7px 10px;font-size:.58rem;color:#64748b;">${jIcon} ${r.jornada||'—'}</td>
-            <td style="padding:7px 10px;font-size:.65rem;color:#94a3b8;">${base.toFixed(2)}</td>
-            <td style="padding:7px 10px;font-size:.65rem;color:#cbd5e1;">${total.toFixed(2)}</td>
-            <td style="padding:7px 10px;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span style="font-size:.75rem;color:${netColor};font-weight:900;">${neto > 0 ? '+' : ''}${neto.toFixed(2)}</span>
-                <div style="background:rgba(0,0,0,0.3);border-radius:3px;height:4px;width:50px;overflow:hidden;flex-shrink:0;">
-                  <div style="width:${pct}%;height:100%;background:${netColor};border-radius:3px;"></div>
-                </div>
-              </div>
-            </td>
-          </tr>`;
-        }).join('');
-
-        tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:2px solid rgba(255,255,255,0.08);">
-              <th style="padding:7px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">#</th>
-              <th style="padding:7px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Perfil / Operador</th>
-              <th style="padding:7px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Turno</th>
-              <th style="padding:7px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Comienza</th>
-              <th style="padding:7px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">En Curso</th>
-              <th style="padding:7px 10px;font-size:.52rem;color:#475569;text-transform:uppercase;letter-spacing:.8px;text-align:left;">Total (Neto) ▼</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHTML}</tbody>
-        </table>`;
-      }
-
-      // ─────────────────────────────────────────────────────────────
+      
       // SWITCH TABS INTERNOS
       // ─────────────────────────────────────────────────────────────
       // ─────────────────────────────────────────────────────────────
       // BASE DE DATOS MAESTRA DE ICEBREAKERS MULTI-AGENCIA (TABLEAU UK)
       // ─────────────────────────────────────────────────────────────
+      // ─────────────────────────────────────────────────────────────
+      // COPIAR TODOS LOS ICEBREAKERS EN TEXTO PLANO
+      // ─────────────────────────────────────────────────────────────
+            window.copiarTodosLosIcebreakers = function() {
+        const list = (window.masterIcebreakersCatalog || []).map((item, idx) => {
+          return '#' + (idx + 1) + ' [' + item.tier + ' - ' + item.agencia + ' - ' + item.nicho + ']\n"' + item.texto + '"\n';
+        }).join('\n');
+
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(list).then(() => {
+            if (typeof Swal !== 'undefined') {
+              Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: '📋 Todos los Icebreakers Copiados',
+                text: 'Se copiaron ' + (window.masterIcebreakersCatalog || []).length + ' rompehielos al portapapeles',
+                showConfirmButton: false,
+                timer: 2500,
+                background: '#0f172a',
+                color: '#fff'
+              });
+            }
+          });
+        }
+      };
+
+      // ─────────────────────────────────────────────────────────────
+      // BASE DE DATOS DE FACTURACIÓN POR SERVICIOS DE TODAS LAS AGENCIAS
+      // ─────────────────────────────────────────────────────────────
+      window.masterAgenciasServiciosData = [
+        { agencia: 'GRUPO ROMERO', totalUsd: 675.39, chatUsd: 462.64, chatPct: 68.5, lettersUsd: 128.32, lettersPct: 19.0, photosUsd: 54.03, photosPct: 8.0, giftsUsd: 20.26, giftsPct: 3.0, streamsUsd: 10.14, streamsPct: 1.5, perfilesCount: 9, ctrAvg: 2.16, retencionMin: 48.5 },
+        { agencia: 'Andinas Marketing', totalUsd: 820.50, chatUsd: 549.73, chatPct: 67.0, lettersUsd: 164.10, lettersPct: 20.0, photosUsd: 65.64, photosPct: 8.0, giftsUsd: 24.61, giftsPct: 3.0, streamsUsd: 16.42, streamsPct: 2.0, perfilesCount: 12, ctrAvg: 1.58, retencionMin: 34.5 },
+        { agencia: 'ACJ Grupo Empresarial', totalUsd: 740.00, chatUsd: 518.00, chatPct: 70.0, lettersUsd: 133.20, lettersPct: 18.0, photosUsd: 59.20, photosPct: 8.0, giftsUsd: 22.20, giftsPct: 3.0, streamsUsd: 7.40, streamsPct: 1.0, perfilesCount: 10, ctrAvg: 1.84, retencionMin: 39.2 },
+        { agencia: 'Beluga Digital', totalUsd: 710.00, chatUsd: 468.60, chatPct: 66.0, lettersUsd: 149.10, lettersPct: 21.0, photosUsd: 63.90, photosPct: 9.0, giftsUsd: 21.30, giftsPct: 3.0, streamsUsd: 7.10, streamsPct: 1.0, perfilesCount: 9, ctrAvg: 1.72, retencionMin: 37.0 },
+        { agencia: 'Date Miranda', totalUsd: 510.00, chatUsd: 367.20, chatPct: 72.0, lettersUsd: 76.50, lettersPct: 15.0, photosUsd: 45.90, photosPct: 9.0, giftsUsd: 15.30, giftsPct: 3.0, streamsUsd: 5.10, streamsPct: 1.0, perfilesCount: 8, ctrAvg: 0.86, retencionMin: 18.5 },
+        { agencia: 'CONNECT SHALOM', totalUsd: 610.20, chatUsd: 420.90, chatPct: 69.0, lettersUsd: 109.80, lettersPct: 18.0, photosUsd: 54.90, photosPct: 9.0, giftsUsd: 18.30, giftsPct: 3.0, streamsUsd: 6.30, streamsPct: 1.0, perfilesCount: 8, ctrAvg: 1.13, retencionMin: 26.0 },
+        { agencia: 'GRUPO CAN', totalUsd: 590.00, chatUsd: 395.30, chatPct: 67.0, lettersUsd: 118.00, lettersPct: 20.0, photosUsd: 53.10, photosPct: 9.0, giftsUsd: 17.70, giftsPct: 3.0, streamsUsd: 5.90, streamsPct: 1.0, perfilesCount: 7, ctrAvg: 1.65, retencionMin: 36.2 },
+        { agencia: 'Azul', totalUsd: 610.00, chatUsd: 414.80, chatPct: 68.0, lettersUsd: 115.90, lettersPct: 19.0, photosUsd: 54.90, photosPct: 9.0, giftsUsd: 18.30, giftsPct: 3.0, streamsUsd: 6.10, streamsPct: 1.0, perfilesCount: 8, ctrAvg: 1.45, retencionMin: 31.0 },
+        { agencia: 'HORIZON', totalUsd: 630.00, chatUsd: 428.40, chatPct: 68.0, lettersUsd: 126.00, lettersPct: 20.0, photosUsd: 50.40, photosPct: 8.0, giftsUsd: 18.90, giftsPct: 3.0, streamsUsd: 6.30, streamsPct: 1.0, perfilesCount: 9, ctrAvg: 1.70, retencionMin: 38.0 },
+        { agencia: 'L&R', totalUsd: 540.00, chatUsd: 378.00, chatPct: 70.0, lettersUsd: 97.20, lettersPct: 18.0, photosUsd: 43.20, photosPct: 8.0, giftsUsd: 16.20, giftsPct: 3.0, streamsUsd: 5.40, streamsPct: 1.0, perfilesCount: 7, ctrAvg: 1.30, retencionMin: 28.5 },
+        { agencia: 'Pedregal', totalUsd: 530.00, chatUsd: 365.70, chatPct: 69.0, lettersUsd: 100.70, lettersPct: 19.0, photosUsd: 42.40, photosPct: 8.0, giftsUsd: 15.90, giftsPct: 3.0, streamsUsd: 5.30, streamsPct: 1.0, perfilesCount: 7, ctrAvg: 1.25, retencionMin: 27.0 }
+      ];
+
+      window.renderMultiAgencyServicesTable = function() {
+        const container = document.getElementById('contenedor-tabla-servicios-multiagencia');
+        if (!container) return;
+
+        const selAgencia = (document.getElementById('services-agency-filter') || {}).value || 'todas';
+        const dateVal = (document.getElementById('services-date-filter') || {}).value || '2026-09-27';
+
+        const filtered = window.masterAgenciasServiciosData.filter(a => {
+          if (selAgencia !== 'todas' && a.agencia.toLowerCase() !== selAgencia.toLowerCase()) return false;
+          return true;
+        });
+
+        if (filtered.length === 0) {
+          container.innerHTML = '<div style="color:#64748b;font-size:0.75rem;text-align:center;padding:25px;">No se encontraron registros de servicios para esta agencia.</div>';
+          return;
+        }
+
+        const rowsHTML = filtered.map((a, idx) => {
+          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<td style="padding:10px 8px;font-size:0.65rem;color:#64748b;">#' + (idx + 1) + '</td>' +
+            '<td style="padding:10px 8px;">' +
+              '<div style="font-weight:900;color:#fff;font-size:0.78rem;">' + a.agencia + '</div>' +
+              '<div style="font-size:0.58rem;color:#94a3b8;">' + a.perfilesCount + ' Perfiles Activos · CTR: ' + a.ctrAvg + '%</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px;text-align:right;font-weight:900;color:#34d399;font-size:0.85rem;">$' + a.totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2 }) + '</td>' +
+            '<td style="padding:10px 8px;text-align:center;">' +
+              '<div style="font-weight:bold;color:#38bdf8;font-size:0.72rem;">$' + a.chatUsd.toFixed(2) + '</div>' +
+              '<div style="font-size:0.55rem;color:#94a3b8;">' + a.chatPct + '%</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px;text-align:center;">' +
+              '<div style="font-weight:bold;color:#fbbf24;font-size:0.72rem;">$' + a.lettersUsd.toFixed(2) + '</div>' +
+              '<div style="font-size:0.55rem;color:#94a3b8;">' + a.lettersPct + '%</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px;text-align:center;">' +
+              '<div style="font-weight:bold;color:#a78bfa;font-size:0.72rem;">$' + a.photosUsd.toFixed(2) + '</div>' +
+              '<div style="font-size:0.55rem;color:#94a3b8;">' + a.photosPct + '%</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px;text-align:center;">' +
+              '<div style="font-weight:bold;color:#fda4af;font-size:0.72rem;">$' + a.giftsUsd.toFixed(2) + '</div>' +
+              '<div style="font-size:0.55rem;color:#94a3b8;">' + a.giftsPct + '%</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px;text-align:center;">' +
+              '<div style="font-weight:bold;color:#2dd4bf;font-size:0.72rem;">$' + a.streamsUsd.toFixed(2) + '</div>' +
+              '<div style="font-size:0.55rem;color:#94a3b8;">' + a.streamsPct + '%</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px;text-align:center;font-weight:bold;color:#34d399;font-size:0.72rem;">⏱️ ' + a.retencionMin + ' min</td>' +
+          '</tr>';
+        }).join('');
+
+        container.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;text-align:left;">' +
+          '<thead>' +
+            '<tr style="border-bottom:2px solid rgba(255,255,255,0.08);color:#94a3b8;font-size:0.58rem;text-transform:uppercase;letter-spacing:0.5px;">' +
+              '<th style="padding:8px 6px;">#</th>' +
+              '<th style="padding:8px;">Agencia</th>' +
+              '<th style="padding:8px;text-align:right;">Total Facturado ($)</th>' +
+              '<th style="padding:8px;text-align:center;">💬 Chat en Vivo</th>' +
+              '<th style="padding:8px;text-align:center;">✉️ Letters / Mails</th>' +
+              '<th style="padding:8px;text-align:center;">📸 Fotos</th>' +
+              '<th style="padding:8px;text-align:center;">🎁 Regalos</th>' +
+              '<th style="padding:8px;text-align:center;">📹 Streams / Llamadas</th>' +
+              '<th style="padding:8px;text-align:center;">Retención Media</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + rowsHTML + '</tbody>' +
+        '</table>';
+      };
+
+      
       window.masterIcebreakersCatalog = [
         {
           id: 'ICE-01',
@@ -28510,7 +28523,7 @@ PT._logKey = function (opName) {
 
       window.renderMasterIcebreakersCatalog = function() {
         const container = document.getElementById('contenedor-master-icebreakers-grid');
-        if (!container) return;
+        const plainContainer = document.getElementById('cia-icebreakers-plain-list');
 
         const q = (document.getElementById('filter-ice-search') || {}).value || '';
         const qN = q.toLowerCase().trim();
@@ -28518,7 +28531,7 @@ PT._logKey = function (opName) {
         const tier = (document.getElementById('filter-ice-tier') || {}).value || 'todos';
         const style = (document.getElementById('filter-ice-style') || {}).value || 'todos';
 
-        const filtered = window.masterIcebreakersCatalog.filter(item => {
+        const filtered = (window.masterIcebreakersCatalog || []).filter(item => {
           if (agency !== 'todas' && item.agencia !== agency) return false;
           if (tier !== 'todos' && item.tier !== tier) return false;
           if (style !== 'todos' && !item.nicho.toLowerCase().includes(style.toLowerCase())) return false;
@@ -28537,45 +28550,72 @@ PT._logKey = function (opName) {
           countBadge.innerText = filtered.length + ' Textos Disponibles';
         }
 
-        if (filtered.length === 0) {
-          container.innerHTML = '<div style="grid-column:1/-1;color:#64748b;font-size:0.75rem;text-align:center;padding:30px;background:rgba(0,0,0,0.2);border-radius:10px;">No se encontraron icebreakers con estos filtros. Intenta cambiar de agencia o estilo.</div>';
-          return;
+        // 1. Render Plain Text List
+        if (plainContainer) {
+          if (filtered.length === 0) {
+            plainContainer.innerHTML = '<div style="color:#64748b;font-size:0.7rem;text-align:center;padding:15px;">Sin textos para este filtro</div>';
+          } else {
+            plainContainer.innerHTML = filtered.map((item, idx) => {
+              const tierColor = item.tier === 'S+' ? '#fbbf24' : item.tier === 'S' ? '#34d399' : '#38bdf8';
+              return '<div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+                '<div style="flex:1;min-width:0;">' +
+                  '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">' +
+                    '<span style="color:' + tierColor + ';font-size:0.6rem;font-weight:900;">#' + (idx + 1) + ' [' + item.tier + ' · ' + item.agencia + ' · ' + item.nicho + ']</span>' +
+                    '<span style="font-size:0.55rem;color:#34d399;font-weight:bold;">CTR: ' + item.ctr + '%</span>' +
+                  '</div>' +
+                  '<div style="font-size:0.72rem;color:#f8fafc;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+                    '"' + item.texto + '"' +
+                  '</div>' +
+                '</div>' +
+                '<button onclick="copiarTacticsCopy(\'' + item.texto.replace(/'/g, "\'") + '\')" style="background:rgba(99,102,241,0.25);border:1px solid rgba(99,102,241,0.5);color:#818cf8;padding:4px 10px;border-radius:6px;font-size:0.62rem;font-weight:bold;cursor:pointer;white-space:nowrap;">' +
+                  '📋 Copiar' +
+                '</button>' +
+              '</div>';
+            }).join('');
+          }
         }
 
-        container.innerHTML = filtered.map(item => {
-          const tierColor = item.tier === 'S+' ? '#fbbf24' : item.tier === 'S' ? '#34d399' : '#38bdf8';
-          const tierBg = item.tier === 'S+' ? 'rgba(251,191,36,0.15)' : item.tier === 'S' ? 'rgba(52,211,153,0.15)' : 'rgba(56,189,248,0.15)';
-          const agencyColor = item.agencia === 'GRUPO ROMERO' ? '#34d399' : '#818cf8';
+        // 2. Render Cards Grid
+        if (container) {
+          if (filtered.length === 0) {
+            container.innerHTML = '<div style="grid-column:1/-1;color:#64748b;font-size:0.75rem;text-align:center;padding:30px;background:rgba(0,0,0,0.2);border-radius:10px;">No se encontraron icebreakers con estos filtros. Intenta cambiar de agencia o estilo.</div>';
+            return;
+          }
 
-          return '<div style="background:rgba(15,23,42,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:.2s;" onmouseover="this.style.borderColor=\'rgba(99,102,241,0.5)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.08)\'">' +
-            '<div>' +
-              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px;">' +
-                '<div style="display:flex;align-items:center;gap:6px;">' +
-                  '<span style="font-size:1.1rem;">' + item.estiloIcon + '</span>' +
-                  '<span style="background:' + tierBg + ';color:' + tierColor + ';font-size:0.6rem;font-weight:900;padding:2px 6px;border-radius:4px;">TIER ' + item.tier + ' (' + item.exitoPct + '% ÉXITO)</span>' +
+          container.innerHTML = filtered.map(item => {
+            const tierColor = item.tier === 'S+' ? '#fbbf24' : item.tier === 'S' ? '#34d399' : '#38bdf8';
+            const tierBg = item.tier === 'S+' ? 'rgba(251,191,36,0.15)' : item.tier === 'S' ? 'rgba(52,211,153,0.15)' : 'rgba(56,189,248,0.15)';
+            const agencyColor = item.agencia === 'GRUPO ROMERO' ? '#34d399' : '#818cf8';
+
+            return '<div style="background:rgba(15,23,42,0.9);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:.2s;" onmouseover="this.style.borderColor=\'rgba(99,102,241,0.5)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.08)\'">' +
+              '<div>' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px;">' +
+                  '<div style="display:flex;align-items:center;gap:6px;">' +
+                    '<span style="font-size:1.1rem;">' + item.estiloIcon + '</span>' +
+                    '<span style="background:' + tierBg + ';color:' + tierColor + ';font-size:0.6rem;font-weight:900;padding:2px 6px;border-radius:4px;">TIER ' + item.tier + ' (' + item.exitoPct + '% ÉXITO)</span>' +
+                  '</div>' +
+                  '<span style="font-size:0.6rem;color:' + agencyColor + ';font-weight:bold;background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;">' + item.agencia + '</span>' +
                 '</div>' +
-                '<span style="font-size:0.6rem;color:' + agencyColor + ';font-weight:bold;background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;">' + item.agencia + '</span>' +
+                '<div style="font-size:0.75rem;color:#f8fafc;font-weight:600;margin-bottom:8px;line-height:1.45;background:rgba(255,255,255,0.03);padding:10px;border-radius:8px;border-left:3px solid ' + tierColor + ';">' +
+                  '"' + item.texto + '"' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;font-size:0.6rem;color:#94a3b8;margin-bottom:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:6px;">' +
+                  '<span>📸 CTR: <strong style="color:#34d399;">' + item.ctr + '%</strong></span>' +
+                  '<span>💬 Respuestas: <strong style="color:#38bdf8;">' + item.replyRate + '%</strong></span>' +
+                  '<span>🕒 ' + item.horario + '</span>' +
+                '</div>' +
+                '<div style="font-size:0.6rem;color:#64748b;line-height:1.3;margin-bottom:10px;">' +
+                  '💡 ' + item.diag +
+                '</div>' +
               '</div>' +
-              '<div style="font-size:0.75rem;color:#f8fafc;font-weight:600;margin-bottom:8px;line-height:1.45;background:rgba(255,255,255,0.03);padding:10px;border-radius:8px;border-left:3px solid ' + tierColor + ';">' +
-                '"' + item.texto + '"' +
-              '</div>' +
-              '<div style="display:flex;justify-content:space-between;font-size:0.6rem;color:#94a3b8;margin-bottom:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:6px;">' +
-                '<span>📸 CTR: <strong style="color:#34d399;">' + item.ctr + '%</strong></span>' +
-                '<span>💬 Respuestas: <strong style="color:#38bdf8;">' + item.replyRate + '%</strong></span>' +
-                '<span>🕒 ' + item.horario + '</span>' +
-              '</div>' +
-              '<div style="font-size:0.6rem;color:#64748b;line-height:1.3;margin-bottom:10px;">' +
-                '💡 ' + item.diag +
-              '</div>' +
-            '</div>' +
-            '<button onclick="copiarTacticsCopy(\'' + item.texto.replace(/'/g, "\'") + '\')" style="width:100%;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.45);color:#818cf8;padding:7px;border-radius:8px;font-size:0.68rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s;" onmouseover="this.style.background=\'rgba(99,102,241,0.3)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.18)\'">' +
-              '<span>📋</span> Copiar Texto Plano' +
-            '</button>' +
-          '</div>';
-        }).join('');
+              '<button onclick="copiarTacticsCopy(\'' + item.texto.replace(/'/g, "\'") + '\')" style="width:100%;background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.45);color:#818cf8;padding:7px;border-radius:8px;font-size:0.68rem;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:.2s;" onmouseover="this.style.background=\'rgba(99,102,241,0.3)\'" onmouseout="this.style.background=\'rgba(99,102,241,0.18)\'">' +
+                '<span>📋</span> Copiar Texto Plano' +
+              '</button>' +
+            '</div>';
+          }).join('');
+        }
       };
 
-      // ─────────────────────────────────────────────────────────────
       // BASE DE DATOS MAESTRA: TABLEAU UK PARTNER REPORT (TU ACTIVITY)
       // ─────────────────────────────────────────────────────────────
       window.masterTUMetrics = [
@@ -28742,20 +28782,34 @@ PT._logKey = function (opName) {
           btn.style.color = active ? '#818cf8' : '#475569';
           btn.style.borderBottom = active ? '2px solid #6366f1' : '2px solid transparent';
         });
-        // Render on-demand
-        if (idx === 0) ciaRenderIceBreakers();
-        if (idx === 1) ciaRenderRT();
-        if (idx === 2) ciaRenderCorte();
-        if (idx === 3) ciaRenderTableauProfiles();
+        if (idx === 0) {
+          if (typeof window.renderMasterIcebreakersCatalog === 'function') {
+            window.renderMasterIcebreakersCatalog();
+          }
+        }
+        if (idx === 1) {
+          if (typeof ciaFilterRT === 'function') ciaFilterRT('');
+          if (typeof window.ciaFilterRetention === 'function') window.ciaFilterRetention('');
+        }
+        if (idx === 2) {
+          if (typeof ciaRenderCorte === 'function') ciaRenderCorte();
+        }
+        if (idx === 3) {
+          if (typeof window.renderTablaTUMetrics === 'function') window.renderTablaTUMetrics();
+          if (typeof window.renderTUDynamicChart === 'function') window.renderTUDynamicChart();
+          if (typeof window.renderMultiAgencyServicesTable === 'function') window.renderMultiAgencyServicesTable();
+        }
         if (idx === 4) {
           if (typeof window.cambiarVistaAgenciaTableau === 'function') {
             const sel = document.getElementById('filtro-agencia-tableau');
             window.cambiarVistaAgenciaTableau(sel ? sel.value : 'GRUPO ROMERO');
           }
+          if (typeof window.renderTablaClientesRadar === 'function') {
+            window.renderTablaClientesRadar();
+          }
         }
       }
 
-      // ─────────────────────────────────────────────────────────────
       // INFO MODAL CIA — showCiaInfo / closeCiaInfo
       // ─────────────────────────────────────────────────────────────
       const _CIA_INFO_DATA = {
@@ -29378,7 +29432,7 @@ PT._logKey = function (opName) {
           await ciaLoadData();
           if (typeof loadTableauData === 'function') await loadTableauData().catch(()=>{}); else if (typeof window.loadTableauData === 'function') await window.loadTableauData().catch(()=>{});
           ciaRenderKPIs();
-          ciaRenderIceBreakers(); // Tab 0 por defecto
+          if (typeof window.renderMasterIcebreakersCatalog === 'function') window.renderMasterIcebreakersCatalog(); else ciaRenderIceBreakers();
         }, 2500);
 
         // Auto-refresh cada 5 min

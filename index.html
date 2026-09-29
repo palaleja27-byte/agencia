@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -21031,11 +21031,13 @@ function exportarDatos() {
       };
 
       window.renderTablaClientesRadar = function() {
-        var wrap = document.getElementById('contenedor-radar-clientes-tabla');
+        // Buscar el contenedor en ambas versiones del ID (compatibilidad)
+        var wrap = document.getElementById('contenedor-radar-clientes-tabla') || document.getElementById('contenedor-tabla-clientes-radar');
         if (!wrap) return;
 
-        var q = (document.getElementById('radar-cliente-search') ? document.getElementById('radar-cliente-search').value : '').toLowerCase().trim();
-        var fFrec = (document.getElementById('radar-frecuencia-filter') ? document.getElementById('radar-frecuencia-filter').value : 'todos');
+        var searchEl = document.getElementById('radar-cliente-search') || document.getElementById('input-buscar-cliente-radar');
+        var q = searchEl ? searchEl.value.toLowerCase().trim() : (window.filtroQueryClienteActual || '');
+        var fFrec = (document.getElementById('radar-frecuencia-filter') ? document.getElementById('radar-frecuencia-filter').value : (window.filtroTipoClienteActual || 'todos'));
         var fAgencia = window.currentAgenciaSeleccionada || 'todas';
 
         var filtered = (window.masterRadarClientes || []).filter(function(c) {
@@ -28338,7 +28340,7 @@ PT._logKey = function (opName) {
                   🎯 En Otras Agencias (Para Atacar)
                 </button>
               </div>
-              <input id="input-buscar-cliente-radar" type="text" placeholder="🔍 Buscar cliente, ID, agencia o modelo..." oninput="window.filtrarTablaClientesConectados(this.value)" style="background:#0b132b; border:1px solid rgba(52,211,153,0.3); color:#fff; padding:6px 12px; border-radius:6px; font-size:0.7rem; outline:none; min-width:240px;">
+              <input id="input-buscar-cliente-radar" type="text" placeholder="🔍 Buscar cliente, ID, agencia o modelo..." oninput="window.filtroQueryClienteActual=this.value; if(typeof window.renderTablaClientesRadar==='function') window.renderTablaClientesRadar();" style="background:#0b132b; border:1px solid rgba(52,211,153,0.3); color:#fff; padding:6px 12px; border-radius:6px; font-size:0.7rem; outline:none; min-width:240px;">
             </div>
 
             <!-- CONTENEDOR DE LA TABLA DINÁMICA DE CLIENTES -->
@@ -41159,3 +41161,4 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
 
 </body>
 </html>
+

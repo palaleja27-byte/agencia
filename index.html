@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -17485,12 +17485,166 @@
     // 💎 FUNCIONES DE NAVEGACIÓN & ATAQUE DIRECTO A TALKYTIMES
     // ═════════════════════════════════════════════════════════════════════════
     window.abrirTalkytimes = function(talkytimesId) {
-      if (!talkytimesId) return;
+      if (!talkytimesId) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ icon: 'warning', title: 'ID de Talkytimes Faltante', text: 'Por favor ingresa o selecciona un ID válido.', background: '#0f172a', color: '#fff' });
+        }
+        return;
+      }
       var cleanId = String(talkytimesId).replace(/\D/g, '').trim();
-      if (!cleanId) return;
+      if (!cleanId || cleanId.length < 5) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: 'ID Talkytimes Inválido',
+            text: 'El valor "' + talkytimesId + '" no es un ID numérico válido de Talkytimes (debe tener entre 6 y 10 dígitos, ej: 170699370).',
+            background: '#0f172a',
+            color: '#fff'
+          });
+        }
+        return;
+      }
       var url = 'https://talkytimes.com/user/' + cleanId;
-      window.open(url, '_blank');
+      var win = window.open(url, '_blank');
+      if (!win || win.closed || typeof win.closed === 'undefined') {
+        // En caso de que el navegador bloquee la ventana emergente, crear un enlace temporal y simular click
+        var a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
     };
+
+    window.abrirTalkytimesDirectoInput = function() {
+      var inp = document.getElementById('quick-tt-search-input');
+      if (!inp) return;
+      var raw = inp.value.trim();
+      if (!raw) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'info',
+            title: 'Ingresa un ID de Talkytimes',
+            text: 'Escribe o pega el ID numérico del usuario de Talkytimes (ej: 170699370) o su URL completa.',
+            background: '#0f172a',
+            color: '#fff'
+          });
+        }
+        return;
+      }
+      var cleanId = String(raw).replace(/\D/g, '').trim();
+      if (!cleanId || cleanId.length < 5) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'error',
+            title: 'ID No Válido',
+            text: 'No se detectaron suficientes dígitos numéricos en "' + raw + '". Ejemplo válido: 170699370',
+            background: '#0f172a',
+            color: '#fff'
+          });
+        }
+        return;
+      }
+      window.abrirTalkytimes(cleanId);
+    };
+
+    window.modalAgregarClienteRecarga = function() {
+      if (typeof Swal === 'undefined') {
+        var cid = prompt('Ingresa el ID del cliente de Talkytimes (RU) que recargó:');
+        if (cid) {
+          var cclean = String(cid).replace(/\D/g, '').trim();
+          if (cclean.length >= 5) {
+            var cnom = prompt('Nombre del cliente:', 'Cliente ' + cclean);
+            var cmon = parseFloat(prompt('Monto de recarga en USD:', '150') || '150');
+            var cmod = prompt('Modelo / Perfil de afinidad:', 'HORACIO');
+            var nuevoCli = { id: cclean, nombre: cnom, recargaUSD: cmon, saldoUSD: cmon, creditos: cmon * 10, perfil: cmod, verificado: true };
+            window.registrarNuevaRecargaDatame(nuevoCli);
+            window.abrirTalkytimes(cclean);
+          }
+        }
+        return;
+      }
+
+      Swal.fire({
+        title: '⚡ REGISTRAR RECARGA EN VIVO (TALKYTIMES)',
+        html: '<div style="text-align:left; font-size:0.75rem; color:#cbd5e1; display:flex; flex-direction:column; gap:10px;">' +
+          '<div>' +
+            '<label style="color:#38bdf8; font-weight:800; display:block; margin-bottom:4px;">ID DEL CLIENTE TALKYTIMES (RU): *</label>' +
+            '<input id="swal-rec-id" type="text" placeholder="Ej: 170699370 o https://talkytimes.com/user/170699370" style="width:100%; box-sizing:border-box; background:#0b132b; border:1px solid #38bdf8; color:#fff; padding:8px 12px; border-radius:8px; font-size:0.8rem; font-family:monospace;">' +
+          '</div>' +
+          '<div style="display:flex; gap:10px;">' +
+            '<div style="flex:1;">' +
+              '<label style="color:#cbd5e1; font-weight:700; display:block; margin-bottom:4px;">Nombre Cliente:</label>' +
+              '<input id="swal-rec-nom" type="text" placeholder="Ej: Sharyn" style="width:100%; box-sizing:border-box; background:#0b132b; border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px 10px; border-radius:8px; font-size:0.75rem;">' +
+            '</div>' +
+            '<div style="flex:1;">' +
+              '<label style="color:#34d399; font-weight:700; display:block; margin-bottom:4px;">Monto Recarga USD: *</label>' +
+              '<input id="swal-rec-monto" type="number" placeholder="Ej: 320" value="150" style="width:100%; box-sizing:border-box; background:#0b132b; border:1px solid rgba(52,211,153,0.4); color:#34d399; padding:7px 10px; border-radius:8px; font-size:0.75rem; font-weight:800;">' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex; gap:10px;">' +
+            '<div style="flex:1;">' +
+              '<label style="color:#cbd5e1; font-weight:700; display:block; margin-bottom:4px;">Modelo TU Asignado:</label>' +
+              '<select id="swal-rec-perfil" style="width:100%; box-sizing:border-box; background:#0b132b; border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px 10px; border-radius:8px; font-size:0.75rem;">' +
+                '<option value="HORACIO">HORACIO (118179794)</option>' +
+                '<option value="GUSTAVO">GUSTAVO (168486464)</option>' +
+                '<option value="MARCOS">MARCOS (1020195)</option>' +
+                '<option value="LUIZ">LUIZ (157112125)</option>' +
+                '<option value="ROBERTO">ROBERTO (170740935)</option>' +
+                '<option value="RAONI">RAONI (130422416)</option>' +
+                '<option value="AGUSTIN">AGUSTIN (180293841)</option>' +
+                '<option value="LUCAS">LUCAS (146603073)</option>' +
+                '<option value="RODRIGO">RODRIGO (180371302)</option>' +
+                '<option value="RONALT">RONALT (171638277)</option>' +
+              '</select>' +
+            '</div>' +
+            '<div style="flex:1;">' +
+              '<label style="color:#cbd5e1; font-weight:700; display:block; margin-bottom:4px;">País / Origen:</label>' +
+              '<input id="swal-rec-pais" type="text" placeholder="Ej: 🇺🇸 USA" value="🇺🇸 USA" style="width:100%; box-sizing:border-box; background:#0b132b; border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px 10px; border-radius:8px; font-size:0.75rem;">' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:0.62rem; color:#94a3b8; background:rgba(56,189,248,0.06); padding:8px; border-radius:6px; border:1px solid rgba(56,189,248,0.2);">' +
+            '💡 <i>Al guardar, se agregará de inmediato al Radar con enlace directo verificado a Talkytimes y se abrirá su perfil en una pestaña nueva.</i>' +
+          '</div>' +
+        '</div>',
+        showCancelButton: true,
+        confirmButtonText: '🚀 Guardar y Abrir en Talkytimes',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0ea5e9',
+        cancelButtonColor: '#475569',
+        background: '#0f172a',
+        color: '#fff',
+        focusConfirm: false,
+        preConfirm: function() {
+          var rawId = document.getElementById('swal-rec-id').value;
+          var cleanId = String(rawId).replace(/\D/g, '').trim();
+          if (!cleanId || cleanId.length < 5) {
+            Swal.showValidationMessage('Ingresa un ID de Talkytimes válido (mínimo 6 dígitos numéricos)');
+            return false;
+          }
+          var monto = parseFloat(document.getElementById('swal-rec-monto').value) || 150;
+          var nom = document.getElementById('swal-rec-nom').value.trim() || ('Cliente ' + cleanId);
+          var per = document.getElementById('swal-rec-perfil').value;
+          var pai = document.getElementById('swal-rec-pais').value.trim() || '🇺🇸 USA';
+          return { id: cleanId, nombre: nom, recargaUSD: monto, saldoUSD: monto, creditos: monto * 10, perfil: per, pais: pai, verificado: true };
+        }
+      }).then(function(result) {
+        if (result.isConfirmed && result.value) {
+          var data = result.value;
+          try {
+            var existing = JSON.parse(localStorage.getItem('rr_custom_radar_clientes') || '[]');
+            existing = existing.filter(function(x) { return x.id !== data.id; });
+            existing.unshift(data);
+            localStorage.setItem('rr_custom_radar_clientes', JSON.stringify(existing));
+          } catch(e) {}
+          window.registrarNuevaRecargaDatame(data);
+          window.abrirTalkytimes(data.id);
+        }
+      });
+    };
+
 
     window.copiarTalkytimesID = function(talkytimesId, nombreCliente) {
       if (!talkytimesId) return;
@@ -17726,8 +17880,41 @@
 
       // Roster organizado por turnos oficiales y perfiles con sus clientes reales (RU)
       var roster = [
+        // ── TURNO EN VIVO / RECARGA CONFIRMADA TALKYTIMES ──
+        { 
+          id: '118179794', 
+          modelo: 'HORACIO', 
+          op: 'Esperanza Jimenez / Bill', 
+          jornada: 'Tarde', 
+          ptsNeto: 42.0, 
+          speedSec: 12.5, 
+          pph: 21.0, 
+          chatsPts: 18.0, 
+          cartasPts: 5.0, 
+          fotosPts: 11.0, 
+          audioPts: 5.0, 
+          regalosPts: 3.0,
+          status: 'facturando', 
+          estadoTxt: '⚡ Facturando en Vivo · Recarga Confirmada',
+          ultimoPulso: { montoUSD: 4.50, servicio: 'Live Chat VIP', haceMin: '20s' },
+          clientes: [
+            { 
+              id: '170699370', 
+              nombre: 'Sharyn', 
+              pais: '🇺🇸 USA', 
+              saldoUSD: 320.00, 
+              creditos: 3200, 
+              tiempoRecarga: '¡AHORA MISMO! (En Vivo)', 
+              antiguedad: '1953 (71 años) · Viuda (Cliente Fiel)', 
+              temas: 'Cocina (Cooking), Mascotas (Pets), Ver televisión (Watching tv)', 
+              statusOnline: '⚡ Recarga en Vivo',
+              verificado: true 
+            }
+          ]
+        },
         // ── TURNO NOCHE (22:00 - 06:00) ──
         { 
+
           id: '168486464', 
           modelo: 'GUSTAVO', 
           op: 'Krystal Gabriela', 
@@ -18099,14 +18286,21 @@
           : '<span style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟡 EN ESPERA</span>';
 
         var clientesListHTML = (r.clientes || []).map(function(c) {
+          var cleanClientId = String(c.id).replace(/\D/g, '').trim();
+          var isVerif = c.verificado || cleanClientId === '170699370';
+          var badgeVerif = isVerif 
+            ? '<span style="background:rgba(52,211,153,0.18); color:#34d399; border:1px solid rgba(52,211,153,0.4); padding:1px 6px; border-radius:4px; font-size:0.5rem; font-weight:900;">✅ VERIFICADO TALKYTIMES</span>'
+            : '<span style="background:rgba(251,191,36,0.12); color:#fbbf24; border:1px solid rgba(251,191,36,0.3); padding:1px 6px; border-radius:4px; font-size:0.5rem; font-weight:800;">ID RU</span>';
+
           return '<div style="background:rgba(255,255,255,0.03); backdrop-filter:blur(8px); padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.07); display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px;">' +
             '<div>' +
-              '<div style="font-size:0.75rem; color:#ffffff; font-weight:900;">' +
+              '<div style="font-size:0.75rem; color:#ffffff; font-weight:900; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
                 '👤 <span style="color:#38bdf8;">' + c.nombre + '</span> <span style="font-size:0.65rem; color:#94a3b8; font-weight:normal;">' + (c.pais || '') + '</span>' +
                 ' <span style="font-size:0.55rem; color:#34d399; background:rgba(52,211,153,0.12); padding:1px 6px; border-radius:4px; font-weight:800; border:1px solid rgba(52,211,153,0.25);">' + (c.statusOnline || '🟢 Online') + '</span>' +
+                badgeVerif +
               '</div>' +
               '<div style="font-size:0.62rem; color:#cbd5e1; margin-top:2px;">' +
-                '🔑 <span style="color:#94a3b8; font-family:monospace; font-weight:900;">ID Talkytimes: <b style="color:#38bdf8;">' + c.id + '</b></span> · <span style="color:#34d399; font-weight:900;">$' + Number(c.saldoUSD).toFixed(2) + ' USD (' + Number(c.creditos).toLocaleString() + ' cr)</span>' +
+                '🔑 <span style="color:#94a3b8; font-family:monospace; font-weight:900;">ID Talkytimes: <b style="color:#38bdf8;">' + cleanClientId + '</b></span> · <span style="color:#34d399; font-weight:900;">$' + Number(c.saldoUSD).toFixed(2) + ' USD (' + Number(c.creditos).toLocaleString() + ' cr)</span>' +
               '</div>' +
               '<div style="font-size:0.55rem; color:#94a3b8; margin-top:1px;">' +
                 '⏳ <b>Recarga:</b> ' + c.tiempoRecarga + ' · <b>Antigüedad:</b> ' + (c.antiguedad || 'Cliente VIP') + ' · <i>' + (c.temas || '') + '</i>' +
@@ -18114,13 +18308,14 @@
             '</div>' +
             '<div style="display:flex; gap:5px; flex-direction:column;">' +
               '<div style="display:flex; gap:5px;">' +
-                '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; border-radius:6px; padding:3px 8px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">📋 ID</button>' +
-                '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.35); color:#38bdf8; border-radius:6px; padding:3px 8px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">🔗 Abrir</button>' +
+                '<button onclick="copiarTalkytimesID(\'' + cleanClientId + '\', \'' + c.nombre + '\')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; border-radius:6px; padding:3px 8px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">📋 ID</button>' +
+                '<a href="https://talkytimes.com/user/' + cleanClientId + '" target="_blank" onclick="event.stopPropagation(); window.abrirTalkytimes(\'' + cleanClientId + '\');" style="background:linear-gradient(135deg, rgba(14,165,233,0.35), rgba(59,130,246,0.35)); border:1px solid rgba(56,189,248,0.5); color:#38bdf8; border-radius:6px; padding:3px 10px; font-size:0.58rem; font-weight:900; cursor:pointer; white-space:nowrap; text-decoration:none; display:inline-flex; align-items:center; gap:2px; box-shadow:0 2px 8px rgba(14,165,233,0.25);">🔗 Abrir</a>' +
               '</div>' +
-              '<button onclick="abrirModalDetalleCliente(\'' + c.id + '\', \'' + r.modelo + '\', \'' + r.op + '\', \'' + c.nombre + '\', ' + c.saldoUSD + ', ' + c.creditos + ', \'' + r.ultimoPulso.servicio + '\', \'' + c.tiempoRecarga + '\', \'' + c.antiguedad + '\', \'' + c.temas + '\')" style="background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.25); color:#c084fc; border-radius:6px; padding:2px 8px; font-size:0.55rem; font-weight:700; cursor:pointer; white-space:nowrap;">ℹ️ Info CRM</button>' +
+              '<button onclick="abrirModalDetalleCliente(\'' + cleanClientId + '\', \'' + r.modelo + '\', \'' + r.op + '\', \'' + c.nombre + '\', ' + c.saldoUSD + ', ' + c.creditos + ', \'' + (r.ultimoPulso ? r.ultimoPulso.servicio : 'Chat') + '\', \'' + c.tiempoRecarga + '\', \'' + c.antiguedad + '\', \'' + c.temas + '\')" style="background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.25); color:#c084fc; border-radius:6px; padding:2px 8px; font-size:0.55rem; font-weight:700; cursor:pointer; white-space:nowrap;">ℹ️ Info CRM</button>' +
             '</div>' +
           '</div>';
         }).join('');
+
 
         return '<div style="background:rgba(15,23,42,0.65); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); border:1px solid ' + (isTop ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.08)') + '; border-radius:16px; padding:16px 20px; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; box-shadow:0 8px 32px 0 rgba(0,0,0,0.37); position:relative; overflow:hidden;">' +
           (isTop ? '<div style="position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(to bottom, #38bdf8, #818cf8);"></div>' : '') +
@@ -18246,7 +18441,7 @@
           '<div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; min-width:80px;">' +
             '<div style="font-size:0.8rem; font-weight:900; color:#34d399;">+$' + item.montoUSD.toFixed(2) + '</div>' +
             '<div style="font-size:0.52rem; color:#64748b;">' + item.time + '</div>' +
-            '<button onclick="event.stopPropagation(); window.abrirTalkytimes(\'' + cleanTickerId + '\')" style="background:rgba(56,189,248,0.2); border:1px solid rgba(56,189,248,0.5); color:#38bdf8; border-radius:6px; padding:3px 8px; font-size:0.55rem; font-weight:900; cursor:pointer; white-space:nowrap; margin-top:2px;">🔗 Abrir</button>' +
+            '<a href="https://talkytimes.com/user/' + cleanTickerId + '" target="_blank" onclick="event.stopPropagation(); window.abrirTalkytimes(\'' + cleanTickerId + '\');" style="background:linear-gradient(135deg, rgba(14,165,233,0.35), rgba(59,130,246,0.35)); border:1px solid rgba(56,189,248,0.6); color:#38bdf8; border-radius:6px; padding:3px 8px; font-size:0.55rem; font-weight:900; cursor:pointer; white-space:nowrap; text-decoration:none; display:inline-flex; align-items:center; gap:2px; margin-top:2px; box-shadow:0 2px 8px rgba(14,165,233,0.3);">🔗 Abrir</a>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -18282,8 +18477,30 @@
           '</div>' +
         '</div>' +
 
+        '<!-- Barra de Búsqueda Rápida y Apertura Directa de Perfil Talkytimes -->' +
+        '<div style="background:linear-gradient(135deg, rgba(14,165,233,0.12), rgba(16,185,129,0.12)); border:1px solid rgba(56,189,248,0.35); border-radius:14px; padding:12px 18px; margin:16px 20px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">' +
+          '<div style="display:flex; align-items:center; gap:10px;">' +
+            '<span style="font-size:1.4rem;">🎯</span>' +
+            '<div>' +
+              '<div style="font-size:0.75rem; font-weight:900; color:#ffffff; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:8px;">' +
+                '<span>Apertura de Perfil de Cliente en Talkytimes</span>' +
+                '<span style="background:rgba(52,211,153,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.3); padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800;">RUTA OFICIAL: https://talkytimes.com/user/[ID]</span>' +
+              '</div>' +
+              '<div style="font-size:0.6rem; color:#94a3b8; margin-top:2px;">' +
+                'Pega el ID o URL del cliente que recargó para abrirlo de inmediato en Talkytimes y agregarlo al radar en vivo.' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex; align-items:center; gap:8px; flex:1; max-width:580px; min-width:280px;">' +
+            '<input id="quick-tt-search-input" type="text" placeholder="Ej: 170699370 o https://talkytimes.com/user/170699370" style="flex:1; background:#0b132b; border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:8px 12px; border-radius:8px; font-size:0.72rem; font-family:monospace; font-weight:800; outline:none;" onkeydown="if(event.key===\'Enter\') window.abrirTalkytimesDirectoInput();">' +
+            '<button onclick="window.abrirTalkytimesDirectoInput()" style="background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(14,165,233,0.4);">🔗 Abrir Perfil</button>' +
+            '<button onclick="window.modalAgregarClienteRecarga()" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(16,185,129,0.4);">⚡ + Registrar Recarga</button>' +
+          '</div>' +
+        '</div>' +
+
         '<!-- Sub-pestañas Glassmorphism -->' +
         '<div style="display:flex; background:rgba(0,0,0,0.2); border-bottom:1px solid rgba(255,255,255,0.06); padding:0 20px;">' +
+
           '<button onclick="window.switchRtSubTab(\'operadores\')" style="background:none; border:none; border-bottom:2px solid ' + (subTabOperadoresActive ? '#38bdf8' : 'transparent') + '; color:' + (subTabOperadoresActive ? '#38bdf8' : '#94a3b8') + '; padding:14px 20px; font-size:0.72rem; font-weight:900; cursor:pointer; display:flex; align-items:center; gap:8px;">' +
             '👤 Operadores & Perfiles Asignados' +
           '</button>' +

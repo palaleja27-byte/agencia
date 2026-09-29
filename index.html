@@ -16941,7 +16941,7 @@
     window.activeRtFilterTurno = window.activeRtFilterTurno || 'ALL';
     window.activeRtFilterStatus = window.activeRtFilterStatus || 'ALL';
     window.activeRtSearchOp = window.activeRtSearchOp || '';
-    window.activeRtSubTab = window.activeRtSubTab || 'operadores'; // 'operadores' o 'clientes-recarga'
+    window.activeRtSubTab = window.activeRtSubTab || 'operadores';
 
     window.setRtFilterTurno = function(turno) {
       window.activeRtFilterTurno = turno;
@@ -16965,21 +16965,27 @@
 
     window.copiarDatameID = function(datameId, nombreCliente) {
       if (!datameId) return;
-      navigator.clipboard.writeText(String(datameId)).then(() => {
-        alert('📋 ID Datame copiado: ' + datameId + '\nCliente: ' + (nombreCliente || '') + '\nPégalo en Datame para abrir el chat de inmediato.');
-      }).catch(() => {
-        prompt('Copia el ID de Datame manualmente:', datameId);
-      });
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(String(datameId)).then(() => {
+          alert('📋 ID Datame copiado: ' + datameId + '\nCliente: ' + (nombreCliente || '') + '\nPégalo en Datame para abrir el chat de inmediato.');
+        }).catch(() => {
+          prompt('Copia el ID de Datame manualmente:', datameId);
+        });
+      } else {
+        prompt('Copia el ID de Datame:', datameId);
+      }
     };
 
-    window.atacarClienteDatame = function(datameId, nombreCliente, saldoUSD, creditos) {
-      const msg = 'Hola ' + nombreCliente + ', me encantaría charlar contigo ahora que estás en línea... ✨';
-      navigator.clipboard.writeText(String(datameId)).then(() => {
-        alert('🎯 DATOS COPIADOS AL PORTAPAPELES:\n• ID Datame: ' + datameId + '\n• Cliente: ' + nombreCliente + '\n• Recarga: $' + saldoUSD + ' USD (' + creditos + ' créditos)\n\nPega el ID en la barra de Datame para iniciar la conversación.');
-      });
+    window.atacarClienteDatame = function(datameId, nombreCliente, saldoUSD, creditos, hookText) {
+      const msg = hookText || ('Hola ' + nombreCliente + ', me encantaría charlar contigo ahora que estás en línea... ✨');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(msg).then(() => {
+          alert('🎯 DATOS COPIADOS AL PORTAPAPELES:\n• ID Datame: ' + datameId + '\n• Cliente: ' + nombreCliente + '\n• Recarga: $' + saldoUSD + ' USD (' + creditos + ' créditos)\n• Mensaje de apertura copiado.\n\nPega el ID en Datame e inicia la conversación.');
+        });
+      }
     };
 
-    window.abrirModalDetalleCliente = function(id, modelo, op, cliente, saldoUSD, creditos, ultimoServicio) {
+    window.abrirModalDetalleCliente = function(id, modelo, op, cliente, saldoUSD, creditos, ultimoServicio, tiempoRecarga, antiguedad, temas) {
       const modal = document.getElementById('rt-cliente-modal');
       if (!modal) return;
       document.getElementById('rt-m-cliente-nombre').textContent = cliente;
@@ -16987,7 +16993,15 @@
       document.getElementById('rt-m-cliente-saldo').textContent = '$' + Number(saldoUSD).toFixed(2) + ' USD (' + Number(creditos).toLocaleString() + ' créditos de recarga disponibles)';
       document.getElementById('rt-m-cliente-op').textContent = op;
       document.getElementById('rt-m-cliente-modelo').textContent = modelo;
-      document.getElementById('rt-m-cliente-ultimoservicio').textContent = ultimoServicio;
+      document.getElementById('rt-m-cliente-ultimoservicio').textContent = ultimoServicio + (tiempoRecarga ? ' · Recarga ' + tiempoRecarga : '');
+      
+      const elExt = document.getElementById('rt-m-cliente-extra');
+      if (elExt) {
+        elExt.innerHTML = '<div style="font-size:0.62rem; color:#cbd5e1; margin-top:8px; line-height:1.4;">' +
+          '⏳ <b>Antigüedad:</b> ' + (antiguedad || 'Cliente activo') + '<br>' +
+          '💡 <b>Intereses / CRM:</b> ' + (temas || 'Conversaciones íntimas, fotos y audio') +
+        '</div>';
+      }
       modal.style.display = 'flex';
     };
 
@@ -17004,7 +17018,7 @@
       }
       wrap.style.display = 'block';
 
-      // Roster oficial de operadores y perfiles asignados (SIN FOTOS DE AVATAR, CON ID DATAME REAL)
+      // Roster completo de operadores oficiales de Agencia Romero con todos sus perfiles y clientes con recarga
       const roster = [
         { 
           id: '168486464', 
@@ -17021,11 +17035,10 @@
           status: 'facturando', 
           estadoTxt: '🟢 Facturando en Vivo',
           ultimoPulso: { montoUSD: 3.50, servicio: 'Foto VIP', haceMin: '1m' },
-          clienteNombre: 'Robert Miller',
-          clienteDatameId: '99198592',
-          clienteSaldoUSD: 450.00,
-          clienteCreditos: 4500,
-          clientePais: '🇺🇸 USA'
+          clientes: [
+            { id: '99198592', nombre: 'Robert Miller (Andres)', pais: '🇺🇸 USA', saldoUSD: 450.00, creditos: 4500, tiempoRecarga: 'Hace 15 min', antiguedad: '14 meses (Cliente Fiel)', temas: 'Viajes en yate, arquitectura moderna', statusOnline: '🟢 Online en Chat' },
+            { id: '95457347', nombre: 'Mariano (Whale)', pais: '🇺🇸 USA', saldoUSD: 850.00, creditos: 8500, tiempoRecarga: 'Hace 8 min', antiguedad: '22 meses (Super Whale)', temas: 'Fitness, negocios en Miami, autos de lujo', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '157112125', 
@@ -17042,11 +17055,10 @@
           status: 'facturando', 
           estadoTxt: '🟢 Facturando en Vivo',
           ultimoPulso: { montoUSD: 5.00, servicio: 'Audio Stream Privado', haceMin: '2m' },
-          clienteNombre: 'Michael Chang',
-          clienteDatameId: '157057754',
-          clienteSaldoUSD: 620.00,
-          clienteCreditos: 6200,
-          clientePais: '🇬🇧 UK'
+          clientes: [
+            { id: '157057754', nombre: 'Michael Chang (Valdemir)', pais: '🇬🇧 UK', saldoUSD: 620.00, creditos: 6200, tiempoRecarga: 'Hace 22 min', antiguedad: '8 meses', temas: 'Finanzas en Londres, tenis, salidas a cenar', statusOnline: '🟢 Online en Chat' },
+            { id: '113579174', nombre: 'Ronaldo (Beluga Intercept)', pais: '🇨🇦 Canadá', saldoUSD: 780.00, creditos: 7800, tiempoRecarga: 'Hace 18 min', antiguedad: '19 meses (Whale)', temas: 'Esquí en Vancouver, fotografía gourmet', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '1020195', 
@@ -17063,11 +17075,10 @@
           status: 'facturando', 
           estadoTxt: '🟢 Facturando en Vivo',
           ultimoPulso: { montoUSD: 2.00, servicio: 'Chat Rápido', haceMin: '3m' },
-          clienteNombre: 'David Wilson',
-          clienteDatameId: '107609294',
-          clienteSaldoUSD: 180.00,
-          clienteCreditos: 1800,
-          clientePais: '🇨🇦 Canadá'
+          clientes: [
+            { id: '107609294', nombre: 'David Wilson (Cesar)', pais: '🇨🇦 Canadá', saldoUSD: 180.00, creditos: 1800, tiempoRecarga: 'Hace 35 min', antiguedad: '11 meses', temas: 'Música clásica, charlas nocturnas íntimas', statusOnline: '🟢 Online en Chat' },
+            { id: '101246949', nombre: 'Pablo (Date Miranda Intercept)', pais: '🇦🇺 Australia', saldoUSD: 550.00, creditos: 5500, tiempoRecarga: 'Hace 28 min', antiguedad: '16 meses', temas: 'Playa en Sydney, cócteles al atardecer', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '130422416', 
@@ -17084,11 +17095,10 @@
           status: 'chateando', 
           estadoTxt: '💬 Chateando Activo',
           ultimoPulso: { montoUSD: 1.50, servicio: 'Icebreaker Reply', haceMin: '4m' },
-          clienteNombre: 'James Anderson',
-          clienteDatameId: '97998195',
-          clienteSaldoUSD: 210.00,
-          clienteCreditos: 2100,
-          clientePais: '🇦🇺 Australia'
+          clientes: [
+            { id: '97998195', nombre: 'James Anderson (Carolina)', pais: '🇦🇺 Australia', saldoUSD: 210.00, creditos: 2100, tiempoRecarga: 'Hace 45 min', antiguedad: '6 meses', temas: 'Fotografía de paisajes, viajes tropicales', statusOnline: '🟢 Online en Chat' },
+            { id: '145839775', nombre: 'Bruno (CAN Intercept)', pais: '🇩🇪 Alemania', saldoUSD: 500.00, creditos: 5000, tiempoRecarga: 'Hace 32 min', antiguedad: '13 meses', temas: 'Ingeniería en Munich, vinos y tecnología', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '170740935', 
@@ -17105,11 +17115,10 @@
           status: 'facturando', 
           estadoTxt: '🟢 Facturando en Vivo',
           ultimoPulso: { montoUSD: 4.00, servicio: 'Set de Fotos', haceMin: '2m' },
-          clienteNombre: 'Thomas Wright',
-          clienteDatameId: '144023064',
-          clienteSaldoUSD: 340.00,
-          clienteCreditos: 3400,
-          clientePais: '🇺🇸 USA'
+          clientes: [
+            { id: '144023064', nombre: 'Thomas Wright (Jacinto)', pais: '🇺🇸 USA', saldoUSD: 340.00, creditos: 3400, tiempoRecarga: 'Hace 50 min', antiguedad: '15 meses', temas: 'Golf, bienes raíces en Texas', statusOnline: '🟢 Online en Chat' },
+            { id: '103602997', nombre: 'Cristina (ACJ Intercept)', pais: '🇬🇧 UK', saldoUSD: 420.00, creditos: 4200, tiempoRecarga: 'Hace 40 min', antiguedad: '9 meses', temas: 'Moda en Londres, arte contemporáneo', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '171638277', 
@@ -17126,11 +17135,10 @@
           status: 'chateando', 
           estadoTxt: '💬 Chateando Activo',
           ultimoPulso: { montoUSD: 2.50, servicio: 'Nota de Audio', haceMin: '5m' },
-          clienteNombre: 'Carlos Gomez',
-          clienteDatameId: '94988099',
-          clienteSaldoUSD: 95.00,
-          clienteCreditos: 950,
-          clientePais: '🇪🇸 España'
+          clientes: [
+            { id: '94988099', nombre: 'Carlos Gomez (Leonardo)', pais: '🇪🇸 España', saldoUSD: 95.00, creditos: 950, tiempoRecarga: 'Hace 1 hora', antiguedad: '4 meses', temas: 'Fútbol en Madrid, vida nocturna en Ibiza', statusOnline: '🟢 Online en Chat' },
+            { id: '109179953', nombre: 'Marcelo (SHALOM Intercept)', pais: '🇨🇭 Suiza', saldoUSD: 390.00, creditos: 3900, tiempoRecarga: 'Hace 48 min', antiguedad: '17 meses', temas: 'Relojería en Ginebra, esquí en los Alpes', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '108018336', 
@@ -17147,11 +17155,10 @@
           status: 'espera', 
           estadoTxt: '🟡 Esperando Mensajes',
           ultimoPulso: { montoUSD: 1.00, servicio: 'Chat Texto', haceMin: '8m' },
-          clienteNombre: 'Daniel Lee',
-          clienteDatameId: '177425789',
-          clienteSaldoUSD: 140.00,
-          clienteCreditos: 1400,
-          clientePais: '🇨🇦 Canadá'
+          clientes: [
+            { id: '177425789', nombre: 'Daniel Lee (Everton)', pais: '🇨🇦 Canadá', saldoUSD: 140.00, creditos: 1400, tiempoRecarga: 'Hace 1 hora', antiguedad: '5 meses', temas: 'Desarrollo de software en Toronto, gaming', statusOnline: '🟢 Online en Espera' },
+            { id: '95938147', nombre: 'Danilo (Azul Intercept)', pais: '🇸🇪 Suecia', saldoUSD: 360.00, creditos: 3600, tiempoRecarga: 'Hace 52 min', antiguedad: '12 meses', temas: 'Diseño en Estocolmo, naturaleza y música', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '138130329', 
@@ -17168,11 +17175,10 @@
           status: 'facturando', 
           estadoTxt: '🟢 Facturando en Vivo',
           ultimoPulso: { montoUSD: 3.00, servicio: 'Foto Álbum', haceMin: '3m' },
-          clienteNombre: 'Paul Davis',
-          clienteDatameId: '181543920',
-          clienteSaldoUSD: 190.00,
-          clienteCreditos: 1900,
-          clientePais: '🇬🇧 UK'
+          clientes: [
+            { id: '181543920', nombre: 'Paul Davis (Maria A.)', pais: '🇬🇧 UK', saldoUSD: 190.00, creditos: 1900, tiempoRecarga: 'Hace 1 hora', antiguedad: '7 meses', temas: 'Premier League, pubs en Manchester', statusOnline: '🟢 Online en Chat' },
+            { id: '115976238', nombre: 'Rodrigo (HORIZON Intercept)', pais: '🇬🇧 UK', saldoUSD: 310.00, creditos: 3100, tiempoRecarga: 'Hace 1 hora', antiguedad: '10 meses', temas: 'Historia europea, lectura y viajes', statusOnline: '🟢 Online en Espera' }
+          ]
         },
         { 
           id: '145844971', 
@@ -17189,32 +17195,106 @@
           status: 'espera', 
           estadoTxt: '🟡 En Espera / Respuesta Requerida',
           ultimoPulso: { montoUSD: 1.20, servicio: 'Chat Texto', haceMin: '12m' },
-          clienteNombre: 'George Hall',
-          clienteDatameId: '112349081',
-          clienteSaldoUSD: 80.00,
-          clienteCreditos: 800,
-          clientePais: '🇺🇸 USA'
+          clientes: [
+            { id: '112349081', nombre: 'George Hall', pais: '🇺🇸 USA', saldoUSD: 80.00, creditos: 800, tiempoRecarga: 'Hace 2 horas', antiguedad: '3 meses', temas: 'Pesca en Florida, botes y barbacoas', statusOnline: '🟢 Online en Espera' },
+            { id: '183558597', nombre: 'Allan (L&R Intercept)', pais: '🇬🇧 UK', saldoUSD: 280.00, creditos: 2800, tiempoRecarga: 'Hace 1 hora', antiguedad: '14 meses', temas: 'Cervezas artesanales en Yorkshire, rugby', statusOnline: '🟢 Online en Espera' }
+          ]
+        },
+        { 
+          id: '108849201', 
+          modelo: 'DANIEL', 
+          op: 'Daniel Torrealba', 
+          jornada: 'Tarde', 
+          ptsNeto: 26.5, 
+          speedSec: 20.4, 
+          pph: 13.2, 
+          chatsPts: 14.0, 
+          fotosPts: 7.5, 
+          audioPts: 3.0, 
+          regalosPts: 2.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 3.00, servicio: 'Set de Fotos', haceMin: '4m' },
+          clientes: [
+            { id: '91363720', nombre: 'Sandra Marina (Pedregal Intercept)', pais: '🇲🇽 México', saldoUSD: 260.00, creditos: 2600, tiempoRecarga: 'Hace 1 hora', antiguedad: '8 meses', temas: 'Negocios en Cancún, cenas gourmet', statusOnline: '🟢 Online en Espera' }
+          ]
+        },
+        { 
+          id: '109923841', 
+          modelo: 'GLORIA', 
+          op: 'Gloria Avila', 
+          jornada: 'Mañana', 
+          ptsNeto: 28.1, 
+          speedSec: 19.8, 
+          pph: 14.0, 
+          chatsPts: 15.0, 
+          fotosPts: 8.1, 
+          audioPts: 3.0, 
+          regalosPts: 2.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 4.50, servicio: 'Foto VIP', haceMin: '3m' },
+          clientes: [
+            { id: '72101046', nombre: 'Maria Teresa (Whale)', pais: '🇨🇴 Colombia', saldoUSD: 320.00, creditos: 3200, tiempoRecarga: 'Hace 45 min', antiguedad: '16 meses', temas: 'Moda en Medellín, eventos sociales', statusOnline: '🟢 Online en Chat' }
+          ]
+        },
+        { 
+          id: '110482910', 
+          modelo: 'NAVID', 
+          op: 'Navid Guinand', 
+          jornada: 'Noche', 
+          ptsNeto: 24.6, 
+          speedSec: 22.0, 
+          pph: 12.3, 
+          chatsPts: 13.0, 
+          fotosPts: 6.6, 
+          audioPts: 3.0, 
+          regalosPts: 2.0,
+          status: 'chateando', 
+          estadoTxt: '💬 Chateando Activo',
+          ultimoPulso: { montoUSD: 2.00, servicio: 'Chat Directo', haceMin: '5m' },
+          clientes: [
+            { id: '84065291', nombre: 'Alonso (NLOVE Intercept)', pais: '🇪🇸 España', saldoUSD: 290.00, creditos: 2900, tiempoRecarga: 'Hace 1 hora', antiguedad: '10 meses', temas: 'Música en Madrid, gastronomía', statusOnline: '🟢 Online en Espera' }
+          ]
+        },
+        { 
+          id: '111829471', 
+          modelo: 'DEIBYS', 
+          op: 'Deibys Peres', 
+          jornada: 'Tarde', 
+          ptsNeto: 18.0, 
+          speedSec: 25.0, 
+          pph: 9.0, 
+          chatsPts: 10.0, 
+          fotosPts: 5.0, 
+          audioPts: 2.0, 
+          regalosPts: 1.0,
+          status: 'espera', 
+          estadoTxt: '🟡 Esperando Mensajes',
+          ultimoPulso: { montoUSD: 1.50, servicio: 'Chat Texto', haceMin: '10m' },
+          clientes: [
+            { id: '87744921', nombre: 'Gilson (Ex-volutio Intercept)', pais: '🇧🇷 Brasil', saldoUSD: 240.00, creditos: 2400, tiempoRecarga: 'Hace 2 horas', antiguedad: '6 meses', temas: 'Playa en Río, viajes por Sudamérica', statusOnline: '🟢 Online en Espera' }
+          ]
+        },
+        { 
+          id: '112938472', 
+          modelo: 'JHONNYS', 
+          op: 'Jhonnys Gonzalez', 
+          jornada: 'Mañana', 
+          ptsNeto: 9.0, 
+          speedSec: 28.0, 
+          pph: 4.5, 
+          chatsPts: 5.0, 
+          fotosPts: 2.5, 
+          audioPts: 1.0, 
+          regalosPts: 0.5,
+          status: 'espera', 
+          estadoTxt: '🟡 En Espera',
+          ultimoPulso: { montoUSD: 1.00, servicio: 'Chat Texto', haceMin: '15m' },
+          clientes: [
+            { id: '95031124', nombre: 'Alba (Geneva Intercept)', pais: '🇨🇭 Suiza', saldoUSD: 210.00, creditos: 2100, tiempoRecarga: 'Hace 2 horas', antiguedad: '5 meses', temas: 'Viajes a Ginebra, fotografía', statusOnline: '🟢 Online en Espera' }
+          ]
         }
-      ];
-
-      // Catálogo maestro de todos los clientes online con créditos de recarga extraídos de Datame
-      const clientesOnlineDatame = [
-        { id: '95457347', nombre: 'Mariano', pais: '🇺🇸 USA', agencia: 'Andinas Marketing', saldoUSD: 850.00, creditos: 8500, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 12 min', arquetipo: 'Whale / High Roller' },
-        { id: '113579174', nombre: 'Ronaldo', pais: '🇨🇦 Canadá', agencia: 'Beluga Digital', saldoUSD: 780.00, creditos: 7800, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 18 min', arquetipo: 'Whale / Fotos VIP' },
-        { id: '157057754', nombre: 'Valdemir', pais: '🇬🇧 UK', agencia: 'GRUPO ROMERO', saldoUSD: 620.00, creditos: 6200, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 25 min', arquetipo: 'Whale / Audio & Chat' },
-        { id: '101246949', nombre: 'Pablo', pais: '🇦🇺 Australia', agencia: 'Date Miranda', saldoUSD: 550.00, creditos: 5500, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 30 min', arquetipo: 'High Value' },
-        { id: '145839775', nombre: 'Bruno', pais: '🇩🇪 Alemania', agencia: 'GRUPO CAN', saldoUSD: 500.00, creditos: 5000, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 35 min', arquetipo: 'Whale / Tips' },
-        { id: '99198592', nombre: 'Andres (Robert M.)', pais: '🇺🇸 USA', agencia: 'GRUPO ROMERO', saldoUSD: 450.00, creditos: 4500, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 40 min', arquetipo: 'VIP Regular' },
-        { id: '103602997', nombre: 'Cristina (London)', pais: '🇬🇧 UK', agencia: 'ACJ Grupo Empresarial', saldoUSD: 420.00, creditos: 4200, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 45 min', arquetipo: 'VIP Regular' },
-        { id: '109179953', nombre: 'Marcelo', pais: '🇨🇭 Suiza', agencia: 'CONNECT SHALOM', saldoUSD: 390.00, creditos: 3900, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 50 min', arquetipo: 'VIP Regular' },
-        { id: '95938147', nombre: 'Danilo', pais: '🇸🇪 Suecia', agencia: 'Azul', saldoUSD: 360.00, creditos: 3600, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 55 min', arquetipo: 'Active Spender' },
-        { id: '144023064', nombre: 'Jacinto (Thomas W.)', pais: '🇺🇸 USA', agencia: 'GRUPO ROMERO', saldoUSD: 340.00, creditos: 3400, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 1 hora', arquetipo: 'Active Spender' },
-        { id: '115976238', nombre: 'Rodrigo (Oxford)', pais: '🇬🇧 UK', agencia: 'HORIZON', saldoUSD: 310.00, creditos: 3100, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 1 hora', arquetipo: 'Active Spender' },
-        { id: '183558597', nombre: 'Allan', pais: '🇬🇧 UK', agencia: 'L&R', saldoUSD: 280.00, creditos: 2800, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 1 hora', arquetipo: 'Active Spender' },
-        { id: '97998195', nombre: 'Carolina (James A.)', pais: '🇦🇺 Australia', agencia: 'GRUPO ROMERO', saldoUSD: 210.00, creditos: 2100, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 2 horas', arquetipo: 'Moderate Spender' },
-        { id: '181543920', nombre: 'Maria Alejandra (Paul D.)', pais: '🇬🇧 UK', agencia: 'GRUPO ROMERO', saldoUSD: 190.00, creditos: 1900, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 2 horas', arquetipo: 'Moderate Spender' },
-        { id: '107609294', nombre: 'Cesar (David W.)', pais: '🇨🇦 Canadá', agencia: 'GRUPO ROMERO', saldoUSD: 180.00, creditos: 1800, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 2 horas', arquetipo: 'Moderate Spender' },
-        { id: '177425789', nombre: 'Everton (Daniel L.)', pais: '🇨🇦 Canadá', agencia: 'GRUPO ROMERO', saldoUSD: 140.00, creditos: 1400, statusOnline: '🟢 Online Ahora', ultimaRecarga: 'Hace 3 horas', arquetipo: 'Moderate Spender' }
       ];
 
       // Sincronizar dinámicamente con _rrRtData si existe
@@ -17235,12 +17315,13 @@
       const filteredRoster = roster.filter(r => {
         const matchT = (filterT === 'ALL') || (r.jornada === filterT);
         const matchS = (filterS === 'ALL') || (r.status === filterS);
-        const matchQ = !searchQ || r.op.toLowerCase().includes(searchQ) || r.modelo.toLowerCase().includes(searchQ) || r.id.includes(searchQ) || r.clienteNombre.toLowerCase().includes(searchQ) || r.clienteDatameId.includes(searchQ);
+        const matchQ = !searchQ || r.op.toLowerCase().includes(searchQ) || r.modelo.toLowerCase().includes(searchQ) || r.id.includes(searchQ) || (r.clientes && r.clientes.some(c => c.nombre.toLowerCase().includes(searchQ) || c.id.includes(searchQ)));
         return matchT && matchS && matchQ;
       });
 
-      const filteredClientesOnline = clientesOnlineDatame.filter(c => {
-        return !searchQ || c.nombre.toLowerCase().includes(searchQ) || c.id.includes(searchQ) || c.agencia.toLowerCase().includes(searchQ) || c.pais.toLowerCase().includes(searchQ);
+      const allClientsOnline = window.masterRadarClientes || [];
+      const filteredClientesOnline = allClientsOnline.filter(c => {
+        return !searchQ || c.nombre.toLowerCase().includes(searchQ) || c.id.includes(searchQ) || c.agencia.toLowerCase().includes(searchQ) || c.pais.toLowerCase().includes(searchQ) || (c.temasInteres && c.temasInteres.toLowerCase().includes(searchQ));
       });
 
       // Cálculos globales
@@ -17253,17 +17334,17 @@
       const metaJornadaUSD = 300.0;
       const metaPct = Math.min(100, Math.round((totalUSD / metaJornadaUSD) * 100));
 
-      const totalSaldoOnlineUSD = clientesOnlineDatame.reduce((s, c) => s + c.saldoUSD, 0);
-      const totalCreditosOnline = clientesOnlineDatame.reduce((s, c) => s + c.creditos, 0);
+      const totalSaldoOnlineUSD = allClientsOnline.reduce((s, c) => s + (c.recargaUSD || c.saldoUSD || 0), 0);
+      const totalCreditosOnline = allClientsOnline.reduce((s, c) => s + (c.creditos || 0), 0);
 
-      // Feed de transacciones en vivo con Datame IDs
+      // Ticker de transacciones en vivo
       const liveFeedItems = [
-        { op: 'Krystal Gabriela', modelo: 'GUSTAVO', montoUSD: 3.50, servicio: '📸 Foto VIP', time: 'Hace 45 seg', cliente: 'Robert Miller', datameId: '99198592', saldoUSD: 450.00, creditos: 4500 },
-        { op: 'Kevin Jhosneiver', modelo: 'LUIZ', montoUSD: 5.00, servicio: '🎙️ Audio Stream', time: 'Hace 2 min', cliente: 'Michael Chang', datameId: '157057754', saldoUSD: 620.00, creditos: 6200 },
-        { op: 'Esperanza Jimenez', modelo: 'ROBERTO', montoUSD: 4.00, servicio: '📸 Foto Privada', time: 'Hace 3 min', cliente: 'Thomas Wright', datameId: '144023064', saldoUSD: 340.00, creditos: 3400 },
-        { op: 'Josue David H.', modelo: 'MARCOS', montoUSD: 2.00, servicio: '💬 Chat Instantáneo', time: 'Hace 4 min', cliente: 'David Wilson', datameId: '107609294', saldoUSD: 180.00, creditos: 1800 },
-        { op: 'Kevin Jhosneiver', modelo: 'AGUSTIN', montoUSD: 3.00, servicio: '🎁 Regalo / Tip', time: 'Hace 5 min', cliente: 'Paul Davis', datameId: '181543920', saldoUSD: 190.00, creditos: 1900 },
-        { op: 'Krystal Gabriela', modelo: 'RONALT', montoUSD: 2.50, servicio: '💬 Sesión de Chat', time: 'Hace 6 min', cliente: 'Carlos Gomez', datameId: '94988099', saldoUSD: 95.00, creditos: 950 }
+        { op: 'Krystal Gabriela', modelo: 'GUSTAVO', montoUSD: 3.50, servicio: '📸 Foto VIP', time: 'Hace 45 seg', cliente: 'Robert Miller', datameId: '99198592', saldoUSD: 450.00, creditos: 4500, antiguedad: '14 meses', temas: 'Viajes en yate' },
+        { op: 'Kevin Jhosneiver', modelo: 'LUIZ', montoUSD: 5.00, servicio: '🎙️ Audio Stream', time: 'Hace 2 min', cliente: 'Michael Chang', datameId: '157057754', saldoUSD: 620.00, creditos: 6200, antiguedad: '8 meses', temas: 'Finanzas en Londres' },
+        { op: 'Esperanza Jimenez', modelo: 'ROBERTO', montoUSD: 4.00, servicio: '📸 Foto Privada', time: 'Hace 3 min', cliente: 'Thomas Wright', datameId: '144023064', saldoUSD: 340.00, creditos: 3400, antiguedad: '15 meses', temas: 'Golf en Texas' },
+        { op: 'Josue David H.', modelo: 'MARCOS', montoUSD: 2.00, servicio: '💬 Chat Instantáneo', time: 'Hace 4 min', cliente: 'David Wilson', datameId: '107609294', saldoUSD: 180.00, creditos: 1800, antiguedad: '11 meses', temas: 'Música clásica' },
+        { op: 'Kevin Jhosneiver', modelo: 'AGUSTIN', montoUSD: 3.00, servicio: '🎁 Regalo / Tip', time: 'Hace 5 min', cliente: 'Paul Davis', datameId: '181543920', saldoUSD: 190.00, creditos: 1900, antiguedad: '7 meses', temas: 'Premier League' },
+        { op: 'Krystal Gabriela', modelo: 'RONALT', montoUSD: 2.50, servicio: '💬 Sesión de Chat', time: 'Hace 6 min', cliente: 'Carlos Gomez', datameId: '94988099', saldoUSD: 95.00, creditos: 950, antiguedad: '4 meses', temas: 'Fútbol en Madrid' }
       ];
 
       const turnosButtons = [
@@ -17273,10 +17354,7 @@
         { key: 'Noche', label: '🌙 Noche (22-06)' }
       ].map(t => {
         const active = (filterT === t.key);
-        const bg = active ? '#ef4444' : 'rgba(255,255,255,0.05)';
-        const bd = active ? '#ef4444' : 'rgba(255,255,255,0.1)';
-        const cl = active ? '#fff' : '#94a3b8';
-        return '<button onclick="window.setRtFilterTurno(\x27' + t.key + '\x27)" style="background:' + bg + '; border:1px solid ' + bd + '; color:' + cl + '; padding:4px 10px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer; transition:0.2s;">' + t.label + '</button>';
+        return '<button onclick="window.setRtFilterTurno(\x27' + t.key + '\x27)" style="background:' + (active ? '#ef4444' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (active ? '#ef4444' : 'rgba(255,255,255,0.1)') + '; color:' + (active ? '#fff' : '#94a3b8') + '; padding:4px 10px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer; transition:0.2s;">' + t.label + '</button>';
       }).join('');
 
       const statusButtons = [
@@ -17286,13 +17364,10 @@
         { key: 'espera', label: '🟡 En Espera' }
       ].map(s => {
         const active = (filterS === s.key);
-        const bg = active ? '#38bdf8' : 'rgba(255,255,255,0.04)';
-        const bd = active ? '#38bdf8' : 'rgba(255,255,255,0.08)';
-        const cl = active ? '#fff' : '#94a3b8';
-        return '<button onclick="window.setRtFilterStatus(\x27' + s.key + '\x27)" style="background:' + bg + '; border:1px solid ' + bd + '; color:' + cl + '; padding:4px 9px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer; transition:0.2s;">' + s.label + '</button>';
+        return '<button onclick="window.setRtFilterStatus(\x27' + s.key + '\x27)" style="background:' + (active ? '#38bdf8' : 'rgba(255,255,255,0.04)') + '; border:1px solid ' + (active ? '#38bdf8' : 'rgba(255,255,255,0.08)') + '; color:' + (active ? '#fff' : '#94a3b8') + '; padding:4px 9px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer; transition:0.2s;">' + s.label + '</button>';
       }).join('');
 
-      // Render cards de operadores SIN FOTOS DE AVATAR (con diseño tecnológico puro)
+      // Render cards de operadores con TODOS los clientes asignados con recarga
       const cardsHTML = filteredRoster.map((r, idx) => {
         const usd = (r.ptsNeto * 1.0).toFixed(2);
         const cop = Math.round(r.ptsNeto * 1400).toLocaleString('es-CO');
@@ -17303,11 +17378,32 @@
           ? '<span style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">💬 CHATEANDO</span>'
           : '<span style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟡 EN ESPERA</span>';
 
-        return '<div style="background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.7)); border:1px solid ' + (isTop ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)') + '; border-radius:14px; padding:14px 18px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(0,0,0,0.3); position:relative; overflow:hidden;">' +
+        const clientesListHTML = (r.clientes || []).map(c => {
+          return '<div style="background:rgba(16,185,129,0.08); padding:7px 10px; border-radius:8px; border:1px solid rgba(16,185,129,0.25); display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">' +
+            '<div>' +
+              '<div style="font-size:0.72rem; color:#ffffff; font-weight:900;">' +
+                '🎯 ' + c.nombre + ' ' + (c.pais || '') +
+                ' <span style="font-size:0.55rem; color:#a7f3d0; background:rgba(52,211,153,0.15); padding:1px 5px; border-radius:4px; font-weight:800;">' + (c.statusOnline || '🟢 Online') + '</span>' +
+              '</div>' +
+              '<div style="font-size:0.62rem; color:#cbd5e1; margin-top:2px;">' +
+                '🔑 <span style="color:#38bdf8; font-family:monospace; font-weight:900;">ID DATAME: ' + c.id + '</span> · <span style="color:#34d399; font-weight:900;">$' + c.saldoUSD.toFixed(0) + ' USD Recarga (' + c.creditos.toLocaleString() + ' cr)</span>' +
+              '</div>' +
+              '<div style="font-size:0.55rem; color:#94a3b8; margin-top:1px;">' +
+                '⏳ <b>Recarga:</b> ' + c.tiempoRecarga + ' · <b>Antigüedad:</b> ' + (c.antiguedad || 'Cliente Fiel') + ' · <i>' + (c.temas || '') + '</i>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex; gap:4px; flex-direction:column;">' +
+              '<button onclick="copiarDatameID(\x27' + c.id + '\x27, \x27' + c.nombre + '\x27)" style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.35); color:#34d399; border-radius:6px; padding:3px 8px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">📋 Copiar ID</button>' +
+              '<button onclick="abrirModalDetalleCliente(\x27' + c.id + '\x27, \x27' + r.modelo + '\x27, \x27' + r.op + '\x27, \x27' + c.nombre + '\x27, ' + c.saldoUSD + ', ' + c.creditos + ', \x27' + r.ultimoPulso.servicio + '\x27, \x27' + c.tiempoRecarga + '\x27, \x27' + c.antiguedad + '\x27, \x27' + c.temas + '\x27)" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; border-radius:6px; padding:2px 8px; font-size:0.55rem; font-weight:700; cursor:pointer; white-space:nowrap;">ℹ️ Info CRM</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        return '<div style="background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.7)); border:1px solid ' + (isTop ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)') + '; border-radius:14px; padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(0,0,0,0.3); position:relative; overflow:hidden;">' +
           (isTop ? '<div style="position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(to bottom, #ef4444, #f43f5e);"></div>' : '') +
           
           '<!-- Bloque de Operador y Perfil Datame -->' +
-          '<div style="min-width:260px;">' +
+          '<div style="flex:1; min-width:320px;">' +
             '<div style="display:flex; align-items:center; gap:8px;">' +
               '<span style="font-size:0.95rem; font-weight:900; color:#ffffff;">' + r.op + '</span>' +
               (isTop ? '<span style="font-size:0.75rem;">👑</span>' : '') +
@@ -17316,54 +17412,53 @@
             '<div style="display:flex; align-items:center; gap:8px; margin-top:4px;">' +
               '<span style="font-size:0.75rem; font-weight:900; color:#38bdf8; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); padding:2px 8px; border-radius:6px;">👤 ' + r.modelo + '</span>' +
               '<span style="font-size:0.62rem; color:#64748b; font-weight:700;">ID Datame: <b style="color:#94a3b8;">' + r.id + '</b></span>' +
+              '<span style="font-size:0.58rem; color:#34d399; font-weight:800;">⚡ ' + (r.clientes ? r.clientes.length : 0) + ' Clientes con Recarga</span>' +
             '</div>' +
             
-            '<!-- Tarjeta del Cliente con ID Datame y Saldo de Recarga -->' +
-            '<div style="font-size:0.65rem; color:#a7f3d0; margin-top:6px; font-weight:700; background:rgba(16,185,129,0.08); padding:5px 10px; border-radius:8px; border:1px solid rgba(16,185,129,0.25); display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
-              '<div>' +
-                '🎯 Cliente: <b style="color:#ffffff;">' + r.clienteNombre + '</b> ' + r.clientePais + '<br>' +
-                '🔑 <span style="color:#38bdf8; font-family:monospace; font-weight:900; font-size:0.72rem;">ID DATAME: ' + r.clienteDatameId + '</span> · <span style="color:#34d399; font-weight:900;">$' + r.clienteSaldoUSD.toFixed(0) + ' USD Recarga (' + r.clienteCreditos.toLocaleString() + ' cr)</span>' +
+            '<!-- Lista de Clientes con Recarga del Perfil -->' +
+            '<div style="margin-top:8px;">' +
+              clientesListHTML +
+            '</div>' +
+          '</div>' +
+
+          '<!-- Desglose de Servicios y Métricas -->' +
+          '<div style="display:flex; flex-direction:column; align-items:flex-end; gap:10px; min-width:180px;">' +
+            '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+              '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px; text-align:center; min-width:50px;">' +
+                '<div style="font-size:0.5rem; color:#94a3b8; font-weight:800;">💬 CHAT</div>' +
+                '<div style="font-size:0.7rem; font-weight:900; color:#38bdf8;">' + r.chatsPts.toFixed(1) + 'p</div>' +
               '</div>' +
-              '<button onclick="copiarDatameID(\x27' + r.clienteDatameId + '\x27, \x27' + r.clienteNombre + '\x27)" style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.35); color:#34d399; border-radius:6px; padding:3px 8px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">📋 Copiar ID</button>' +
+              '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px; text-align:center; min-width:50px;">' +
+                '<div style="font-size:0.5rem; color:#94a3b8; font-weight:800;">📸 FOTO</div>' +
+                '<div style="font-size:0.7rem; font-weight:900; color:#a855f7;">' + r.fotosPts.toFixed(1) + 'p</div>' +
+              '</div>' +
+              '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px; text-align:center; min-width:50px;">' +
+                '<div style="font-size:0.5rem; color:#94a3b8; font-weight:800;">🎙️ AUDIO</div>' +
+                '<div style="font-size:0.7rem; font-weight:900; color:#fbbf24;">' + r.audioPts.toFixed(1) + 'p</div>' +
+              '</div>' +
+              '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:4px 8px; border-radius:6px; text-align:center; min-width:50px;">' +
+                '<div style="font-size:0.5rem; color:#94a3b8; font-weight:800;">🎁 TIPS</div>' +
+                '<div style="font-size:0.7rem; font-weight:900; color:#f43f5e;">' + r.regalosPts.toFixed(1) + 'p</div>' +
+              '</div>' +
+            '</div>' +
+
+            '<div style="text-align:right;">' +
+              '<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">' +
+                statusBadge +
+                '<span style="font-size:0.6rem; color:#94a3b8; font-weight:800;">⚡ ' + r.speedSec + 's</span>' +
+              '</div>' +
+              '<div style="font-size:1.15rem; font-weight:900; color:#34d399; margin-top:3px;">' +
+                '$' + usd + ' <small style="font-size:0.7rem; color:#a7f3d0;">USD</small>' +
+              '</div>' +
+              '<div style="font-size:0.62rem; color:#38bdf8; font-weight:800;">' +
+                r.ptsNeto.toFixed(1) + ' pts • $' + cop + ' COP' +
+              '</div>' +
+              '<div style="font-size:0.55rem; color:#fca5a5; margin-top:2px; font-weight:700;">' +
+                'Último pulso: +$' + r.ultimoPulso.montoUSD.toFixed(2) + ' (' + r.ultimoPulso.servicio + ')' +
+              '</div>' +
             '</div>' +
           '</div>' +
 
-          '<!-- Desglose de Servicios -->' +
-          '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
-            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
-              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">💬 CHAT</div>' +
-              '<div style="font-size:0.75rem; font-weight:900; color:#38bdf8;">' + r.chatsPts.toFixed(1) + 'p</div>' +
-            '</div>' +
-            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
-              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">📸 FOTOS</div>' +
-              '<div style="font-size:0.75rem; font-weight:900; color:#a855f7;">' + r.fotosPts.toFixed(1) + 'p</div>' +
-            '</div>' +
-            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
-              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">🎙️ AUDIO</div>' +
-              '<div style="font-size:0.75rem; font-weight:900; color:#fbbf24;">' + r.audioPts.toFixed(1) + 'p</div>' +
-            '</div>' +
-            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
-              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">🎁 TIPS</div>' +
-              '<div style="font-size:0.75rem; font-weight:900; color:#f43f5e;">' + r.regalosPts.toFixed(1) + 'p</div>' +
-            '</div>' +
-          '</div>' +
-
-          '<!-- Métricas de Dinero y Velocidad -->' +
-          '<div style="text-align:right; min-width:140px;">' +
-            '<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">' +
-              statusBadge +
-              '<span style="font-size:0.6rem; color:#94a3b8; font-weight:800;">⚡ ' + r.speedSec + 's</span>' +
-            '</div>' +
-            '<div style="font-size:1.15rem; font-weight:900; color:#34d399; margin-top:3px;">' +
-              '$' + usd + ' <small style="font-size:0.7rem; color:#a7f3d0;">USD</small>' +
-            '</div>' +
-            '<div style="font-size:0.62rem; color:#38bdf8; font-weight:800;">' +
-              r.ptsNeto.toFixed(1) + ' pts • $' + cop + ' COP' +
-            '</div>' +
-            '<div style="font-size:0.55rem; color:#fca5a5; margin-top:2px; font-weight:700;">' +
-              'Último pulso: +$' + r.ultimoPulso.montoUSD.toFixed(2) + ' (' + r.ultimoPulso.servicio + ')' +
-            '</div>' +
-          '</div>' +
         '</div>';
       }).join('');
 
@@ -17377,35 +17472,37 @@
         return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04); transition:0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'">' +
           '<td style="padding:10px 8px; font-size:0.65rem; color:#64748b; font-weight:bold;">#' + (idx + 1) + '</td>' +
           '<td style="padding:10px 8px;">' +
-            '<div style="font-size:0.8rem; font-weight:900; color:#ffffff;">' + c.nombre + ' ' + c.pais + '</div>' +
-            '<div style="font-size:0.62rem; color:#94a3b8;">Arquetipo: <span style="color:#cbd5e1;">' + c.arquetipo + '</span></div>' +
+            '<div style="font-size:0.82rem; font-weight:900; color:#ffffff;">' + c.nombre + ' ' + (c.pais || '') + '</div>' +
+            '<div style="font-size:0.62rem; color:#38bdf8; margin-top:2px;">🎯 <b>' + (c.arquetipo || 'VIP') + '</b> · ⏳ <span style="color:#a7f3d0;">' + (c.antiguedad || 'Activo') + '</span></div>' +
+            '<div style="font-size:0.56rem; color:#94a3b8; margin-top:1px;">💡 <i>' + (c.temasInteres || '') + '</i></div>' +
           '</td>' +
           '<td style="padding:10px 8px;">' +
-            '<div style="font-family:monospace; font-size:0.85rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</div>' +
+            '<div style="font-family:monospace; font-size:0.88rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</div>' +
             '<div style="font-size:0.55rem; color:#64748b;">Buscar en Datame</div>' +
           '</td>' +
           '<td style="padding:10px 8px; text-align:right;">' +
-            '<div style="font-size:0.9rem; font-weight:900; color:#34d399;">$' + c.saldoUSD.toFixed(2) + ' USD</div>' +
-            '<div style="font-size:0.62rem; color:#a7f3d0; font-weight:800;">⚡ ' + c.creditos.toLocaleString() + ' Créditos</div>' +
+            '<div style="font-size:0.9rem; font-weight:900; color:#34d399;">$' + (c.recargaUSD || c.saldoUSD || 0).toFixed(2) + ' USD</div>' +
+            '<div style="font-size:0.62rem; color:#a7f3d0; font-weight:800;">⚡ ' + (c.creditos || 0).toLocaleString() + ' Créditos</div>' +
+            '<div style="font-size:0.55rem; color:#fbbf24; margin-top:1px;">Recarga: ' + (c.tiempoRecarga || 'Reciente') + '</div>' +
           '</td>' +
           '<td style="padding:10px 8px;">' +
             badgeAgencia +
-            '<div style="font-size:0.55rem; color:#94a3b8; margin-top:2px;">Recarga: ' + c.ultimaRecarga + '</div>' +
+            '<div style="font-size:0.58rem; color:#cbd5e1; margin-top:2px;">Afinidad: <b style="color:#38bdf8;">' + (c.perfil || 'Cualquiera') + '</b></div>' +
           '</td>' +
           '<td style="padding:10px 8px; text-align:center;">' +
-            '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">' + c.statusOnline + '</span>' +
+            '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">' + (c.statusOnline || '🟢 Online') + '</span>' +
           '</td>' +
           '<td style="padding:10px 8px; text-align:center;">' +
             '<div style="display:flex; gap:6px; justify-content:center;">' +
               '<button onclick="copiarDatameID(\x27' + c.id + '\x27, \x27' + c.nombre + '\x27)" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-              '<button onclick="atacarClienteDatame(\x27' + c.id + '\x27, \x27' + c.nombre + '\x27, ' + c.saldoUSD + ', ' + c.creditos + ')" style="background:linear-gradient(135deg,#ef4444,#f43f5e); border:none; color:white; padding:5px 12px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer;">🎯 Atacar</button>' +
+              '<button onclick="atacarClienteDatame(\x27' + c.id + '\x27, \x27' + c.nombre + '\x27, ' + (c.recargaUSD || c.saldoUSD || 0) + ', ' + (c.creditos || 0) + ', \x27' + (c.copy || '').replace(/'/g, "\\'") + '\x27)" style="background:linear-gradient(135deg,#ef4444,#f43f5e); border:none; color:white; padding:5px 12px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer;">🎯 Atacar</button>' +
             '</div>' +
           '</td>' +
         '</tr>';
       }).join('');
 
       const liveTickerHTML = liveFeedItems.map(item => {
-        return '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.04); border-left:3px solid #ef4444; border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="abrirModalDetalleCliente(\x27' + item.datameId + '\x27, \x27' + item.modelo + '\x27, \x27' + item.op + '\x27, \x27' + item.cliente + '\x27, ' + item.saldoUSD + ', ' + item.creditos + ', \x27' + item.servicio + '\x27)">' +
+        return '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.04); border-left:3px solid #ef4444; border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="abrirModalDetalleCliente(\x27' + item.datameId + '\x27, \x27' + item.modelo + '\x27, \x27' + item.op + '\x27, \x27' + item.cliente + '\x27, ' + item.saldoUSD + ', ' + item.creditos + ', \x27' + item.servicio + '\x27, \x27' + item.time + '\x27, \x27' + item.antiguedad + '\x27, \x27' + item.temas + '\x27)">' +
           '<div>' +
             '<div style="font-size:0.68rem; font-weight:900; color:#ffffff;">' +
               item.op.split(' ')[0] + ' <span style="color:#38bdf8;">(' + item.modelo + ')</span>' +
@@ -17441,7 +17538,7 @@
                 '<span style="font-size:0.6rem; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.5); color:#fca5a5; padding:3px 9px; border-radius:12px; font-weight:900; letter-spacing:1px; animation:rtPulseGlow 2s infinite;">● REALTIME DATAME</span>' +
               '</div>' +
               '<div style="font-size:0.68rem; color:#94a3b8; margin-top:3px;">' +
-                'IDs oficiales de Datame para búsqueda directa, clientes online con recarga activa y facturación en tiempo real' +
+                'Todos los operadores y perfiles activos, IDs de Datame oficiales y clientes online con recarga en tiempo real' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -17460,11 +17557,11 @@
         '<div style="padding:10px 20px; background:rgba(16,185,129,0.08); border-bottom:1px solid rgba(16,185,129,0.2); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">' +
           '<div style="display:flex; align-items:center; gap:8px; font-size:0.68rem; color:#a7f3d0;">' +
             '<span style="font-size:1.1rem;">💰</span>' +
-            '<span><b>RADAR DE RECARGAS DATAME:</b> Hay <b style="color:#ffffff;">' + clientesOnlineDatame.length + ' clientes online</b> con <b style="color:#34d399;">$' + totalSaldoOnlineUSD.toLocaleString('en-US',{minimumFractionDigits:2}) + ' USD (' + totalCreditosOnline.toLocaleString() + ' créditos)</b> de recargas listas para ser atacadas.</span>' +
+            '<span><b>RADAR DE RECARGAS DATAME:</b> Hay <b style="color:#ffffff;">' + allClientsOnline.length + ' clientes online</b> con <b style="color:#34d399;">$' + totalSaldoOnlineUSD.toLocaleString('en-US',{minimumFractionDigits:2}) + ' USD (' + totalCreditosOnline.toLocaleString() + ' créditos)</b> de recargas listas para ser atacadas.</span>' +
           '</div>' +
           '<div style="display:flex; gap:6px;">' +
-            '<button onclick="window.switchRtSubTab(\x27operadores\x27)" style="background:' + (window.activeRtSubTab === 'operadores' ? '#ef4444' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (window.activeRtSubTab === 'operadores' ? '#ef4444' : 'rgba(255,255,255,0.1)') + '; color:' + (window.activeRtSubTab === 'operadores' ? '#fff' : '#94a3b8') + '; padding:4px 12px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer;">👥 Operadores en Vivo</button>' +
-            '<button onclick="window.switchRtSubTab(\x27clientes-recarga\x27)" style="background:' + (window.activeRtSubTab === 'clientes-recarga' ? '#10b981' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (window.activeRtSubTab === 'clientes-recarga' ? '#10b981' : 'rgba(255,255,255,0.1)') + '; color:' + (window.activeRtSubTab === 'clientes-recarga' ? '#fff' : '#94a3b8') + '; padding:4px 12px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer;">🎯 Lista de Clientes con Recarga (' + clientesOnlineDatame.length + ')</button>' +
+            '<button onclick="window.switchRtSubTab(\x27operadores\x27)" style="background:' + (window.activeRtSubTab === 'operadores' ? '#ef4444' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (window.activeRtSubTab === 'operadores' ? '#ef4444' : 'rgba(255,255,255,0.1)') + '; color:' + (window.activeRtSubTab === 'operadores' ? '#fff' : '#94a3b8') + '; padding:4px 12px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer;">👥 Operadores en Vivo (' + filteredRoster.length + ')</button>' +
+            '<button onclick="window.switchRtSubTab(\x27clientes-recarga\x27)" style="background:' + (window.activeRtSubTab === 'clientes-recarga' ? '#10b981' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (window.activeRtSubTab === 'clientes-recarga' ? '#10b981' : 'rgba(255,255,255,0.1)') + '; color:' + (window.activeRtSubTab === 'clientes-recarga' ? '#fff' : '#94a3b8') + '; padding:4px 12px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer;">🎯 Lista de Clientes con Recarga (' + allClientsOnline.length + ')</button>' +
           '</div>' +
         '</div>' +
 
@@ -17527,7 +17624,7 @@
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">' +
               '<div>' +
                 '<div style="font-size:0.85rem; font-weight:900; color:#34d399; text-transform:uppercase; letter-spacing:0.8px; display:flex; align-items:center; gap:8px;">' +
-                  '🎯 RADAR DE CLIENTES ONLINE CON RECARGAS ACTIVAS (DATAME ID)' +
+                  '🎯 RADAR DE CLIENTES ONLINE CON RECARGAS ACTIVAS (DATAME ID & CRM)' +
                 '</div>' +
                 '<div style="font-size:0.65rem; color:#94a3b8; margin-top:3px;">' +
                   'Copia el ID exacto de Datame y pégalo en la barra de búsqueda de Datame para abrir el chat y captar los créditos antes que otras agencias.' +
@@ -17540,7 +17637,7 @@
                 '<thead>' +
                   '<tr style="border-bottom:2px solid rgba(255,255,255,0.08); color:#94a3b8; font-size:0.6rem; text-transform:uppercase;">' +
                     '<th style="padding:8px;">#</th>' +
-                    '<th style="padding:8px;">Cliente & País</th>' +
+                    '<th style="padding:8px;">Cliente & Inteligencia CRM</th>' +
                     '<th style="padding:8px;">ID Datame (Copiar)</th>' +
                     '<th style="padding:8px; text-align:right;">Saldo de Recarga ($ USD)</th>' +
                     '<th style="padding:8px;">Agencia de Recarga</th>' +
@@ -17608,6 +17705,39 @@
           '</div>' +
         '</div>';
       }
+
+      wrap.innerHTML += '<div id="rt-cliente-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">' +
+        '<div style="background:#0f172a; border:1.5px solid rgba(52,211,153,0.4); border-radius:16px; padding:24px; max-width:440px; width:90%; box-shadow:0 20px 50px rgba(0,0,0,0.8); position:relative;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:12px; margin-bottom:16px;">' +
+            '<div style="display:flex; align-items:center; gap:10px;">' +
+              '<span style="font-size:1.5rem;">💳</span>' +
+              '<div>' +
+                '<h3 id="rt-m-cliente-nombre" style="margin:0; font-size:1.1rem; color:#ffffff; font-weight:900;">Cliente</h3>' +
+                '<span id="rt-m-cliente-id" style="font-size:0.65rem; color:#38bdf8; font-weight:800;">ID DATAME: —</span>' +
+              '</div>' +
+            '</div>' +
+            '<button onclick="cerrarModalDetalleCliente()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>' +
+          '</div>' +
+          '<div style="display:flex; flex-direction:column; gap:12px;">' +
+            '<div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px;">' +
+              '<div style="font-size:0.6rem; color:#a7f3d0; font-weight:800;">SALDO DISPONIBLE PARA GASTAR:</div>' +
+              '<div id="rt-m-cliente-saldo" style="font-size:1.2rem; font-weight:900; color:#34d399; margin-top:2px;">$0.00 USD</div>' +
+              '<div style="font-size:0.55rem; color:#cbd5e1; margin-top:4px;">Este cliente ya completó el pago de recarga y sus créditos están disponibles de inmediato.</div>' +
+            '</div>' +
+            '<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:10px; display:flex; justify-content:space-between; font-size:0.68rem; color:#cbd5e1;">' +
+              '<span>Perfil Asignado:</span> <b id="rt-m-cliente-modelo" style="color:#38bdf8;">—</b>' +
+            '</div>' +
+            '<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:10px; display:flex; justify-content:space-between; font-size:0.68rem; color:#cbd5e1;">' +
+              '<span>Operador a Cargo:</span> <b id="rt-m-cliente-op" style="color:#fff;">—</b>' +
+            '</div>' +
+            '<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:10px; display:flex; justify-content:space-between; font-size:0.68rem; color:#cbd5e1;">' +
+              '<span>Última Transacción:</span> <b id="rt-m-cliente-ultimoservicio" style="color:#fbbf24;">—</b>' +
+            '</div>' +
+            '<div id="rt-m-cliente-extra"></div>' +
+          '</div>' +
+          '<button onclick="cerrarModalDetalleCliente()" style="width:100%; margin-top:18px; background:linear-gradient(135deg, #10b981, #059669); color:white; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.75rem;">Entendido</button>' +
+        '</div>' +
+      '</div>';
 
       wrap.innerHTML += '</div>';
     }
@@ -20247,298 +20377,83 @@ function exportarDatos() {
       };
 
       window.renderTablaClientesRadar = function() {
-        const container = document.getElementById('contenedor-tabla-clientes-radar');
-        if (!container) return;
+        const wrap = document.getElementById('contenedor-radar-clientes-tabla');
+        if (!wrap) return;
 
-        const agenciaKey = window.currentAgenciaSeleccionada || 'todas';
-        const tipoFiltro = window.filtroTipoClienteActual || 'todos';
-        const query = (window.filtroQueryClienteActual || '').toLowerCase().trim();
+        const q = (document.getElementById('radar-cliente-search') ? document.getElementById('radar-cliente-search').value : '').toLowerCase().trim();
+        const fFrec = (document.getElementById('radar-frecuencia-filter') ? document.getElementById('radar-frecuencia-filter').value : 'todos');
+        const fAgencia = window.currentAgenciaSeleccionada || 'todas';
 
-        let filtrados = window.masterRadarClientes.filter(c => {
-          // Filtro por Agencia
-          const matchAgencia = (agenciaKey === 'todas' || c.agencia.toLowerCase() === agenciaKey.toLowerCase());
-          if (!matchAgencia) return false;
-
-          // Filtro por Tipo de Cliente
-          if (tipoFiltro === 'ballenas' && c.tipo !== 'ballena') return false;
-          if (tipoFiltro === 'saldo_alto' && c.saldo < 500) return false;
-          if (tipoFiltro === 'chateando' && !c.chateando) return false;
-          if (tipoFiltro === 'otras_agencias' && c.chateando) return false;
-
-          // Filtro por Búsqueda
-          if (query) {
-            const matchQ = c.id.includes(query) ||
-                           c.nombre.toLowerCase().includes(query) ||
-                           c.alias.toLowerCase().includes(query) ||
-                           c.agencia.toLowerCase().includes(query) ||
-                           c.perfil.toLowerCase().includes(query) ||
-                           c.op.toLowerCase().includes(query);
-            if (!matchQ) return false;
-          }
-
-          return true;
-        });
-
-        // Actualizar contador
-        const countBadge = document.getElementById('radar-clients-count');
-        if (countBadge) {
-          countBadge.innerText = filtrados.length + ' Clientes Encontrados';
-        }
-
-        if (filtrados.length === 0) {
-          container.innerHTML = '<div style="color:#64748b;font-size:0.75rem;text-align:center;padding:30px;background:rgba(0,0,0,0.2);border-radius:8px;">No se encontraron clientes para este filtro en ' + agenciaKey + '. Intenta seleccionar "Todas las Agencias" o cambiar el filtro.</div>';
-          return;
-        }
-
-        const rowsHTML = filtrados.map((c, i) => {
-          const isOurChat = c.chateando;
-          const statusBadge = isOurChat
-            ? '<span style="background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.4);padding:3px 8px;border-radius:6px;font-weight:bold;font-size:0.65rem;display:inline-flex;align-items:center;gap:4px;">🟢 SÍ (En Chat Activo)</span>'
-            : '<span style="background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);padding:3px 8px;border-radius:6px;font-weight:bold;font-size:0.65rem;display:inline-flex;align-items:center;gap:4px;">🟡 NO (Libre / En Otra Agencia)</span>';
-
-          const actionBtn = isOurChat
-            ? '<button onclick="copiarTacticsCopy(\'' + c.copy.replace(/'/g, "\\'") + '\')" style="background:rgba(52,211,153,0.2);border:1px solid rgba(52,211,153,0.5);color:#34d399;padding:4px 8px;border-radius:6px;font-size:0.65rem;font-weight:bold;cursor:pointer;">📋 Reforzar</button>'
-            : '<button onclick="copiarTacticsCopy(\'' + c.copy.replace(/'/g, "\\'") + '\')" style="background:rgba(244,63,94,0.25);border:1px solid rgba(244,63,94,0.6);color:#fda4af;padding:4px 8px;border-radius:6px;font-size:0.65rem;font-weight:bold;cursor:pointer;">🎯 Atacar / Robar</button>';
-
-          const freqBadge = c.tipo === 'ballena'
-            ? '<span style="background:rgba(251,191,36,0.15);color:#fbbf24;padding:2px 6px;border-radius:4px;font-size:0.6rem;font-weight:800;">🐳 BALLENA DIARIA</span>'
-            : '<span style="background:rgba(167,139,250,0.15);color:#c084fc;padding:2px 6px;border-radius:4px;font-size:0.6rem;font-weight:700;">💳 SALDO LISTO</span>';
-
-          const rowBg = isOurChat ? 'rgba(52,211,153,0.03)' : 'transparent';
-
-          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);background:' + rowBg + ';">' +
-            '<td style="padding:10px 8px;font-family:monospace;color:#fda4af;font-weight:bold;">' + c.id + '</td>' +
-            '<td style="padding:10px 8px;">' +
-              '<div style="font-weight:bold;color:#fff;font-size:0.75rem;">' + c.nombre + ' <span style="color:#fbbf24;font-size:0.68rem;">(' + c.alias + ')</span></div>' +
-              '<div style="margin-top:2px;">' + freqBadge + ' <span style="font-size:0.6rem;color:#64748b;">· ' + c.frecuencia + '</span></div>' +
-            '</td>' +
-            '<td style="padding:10px 8px;"><span style="background:rgba(255,255,255,0.05);color:#94a3b8;padding:2px 6px;border-radius:4px;font-size:0.62rem;font-weight:bold;">' + c.agencia + '</span></td>' +
-            '<td style="padding:10px 8px;text-align:right;font-weight:bold;color:#34d399;font-size:0.8rem;">' + c.recarga + '</td>' +
-            '<td style="padding:10px 8px;text-align:center;"><span style="background:rgba(52,211,153,0.2);color:#34d399;padding:3px 8px;border-radius:6px;font-weight:900;font-size:0.72rem;">💳 ' + c.saldo + ' pts</span></td>' +
-            '<td style="padding:10px 8px;text-align:center;">' + statusBadge + '</td>' +
-            '<td style="padding:10px 8px;">' +
-              '<div style="color:#e2e8f0;font-weight:bold;">' + (isOurChat ? 'Perfil: ' + c.perfil : 'Recomendado: ' + c.perfil) + '</div>' +
-              '<div style="font-size:0.62rem;color:' + (isOurChat ? '#94a3b8' : '#fbbf24') + ';">' + c.op + '</div>' +
-            '</td>' +
-            '<td style="padding:10px 8px;text-align:center;">' + actionBtn + '</td>' +
-          '</tr>';
-        }).join('');
-
-        container.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;text-align:left;">' +
-          '<thead>' +
-            '<tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:#94a3b8;font-size:0.62rem;text-transform:uppercase;">' +
-              '<th style="padding:8px;">ID Cliente</th>' +
-              '<th style="padding:8px;">Cliente & Frecuencia</th>' +
-              '<th style="padding:8px;">Agencia de Origen</th>' +
-              '<th style="padding:8px;text-align:right;">Recarga</th>' +
-              '<th style="padding:8px;text-align:center;">Saldo de Créditos</th>' +
-              '<th style="padding:8px;text-align:center;">¿Chateando con Nosotros?</th>' +
-              '<th style="padding:8px;">Perfil / Operador Asignado</th>' +
-              '<th style="padding:8px;text-align:center;">Acción Táctica</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' + rowsHTML + '</tbody>' +
-        '</table>';
-      };
-
-      // ─────────────────────────────────────────────────────────────
-      // FILTRO DE BÚSQUEDA DE CLIENTES
-      // ─────────────────────────────────────────────────────────────
-      window.filtrarTablaClientesConectados = function(query) {
-        window.filtroQueryClienteActual = query;
-        window.renderTablaClientesRadar();
-      };
-
-      // ─────────────────────────────────────────────────────────────
-      // ─────────────────────────────────────────────────────────────
-      // BASE DE DATOS OFICIAL TABLEAU UK: RETENTIONTOTAL (60.36%)
-      // ─────────────────────────────────────────────────────────────
-      window.masterRetentionPerfiles = [
-        { id: '64412935', perfil: 'Regiane, 62', diasTotal: 323, retornoSigDia: 274, pct: 84.83, status: 'top', diag: '🔥 Fidelización Extraordinaria. Los clientes regresan casi diario.' },
-        { id: '91477383', perfil: 'Adriano, 48', diasTotal: 270, retornoSigDia: 214, pct: 79.26, status: 'top', diag: '🔥 Altísima tasa de retorno. Conexiones consistentes con clientes VIP.' },
-        { id: '90619840', perfil: 'Victor, 41', diasTotal: 1909, retornoSigDia: 1371, pct: 71.82, status: 'top', diag: '🔥 Perfil pilar. Gran volumen de conexiones con retención sólida.' },
-        { id: '90917191', perfil: 'Cesar, 59', diasTotal: 1516, retornoSigDia: 1032, pct: 68.07, status: 'alto', diag: '🟢 Excelente retención. Genera hábitos diarios de compra de créditos.' },
-        { id: '86746454', perfil: 'Braulio, 65', diasTotal: 3911, retornoSigDia: 2625, pct: 67.12, status: 'alto', diag: '🟢 Récord de volumen. Máximo generador de recurrencia en la red.' },
-        { id: '90550314', perfil: 'Wellington, 58', diasTotal: 1466, retornoSigDia: 976, pct: 66.58, status: 'alto', diag: '🟢 Retención fuerte. Mantiene a sus ballenas activas de forma continua.' },
-        { id: '88243516', perfil: 'Ricardo, 45', diasTotal: 853, retornoSigDia: 557, pct: 65.30, status: 'alto', diag: '🟢 Muy buena recurrencia en chats y envío de cartas multimedia.' },
-        { id: '87108581', perfil: 'Rafael, 42', diasTotal: 719, retornoSigDia: 466, pct: 64.81, status: 'alto', diag: '🟢 Conversión sólida al día siguiente. Flujo de saldo estable.' },
-        { id: '87888082', perfil: 'Alex, 38', diasTotal: 1499, retornoSigDia: 945, pct: 63.04, status: 'alto', diag: '🟢 Por encima de la media de la plataforma (60.36%).' },
-        { id: '90933979', perfil: 'Noel, 53', diasTotal: 1372, retornoSigDia: 848, pct: 61.81, status: 'alto', diag: '🟢 Perfil consistente con buena relación de confianza con clientes.' },
-        { id: '79679899', perfil: 'Norberto, 46', diasTotal: 488, retornoSigDia: 294, pct: 60.25, status: 'medio', diag: '🟡 En la media global de plataforma. Buen potencial de mejora.' },
-        { id: '93301327', perfil: 'Marcelo, 58', diasTotal: 2360, retornoSigDia: 1406, pct: 59.58, status: 'medio', diag: '🟡 Alto volumen pero con margen para subir 3-5% en retención.' },
-        { id: '84844774', perfil: 'Renato, 57', diasTotal: 449, retornoSigDia: 259, pct: 57.68, status: 'medio', diag: '🟡 Retención media. Reforzar seguimientos con audios y fotos de despedida.' },
-        { id: '93393057', perfil: 'Sergio, 65', diasTotal: 2051, retornoSigDia: 1145, pct: 55.83, status: 'medio', diag: '🟡 Retención moderada. Se recomienda enviar ganchos al cerrar el turno.' },
-        { id: '88468616', perfil: 'Julio, 53', diasTotal: 2768, retornoSigDia: 1517, pct: 54.80, status: 'medio', diag: '🟡 Gran base pero tasa de retorno 5% por debajo del promedio.' },
-        { id: '93645358', perfil: 'Gabriel, 71', diasTotal: 1355, retornoSigDia: 742, pct: 54.76, status: 'medio', diag: '🟡 Mantener contacto regular para evitar que el usuario explore otras agencias.' },
-        { id: '51430662', perfil: 'Jose, 48', diasTotal: 271, retornoSigDia: 137, pct: 50.55, status: 'medio', diag: '🟡 Mitad de clientes regresan. Necesita icebreakers de reactivación matutina.' },
-        { id: '93645177', perfil: 'Miguel, 61', diasTotal: 787, retornoSigDia: 385, pct: 48.92, status: 'medio', diag: '🟡 Por debajo de 50%. Táctica: enviar avances o historias inconclusas.' },
-        { id: '93701005', perfil: 'Eduardo, 68', diasTotal: 249, retornoSigDia: 108, pct: 43.37, status: 'medio', diag: '🟡 Retención baja. Se requiere mejorar la rapidez en los primeros mensajes.' },
-        { id: '90891677', perfil: 'Marcos, 60', diasTotal: 53, retornoSigDia: 23, pct: 43.40, status: 'medio', diag: '🟡 Muestra pequeña con 43% de retorno. Intensificar llamadas.' },
-        { id: '87783001', perfil: 'Luiz, 59', diasTotal: 124, retornoSigDia: 53, pct: 42.74, status: 'medio', diag: '🟡 Mejorar empatía y storytelling en el chat para enganchar al usuario.' },
-        { id: '87512328', perfil: 'Francisco, 68', diasTotal: 365, retornoSigDia: 155, pct: 42.47, status: 'medio', diag: '🟡 Retención frágil. Monitorear si los clientes cambian a otros perfiles.' },
-        { id: '93301653', perfil: 'Adrian, 59', diasTotal: 430, retornoSigDia: 176, pct: 40.93, status: 'medio', diag: '🟡 Límite de alerta. Usar técnicas de FOMO para incentivar el retorno.' },
-        { id: '87752758', perfil: 'Daniela, 39', diasTotal: 85, retornoSigDia: 34, pct: 40.00, status: 'riesgo', diag: '🔴 En Riesgo. 60% de los usuarios no vuelven al día siguiente.' },
-        { id: '92793263', perfil: 'Meire, 57', diasTotal: 69, retornoSigDia: 27, pct: 39.13, status: 'riesgo', diag: '🔴 En Riesgo. Necesita revisión integral de fotos de avatar y mensajes.' },
-        { id: '89964028', perfil: 'Sandra, 49', diasTotal: 730, retornoSigDia: 246, pct: 33.70, status: 'riesgo', diag: '🔴 Crítico. Solo 33% regresa. Requiere reasignación u optimización.' },
-        { id: '76018406', perfil: 'Daiana, 45', diasTotal: 24, retornoSigDia: 5, pct: 20.83, status: 'riesgo', diag: '🔴 Muy bajo. Pérdida acelerada de clientes después del primer día.' },
-        { id: '92693554', perfil: 'Kety, 42', diasTotal: 12, retornoSigDia: 2, pct: 16.67, status: 'riesgo', diag: '🔴 Crítico. Requiere nuevo set de fotos y mejores textos de enganche.' },
-        { id: '93304777', perfil: 'Martin, 55', diasTotal: 13, retornoSigDia: 1, pct: 7.69, status: 'riesgo', diag: '🔴 Prácticamente nula retención. Analizar si el operador responde a tiempo.' }
-      ];
-
-      window.ciaFilterRetention = function(query) {
-        const tableEl = document.getElementById('cia-retention-table');
-        if (!tableEl) return;
-
-        const q = (query || '').toLowerCase().trim();
-        const filterType = (document.getElementById('cia-retention-filter') || {}).value || 'todos';
-
-        const filtered = window.masterRetentionPerfiles.filter(p => {
-          const matchQ = !q || p.id.includes(q) || p.perfil.toLowerCase().includes(q) || p.diag.toLowerCase().includes(q);
-          if (!matchQ) return false;
-
-          if (filterType === 'alta' && p.pct < 60) return false;
-          if (filterType === 'media' && (p.pct < 40 || p.pct >= 60)) return false;
-          if (filterType === 'riesgo' && p.pct >= 40) return false;
-
-          return true;
+        const filtered = (window.masterRadarClientes || []).filter(c => {
+          const matchQ = !q || c.nombre.toLowerCase().includes(q) || c.id.includes(q) || (c.temasInteres && c.temasInteres.toLowerCase().includes(q)) || (c.arquetipo && c.arquetipo.toLowerCase().includes(q));
+          const matchAgencia = (fAgencia === 'todas') || (c.agencia.toLowerCase() === fAgencia.toLowerCase());
+          const matchFrec = (fFrec === 'todos') || (fFrec === 'ballena' && c.tipo === 'ballena') || (fFrec === 'libre' && !c.agencia.includes('ROMERO'));
+          return matchQ && matchAgencia && matchFrec;
         });
 
         if (filtered.length === 0) {
-          tableEl.innerHTML = '<div style="color:#64748b;font-size:.7rem;text-align:center;padding:25px;">No se encontraron perfiles para este filtro.</div>';
+          wrap.innerHTML = '<div style="color:#64748b;font-size:.7rem;text-align:center;padding:35px;">No se encontraron clientes con recarga para los filtros seleccionados.</div>';
           return;
         }
 
-        const rowsHTML = filtered.map((p, idx) => {
-          const badgeColor = p.pct >= 70 ? '#34d399' : p.pct >= 60 ? '#2dd4bf' : p.pct >= 40 ? '#fbbf24' : '#f43f5e';
-          const badgeBg = p.pct >= 70 ? 'rgba(52,211,153,0.15)' : p.pct >= 60 ? 'rgba(45,212,191,0.15)' : p.pct >= 40 ? 'rgba(251,191,36,0.15)' : 'rgba(244,63,94,0.15)';
-          const badgeText = p.pct >= 70 ? '🔥 ULTRA RETENCIÓN' : p.pct >= 60 ? '🟢 BUENA RETENCIÓN' : p.pct >= 40 ? '🟡 RETENCIÓN MEDIA' : '🔴 EN RIESGO';
+        const rowsHTML = filtered.map((c, idx) => {
+          const isRomero = c.agencia.includes('ROMERO');
+          const badgeAgencia = isRomero 
+            ? '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">⭐ NUESTRA AGENCIA</span>' 
+            : '<span style="background:rgba(239,68,68,0.15); color:#fca5a5; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">🏢 ' + c.agencia + ' (Interceptar)</span>';
 
-          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;"  onmouseout="this.style.background=\'transparent\'">' +
-            '<td style="padding:10px 8px;font-size:0.65rem;color:#64748b;">#' + (idx + 1) + '</td>' +
+          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'">' +
+            '<td style="padding:10px 8px; font-size:0.65rem; color:#64748b; font-weight:bold;">#' + (idx + 1) + '</td>' +
             '<td style="padding:10px 8px;">' +
-              '<div style="font-weight:900;color:#fff;font-size:0.75rem;">' + p.perfil + '</div>' +
-              '<div style="font-size:0.6rem;color:#a78bfa;font-family:monospace;">ID: ' + p.id + '</div>' +
+              '<div style="font-size:0.85rem; font-weight:900; color:#ffffff;">' + c.nombre + ' ' + c.pais + '</div>' +
+              '<div style="font-size:0.6rem; color:#cbd5e1; margin-top:2px;">' +
+                '🎯 <b style="color:#38bdf8;">' + c.arquetipo + '</b> · ⏳ <span style="color:#a7f3d0;">' + c.antiguedad + '</span>' +
+              '</div>' +
+              '<div style="font-size:0.58rem; color:#94a3b8; margin-top:2px;">' +
+                '💡 <i>' + c.temasInteres + '</i>' +
+              '</div>' +
             '</td>' +
-            '<td style="padding:10px 8px;text-align:center;font-weight:bold;color:#cbd5e1;font-size:0.72rem;">' + p.diasTotal.toLocaleString() + ' días</td>' +
-            '<td style="padding:10px 8px;text-align:center;font-weight:bold;color:#34d399;font-size:0.72rem;">' + p.retornoSigDia.toLocaleString() + ' días</td>' +
-            '<td style="padding:10px 8px;text-align:center;">' +
-              '<div style="font-size:0.85rem;font-weight:900;color:' + badgeColor + ';">' + p.pct.toFixed(2) + '%</div>' +
-              '<div style="background:rgba(255,255,255,0.08);border-radius:4px;height:5px;width:80px;margin:3px auto 0;overflow:hidden;"><div style="background:' + badgeColor + ';width:' + Math.min(100, p.pct) + '%;height:100%;"></div></div>' +
+            '<td style="padding:10px 8px;">' +
+              '<div style="font-family:monospace; font-size:0.9rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</div>' +
+              '<div style="font-size:0.55rem; color:#64748b;">ID Datame Oficial</div>' +
             '</td>' +
-            '<td style="padding:10px 8px;text-align:center;">' +
-              '<span style="background:' + badgeBg + ';color:' + badgeColor + ';padding:3px 8px;border-radius:6px;font-size:0.58rem;font-weight:800;">' + badgeText + '</span>' +
+            '<td style="padding:10px 8px; text-align:right;">' +
+              '<div style="font-size:0.95rem; font-weight:900; color:#34d399;">$' + c.recargaUSD.toFixed(2) + ' USD</div>' +
+              '<div style="font-size:0.65rem; color:#a7f3d0; font-weight:800;">⚡ ' + c.creditos.toLocaleString() + ' Créditos</div>' +
+              '<div style="font-size:0.55rem; color:#94a3b8; margin-top:2px;">Recarga: <b style="color:#fbbf24;">' + c.tiempoRecarga + '</b></div>' +
             '</td>' +
-            '<td style="padding:10px 8px;font-size:0.65rem;color:#cbd5e1;line-height:1.3;">' + p.diag + '</td>' +
+            '<td style="padding:10px 8px;">' +
+              badgeAgencia +
+              '<div style="font-size:0.6rem; color:#cbd5e1; margin-top:4px;">Perfil Afinidad: <b style="color:#38bdf8;">' + c.perfil + '</b></div>' +
+              '<div style="font-size:0.55rem; color:#94a3b8;">Servicio: ' + c.servicioPreferido + '</div>' +
+            '</td>' +
+            '<td style="padding:10px 8px; text-align:center;">' +
+              '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:4px 10px; border-radius:8px; font-size:0.62rem; font-weight:900;">' + c.statusOnline + '</span>' +
+            '</td>' +
+            '<td style="padding:10px 8px; text-align:center;">' +
+              '<div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">' +
+                '<button onclick="copiarDatameID(\x27' + c.id + '\x27, \x27' + c.nombre + '\x27)" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
+                '<button onclick="copiarTacticsCopy(\x27' + c.copy.replace(/'/g, "\\'") + '\x27)" style="background:linear-gradient(135deg,#ef4444,#f43f5e); border:none; color:white; padding:5px 12px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer;">🎯 Copiar Ataque</button>' +
+              '</div>' +
+            '</td>' +
           '</tr>';
         }).join('');
 
-        tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;text-align:left;">' +
+        wrap.innerHTML = '<table style="width:100%; border-collapse:collapse; font-size:0.72rem; text-align:left;">' +
           '<thead>' +
-            '<tr style="border-bottom:2px solid rgba(255,255,255,0.08);color:#94a3b8;font-size:0.6rem;text-transform:uppercase;">' +
+            '<tr style="border-bottom:2px solid rgba(255,255,255,0.08); color:#94a3b8; font-size:0.6rem; text-transform:uppercase;">' +
               '<th style="padding:8px;">#</th>' +
-              '<th style="padding:8px;">Perfil / ID Tableau</th>' +
-              '<th style="padding:8px;text-align:center;">Total Días Conexión</th>' +
-              '<th style="padding:8px;text-align:center;">Retorno Día Siguiente</th>' +
-              '<th style="padding:8px;text-align:center;">% Retención Real</th>' +
-              '<th style="padding:8px;text-align:center;">Nivel Salud</th>' +
-              '<th style="padding:8px;">Diagnóstico & Táctica</th>' +
+              '<th style="padding:8px;">Cliente & Inteligencia CRM</th>' +
+              '<th style="padding:8px;">ID Datame</th>' +
+              '<th style="padding:8px; text-align:right;">Saldo Recarga & Tiempo</th>' +
+              '<th style="padding:8px;">Agencia & Afinidad</th>' +
+              '<th style="padding:8px; text-align:center;">Estado Online</th>' +
+              '<th style="padding:8px; text-align:center;">Acción de Ataque</th>' +
             '</tr>' +
           '</thead>' +
           '<tbody>' + rowsHTML + '</tbody>' +
         '</table>';
       };
-
-      
-      // FILTRO DE TIEMPOS DE RESPUESTA (ANSWERSPEED TABLE)
-      // ─────────────────────────────────────────────────────────────
-      window._ciaRtAnswerspeedRoster = [
-        { id: '168486464', modelo: 'GUSTAVO', op: 'Krystal Gabriela', jornada: 'Noche', speedSec: 14.8, pctFast: 98.6, pph: 19.8, neto: 38.5, status: 'optimo', diag: 'Excelente retención. Cierra ventas y fotos en caliente sin enfriar al cliente.' },
-        { id: '157112125', modelo: 'LUIZ', op: 'Kevin Jhosneiver', jornada: 'Tarde', speedSec: 18.2, pctFast: 96.4, pph: 16.5, neto: 32.0, status: 'optimo', diag: 'Muy productivo. Alta velocidad de contestación en horarios de alto tráfico.' },
-        { id: '1020195', modelo: 'MARCOS', op: 'Josue David Henriquez', jornada: 'Noche', speedSec: 19.5, pctFast: 97.1, pph: 17.0, neto: 34.0, status: 'optimo', diag: 'Gran velocidad nocturna. Maximiza el gasto de clientes VIP en llamadas y regalos.' },
-        { id: '130422416', modelo: 'RAONI', op: 'Josue David Henriquez', jornada: 'Noche', speedSec: 21.0, pctFast: 95.0, pph: 15.5, neto: 31.0, status: 'productivo', diag: 'Ritmo constante y sólido. Buen manejo de chats múltiples simultáneos.' },
-        { id: '170740935', modelo: 'ROBERTO', op: 'Esperanza Jimenez', jornada: 'Mañana', speedSec: 22.4, pctFast: 94.1, pph: 14.2, neto: 28.4, status: 'productivo', diag: 'Productividad consistente en turno diurno. Buena fidelización de clientes habituales.' },
-        { id: '171638277', modelo: 'RONALT', op: 'Krystal Gabriela', jornada: 'Tarde', speedSec: 25.1, pctFast: 92.3, pph: 13.5, neto: 27.0, status: 'productivo', diag: 'Velocidad dentro del estándar. Rápida conversión en mensajes de bienvenida.' },
-        { id: '108018336', modelo: 'LUCAS', op: 'Yhongervis Jesus', jornada: 'Tarde', speedSec: 26.8, pctFast: 91.8, pph: 12.0, neto: 24.0, status: 'aceptable', diag: 'Aceptable. Mantener atención para no superar los 30 segundos en picos de chat.' },
-        { id: '138130329', modelo: 'AGUSTIN', op: 'Kevin Jhosneiver', jornada: 'Mañana', speedSec: 28.5, pctFast: 89.5, pph: 11.2, neto: 22.5, status: 'aceptable', diag: 'Aceptable. Oportunidad de mejorar velocidad en los primeros 3 mensajes de apertura.' },
-        { id: '145844971', modelo: 'RODRIGO', op: 'Yhongervis Jesus', jornada: 'Mañana', speedSec: 34.2, pctFast: 84.0, pph: 9.0, neto: 18.0, status: 'alerta', diag: 'Alerta de lentitud. Tiempos superiores a 30s provocan abandono de clientes nuevos.' }
-      ];
-
-      function ciaFilterRT(q) {
-        const turnoFilter = (document.getElementById('cia-rt-turno') || {}).value || '';
-        const qN = (q || '').toLowerCase().trim();
-
-        const rows = (window._ciaRtAnswerspeedRoster || []).filter(r => {
-          const matchQ = !qN || r.modelo.toLowerCase().includes(qN) || r.op.toLowerCase().includes(qN) || r.id.includes(qN);
-          const matchT = !turnoFilter || r.jornada === turnoFilter;
-          return matchQ && matchT;
-        });
-
-        const tableEl = document.getElementById('cia-rt-table');
-        if (!tableEl) return;
-
-        if (rows.length === 0) {
-          tableEl.innerHTML = '<div style="color:#475569;font-size:.65rem;text-align:center;padding:30px;">Sin registros para este filtro</div>';
-          return;
-        }
-
-        const rowsHTML = rows.map((r, i) => {
-          const semColor = r.speedSec < 20 ? '#34d399' : r.speedSec <= 30 ? '#fbbf24' : '#fda4af';
-          const semBg = r.speedSec < 20 ? 'rgba(52,211,153,0.15)' : r.speedSec <= 30 ? 'rgba(251,191,36,0.15)' : 'rgba(244,63,94,0.15)';
-          const semLabel = r.speedSec < 20 ? '🟢 ULTRA RÁPIDO' : r.speedSec <= 30 ? '🟡 PRODUCTIVO' : '🔴 LENTO (ALERTA)';
-          const jIcon = r.jornada === 'Mañana' ? '☀️' : r.jornada === 'Tarde' ? '🌆' : '🌙';
-
-          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;"  onmouseout="this.style.background=\'transparent\'">' +
-            '<td style="padding:10px 8px;font-size:.6rem;color:#64748b;font-weight:bold;">#' + (i + 1) + '</td>' +
-            '<td style="padding:10px 8px;">' +
-              '<div style="font-size:.75rem;color:#fff;font-weight:900;">' + r.modelo + ' <span style="font-size:.6rem;color:#34d399;">(' + r.id + ')</span></div>' +
-              '<div style="font-size:.6rem;color:#94a3b8;">👤 ' + r.op + '</div>' +
-            '</td>' +
-            '<td style="padding:10px 8px;font-size:.68rem;color:#cbd5e1;">' + jIcon + ' ' + r.jornada + '</td>' +
-            '<td style="padding:10px 8px;text-align:center;">' +
-              '<span style="font-size:.9rem;color:' + semColor + ';font-weight:900;">⏱️ ' + r.speedSec.toFixed(1) + 's</span>' +
-            '</td>' +
-            '<td style="padding:10px 8px;text-align:center;font-weight:bold;color:#38bdf8;font-size:0.75rem;">' + r.pctFast + '%</td>' +
-            '<td style="padding:10px 8px;text-align:center;font-weight:900;color:#a78bfa;font-size:0.8rem;">' + r.pph.toFixed(1) + ' pts/hr</td>' +
-            '<td style="padding:10px 8px;text-align:center;">' +
-              '<span style="background:' + semBg + ';color:' + semColor + ';padding:3px 8px;border-radius:6px;font-size:.6rem;font-weight:800;">' + semLabel + '</span>' +
-            '</td>' +
-            '<td style="padding:10px 8px;font-size:.65rem;color:#cbd5e1;line-height:1.3;">' + r.diag + '</td>' +
-          '</tr>';
-        }).join('');
-
-        tableEl.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;text-align:left;">' +
-          '<thead>' +
-            '<tr style="border-bottom:2px solid rgba(255,255,255,0.08);color:#94a3b8;font-size:0.6rem;text-transform:uppercase;">' +
-              '<th style="padding:8px;">#</th>' +
-              '<th style="padding:8px;">Perfil & Operador</th>' +
-              '<th style="padding:8px;">Turno</th>' +
-              '<th style="padding:8px;text-align:center;">Tiempo Respuesta (s)</th>' +
-              '<th style="padding:8px;text-align:center;">Respuestas &lt; 1 min</th>' +
-              '<th style="padding:8px;text-align:center;">Velocidad Pts/Hr ⚡</th>' +
-              '<th style="padding:8px;text-align:center;">Productividad</th>' +
-              '<th style="padding:8px;">Diagnóstico Operativo</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' + rowsHTML + '</tbody>' +
-        '</table>';
-      }
-
-      function ciaRenderRT() {
-        ciaFilterRT((document.getElementById('cia-rt-search') || {}).value || '');
-      }
-
-      // Render inicial del radar de clientes cuando se carga
-      setTimeout(() => {
-        if (typeof window.renderTablaClientesRadar === 'function') {
-          window.renderTablaClientesRadar();
-        }
-        if (typeof window.ciaFilterRetention === 'function') {
-          window.ciaFilterRetention('');
-        }
-        if (typeof window.ciaRenderRT === 'function') {
-          window.ciaRenderRT();
-        }
-      }, 500);
 
       window.copiarTacticsCopy = function(texto) {
         if (navigator.clipboard) {
@@ -28882,7 +28797,7 @@ PT._logKey = function (opName) {
 
       // ─────────────────────────────────────────────────────────────
       // RENDER RESPONSE TIME TABLE — POWERED BY ANSWERSPEED ROSTER
-      function ciaRenderRT() {
+      window.ciaRenderRT = function() {
         const sVal = (document.getElementById('cia-rt-search')||{}).value || '';
         ciaFilterRT(sVal);
       }

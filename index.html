@@ -4997,6 +4997,64 @@
         width: 100% !important;
       }
     }
+      /* ── Universal Module & Table Responsiveness for Mobile (<= 768px) ── */
+    @media (max-width: 768px) {
+      #tableau-panel-wrap,
+      #conn-dispositivos-table,
+      #contenedor-tabla-clientes-radar,
+      #tabla-avatares-ctr,
+      #cia-corte-table,
+      #contenedor-tabla-servicios-multiagencia,
+      #contenedor-radar-clientes-tabla,
+      .rt-table-wrap,
+      #rk-table-desktop,
+      [id^="cia-panel-"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .cia-tab-btn {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        padding: 8px 12px !important;
+        font-size: 0.62rem !important;
+      }
+
+      #conn-dispositivos-table table,
+      #contenedor-tabla-clientes-radar table,
+      #tabla-avatares-ctr,
+      #cia-corte-table table,
+      #contenedor-tabla-servicios-multiagencia table,
+      #contenedor-radar-clientes-tabla table {
+        min-width: 680px !important;
+      }
+
+      #quick-tt-launcher-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+      }
+
+      #quick-tt-launcher-bar > div:first-child {
+        width: 100% !important;
+      }
+
+      #quick-tt-launcher-bar input {
+        min-width: unset !important;
+        width: 100% !important;
+      }
+
+      #rt-toast-live-container {
+        left: 12px !important;
+        right: 12px !important;
+        bottom: 12px !important;
+        max-width: calc(100vw - 24px) !important;
+        width: auto !important;
+      }
+    }
   </style>
 </head>
 
@@ -17749,40 +17807,82 @@
       if (typeof window.renderTablaClientesRadar === 'function') window.renderTablaClientesRadar();
     };
 
+    window.playRechargeAlertSound = function() {
+      try {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        var ctx = new AudioContext();
+        var now = ctx.currentTime;
+        
+        // Tono 1: 587.33 Hz (Re5)
+        var osc1 = ctx.createOscillator();
+        var gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now);
+        gain1.gain.setValueAtTime(0.18, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        // Tono 2: 880.00 Hz (La5)
+        var osc2 = ctx.createOscillator();
+        var gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880.00, now + 0.12);
+        gain2.gain.setValueAtTime(0.22, now + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.12);
+        osc2.stop(now + 0.55);
+      } catch(e) {}
+    };
+
     window.mostrarToastRecargaEnVivo = function(c) {
+      if (typeof window.playRechargeAlertSound === 'function') {
+        window.playRechargeAlertSound();
+      }
+
       var toastWrap = document.getElementById('rt-toast-live-container');
       if (!toastWrap) {
         toastWrap = document.createElement('div');
         toastWrap.id = 'rt-toast-live-container';
-        toastWrap.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; max-width:390px; width:90%; pointer-events:none;';
+        toastWrap.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; max-width:410px; width:92%; pointer-events:none;';
         document.body.appendChild(toastWrap);
       }
 
+      var cleanId = String(c.id).replace(/\D/g, '').trim();
       var toast = document.createElement('div');
-      toast.style.cssText = 'background:rgba(15, 23, 42, 0.85); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(56, 189, 248, 0.4); border-radius:16px; padding:16px 18px; color:#fff; box-shadow:0 16px 40px rgba(0,0,0,0.6), 0 0 25px rgba(56,189,248,0.2); pointer-events:auto; animation:rtSlideIn 0.3s ease-out;';
+      toast.style.cssText = 'background:rgba(15, 23, 42, 0.94); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(52, 211, 153, 0.6); border-radius:16px; padding:16px 18px; color:#fff; box-shadow:0 16px 48px rgba(0,0,0,0.8), 0 0 30px rgba(52,211,153,0.3); pointer-events:auto; animation:rtSlideIn 0.3s ease-out;';
       toast.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
-        '<div style="font-size:0.75rem; font-weight:900; color:#38bdf8; display:flex; align-items:center; gap:6px; letter-spacing:0.5px;">' +
-          '<span style="display:inline-block; width:8px; height:8px; background:#38bdf8; border-radius:50%; box-shadow:0 0 10px #38bdf8; animation:rtPulseDot 1s infinite;"></span>' +
-          '⚡ RECARGA EN VIVO TALKYTIMES' +
+        '<div style="font-size:0.75rem; font-weight:900; color:#34d399; display:flex; align-items:center; gap:6px; letter-spacing:0.5px;">' +
+          '<span style="display:inline-block; width:9px; height:9px; background:#34d399; border-radius:50%; box-shadow:0 0 12px #34d399; animation:rtPulseDot 0.8s infinite;"></span>' +
+          '⚡ ¡RECARGA EN VIVO DETECTADA! (ATACAR AHORA)' +
         '</div>' +
         '<button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>' +
       '</div>' +
-      '<div style="font-size:0.92rem; font-weight:900; color:#fff;">👤 ' + c.nombre + ' <span style="font-size:0.7rem; color:#94a3b8; font-weight:normal;">' + (c.pais || '') + '</span></div>' +
-      '<div style="font-size:0.78rem; color:#34d399; font-weight:800; margin-top:2px;">' +
-        '💰 Recarga: $' + c.recargaUSD.toFixed(2) + ' USD (' + c.creditos.toLocaleString() + ' créditos)' +
+      '<div style="font-size:0.95rem; font-weight:900; color:#fff; display:flex; align-items:center; justify-content:space-between;">' +
+        '<span>👤 ' + c.nombre + ' <span style="font-size:0.7rem; color:#94a3b8; font-weight:normal;">' + (c.pais || '') + '</span></span>' +
+        '<span style="background:rgba(52,211,153,0.18); color:#34d399; border:1px solid rgba(52,211,153,0.4); padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">SALDO LISTO</span>' +
+      '</div>' +
+      '<div style="font-size:0.85rem; color:#34d399; font-weight:900; margin-top:3px;">' +
+        '💰 Recarga: $' + Number(c.recargaUSD || c.saldoUSD || 150).toFixed(2) + ' USD (' + Number(c.creditos || 1500).toLocaleString() + ' créditos)' +
       '</div>' +
       '<div style="font-size:0.65rem; color:#cbd5e1; margin-top:4px;">' +
-        '🔑 ID Talkytimes: <b style="color:#38bdf8; font-family:monospace; font-size:0.78rem;">' + c.id + '</b> · Afinidad: <b style="color:#a855f7;">' + c.perfil + '</b>' +
+        '🔑 ID Talkytimes (RU): <b style="color:#38bdf8; font-family:monospace; font-size:0.8rem;">' + cleanId + '</b> · Afinidad: <b style="color:#c084fc;">' + (c.perfil || 'HORACIO') + '</b>' +
       '</div>' +
       '<div style="display:flex; gap:6px; margin-top:12px;">' +
-        '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-        '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="flex:1; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.35); color:#38bdf8; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">🔗 Abrir Perfil</button>' +
-        '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + c.recargaUSD + ', ' + c.creditos + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\'); this.parentElement.parentElement.remove();" style="flex:1.2; background:linear-gradient(135deg, #0ea5e9, #3b82f6); border:none; color:#fff; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:900; cursor:pointer; box-shadow:0 4px 15px rgba(14,165,233,0.3);">🎯 Atacar</button>' +
+        '<button onclick="copiarTalkytimesID(\'' + cleanId + '\', \'' + c.nombre + '\')" style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
+        '<a href="https://talkytimes.com/user/' + cleanId + '" target="_blank" onclick="window.abrirTalkytimes(\'' + cleanId + '\');" style="flex:1; background:rgba(56,189,248,0.2); border:1px solid rgba(56,189,248,0.5); color:#38bdf8; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:900; cursor:pointer; text-decoration:none; text-align:center; display:flex; align-items:center; justify-content:center;">🔗 Abrir Perfil</a>' +
+        '<button onclick="atacarClienteDatame(\'' + cleanId + '\', \'' + c.nombre + '\', ' + c.recargaUSD + ', ' + c.creditos + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\'); this.parentElement.parentElement.remove();" style="flex:1.4; background:linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; padding:7px; border-radius:8px; font-size:0.68rem; font-weight:900; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🎯 Atacar Ahora</button>' +
       '</div>';
 
       toastWrap.appendChild(toast);
-      setTimeout(function() { if (toast.parentElement) toast.remove(); }, 14000);
+      setTimeout(function() { if (toast.parentElement) toast.remove(); }, 18000);
     };
+
 
     if (!window._rtRechargeTimerActive) {
       window._rtRechargeTimerActive = true;
@@ -21312,7 +21412,7 @@ function exportarDatos() {
             '<td style="padding:12px 10px; text-align:center;">' +
               '<div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">' +
                 '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-                '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer;">🔗 Abrir</button>' +
+                '<a href="https://talkytimes.com/user/' + String(c.id).replace(/\\D/g, '') + '" target="_blank" onclick="window.abrirTalkytimes(\'' + String(c.id).replace(/\\D/g, '') + '\');" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:3px;">🔗 Abrir Perfil</a>' +
                 '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + montoRecarga + ', ' + creditosRecarga + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6); border:none; color:#fff; padding:5px 12px; border-radius:8px; font-size:0.62rem; font-weight:900; cursor:pointer; box-shadow:0 4px 12px rgba(14,165,233,0.3);">🎯 Atacar</button>' +
               '</div>' +
             '</td>' +
@@ -28826,9 +28926,36 @@ PT._logKey = function (opName) {
 
           <!-- TABLA DE DISPOSITIVOS -->
           <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-            <div style="font-size:0.8rem;font-weight:900;color:#fff;margin-bottom:12px;display:flex;align-items:center;gap:6px;">
-              <span>💻</span> Registro Detallado de Terminales y Sesiones Activas
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+              <div>
+                <div style="font-size:0.85rem;font-weight:900;color:#fff;display:flex;align-items:center;gap:6px;">
+                  <span>💻</span> Registro Detallado de Terminales, Puertos & Sesiones Activas
+                </div>
+                <div style="font-size:0.62rem;color:#94a3b8;margin-top:2px;">
+                  Diferenciación de tráfico: <b style="color:#c084fc;">🟣 Talkytimes App</b> (Extensión/Autopilot), <b style="color:#38bdf8;">🔵 Agency Analytics</b> (Web Monolito) o <b style="color:#34d399;">🟢 Dual Sync</b>. Telemetría de puertos y visor satelital 3D.
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <input id="conn-dispositivos-search" type="text" placeholder="🔍 Filtrar operador, IP, ciudad, puerto..." oninput="if(typeof window.renderConexionesDispositivos==='function') window.renderConexionesDispositivos();" style="background:#0b132b;border:1px solid rgba(14,165,233,0.3);color:#fff;padding:6px 12px;border-radius:8px;font-size:0.68rem;outline:none;min-width:240px;">
+              </div>
             </div>
+
+            <!-- FILTRO DE APLICACIONES CONECTADAS -->
+            <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+              <button class="btn-filtro-app-conn active" id="btn-app-all" onclick="window.setFiltroAppDispositivos('all', this)" style="background:rgba(14,165,233,0.25);border:1px solid rgba(14,165,233,0.5);color:#38bdf8;padding:5px 12px;border-radius:6px;font-size:0.65rem;font-weight:800;cursor:pointer;">
+                🌐 Todas las Sesiones (5)
+              </button>
+              <button class="btn-filtro-app-conn" id="btn-app-talkytimes" onclick="window.setFiltroAppDispositivos('talkytimes', this)" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;padding:5px 12px;border-radius:6px;font-size:0.65rem;font-weight:800;cursor:pointer;">
+                🟣 Talkytimes App (2)
+              </button>
+              <button class="btn-filtro-app-conn" id="btn-app-analytics" onclick="window.setFiltroAppDispositivos('analytics', this)" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;padding:5px 12px;border-radius:6px;font-size:0.65rem;font-weight:800;cursor:pointer;">
+                🔵 Agency Analytics (1)
+              </button>
+              <button class="btn-filtro-app-conn" id="btn-app-dual" onclick="window.setFiltroAppDispositivos('dual', this)" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);color:#94a3b8;padding:5px 12px;border-radius:6px;font-size:0.65rem;font-weight:800;cursor:pointer;">
+                🟢 Dual Sync (Ambas) (2)
+              </button>
+            </div>
+
             <div id="conn-dispositivos-table" style="overflow-x:auto;">
               <!-- Rendered via renderConexionesDispositivos() -->
             </div>
@@ -30380,38 +30507,264 @@ PT._logKey = function (opName) {
     // 🌐 MÓDULO DE CONEXIONES Y DISPOSITIVOS CONECTADOS
     // ═════════════════════════════════════════════════════════════════════════
     window._dispositivosConectados = [
-      { op: 'Krystal Gabriela', rol: 'Operador VIP (Noche)', equipo: '💻 Laptop Asus ROG (Windows 11)', navegador: 'Google Chrome 128.0', ciudad: 'Bogotá', pais: '🇨🇴 Colombia', ip: '186.84.92.14', latencia: '22 ms', resolucion: '1920x1080', loginHora: '22:00 (Ayer)', status: '🟢 En Línea' },
-      { op: 'Kevin Jhosneiver', rol: 'Operador Senior (Tarde)', equipo: '💻 PC Gamer Desktop (Windows 11)', navegador: 'Google Chrome 128.0', ciudad: 'Medellín', pais: '🇨🇴 Colombia', ip: '190.158.45.88', latencia: '28 ms', resolucion: '2560x1440', loginHora: '14:00 (Hoy)', status: '🟢 En Línea' },
-      { op: 'Josue David Henriquez', rol: 'Operador Elite (Noche)', equipo: '💻 Laptop Lenovo ThinkPad (Win 11)', navegador: 'Microsoft Edge 128.0', ciudad: 'Caracas', pais: '🇻🇪 Venezuela', ip: '190.202.77.102', latencia: '35 ms', resolucion: '1920x1080', loginHora: '22:00 (Ayer)', status: '🟢 En Línea' },
-      { op: 'Esperanza Jimenez', rol: 'Operador Pro (Mañana)', equipo: '💻 PC All-in-One HP (Windows 10)', navegador: 'Google Chrome 127.0', ciudad: 'Cali', pais: '🇨🇴 Colombia', ip: '181.137.60.21', latencia: '31 ms', resolucion: '1920x1080', loginHora: '06:00 (Hoy)', status: '🟡 Inactiva (Fin Turno)' },
-      { op: 'Yhongervis Jesus', rol: 'Operador Master (Tarde)', equipo: '💻 MacBook Air M2 (macOS 15)', navegador: 'Safari 18.0', ciudad: 'Medellín', pais: '🇨🇴 Colombia', ip: '190.158.45.92', latencia: '25 ms', resolucion: '2560x1600', loginHora: '14:00 (Hoy)', status: '🟢 En Línea' }
+      { 
+        op: 'Krystal Gabriela', 
+        rol: 'Operador VIP (Noche)', 
+        app: 'dual', 
+        appName: 'Dual Sync', 
+        appBadge: '<span style="background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.4);padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:900;">🟢 Dual Sync (Talky + Analytics)</span>', 
+        equipo: '💻 Laptop Asus ROG (Windows 11)', 
+        navegador: 'Google Chrome 128.0', 
+        resolucion: '1920x1080', 
+        ciudad: 'Bogotá', 
+        pais: '🇨🇴 Colombia', 
+        ip: '186.84.92.14', 
+        isp: 'Claro Telecom Colombia (Fibra 300M)', 
+        puertos: 'Port 443 (HTTPS) · 8080 (WSS Talky) · 22 (SSH)', 
+        protocolo: 'WSS / TLS 1.3 / HTTP/2', 
+        latencia: '22 ms', 
+        loginHora: '22:00:14 (Ayer)', 
+        tiempoSesion: 'hace 8h 22m', 
+        lat: 4.6097, 
+        lon: -74.0817, 
+        status: '🟢 En Línea' 
+      },
+      { 
+        op: 'Kevin Jhosneiver', 
+        rol: 'Operador Senior (Tarde)', 
+        app: 'talkytimes', 
+        appName: 'Talkytimes App', 
+        appBadge: '<span style="background:rgba(192,132,252,0.18);color:#c084fc;border:1px solid rgba(192,132,252,0.4);padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:900;">🟣 Talkytimes App (Autopilot)</span>', 
+        equipo: '💻 PC Gamer Desktop (Windows 11)', 
+        navegador: 'Google Chrome 128.0', 
+        resolucion: '2560x1440', 
+        ciudad: 'Medellín', 
+        pais: '🇨🇴 Colombia', 
+        ip: '190.158.45.88', 
+        isp: 'Tigo UNE Medellín (HFC 500M)', 
+        puertos: 'Port 443 (HTTPS) · 8080 (WSS Talky)', 
+        protocolo: 'WSS / TLS 1.3', 
+        latencia: '28 ms', 
+        loginHora: '14:00:08 (Hoy)', 
+        tiempoSesion: 'hace 4h 22m', 
+        lat: 6.2442, 
+        lon: -75.5812, 
+        status: '🟢 En Línea' 
+      },
+      { 
+        op: 'Josue David Henriquez', 
+        rol: 'Operador Elite (Noche)', 
+        app: 'dual', 
+        appName: 'Dual Sync', 
+        appBadge: '<span style="background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.4);padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:900;">🟢 Dual Sync (Talky + Analytics)</span>', 
+        equipo: '💻 Laptop Lenovo ThinkPad (Win 11)', 
+        navegador: 'Microsoft Edge 128.0', 
+        resolucion: '1920x1080', 
+        ciudad: 'Caracas', 
+        pais: '🇻🇪 Venezuela', 
+        ip: '190.202.77.102', 
+        isp: 'CANTV ABA Ultra (Fibra 100M)', 
+        puertos: 'Port 443 (HTTPS) · 8080 (WSS) · 53 (DNS)', 
+        protocolo: 'WSS / TLS 1.3 / HTTP/2', 
+        latencia: '35 ms', 
+        loginHora: '22:00:30 (Ayer)', 
+        tiempoSesion: 'hace 8h 22m', 
+        lat: 10.4806, 
+        lon: -66.9036, 
+        status: '🟢 En Línea' 
+      },
+      { 
+        op: 'Esperanza Jimenez', 
+        rol: 'Operador Pro (Mañana)', 
+        app: 'analytics', 
+        appName: 'Agency Analytics', 
+        appBadge: '<span style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:900;">🔵 Agency Analytics (Web)</span>', 
+        equipo: '💻 PC All-in-One HP (Windows 10)', 
+        navegador: 'Google Chrome 127.0', 
+        resolucion: '1920x1080', 
+        ciudad: 'Cali', 
+        pais: '🇨🇴 Colombia', 
+        ip: '181.137.60.21', 
+        isp: 'Movistar Fibra Óptica 200M', 
+        puertos: 'Port 443 (HTTPS) · 80 (HTTP)', 
+        protocolo: 'HTTPS / TLS 1.3 / QUIC', 
+        latencia: '31 ms', 
+        loginHora: '06:00:22 (Hoy)', 
+        tiempoSesion: 'Finalizado (Turno 8h)', 
+        lat: 3.4516, 
+        lon: -76.5320, 
+        status: '🟡 Inactiva (Fin Turno)' 
+      },
+      { 
+        op: 'Yhongervis Jesus', 
+        rol: 'Operador Master (Tarde)', 
+        app: 'talkytimes', 
+        appName: 'Talkytimes App', 
+        appBadge: '<span style="background:rgba(192,132,252,0.18);color:#c084fc;border:1px solid rgba(192,132,252,0.4);padding:2px 8px;border-radius:6px;font-size:0.62rem;font-weight:900;">🟣 Talkytimes App (Autopilot)</span>', 
+        equipo: '💻 MacBook Air M2 (macOS 15)', 
+        navegador: 'Safari 18.0', 
+        resolucion: '2560x1600', 
+        ciudad: 'Medellín', 
+        pais: '🇨🇴 Colombia', 
+        ip: '190.158.45.92', 
+        isp: 'Tigo UNE Medellín (Fibra 400M)', 
+        puertos: 'Port 443 (HTTPS) · 8080 (WSS Talky)', 
+        protocolo: 'WSS / TLS 1.3', 
+        latencia: '25 ms', 
+        loginHora: '14:00:45 (Hoy)', 
+        tiempoSesion: 'hace 4h 22m', 
+        lat: 6.2442, 
+        lon: -75.5812, 
+        status: '🟢 En Línea' 
+      }
     ];
+
+    window._filtroAppDispositivos = window._filtroAppDispositivos || 'all';
+
+    window.setFiltroAppDispositivos = function(tipo, btnEl) {
+      window._filtroAppDispositivos = tipo;
+      document.querySelectorAll('.btn-filtro-app-conn').forEach(function(b) {
+        b.style.background = 'rgba(255,255,255,0.04)';
+        b.style.borderColor = 'rgba(255,255,255,0.12)';
+        b.style.color = '#94a3b8';
+      });
+      if (btnEl) {
+        btnEl.style.background = 'rgba(14,165,233,0.25)';
+        btnEl.style.borderColor = 'rgba(14,165,233,0.5)';
+        btnEl.style.color = '#38bdf8';
+      }
+      window.renderConexionesDispositivos();
+    };
+
+    window.ubicarDispositivoGoogleEarth = function(idx) {
+      const d = window._dispositivosConectados[idx];
+      if (!d) return;
+
+      const earthUrl = 'https://earth.google.com/web/search/@' + d.lat + ',' + d.lon + ',900a,35y,0t,0r';
+      const mapsUrl = 'https://www.google.com/maps?q=' + d.lat + ',' + d.lon + '&t=k&z=17';
+
+      // Abrir Google Earth en una nueva pestaña
+      window.open(earthUrl, '_blank');
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: '🌍 TELEMETRÍA GEOESPACIAL & AUDITORÍA 3D',
+          html: '<div style="text-align:left;font-size:0.75rem;color:#cbd5e1;line-height:1.6;">' +
+            '<div style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.3);border-radius:10px;padding:12px;margin-bottom:12px;">' +
+              '<div style="font-size:0.9rem;font-weight:900;color:#fff;">👤 ' + d.op + ' <span style="font-size:0.65rem;color:#38bdf8;">(' + d.rol + ')</span></div>' +
+              '<div style="font-size:0.68rem;color:#94a3b8;margin-top:2px;">Terminal: ' + d.equipo + ' · ' + d.resolucion + '</div>' +
+              '<div style="margin-top:6px;">' + d.appBadge + '</div>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">' +
+              '<div style="background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);">' +
+                '<b style="color:#38bdf8;">📍 Ubicación:</b><br>' + d.pais + ' - ' + d.ciudad + '<br>' +
+                '<small style="color:#64748b;font-family:monospace;">Lat: ' + d.lat.toFixed(4) + ' | Lon: ' + d.lon.toFixed(4) + '</small>' +
+              '</div>' +
+              '<div style="background:rgba(255,255,255,0.03);padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);">' +
+                '<b style="color:#34d399;">⚡ Latencia & Estado:</b><br>' + d.latencia + ' · ' + d.status + '<br>' +
+                '<small style="color:#64748b;">Sesión: ' + d.tiempoSesion + '</small>' +
+              '</div>' +
+            '</div>' +
+            '<div style="background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);margin-bottom:12px;">' +
+              '<div style="font-size:0.68rem;color:#fbbf24;font-weight:800;margin-bottom:4px;">🛡️ AUDITORÍA DE RED & PUERTOS ABIERTOS:</div>' +
+              '<div style="font-size:0.68rem;color:#fff;">IP Pública: <code style="color:#38bdf8;background:rgba(56,189,248,0.1);padding:1px 6px;border-radius:4px;">' + d.ip + '</code></div>' +
+              '<div style="font-size:0.62rem;color:#cbd5e1;margin-top:2px;">ISP: <b>' + d.isp + '</b></div>' +
+              '<div style="font-size:0.62rem;color:#a78bfa;margin-top:2px;">Puertos Detectados: <b>' + d.puertos + '</b></div>' +
+              '<div style="font-size:0.6rem;color:#64748b;margin-top:2px;">Protocolo Cifrado: ' + d.protocolo + '</div>' +
+            '</div>' +
+            '<div style="font-size:0.62rem;color:#94a3b8;font-style:italic;">Se ha abierto la vista 3D en Google Earth en una pestaña nueva. También puedes inspeccionar la vista satelital directa con el botón inferior.</div>' +
+          '</div>',
+          showCancelButton: true,
+          confirmButtonText: '🌍 Reabrir Google Earth 3D',
+          cancelButtonText: '🛰️ Ver Mapa Satélite',
+          showDenyButton: true,
+          denyButtonText: 'Cerrar',
+          confirmButtonColor: '#0284c7',
+          cancelButtonColor: '#059669',
+          denyButtonColor: '#475569',
+          background: 'rgba(15, 23, 42, 0.98)',
+          color: '#fff'
+        }).then(function(res) {
+          if (res.isConfirmed) {
+            window.open(earthUrl, '_blank');
+          } else if (res.dismiss === Swal.DismissReason.cancel) {
+            window.open(mapsUrl, '_blank');
+          }
+        });
+      }
+    };
 
     window.renderConexionesDispositivos = function() {
       const tableEl = document.getElementById('conn-dispositivos-table');
       if (!tableEl) return;
 
-      const rows = window._dispositivosConectados || [];
-      const rowsHTML = rows.map((d, idx) => {
-        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;"  onmouseout="this.style.background=\'transparent\'">' +
-          '<td style="padding:10px 8px;font-size:.6rem;color:#64748b;font-weight:bold;">#' + (idx + 1) + '</td>' +
+      const searchInput = document.getElementById('conn-dispositivos-search');
+      const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+      const fApp = window._filtroAppDispositivos || 'all';
+
+      let rows = (window._dispositivosConectados || []).filter(function(d) {
+        const matchApp = (fApp === 'all') || (d.app === fApp);
+        const matchQ = !q || 
+          d.op.toLowerCase().includes(q) || 
+          d.rol.toLowerCase().includes(q) || 
+          d.ciudad.toLowerCase().includes(q) || 
+          d.ip.includes(q) || 
+          d.puertos.toLowerCase().includes(q) ||
+          d.equipo.toLowerCase().includes(q) ||
+          d.appName.toLowerCase().includes(q);
+        return matchApp && matchQ;
+      });
+
+      // Actualizar conteos KPI si existen elementos
+      const kpiTotal = document.getElementById('conn-kpi-total');
+      if (kpiTotal) kpiTotal.innerText = window._dispositivosConectados.length + ' Terminales';
+
+      if (rows.length === 0) {
+        tableEl.innerHTML = '<div style="color:#64748b;font-size:0.7rem;text-align:center;padding:35px;">No se encontraron dispositivos para el filtro de aplicación o búsqueda seleccionado.</div>';
+        return;
+      }
+
+      const rowsHTML = rows.map((d) => {
+        const originalIdx = window._dispositivosConectados.indexOf(d);
+        const earthUrl = 'https://earth.google.com/web/search/@' + d.lat + ',' + d.lon + ',900a,35y,0t,0r';
+
+        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.02)\'" onmouseout="this.style.background=\'transparent\'">' +
+          '<td style="padding:10px 8px;font-size:.6rem;color:#64748b;font-weight:bold;">#' + (originalIdx + 1) + '</td>' +
           '<td style="padding:10px 8px;">' +
-            '<div style="font-size:.78rem;color:#fff;font-weight:900;">' + d.op + '</div>' +
+            '<div style="font-size:.8rem;color:#fff;font-weight:900;">' + d.op + '</div>' +
             '<div style="font-size:.62rem;color:#38bdf8;">' + d.rol + '</div>' +
+          '</td>' +
+          '<td style="padding:10px 8px;">' +
+            d.appBadge +
+            '<div style="font-size:.56rem;color:#94a3b8;margin-top:2px;">' + d.protocolo + '</div>' +
           '</td>' +
           '<td style="padding:10px 8px;font-size:.68rem;color:#cbd5e1;">' +
             '<div>' + d.equipo + '</div>' +
             '<div style="font-size:.58rem;color:#64748b;">' + d.navegador + ' · ' + d.resolucion + '</div>' +
           '</td>' +
+          '<td style="padding:10px 8px;font-size:.68rem;">' +
+            '<div style="font-family:monospace;font-size:0.75rem;font-weight:bold;color:#38bdf8;">IP: ' + d.ip + '</div>' +
+            '<div style="font-size:.58rem;color:#fbbf24;margin-top:1px;">🔌 ' + d.puertos + '</div>' +
+            '<div style="font-size:.55rem;color:#64748b;">ISP: ' + d.isp + '</div>' +
+          '</td>' +
           '<td style="padding:10px 8px;font-size:.7rem;color:#fff;">' +
             '<div>' + d.pais + ' · <b>' + d.ciudad + '</b></div>' +
-            '<div style="font-size:.58rem;color:#64748b;">IP: ' + d.ip + '</div>' +
+            '<div style="font-size:.58rem;color:#34d399;font-weight:bold;">⚡ Latencia: ' + d.latencia + '</div>' +
+            '<div style="font-size:.55rem;color:#64748b;font-family:monospace;">Coords: ' + d.lat.toFixed(2) + ', ' + d.lon.toFixed(2) + '</div>' +
+          '</td>' +
+          '<td style="padding:10px 8px;font-size:.65rem;color:#94a3b8;">' +
+            '<div style="color:#e2e8f0;font-weight:700;">' + d.loginHora + '</div>' +
+            '<div style="font-size:.58rem;color:#34d399;">' + d.tiempoSesion + '</div>' +
+            '<div style="font-size:.58rem;color:#64748b;margin-top:2px;">' + d.status + '</div>' +
           '</td>' +
           '<td style="padding:10px 8px;text-align:center;">' +
-            '<span style="background:rgba(52,211,153,0.15);color:#34d399;font-weight:900;padding:2px 8px;border-radius:6px;font-size:.65rem;">' + d.latencia + '</span>' +
+            '<div style="display:flex;flex-direction:column;gap:4px;align-items:center;">' +
+              '<button onclick="window.ubicarDispositivoGoogleEarth(' + originalIdx + ')" style="background:linear-gradient(135deg,#0284c7,#0369a1);border:none;color:#fff;padding:5px 10px;border-radius:6px;font-size:0.62rem;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:4px;box-shadow:0 3px 10px rgba(2,132,199,0.3);">' +
+                '🌍 Ver en Earth' +
+              '</button>' +
+              '<a href="' + earthUrl + '" target="_blank" style="font-size:0.58rem;color:#38bdf8;text-decoration:none;">🛰️ Abrir Directo 3D</a>' +
+            '</div>' +
           '</td>' +
-          '<td style="padding:10px 8px;font-size:.65rem;color:#94a3b8;">' + d.loginHora + '</td>' +
-          '<td style="padding:10px 8px;text-align:center;font-size:.65rem;font-weight:bold;">' + d.status + '</td>' +
         '</tr>';
       }).join('');
 
@@ -30419,19 +30772,20 @@ PT._logKey = function (opName) {
         '<thead>' +
           '<tr style="border-bottom:2px solid rgba(255,255,255,0.08);color:#94a3b8;font-size:0.6rem;text-transform:uppercase;">' +
             '<th style="padding:8px;">#</th>' +
-            '<th style="padding:8px;">Operador</th>' +
-            '<th style="padding:8px;">Dispositivo & Navegador</th>' +
-            '<th style="padding:8px;">Geolocalización & IP</th>' +
-            '<th style="padding:8px;text-align:center;">Latencia (Ping)</th>' +
-            '<th style="padding:8px;">Hora Conexión</th>' +
-            '<th style="padding:8px;text-align:center;">Estado</th>' +
+            '<th style="padding:8px;">Operador & Rol</th>' +
+            '<th style="padding:8px;">Aplicación Conectada</th>' +
+            '<th style="padding:8px;">Terminal & Sistema</th>' +
+            '<th style="padding:8px;">IP Pública & Puertos</th>' +
+            '<th style="padding:8px;">Geolocalización & Ping</th>' +
+            '<th style="padding:8px;">Hora & Duración</th>' +
+            '<th style="padding:8px;text-align:center;">🌍 Google Earth 3D</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody>' + rowsHTML + '</tbody>' +
       '</table>';
     };
 
-function ciaSwitchTab(idx) {
+    function ciaSwitchTab(idx) {
         [0, 1, 2, 3, 4, 5].forEach(i => {
           const panel = document.getElementById('cia-panel-' + i);
           const btn   = document.getElementById('cia-tab-' + i);

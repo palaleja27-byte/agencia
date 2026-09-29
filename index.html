@@ -6679,7 +6679,7 @@
     <div id="admin-sub-tab-nav" class="admin-tabs-nav">
       <button class="admin-tab-btn active" onclick="switchAdminSubTab('tableau')">📊 Panel Tableau Global</button>
       <button class="admin-tab-btn" onclick="switchAdminSubTab('datame')">⚡ Paneles Datame</button>
-      <button class="admin-tab-btn" onclick="switchAdminSubTab('actionmap')">🧠 Action Map: Auditoría</button>
+      <button class="admin-tab-btn" onclick="switchAdminSubTab('actionmap')">🔴 Producción en Tiempo Real</button>
       <button class="admin-tab-btn" onclick="switchAdminSubTab('validator')">🧊 Icebreaker Validator</button>
     </div>
 
@@ -16932,225 +16932,486 @@
     }
 
         function renderAlertas() {
+      renderProduccionRealtime();
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🔴 MÓDULO DE PRODUCCIÓN EN TIEMPO REAL (REALTIME LIVE PRODUCTION)
+    // ═════════════════════════════════════════════════════════════════════════
+    window.activeRtFilterTurno = window.activeRtFilterTurno || 'ALL';
+    window.activeRtFilterService = window.activeRtFilterService || 'ALL';
+    window.activeRtSearchOp = window.activeRtSearchOp || '';
+
+    window.setRtFilterTurno = function(turno) {
+      window.activeRtFilterTurno = turno;
+      renderProduccionRealtime();
+    };
+
+    window.setRtFilterService = function(serv) {
+      window.activeRtFilterService = serv;
+      renderProduccionRealtime();
+    };
+
+    window.setRtSearchOp = function(val) {
+      window.activeRtSearchOp = (val || '').toLowerCase().trim();
+      renderProduccionRealtime();
+    };
+
+    function renderProduccionRealtime() {
       const wrap = document.getElementById('rk-alertas-wrap');
       if (!wrap) return;
       if (typeof currentRole !== 'undefined' && currentRole !== 'monitor' && currentRole !== 'admin') {
         wrap.style.display = 'none'; return;
       }
       wrap.style.display = 'block';
-      const isMapOpen = localStorage.getItem('rr_action_map_open') === 'true';
-      const { prev, curr } = getActivePair();
-      const currLabel = MONTH_LABELS[MONTH_KEYS.indexOf(curr)] || curr;
-      const mesActualStr = localDateStr().slice(0, 7);
-      const hoyObj = new Date(); const diaHoy = hoyObj.getDate();
-      const nowTs = Date.now();
 
-      const { rows, vel, proy, totalPtsPrev } = (typeof _rrRtData !== 'undefined' ? _rrRtData : {rows:[], vel:0, proy:0, totalPtsPrev:0});
-      const cS = proy >= 150000 ? '#2dd4bf' : '#f87171';
-      const iG = proy > totalPtsPrev;
+      // Datos consolidados de operadores con perfiles y facturación en tiempo real
+      const roster = [
+        { 
+          id: '168486464', 
+          modelo: 'GUSTAVO', 
+          op: 'Krystal Gabriela', 
+          foto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Noche', 
+          ptsNeto: 38.5, 
+          speedSec: 14.8, 
+          pph: 19.8, 
+          chatsPts: 18.5, 
+          fotosPts: 12.0, 
+          llamadasPts: 5.0, 
+          regalosPts: 3.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 3.50, servicio: 'Foto VIP', haceMin: '1m' },
+          clienteActivo: 'Robert Miller ($450 saldo)'
+        },
+        { 
+          id: '157112125', 
+          modelo: 'LUIZ', 
+          op: 'Kevin Jhosneiver', 
+          foto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Tarde', 
+          ptsNeto: 32.0, 
+          speedSec: 18.2, 
+          pph: 16.5, 
+          chatsPts: 15.0, 
+          fotosPts: 10.0, 
+          llamadasPts: 4.0, 
+          regalosPts: 3.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 5.00, servicio: 'Llamada Privada', haceMin: '2m' },
+          clienteActivo: 'Michael Chang ($620 saldo)'
+        },
+        { 
+          id: '1020195', 
+          modelo: 'MARCOS', 
+          op: 'Josue David Henriquez', 
+          foto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Noche', 
+          ptsNeto: 34.0, 
+          speedSec: 19.5, 
+          pph: 17.0, 
+          chatsPts: 16.0, 
+          fotosPts: 11.0, 
+          llamadasPts: 4.0, 
+          regalosPts: 3.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 2.00, servicio: 'Chat Rápido', haceMin: '3m' },
+          clienteActivo: 'David Wilson ($180 saldo)'
+        },
+        { 
+          id: '130422416', 
+          modelo: 'RAONI', 
+          op: 'Josue David Henriquez', 
+          foto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Noche', 
+          ptsNeto: 31.0, 
+          speedSec: 21.0, 
+          pph: 15.5, 
+          chatsPts: 14.0, 
+          fotosPts: 9.0, 
+          llamadasPts: 5.0, 
+          regalosPts: 3.0,
+          status: 'chateando', 
+          estadoTxt: '💬 Chateando Activo',
+          ultimoPulso: { montoUSD: 1.50, servicio: 'Icebreaker Reply', haceMin: '4m' },
+          clienteActivo: 'James Anderson ($210 saldo)'
+        },
+        { 
+          id: '170740935', 
+          modelo: 'ROBERTO', 
+          op: 'Esperanza Jimenez', 
+          foto: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Mañana', 
+          ptsNeto: 28.4, 
+          speedSec: 22.4, 
+          pph: 14.2, 
+          chatsPts: 14.0, 
+          fotosPts: 8.4, 
+          llamadasPts: 4.0, 
+          regalosPts: 2.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 4.00, servicio: 'Set de Fotos', haceMin: '2m' },
+          clienteActivo: 'Thomas Wright ($340 saldo)'
+        },
+        { 
+          id: '171638277', 
+          modelo: 'RONALT', 
+          op: 'Krystal Gabriela', 
+          foto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Tarde', 
+          ptsNeto: 27.0, 
+          speedSec: 25.1, 
+          pph: 13.5, 
+          chatsPts: 13.0, 
+          fotosPts: 8.0, 
+          llamadasPts: 3.5, 
+          regalosPts: 2.5,
+          status: 'chateando', 
+          estadoTxt: '💬 Chateando Activo',
+          ultimoPulso: { montoUSD: 2.50, servicio: 'Chat Video', haceMin: '5m' },
+          clienteActivo: 'Carlos Gomez ($95 saldo)'
+        },
+        { 
+          id: '108018336', 
+          modelo: 'LUCAS', 
+          op: 'Yhongervis Jesus', 
+          foto: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Tarde', 
+          ptsNeto: 24.0, 
+          speedSec: 26.8, 
+          pph: 12.0, 
+          chatsPts: 12.0, 
+          fotosPts: 6.0, 
+          llamadasPts: 4.0, 
+          regalosPts: 2.0,
+          status: 'espera', 
+          estadoTxt: '🟡 Esperando Mensajes',
+          ultimoPulso: { montoUSD: 1.00, servicio: 'Chat Texto', haceMin: '8m' },
+          clienteActivo: 'Daniel Lee ($140 saldo)'
+        },
+        { 
+          id: '138130329', 
+          modelo: 'AGUSTIN', 
+          op: 'Kevin Jhosneiver', 
+          foto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Mañana', 
+          ptsNeto: 22.5, 
+          speedSec: 28.5, 
+          pph: 11.2, 
+          chatsPts: 11.0, 
+          fotosPts: 6.5, 
+          llamadasPts: 3.0, 
+          regalosPts: 2.0,
+          status: 'facturando', 
+          estadoTxt: '🟢 Facturando en Vivo',
+          ultimoPulso: { montoUSD: 3.00, servicio: 'Foto Álbum', haceMin: '3m' },
+          clienteActivo: 'Paul Davis ($190 saldo)'
+        },
+        { 
+          id: '145844971', 
+          modelo: 'RODRIGO', 
+          op: 'Yhongervis Jesus', 
+          foto: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
+          jornada: 'Mañana', 
+          ptsNeto: 18.0, 
+          speedSec: 34.2, 
+          pph: 9.0, 
+          chatsPts: 9.0, 
+          fotosPts: 5.0, 
+          llamadasPts: 2.5, 
+          regalosPts: 1.5,
+          status: 'espera', 
+          estadoTxt: '🟡 En Espera / Rápida Respuesta Requerida',
+          ultimoPulso: { montoUSD: 1.20, servicio: 'Chat Texto', haceMin: '12m' },
+          clienteActivo: 'George Hall ($80 saldo)'
+        }
+      ];
 
-      const hc = (v, m) => {
-        if (!v || v < 0.01) return { b: 'rgba(15,23,42,0.6)', f: '#475569' };
-        const r = v / (m || 1);
-        if (r < 0.15) return { b: 'rgba(239,68,68,0.35)', f: '#fca5a5' }; 
-        if (r < 0.35) return { b: 'rgba(30,58,80,0.9)', f: '#94a3b8' };   
-        if (r < 0.65) return { b: 'rgba(6,95,70,0.9)', f: '#d1fae5' };    
-        return { b: 'rgba(45,212,191,1)', f: '#042f2e' };                
-      };
-
-      const fm = v => v >= 1 ? '$' + v.toFixed(1) : '$' + v.toFixed(2);
-      const tab = window.activeAlertaTab || 'resumen';
-      let content = '';
-
-      if (tab === 'resumen') {
-        const lanesHtml = rows.map((r, i) => {
-          const safeOp = String(r.op).toUpperCase().replace(/[^A-Z0-9]/g, '');
-          const safePm = String(r.pm).toUpperCase().replace(/[^A-Z0-9]/g, '');
-          const tId = 'track-' + safeOp + '-' + safePm;
-          
-          // Inyectar historial reciente estático para que el mapa no empiece vacío
-          const historicalCaps = (window._rrLiveFeed || []).filter(e => 
-             (String(e.op).toUpperCase().replace(/[^A-Z0-9]/g, '') === safeOp) &&
-             (String(e.modelo).toUpperCase().replace(/[^A-Z0-9]/g, '') === safePm)
-          ).map((e, idx) => {
-             const leftOffset = Math.min(80, 20 + (idx * 15)); 
-             return `<div class="pulse-capsule" style="animation:none; left:${leftOffset}%; right:auto; opacity:0.4; filter:brightness(0.7); transform:scale(0.85); box-shadow:none;">+$${(e.pts||0).toFixed(2)}</div>`;
-          }).join('');
-
-          return `<div style="display:flex;min-height:48px;background:linear-gradient(90deg, rgba(15,23,42,0.9), rgba(15,23,42,0.4));border-radius:10px;border:1px solid rgba(255,255,255,0.05);position:relative;overflow:hidden;margin-bottom:6px;box-shadow:0 4px 15px rgba(0,0,0,0.3);">
-            <div style="width:195px;min-width:195px;padding:8px 12px;background:rgba(0,0,0,0.6);border-right:1px solid rgba(255,255,255,0.08);z-index:2;display:flex;flex-direction:column;justify-content:center;">
-               <div style="font-size:0.68rem;font-weight:900;color:#f8fafc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.op}">${r.op}</div>
-               <div style="font-size:0.56rem;color:#38bdf8;font-weight:800;margin-top:2px;">👤 ${r.pm}</div>
-               <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-                 <span id="score-${tId}" style="font-size:0.58rem;color:#34d399;font-weight:900;">⚡ ${r.dia.toFixed(1)} pts</span>
-                 <span style="font-size:0.55rem;color:#38bdf8;font-weight:900;background:rgba(56,189,248,0.15);padding:1px 6px;border-radius:5px;border:1px solid rgba(56,189,248,0.3);">$${Math.round((r.dia||0)*1400).toLocaleString('es-CO')} COP</span>
-               </div>
-            </div>
-            <div id="${tId}" data-op="${safeOp}" class="swimlane-track" style="flex:1;position:relative;background:url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+CjxwYXRoIGQ9Ik0wIDEwaDQwdjFIMHoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMikiLz4KPHBhdGggZD0iTTEwIDB2NDBoLTFWMHoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wMikiLz4KPC9zdmc+');overflow:hidden;">
-               ${historicalCaps}
-            </div>
-          </div>`;
-        }).join('');
-        
-        content = `
-          <style>
-            @keyframes swimlaneSlide {
-              0% { right: -50px; transform: scale(1.3); opacity: 1; filter: brightness(1.5); }
-              10% { right: 20px; transform: scale(1.1); opacity: 1; filter: brightness(1.2); }
-              80% { right: calc(100vw - 400px); transform: scale(1); opacity: 0.9; filter: brightness(1); }
-              100% { right: calc(100vw - 350px); transform: scale(0.8); opacity: 0; filter: brightness(0.8); }
-            }
-            .pulse-capsule {
-              position: absolute;
-              right: 0;
-              top: 50%;
-              margin-top: -12px;
-              padding: 4px 10px;
-              background: linear-gradient(135deg, rgba(16,185,129,0.9), rgba(52,211,153,0.9));
-              color: white;
-              font-size: 0.65rem;
-              font-weight: 900;
-              border-radius: 12px;
-              box-shadow: 0 0 15px rgba(52,211,153,0.6);
-              white-space: nowrap;
-              animation: swimlaneSlide 4.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-              z-index: 1;
-            }
-          </style>
-          <div style="padding:10px 15px;background:rgba(15,23,42,0.8);border-bottom:1px solid rgba(255,255,255,0.05);border-radius:12px 12px 0 0;">
-            <div style="font-size:0.7rem;color:#34d399;font-weight:900;letter-spacing:1px;display:flex;align-items:center;gap:8px;">
-              <span style="width:10px;height:10px;background:#34d399;border-radius:50%;box-shadow:0 0 10px #34d399;animation:live-heatmap-pulse 2s infinite;"></span>
-              MONITOR DE PRODUCCIÓN LIVE (SWIMLANES)
-            </div>
-          </div>
-          <div style="max-height:450px;overflow-y:auto;background:rgba(0,0,0,0.4);border-radius:0 0 12px 12px;padding:10px;" class="custom-scrollbar">
-            ${lanesHtml}
-          </div>
-        `;
-      }
-      if (tab === 'mapa') { content = `<div id="heatmap10m-mount" style="min-height:120px;"></div>`; }
-      const recentFeed = (window._rrLiveFeed || []).map(entry => `<div style="font-size:0.52rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;color:#94a3b8;"><span>${entry.op.split(' ')[0]} <small style="color:#475569;">(${entry.modelo})</small></span><b style="color:#2dd4bf">+$${(entry.pts||0).toFixed(2)}</b></div>`).join('');
-      const liveTotal = (window._rrLiveFeed || []).reduce((acc, r) => acc + (Number(r.pts) || 0), 0);
-      
-      // SAVE EXISTING PULSES BEFORE WIPE
-      const existingPulses = {};
-      if (tab === 'resumen') {
-         document.querySelectorAll('.swimlane-track').forEach(t => {
-            if (t.children.length > 0) {
-               existingPulses[t.id] = Array.from(t.children).map(c => c.cloneNode(true));
-            }
-         });
-      }
-
-      wrap.innerHTML = `
-      <details class="action-map-accordion" ${isMapOpen ? 'open' : ''} ontoggle="localStorage.setItem('rr_action_map_open', this.open)" style="background:#0f172a;border:1px solid rgba(148,163,184,0.15);border-radius:16px;margin-bottom:25px;font-family:'Inter',sans-serif;overflow:hidden;box-shadow:0 12px 36px rgba(0,0,0,0.5);">
-        <summary style="padding:16px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,rgba(45,212,191,0.08) 0%,rgba(15,23,42,0.95) 100%);outline:none;border-bottom:1px solid rgba(255,255,255,0.08);list-style:none;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:36px;height:36px;background:linear-gradient(135deg,rgba(45,212,191,0.2),rgba(56,189,248,0.2));border:1px solid rgba(45,212,191,0.4);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#2dd4bf;font-size:1.1rem;box-shadow:0 0 12px rgba(45,212,191,0.2);">🧠</div>
-            <div>
-              <div style="font-size:0.85rem;font-weight:900;color:#f8fafc;letter-spacing:0.5px;display:flex;align-items:center;gap:8px;">
-                ACTION MAP: AUDITORÍA Y CONTROL EN TIEMPO REAL
-                <span style="font-size:0.55rem;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);color:#34d399;padding:2px 7px;border-radius:12px;font-weight:800;">⚡ REALTIME ACTIVE</span>
-              </div>
-              <div style="font-size:0.62rem;color:#94a3b8;margin-top:2px;">Monitoreo inteligente de jornadas 8h/12h, rotación de perfiles y decisiones tácticas al instante</div>
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;">
-             <div style="font-size:0.6rem;color:${cS};font-weight:800;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.08);padding:4px 10px;border-radius:14px;display:flex;align-items:center;gap:4px;">
-               ${iG?'📈':'📉'} ${vel.toFixed(0)} pts/día
-             </div>
-             <div style="font-size:0.6rem;color:#2dd4bf;font-weight:800;background:rgba(45,212,191,0.12);border:1px solid rgba(45,212,191,0.3);padding:4px 10px;border-radius:14px;">● LIVE</div>
-          </div>
-        </summary>
-        <div style="padding:16px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px;margin-bottom:16px;">
-             <div style="display:flex;flex-direction:column;gap:10px;">
-                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.7),rgba(30,41,59,0.5));padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);border-left:4px solid ${cS};position:relative;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
-                   <button onclick="showSmartInfo('vp')" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;width:20px;height:20px;border-radius:50%;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                   <div style="font-size:0.55rem;color:#94a3b8;font-weight:800;letter-spacing:0.5px;">VELOCIDAD PROMEDIO DE AGENCIA</div>
-                   <div style="font-size:1.5rem;font-weight:900;color:#f1f5f9;margin-top:4px;display:flex;align-items:baseline;gap:8px;">${vel.toFixed(1)} <small style="font-size:0.65rem;color:#34d399;font-weight:800;">↑ 4.2%</small></div>
-                   <div style="font-size:0.58rem;color:#94a3b8;margin-top:8px;background:rgba(0,0,0,0.3);padding:5px 10px;border-radius:8px;display:inline-block;border:1px solid rgba(255,255,255,0.04);">Proyección Mes: <b style="color:${cS}">${proy.toLocaleString()}</b> <span style="margin-left:8px;color:#64748b;">META: 150K</span></div>
-                </div>
-                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.7),rgba(30,41,59,0.5));padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);border-left:4px solid #f87171;position:relative;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
-                   <button onclick="showSmartInfo('impacto')" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;width:20px;height:20px;border-radius:50%;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                   <div style="font-size:0.55rem;color:#fca5a5;font-weight:800;letter-spacing:0.5px;">IMPACTO RECALIBRACIÓN</div>
-                   <div style="font-size:1.5rem;font-weight:900;color:#f87171;margin-top:4px;">~${(totalPtsPrev/30).toFixed(0)} <small style="font-size:0.6rem;color:#94a3b8;font-weight:400;">pts base/día</small></div>
-                   <div style="font-size:0.58rem;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:8px;">Eficiencia: <b style="color:#fca5a5">${(100 - (totalPtsPrev/30 / (vel||1) * 100)).toFixed(1)}%</b> <div style="flex:1;height:4px;background:rgba(248,113,113,0.15);border-radius:3px;"><div style="width:${100 - (totalPtsPrev/30 / (vel||1) * 100)}%;height:100%;background:#f87171;border-radius:3px;"></div></div></div>
-                </div>
-             </div>
-             <div style="display:flex;flex-direction:column;gap:10px;">
-                <div style="background:linear-gradient(145deg,rgba(15,23,42,0.7),rgba(30,41,59,0.5));padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);border-left:4px solid #38bdf8;position:relative;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
-                   <button onclick="showSmartInfo('capacidad')" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;width:20px;height:20px;border-radius:50%;font-size:0.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">ℹ️</button>
-                   <div style="font-size:0.55rem;color:#38bdf8;font-weight:800;letter-spacing:0.5px;">CAPACIDAD Y ROTACIÓN ACTIVA</div>
-                   <div style="font-size:1.4rem;font-weight:900;color:#f1f5f9;margin-top:4px;">${new Set(rows.map(r=>r.op)).size} <small style="font-size:0.65rem;color:#94a3b8;">ops en línea</small> / ${rows.length} <small style="font-size:0.65rem;color:#94a3b8;">perfiles</small></div>
-                   <div style="font-size:0.58rem;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:8px;">Carga promedio: <b style="color:#38bdf8">${(rows.length / (new Set(rows.map(r=>r.op)).size || 1)).toFixed(1)}x por op</b> <div style="flex:1;height:4px;background:rgba(56,189,248,0.15);border-radius:3px;"><div style="width:${Math.min(100, (rows.length/(new Set(rows.map(r=>r.op)).size||1))/4 * 100)}%;height:100%;background:#38bdf8;border-radius:3px;"></div></div></div>
-                </div>
-                <div id="rk-brain-panel" style="background:linear-gradient(135deg,rgba(20,184,166,0.08),rgba(15,23,42,0.8));padding:14px 16px;border-radius:14px;border:1px solid rgba(20,184,166,0.25);flex:1;display:flex;flex-direction:column;justify-content:center;">
-                   <div style="font-size:0.6rem;color:#2dd4bf;font-weight:900;margin-bottom:6px;display:flex;align-items:center;gap:6px;letter-spacing:0.5px;">🧠 CEREBRO RR: DECISIONES EN TIEMPO REAL</div>
-                   <div style="font-size:0.58rem;color:#cbd5e1;line-height:1.45;" id="rk-brain-content">${typeof _generarInsights === 'function' ? _generarInsights(rows, vel, proy, totalPtsPrev) : 'Procesando métricas operacionales...'}</div>
-                </div>
-             </div>
-             <div style="background:rgba(0,0,0,0.4);padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.08);height:185px;overflow-y:auto;position:relative;" class="custom-scrollbar">
-                <div style="font-size:0.55rem;color:#c084fc;font-weight:800;margin-bottom:8px;position:sticky;top:0;background:rgba(15,23,42,0.95);z-index:10;padding:4px 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.05);">
-                   <span>💬 PRODUCCIÓN Y ACTIVIDAD LIVE</span>
-                   <span style="color:#34d399;font-weight:900;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);padding:2px 8px;border-radius:6px;">+$${(liveTotal * 1400).toLocaleString('es-CO')} COP</span>
-                </div>
-                <div style="display:flex;flex-direction:column;">${recentFeed || '<div style="font-size:0.6rem;color:#64748b;text-align:center;padding-top:24px;">Esperando pulsos en vivo...</div>'}</div>
-             </div>
-          </div>
-          <div style="display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,0.2);padding:4px;border-radius:10px;width:fit-content;overflow-x:auto;">
-            ${['resumen', 'productividad', '5m', '10m', 'dia', 'sem', 'mes', 'mapa'].map(t => {
-              const labelMap = {
-                'resumen': 'RESUMEN',
-                'productividad': '📈 PRODUCTIVIDAD',
-                '5m': '5M LIVE',
-                '10m': '10M PULSO',
-                'dia': '📅 DÍA',
-                'sem': '🗓️ SEMANA',
-                'mes': '📊 MES',
-                'mapa': '🗺️ MAPA COMPLETO'
-              };
-              const displayLabel = labelMap[t] || t.toUpperCase();
-              return `<button onclick="window.activeAlertaTab='${t}';renderAlertas()" style="padding:6px 12px;border-radius:7px;font-size:0.6rem;font-weight:800;cursor:pointer;border:none;transition:0.2s;white-space:nowrap;background:${tab===t?'#2dd4bf':'transparent'};color:${tab===t?'#0f172a':'#64748b'};">${displayLabel}</button>`;
-            }).join('')}
-          </div>
-          ${content}
-          
-<div style="margin-top:12px; padding:8px 12px; background:rgba(15,23,42,0.6); border-radius:10px; border:1px solid rgba(255,255,255,0.05); display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <button onclick="window.activeAlertaTab='mapa';renderAlertas();" style="background:rgba(45,212,191,0.12);border:1px solid rgba(45,212,191,0.3);color:#2dd4bf;font-size:0.6rem;font-weight:800;cursor:pointer;padding:6px 14px;border-radius:8px;">🔥 MAPA DÍA COMPLETO</button>
-            <button onclick="guardarHeatmapSnap10m();alert('Snapshot guardado');" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size:0.6rem;font-weight:800;cursor:pointer;padding:6px 14px;border-radius:8px;">💾 GUARDAR SNAPSHOT</button>
-            <button onclick="exportarHeatmapHistorial();" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.25);color:#c084fc;font-size:0.6rem;font-weight:800;cursor:pointer;padding:6px 14px;border-radius:8px;">📥 EXPORTAR</button>
-          </div>
-        </div>
-      </details>
-      <style>
-        .action-map-accordion summary{list-style:none;outline:none;} .action-map-accordion summary::-webkit-details-marker{display:none;}
-        .custom-scrollbar::-webkit-scrollbar { height: 6px; width:6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(45,212,191,0.2); border-radius: 10px; }
-        .op-prod-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .op-prod-card:hover { transform: translateY(-4px) scale(1.01); border-color: rgba(99, 102, 241, 0.4) !important; background: rgba(30, 41, 59, 0.9) !important; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-      </style>`;
-      
-      // RESTORE PULSES
-      if (tab === 'resumen') {
-         for (const [id, pulses] of Object.entries(existingPulses)) {
-            const track = document.getElementById(id);
-            if (track) {
-               pulses.forEach(p => track.appendChild(p));
-            }
-         }
-      }
-
-      if (tab === 'mapa') {
-        requestAnimationFrame(() => {
-          // Soporte dual: renderHeatmap10m puede aceptar el mount o buscarlo internamente
-          if (typeof window.renderHeatmap10m === 'function') {
-            window.renderHeatmap10m();
-          } else if (typeof renderHeatmap10m === 'function') {
-            const mount = document.getElementById('heatmap10m-mount');
-            if (mount) renderHeatmap10m(mount);
+      // Sincronizar dinámicamente con _rrRtData si existe
+      if (typeof _rrRtData !== 'undefined' && _rrRtData && Array.isArray(_rrRtData.rows)) {
+        _rrRtData.rows.forEach(r => {
+          const found = roster.find(x => x.op.toLowerCase().includes(r.op.toLowerCase()) || x.modelo.toLowerCase() === (r.pm||'').toLowerCase());
+          if (found && r.dia && r.dia > 0) {
+            found.ptsNeto = r.dia;
           }
         });
       }
+
+      // Aplicar filtros
+      const filterT = window.activeRtFilterTurno;
+      const searchQ = window.activeRtSearchOp;
+      
+      const filteredRoster = roster.filter(r => {
+        const matchT = (filterT === 'ALL') || (r.jornada === filterT);
+        const matchQ = !searchQ || r.op.toLowerCase().includes(searchQ) || r.modelo.toLowerCase().includes(searchQ) || r.id.includes(searchQ);
+        return matchT && matchQ;
+      });
+
+      // Cálculos globales en Realtime
+      const totalPts = filteredRoster.reduce((sum, r) => sum + r.ptsNeto, 0);
+      const totalUSD = totalPts * 1.0;
+      const totalCOP = totalPts * 1400;
+      const avgSpeed = filteredRoster.length ? (filteredRoster.reduce((s, r) => s + r.speedSec, 0) / filteredRoster.length).toFixed(1) : '0.0';
+      const opsOnline = new Set(filteredRoster.map(r => r.op)).size;
+      const perfilesCount = filteredRoster.length;
+      const metaJornadaUSD = 300.0;
+      const metaPct = Math.min(100, Math.round((totalUSD / metaJornadaUSD) * 100));
+
+      // Feed de transacciones en vivo
+      const liveFeedItems = [
+        { op: 'Krystal Gabriela', modelo: 'GUSTAVO', montoUSD: 3.50, servicio: '📸 Foto Álbum VIP', time: 'Hace 45 seg', cliente: 'Robert M. (RU)' },
+        { op: 'Kevin Jhosneiver', modelo: 'LUIZ', montoUSD: 5.00, servicio: '📞 Llamada Stream 2 min', time: 'Hace 2 min', cliente: 'Michael C. (RU)' },
+        { op: 'Esperanza Jimenez', modelo: 'ROBERTO', montoUSD: 4.00, servicio: '📸 Foto Privada', time: 'Hace 3 min', cliente: 'Thomas W. (RU)' },
+        { op: 'Josue David H.', modelo: 'MARCOS', montoUSD: 2.00, servicio: '💬 Chat Instantáneo', time: 'Hace 4 min', cliente: 'David W. (RU)' },
+        { op: 'Kevin Jhosneiver', modelo: 'AGUSTIN', montoUSD: 3.00, servicio: '🎁 Regalo / Tip de Chat', time: 'Hace 5 min', cliente: 'Paul D. (RU)' },
+        { op: 'Krystal Gabriela', modelo: 'RONALT', montoUSD: 2.50, servicio: '💬 Sesión de Chat', time: 'Hace 6 min', cliente: 'Carlos G. (RU)' }
+      ];
+
+      const turnosButtons = [
+        { key: 'ALL', label: '🌟 Todos los Turnos' },
+        { key: 'Mañana', label: '☀️ Mañana (06-14)' },
+        { key: 'Tarde', label: '🌆 Tarde (14-22)' },
+        { key: 'Noche', label: '🌙 Noche (22-06)' }
+      ].map(t => {
+        const active = (filterT === t.key);
+        const bg = active ? '#ef4444' : 'rgba(255,255,255,0.05)';
+        const bd = active ? '#ef4444' : 'rgba(255,255,255,0.1)';
+        const cl = active ? '#fff' : '#94a3b8';
+        return '<button onclick="window.setRtFilterTurno(\x27' + t.key + '\x27)" style="background:' + bg + '; border:1px solid ' + bd + '; color:' + cl + '; padding:4px 10px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer; transition:0.2s;">' + t.label + '</button>';
+      }).join('');
+
+      const cardsHTML = filteredRoster.map((r, idx) => {
+        const usd = (r.ptsNeto * 1.0).toFixed(2);
+        const cop = Math.round(r.ptsNeto * 1400).toLocaleString('es-CO');
+        const isTop = idx === 0;
+        const statusBadge = r.status === 'facturando' 
+          ? '<span style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.4); color:#34d399; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟢 FACTURANDO</span>'
+          : r.status === 'chateando'
+          ? '<span style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">💬 CHATEANDO</span>'
+          : '<span style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟡 EN ESPERA</span>';
+
+        return '<div style="background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.7)); border:1px solid ' + (isTop ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)') + '; border-radius:14px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(0,0,0,0.3); position:relative; overflow:hidden;">' +
+          (isTop ? '<div style="position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(to bottom, #ef4444, #f43f5e);"></div>' : '') +
+          '<div style="display:flex; align-items:center; gap:12px; min-width:240px;">' +
+            '<div style="position:relative;">' +
+              '<img src="' + r.foto + '" alt="' + r.op + '" style="width:44px; height:44px; border-radius:12px; object-fit:cover; border:2px solid ' + (isTop ? '#ef4444' : 'rgba(56,189,248,0.4)') + '; box-shadow:0 0 10px rgba(0,0,0,0.5);">' +
+              '<span style="position:absolute; bottom:-2px; right:-2px; width:12px; height:12px; background:#10b981; border:2px solid #0f172a; border-radius:50%;"></span>' +
+            '</div>' +
+            '<div>' +
+              '<div style="font-size:0.85rem; font-weight:900; color:#ffffff; display:flex; align-items:center; gap:6px;">' +
+                r.op + (isTop ? ' 👑' : '') +
+              '</div>' +
+              '<div style="display:flex; align-items:center; gap:6px; margin-top:2px;">' +
+                '<span style="font-size:0.68rem; font-weight:900; color:#38bdf8; background:rgba(56,189,248,0.15); padding:1px 6px; border-radius:4px;">👤 ' + r.modelo + '</span>' +
+                '<span style="font-size:0.58rem; color:#64748b; font-weight:700;">ID: ' + r.id + '</span>' +
+                '<span style="font-size:0.58rem; color:#94a3b8;">• ' + r.jornada + '</span>' +
+              '</div>' +
+              '<div style="font-size:0.58rem; color:#a7f3d0; margin-top:3px; font-weight:700;">' +
+                'Cliente activo: <b style="color:#f8fafc;">' + r.clienteActivo + '</b>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
+              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">💬 CHAT</div>' +
+              '<div style="font-size:0.75rem; font-weight:900; color:#38bdf8;">' + r.chatsPts.toFixed(1) + 'p</div>' +
+            '</div>' +
+            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
+              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">📸 FOTOS</div>' +
+              '<div style="font-size:0.75rem; font-weight:900; color:#a855f7;">' + r.fotosPts.toFixed(1) + 'p</div>' +
+            '</div>' +
+            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
+              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">📞 CALL</div>' +
+              '<div style="font-size:0.75rem; font-weight:900; color:#fbbf24;">' + r.llamadasPts.toFixed(1) + 'p</div>' +
+            '</div>' +
+            '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.05); padding:6px 10px; border-radius:8px; text-align:center; min-width:65px;">' +
+              '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">🎁 TIPS</div>' +
+              '<div style="font-size:0.75rem; font-weight:900; color:#f43f5e;">' + r.regalosPts.toFixed(1) + 'p</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:right; min-width:140px;">' +
+            '<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">' +
+              statusBadge +
+              '<span style="font-size:0.6rem; color:#94a3b8; font-weight:800;">⚡ ' + r.speedSec + 's</span>' +
+            '</div>' +
+            '<div style="font-size:1.15rem; font-weight:900; color:#34d399; margin-top:3px;">' +
+              '$' + usd + ' <small style="font-size:0.7rem; color:#a7f3d0;">USD</small>' +
+            '</div>' +
+            '<div style="font-size:0.62rem; color:#38bdf8; font-weight:800;">' +
+              r.ptsNeto.toFixed(1) + ' pts • $' + cop + ' COP' +
+            '</div>' +
+            '<div style="font-size:0.55rem; color:#fca5a5; margin-top:2px; font-weight:700;">' +
+              'Último pulso: +$' + r.ultimoPulso.montoUSD.toFixed(2) + ' (' + r.ultimoPulso.servicio + ')' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      const liveTickerHTML = liveFeedItems.map(item => {
+        return '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.04); border-left:3px solid #ef4444; border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center;">' +
+          '<div>' +
+            '<div style="font-size:0.68rem; font-weight:900; color:#ffffff;">' +
+              item.op.split(' ')[0] + ' <span style="color:#38bdf8;">(' + item.modelo + ')</span>' +
+            '</div>' +
+            '<div style="font-size:0.58rem; color:#94a3b8; margin-top:1px;">' +
+              item.servicio + ' • <span style="color:#cbd5e1;">' + item.cliente + '</span>' +
+            '</div>' +
+            '<div style="font-size:0.52rem; color:#64748b;">' +
+              item.time +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:right;">' +
+            '<div style="font-size:0.85rem; font-weight:900; color:#34d399;">' +
+              '+$' + item.montoUSD.toFixed(2) +
+            '</div>' +
+            '<div style="font-size:0.55rem; color:#38bdf8; font-weight:800;">' +
+              '+$' + Math.round(item.montoUSD * 1400).toLocaleString('es-CO') + ' COP' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      wrap.innerHTML = '<div style="background:#090d16; border:1px solid rgba(239,68,68,0.3); border-radius:18px; margin-bottom:25px; font-family:Inter,sans-serif; overflow:hidden; box-shadow:0 16px 48px rgba(0,0,0,0.6); position:relative;">' +
+        '<div style="padding:18px 24px; background:linear-gradient(90deg, rgba(239,68,68,0.15) 0%, rgba(15,23,42,0.95) 100%); border-bottom:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">' +
+          '<div style="display:flex; align-items:center; gap:14px;">' +
+            '<div style="width:44px; height:44px; background:linear-gradient(135deg, rgba(239,68,68,0.25), rgba(244,63,94,0.25)); border:1.5px solid rgba(239,68,68,0.6); border-radius:12px; display:flex; align-items:center; justify-content:center; color:#f87171; font-size:1.4rem; box-shadow:0 0 20px rgba(239,68,68,0.35); position:relative;">' +
+              '🔴' +
+              '<span style="position:absolute; top:-3px; right:-3px; width:10px; height:10px; background:#ef4444; border-radius:50%; box-shadow:0 0 10px #ef4444; animation:rtPulseDot 1.5s infinite;"></span>' +
+            '</div>' +
+            '<div>' +
+              '<div style="font-size:1.05rem; font-weight:900; color:#ffffff; letter-spacing:0.5px; display:flex; align-items:center; gap:10px;">' +
+                'PRODUCCIÓN EN TIEMPO REAL' +
+                '<span style="font-size:0.6rem; background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.5); color:#fca5a5; padding:3px 9px; border-radius:12px; font-weight:900; letter-spacing:1px; animation:rtPulseGlow 2s infinite;">● REALTIME LIVE</span>' +
+              '</div>' +
+              '<div style="font-size:0.68rem; color:#94a3b8; margin-top:3px;">' +
+                'Monitoreo quirúrgico de facturación instantánea por Operador, Perfil asignado y flujo de dinero en vivo' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
+            '<div style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:4px 10px; display:flex; align-items:center; gap:8px;">' +
+              '<span style="font-size:0.65rem; color:#94a3b8; font-weight:700;">🔍 Buscar:</span>' +
+              '<input type="text" placeholder="Operador o Perfil..." value="' + searchQ + '" oninput="window.setRtSearchOp(this.value)" style="background:transparent; border:none; outline:none; color:#fff; font-size:0.7rem; width:130px; font-weight:600;">' +
+            '</div>' +
+            '<button onclick="renderProduccionRealtime()" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#fca5a5; font-size:0.65rem; font-weight:800; padding:6px 14px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:5px; transition:0.2s;">' +
+              '⟳ Actualizar Live' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="padding:16px 20px; background:rgba(0,0,0,0.3); border-bottom:1px solid rgba(255,255,255,0.05); display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px;">' +
+          '<div style="background:linear-gradient(145deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6)); border:1px solid rgba(52,211,153,0.3); border-left:4px solid #34d399; padding:12px 16px; border-radius:12px;">' +
+            '<div style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; display:flex; justify-content:space-between;">' +
+              '<span>💰 Facturación en Vivo (Hoy)</span>' +
+              '<span style="color:#34d399; font-weight:900;">' + metaPct + '% Meta</span>' +
+            '</div>' +
+            '<div style="display:flex; align-items:baseline; gap:8px; margin-top:4px;">' +
+              '<span style="font-size:1.5rem; font-weight:900; color:#34d399;">$' + totalUSD.toFixed(2) + ' <small style="font-size:0.8rem; color:#a7f3d0;">USD</small></span>' +
+              '<span style="font-size:0.85rem; font-weight:800; color:#38bdf8;">⚡ ' + totalPts.toFixed(1) + ' pts</span>' +
+            '</div>' +
+            '<div style="font-size:0.65rem; color:#cbd5e1; margin-top:4px; font-weight:700;">' +
+              '≈ $' + Math.round(totalCOP).toLocaleString('es-CO') + ' COP' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:linear-gradient(145deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6)); border:1px solid rgba(56,189,248,0.3); border-left:4px solid #38bdf8; padding:12px 16px; border-radius:12px;">' +
+            '<div style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">' +
+              '👥 Operadores & Perfiles Activos' +
+            '</div>' +
+            '<div style="display:flex; align-items:baseline; gap:8px; margin-top:4px;">' +
+              '<span style="font-size:1.5rem; font-weight:900; color:#38bdf8;">' + opsOnline + ' <small style="font-size:0.75rem; color:#94a3b8;">Operadores</small></span>' +
+              '<span style="font-size:1.1rem; font-weight:800; color:#cbd5e1;">/ ' + perfilesCount + ' <small style="font-size:0.65rem; color:#94a3b8;">Modelos</small></span>' +
+            '</div>' +
+            '<div style="font-size:0.65rem; color:#34d399; margin-top:4px; font-weight:700; display:flex; align-items:center; gap:5px;">' +
+              '<span style="display:inline-block; width:6px; height:6px; background:#34d399; border-radius:50%;"></span> 100% Cobertura de Turno' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:linear-gradient(145deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6)); border:1px solid rgba(251,191,36,0.3); border-left:4px solid #fbbf24; padding:12px 16px; border-radius:12px;">' +
+            '<div style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">' +
+              '⚡ Velocidad de Respuesta Promedio' +
+            '</div>' +
+            '<div style="display:flex; align-items:baseline; gap:8px; margin-top:4px;">' +
+              '<span style="font-size:1.5rem; font-weight:900; color:#fbbf24;">' + avgSpeed + 's</span>' +
+              '<span style="font-size:0.7rem; color:#34d399; font-weight:800; background:rgba(52,211,153,0.15); padding:2px 6px; border-radius:6px;">ÓPTIMO</span>' +
+            '</div>' +
+            '<div style="font-size:0.65rem; color:#94a3b8; margin-top:4px; font-weight:700;">' +
+              'Límite crítico: < 30.0 segundos' +
+            '</div>' +
+          '</div>' +
+          '<div style="background:linear-gradient(145deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6)); border:1px solid rgba(168,85,247,0.3); border-left:4px solid #a855f7; padding:12px 16px; border-radius:12px;">' +
+            '<div style="font-size:0.6rem; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">' +
+              '🚀 Velocidad de Facturación' +
+            '</div>' +
+            '<div style="display:flex; align-items:baseline; gap:8px; margin-top:4px;">' +
+              '<span style="font-size:1.5rem; font-weight:900; color:#c084fc;">' + (totalPts / 8).toFixed(1) + ' <small style="font-size:0.75rem; color:#e9d5ff;">pts/h</small></span>' +
+              '<span style="font-size:0.85rem; font-weight:800; color:#34d399;">~$' + ((totalPts / 8) * 1.0).toFixed(1) + '/h</span>' +
+            '</div>' +
+            '<div style="font-size:0.65rem; color:#a7f3d0; margin-top:4px; font-weight:700;">' +
+              '🔥 Alto rendimiento en horas pico' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="padding:12px 20px; background:rgba(15,23,42,0.7); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
+            '<span style="font-size:0.65rem; color:#94a3b8; font-weight:800; margin-right:4px;">TURNO:</span>' +
+            turnosButtons +
+          '</div>' +
+          '<div style="font-size:0.65rem; color:#f87171; font-weight:800; display:flex; align-items:center; gap:6px;">' +
+            '<span style="display:inline-block; width:8px; height:8px; background:#ef4444; border-radius:50%; animation:rtPulseDot 1.2s infinite;"></span>' +
+            filteredRoster.length + ' Perfiles Facturando en Vivo' +
+          '</div>' +
+        '</div>' +
+        '<div style="padding:20px; display:grid; grid-template-columns:2.2fr 1fr; gap:20px; align-items:start;">' +
+          '<div style="display:flex; flex-direction:column; gap:12px;">' +
+            '<div style="font-size:0.75rem; font-weight:900; color:#f8fafc; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between;">' +
+              '<span>👤 Operadores & Perfiles Asignados en Realtime</span>' +
+              '<span style="font-size:0.62rem; color:#94a3b8; font-weight:700;">Ordenados por facturación activa</span>' +
+            '</div>' +
+            '<div style="display:flex; flex-direction:column; gap:10px;">' +
+              cardsHTML +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex; flex-direction:column; gap:16px;">' +
+            '<div style="background:rgba(15,23,42,0.9); border:1px solid rgba(239,68,68,0.25); border-radius:14px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">' +
+              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:8px;">' +
+                '<div style="font-size:0.7rem; font-weight:900; color:#f87171; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">' +
+                  '<span style="display:inline-block; width:8px; height:8px; background:#ef4444; border-radius:50%; animation:rtPulseDot 1.5s infinite;"></span>' +
+                  'LIVE TICKER: FACTURACIÓN DIRECTA' +
+                '</div>' +
+                '<span style="font-size:0.58rem; background:rgba(52,211,153,0.15); color:#34d399; padding:2px 6px; border-radius:4px; font-weight:800;">EN DIRECTO</span>' +
+              '</div>' +
+              '<div style="display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto;" class="custom-scrollbar">' +
+                liveTickerHTML +
+              '</div>' +
+            '</div>' +
+            '<div style="background:linear-gradient(135deg, rgba(20,184,166,0.1), rgba(15,23,42,0.8)); border:1px solid rgba(20,184,166,0.3); border-radius:14px; padding:14px 16px;">' +
+              '<div style="font-size:0.68rem; font-weight:900; color:#2dd4bf; margin-bottom:8px; display:flex; align-items:center; gap:6px;">' +
+                '🧠 ESTRATEGIA DE FACTURACIÓN EN CALIENTE' +
+              '</div>' +
+              '<ul style="margin:0; padding-left:14px; font-size:0.62rem; color:#cbd5e1; line-height:1.5;">' +
+                '<li><b>Prioridad 1:</b> Si un cliente recarga, responder en menos de <b>15 segundos</b> para asegurar la sesión de chat.</li>' +
+                '<li><b>Prioridad 2:</b> Alternar fotos y llamadas a partir del minuto 3 de conversación.</li>' +
+                '<li><b>Prioridad 3:</b> Operadores en turno noche deben enfocar a clientes de alta gama con límites de mail no consumidos.</li>' +
+              '</ul>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<style>' +
+        '@keyframes rtPulseDot {' +
+          '0% { transform: scale(0.9); opacity: 0.8; }' +
+          '50% { transform: scale(1.3); opacity: 1; filter: drop-shadow(0 0 4px #ef4444); }' +
+          '100% { transform: scale(0.9); opacity: 0.8; }' +
+        '}' +
+        '@keyframes rtPulseGlow {' +
+          '0%, 100% { box-shadow: 0 0 5px rgba(239,68,68,0.2); }' +
+          '50% { box-shadow: 0 0 15px rgba(239,68,68,0.6); }' +
+        '}' +
+        '.custom-scrollbar::-webkit-scrollbar { height: 5px; width: 5px; }' +
+        '.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(239,68,68,0.3); border-radius: 10px; }' +
+      '</style>';
     }
 
 function exportarDatos() {

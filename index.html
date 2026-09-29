@@ -16936,9 +16936,27 @@
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🌐 BASE DE DATOS MAESTRA CENTRALIZADA: CLIENTES REALES (RU) & RECARGAS DATAME
+    // 🌐 BASE DE DATOS MAESTRA CENTRALIZADA: CLIENTES REALES TALKYTIMES (RU)
     // ═════════════════════════════════════════════════════════════════════════
     window.masterRadarClientes = window.masterRadarClientes || [
+      { 
+        id: '170699370', 
+        nombre: 'Sharyn', 
+        pais: '🇺🇸 United States', 
+        recargaUSD: 320.00, 
+        saldoUSD: 320.00, 
+        creditos: 3200, 
+        tiempoRecarga: '¡AHORA MISMO! (En Vivo)', 
+        antiguedad: '1953 (71 años) · Viuda (Cliente Fiel)', 
+        arquetipo: '👑 Super Whale VIP', 
+        temasInteres: 'Cocina (Cooking), Mascotas (Pets), Ver televisión (Watching tv)', 
+        perfil: 'HORACIO', 
+        op: 'Esperanza Jimenez (Mañana | En vivo)', 
+        agencia: 'GRUPO ROMERO', 
+        tipo: 'ballena',
+        statusOnline: '⚡ Recarga en Vivo', 
+        copy: 'Hola Sharyn, qué lindo verte conectada... estaba recordando una receta especial y pensé en ti. ¿Cómo va tu día? 🌹' 
+      },
       { 
         id: '99198592', 
         nombre: 'Johnathan Vance', 
@@ -17464,12 +17482,85 @@
     ];
 
     // ═════════════════════════════════════════════════════════════════════════
-    // ⚡ MOTOR DE RECONOCIMIENTO Y ALERTA DE RECARGAS EN REALTIME
+    // ⚡ MOTOR DE RECONOCIMIENTO Y ALERTA DE RECARGAS EN REALTIME (VERDE NEÓN)
     // ═════════════════════════════════════════════════════════════════════════
+    window.abrirTalkytimes = function(talkytimesId) {
+      if (!talkytimesId) return;
+      var url = 'https://talkytimes.com/user/' + String(talkytimesId).trim();
+      window.open(url, '_blank');
+    };
+
+    window.copiarTalkytimesID = function(talkytimesId, nombreCliente) {
+      if (!talkytimesId) return;
+      var idStr = String(talkytimesId).trim();
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(idStr).then(function() {
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'success',
+              title: '📋 ID Talkytimes Copiado: ' + idStr,
+              text: (nombreCliente || 'Cliente') + ' · https://talkytimes.com/user/' + idStr,
+              showConfirmButton: false,
+              timer: 3000,
+              background: '#0f172a',
+              color: '#00ff88'
+            });
+          } else {
+            alert('📋 ID Talkytimes Copiado: ' + idStr + '\nCliente: ' + (nombreCliente || '') + '\nURL: https://talkytimes.com/user/' + idStr);
+          }
+        }).catch(function() {
+          prompt('Copia el ID de Talkytimes:', idStr);
+        });
+      } else {
+        prompt('Copia el ID de Talkytimes:', idStr);
+      }
+    };
+
+    window.copiarDatameID = window.copiarTalkytimesID;
+
+    window.atacarClienteDatame = function(talkytimesId, nombreCliente, saldoUSD, creditos, hookText) {
+      var msg = hookText || ('Hola ' + nombreCliente + ', me encantaría charlar contigo ahora que estás en línea... ✨');
+      var idStr = String(talkytimesId).trim();
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(msg).then(function() {
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({
+              icon: 'success',
+              title: '🎯 ATAQUE LISTO PARA TALKYTIMES',
+              html: '<div style="text-align:left; font-size:0.8rem; color:#cbd5e1;">' +
+                '<p><b>👤 Cliente:</b> ' + nombreCliente + ' (ID: ' + idStr + ')</p>' +
+                '<p><b>💰 Recarga:</b> $' + Number(saldoUSD).toFixed(2) + ' USD (' + Number(creditos).toLocaleString() + ' créditos)</p>' +
+                '<p style="color:#00ff88; background:rgba(0,255,136,0.1); padding:8px; border-radius:6px;"><b>💬 Mensaje copiado al portapapeles:</b><br><i>"' + msg + '"</i></p>' +
+                '<p>Se abrirá el perfil en Talkytimes para iniciar el chat de inmediato.</p>' +
+              '</div>',
+              showCancelButton: true,
+              confirmButtonText: '🔗 Abrir Perfil en Talkytimes',
+              cancelButtonText: 'Cerrar',
+              confirmButtonColor: '#00ff88',
+              cancelButtonColor: '#475569',
+              background: '#0f172a',
+              color: '#fff'
+            }).then(function(result) {
+              if (result.isConfirmed) {
+                window.abrirTalkytimes(idStr);
+              }
+            });
+          } else {
+            alert('🎯 DATOS COPIADOS AL PORTAPAPELES:\n• ID Talkytimes: ' + idStr + '\n• Cliente: ' + nombreCliente + '\n• Recarga: $' + saldoUSD + ' USD\n• Mensaje copiado.');
+            window.abrirTalkytimes(idStr);
+          }
+        });
+      } else {
+        window.abrirTalkytimes(idStr);
+      }
+    };
+
     window.registrarNuevaRecargaDatame = function(clienteData) {
       if (!clienteData || !clienteData.id) return;
       
-      const nuevo = {
+      var nuevo = {
         id: String(clienteData.id),
         nombre: clienteData.nombre || 'Cliente VIP Recién Recargado',
         pais: clienteData.pais || '🇺🇸 USA',
@@ -17506,33 +17597,34 @@
       if (!toastWrap) {
         toastWrap = document.createElement('div');
         toastWrap.id = 'rt-toast-live-container';
-        toastWrap.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; max-width:380px; width:90%; pointer-events:none;';
+        toastWrap.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; max-width:390px; width:90%; pointer-events:none;';
         document.body.appendChild(toastWrap);
       }
 
       var toast = document.createElement('div');
-      toast.style.cssText = 'background:linear-gradient(135deg, #0f172a, #1e1b4b); border:2px solid #ef4444; border-radius:14px; padding:14px 16px; color:#fff; box-shadow:0 12px 35px rgba(239,68,68,0.5); pointer-events:auto; animation:rtSlideIn 0.3s ease-out;';
+      toast.style.cssText = 'background:linear-gradient(135deg, #0f172a, #064e3b); border:2px solid #00ff88; border-radius:14px; padding:15px 18px; color:#fff; box-shadow:0 12px 35px rgba(0,255,136,0.4); pointer-events:auto; animation:rtSlideIn 0.3s ease-out;';
       toast.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
-        '<div style="font-size:0.75rem; font-weight:900; color:#f87171; display:flex; align-items:center; gap:6px;">' +
-          '<span style="display:inline-block; width:10px; height:10px; background:#ef4444; border-radius:50%; animation:rtPulseDot 1s infinite;"></span>' +
-          '⚡ ¡NUEVA RECARGA EN VIVO DETECTADA!' +
+        '<div style="font-size:0.78rem; font-weight:900; color:#00ff88; display:flex; align-items:center; gap:6px; letter-spacing:0.5px;">' +
+          '<span style="display:inline-block; width:10px; height:10px; background:#00ff88; border-radius:50%; box-shadow:0 0 10px #00ff88; animation:rtPulseDot 0.8s infinite;"></span>' +
+          '⚡ ¡NUEVA RECARGA EN VIVO TALKYTIMES!' +
         '</div>' +
-        '<button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:#94a3b8; font-size:1rem; cursor:pointer;">✕</button>' +
+        '<button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>' +
       '</div>' +
-      '<div style="font-size:0.85rem; font-weight:900; color:#fff;">👤 ' + c.nombre + ' ' + c.pais + '</div>' +
-      '<div style="font-size:0.72rem; color:#34d399; font-weight:800; margin-top:2px;">' +
+      '<div style="font-size:0.88rem; font-weight:900; color:#fff;">👤 ' + c.nombre + ' ' + (c.pais || '') + '</div>' +
+      '<div style="font-size:0.75rem; color:#34d399; font-weight:800; margin-top:2px;">' +
         '💰 Recarga: $' + c.recargaUSD.toFixed(2) + ' USD (' + c.creditos.toLocaleString() + ' créditos)' +
       '</div>' +
       '<div style="font-size:0.62rem; color:#cbd5e1; margin-top:3px;">' +
-        '🔑 Datame ID: <b style="color:#38bdf8; font-family:monospace;">' + c.id + '</b> · Afinidad: <b style="color:#f43f5e;">' + c.perfil + '</b>' +
+        '🔑 ID Talkytimes: <b style="color:#00ff88; font-family:monospace; font-size:0.75rem;">' + c.id + '</b> · Afinidad: <b style="color:#38bdf8;">' + c.perfil + '</b>' +
       '</div>' +
-      '<div style="display:flex; gap:8px; margin-top:10px;">' +
-        '<button onclick="copiarDatameID(\'' + c.id + '\', \'' + c.nombre + '\')" style="flex:1; background:rgba(56,189,248,0.2); border:1px solid rgba(56,189,248,0.5); color:#38bdf8; padding:6px; border-radius:6px; font-size:0.65rem; font-weight:900; cursor:pointer;">📋 Copiar ID Datame</button>' +
-        '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + c.recargaUSD + ', ' + c.creditos + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\'); this.parentElement.parentElement.remove();" style="flex:1; background:linear-gradient(135deg, #ef4444, #f43f5e); border:none; color:white; padding:6px; border-radius:6px; font-size:0.65rem; font-weight:900; cursor:pointer;">🎯 Atacar Ahora</button>' +
+      '<div style="display:flex; gap:6px; margin-top:10px;">' +
+        '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="flex:1; background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.4); color:#00ff88; padding:6px; border-radius:6px; font-size:0.65rem; font-weight:900; cursor:pointer;">📋 Copiar ID</button>' +
+        '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="flex:1; background:rgba(56,189,248,0.2); border:1px solid rgba(56,189,248,0.5); color:#38bdf8; padding:6px; border-radius:6px; font-size:0.65rem; font-weight:900; cursor:pointer;">🔗 Abrir Perfil</button>' +
+        '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + c.recargaUSD + ', ' + c.creditos + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\'); this.parentElement.parentElement.remove();" style="flex:1.2; background:linear-gradient(135deg, #10b981, #00ff88); border:none; color:#0f172a; padding:6px; border-radius:6px; font-size:0.65rem; font-weight:900; cursor:pointer;">🎯 Atacar</button>' +
       '</div>';
 
       toastWrap.appendChild(toast);
-      setTimeout(function() { if (toast.parentElement) toast.remove(); }, 12000);
+      setTimeout(function() { if (toast.parentElement) toast.remove(); }, 14000);
     };
 
     // Iniciar simulación de pulsos en vivo de recargas cada 45 segundos
@@ -17540,6 +17632,7 @@
       window._rtRechargeTimerActive = true;
       setInterval(function() {
         var pool = [
+          { id: '170699370', nombre: 'Sharyn', pais: '🇺🇸 United States', recargaUSD: 320.00, saldoUSD: 320.00, creditos: 3200, perfil: 'HORACIO', agencia: 'GRUPO ROMERO', antiguedad: '1953 (71 años) · Viuda', temasInteres: 'Cocina, Mascotas, Ver TV' },
           { id: '192841029', nombre: 'Samuel Becker', pais: '🇨🇭 Suiza', recargaUSD: 350.00, saldoUSD: 350.00, creditos: 3500, perfil: 'GUSTAVO', agencia: 'GRUPO ROMERO', antiguedad: '11 meses', temasInteres: 'Banca privada en Zurich, fotos exclusivas' },
           { id: '184920194', nombre: 'James O Conner', pais: '🇬🇧 UK', recargaUSD: 500.00, saldoUSD: 500.00, creditos: 5000, perfil: 'LUIZ', agencia: 'Andinas Marketing', antiguedad: '19 meses (Super Whale)', temasInteres: 'Inversiones en Londres, notas de voz' },
           { id: '173849102', nombre: 'David Miller', pais: '🇺🇸 USA', recargaUSD: 280.00, saldoUSD: 280.00, creditos: 2800, perfil: 'ROBERTO', agencia: 'Date Miranda', antiguedad: '6 meses', temasInteres: 'Viajes a California, fotos VIP' }
@@ -17553,7 +17646,7 @@
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 🔴 MÓDULO DE PRODUCCIÓN EN TIEMPO REAL
+    // 🟢 MÓDULO DE PRODUCCIÓN EN TIEMPO REAL (ESTILO VERDE NEÓN)
     // ═════════════════════════════════════════════════════════════════════════
     window.activeRtFilterTurno = window.activeRtFilterTurno || 'ALL';
     window.activeRtFilterStatus = window.activeRtFilterStatus || 'ALL';
@@ -17580,34 +17673,12 @@
       renderProduccionRealtime();
     };
 
-    window.copiarDatameID = function(datameId, nombreCliente) {
-      if (!datameId) return;
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(String(datameId)).then(function() {
-          alert('📋 ID Datame copiado: ' + datameId + '\nCliente: ' + (nombreCliente || '') + '\nPégalo en la barra de búsqueda de Datame para abrir el chat de inmediato.');
-        }).catch(function() {
-          prompt('Copia el ID de Datame manualmente:', datameId);
-        });
-      } else {
-        prompt('Copia el ID de Datame:', datameId);
-      }
-    };
-
-    window.atacarClienteDatame = function(datameId, nombreCliente, saldoUSD, creditos, hookText) {
-      var msg = hookText || ('Hola ' + nombreCliente + ', me encantaría charlar contigo ahora que estás en línea... ✨');
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(msg).then(function() {
-          alert('🎯 DATOS COPIADOS AL PORTAPAPELES:\n• ID Datame: ' + datameId + '\n• Cliente: ' + nombreCliente + '\n• Recarga: $' + saldoUSD + ' USD (' + creditos + ' créditos)\n• Mensaje de apertura copiado.\n\nPega el ID en Datame e inicia la conversación.');
-        });
-      }
-    };
-
     window.abrirModalDetalleCliente = function(id, modelo, op, cliente, saldoUSD, creditos, ultimoServicio, tiempoRecarga, antiguedad, temas) {
       var modal = document.getElementById('rt-cliente-modal');
       if (!modal) return;
       document.getElementById('rt-m-cliente-nombre').textContent = cliente;
-      document.getElementById('rt-m-cliente-id').textContent = 'ID DATAME CLIENTE (RU): ' + id;
-      document.getElementById('rt-m-cliente-saldo').textContent = '$' + Number(saldoUSD).toFixed(2) + ' USD (' + Number(creditos).toLocaleString() + ' créditos de recarga disponibles)';
+      document.getElementById('rt-m-cliente-id').textContent = 'ID TALKYTIMES CLIENTE (RU): ' + id;
+      document.getElementById('rt-m-cliente-saldo').textContent = '$' + Number(saldoUSD).toFixed(2) + ' USD (' + Number(creditos).toLocaleString() + ' créditos disponibles)';
       document.getElementById('rt-m-cliente-op').textContent = op;
       document.getElementById('rt-m-cliente-modelo').textContent = modelo;
       document.getElementById('rt-m-cliente-ultimoservicio').textContent = ultimoServicio + (tiempoRecarga ? ' · Recarga ' + tiempoRecarga : '');
@@ -17617,6 +17688,7 @@
         elExt.innerHTML = '<div style="font-size:0.62rem; color:#cbd5e1; margin-top:8px; line-height:1.4;">' +
           '⏳ <b>Antigüedad en Plataforma:</b> ' + (antiguedad || 'Cliente activo') + '<br>' +
           '💡 <b>Inteligencia CRM / Temas de Conversación:</b> ' + (temas || 'Conversaciones íntimas, fotos y audio') + '<br>' +
+          '🔗 <b>Enlace Directo:</b> <a href="https://talkytimes.com/user/' + id + '" target="_blank" style="color:#00ff88; text-decoration:underline;">https://talkytimes.com/user/' + id + '</a><br>' +
           '🏷️ <b>Tipo de Usuario:</b> Regular User (RU) - Cliente Pagador Directo' +
         '</div>';
       }
@@ -17741,8 +17813,8 @@
           estadoTxt: '🟢 Facturando en Vivo',
           ultimoPulso: { montoUSD: 4.00, servicio: 'Foto Privada', haceMin: '2m' },
           clientes: [
-            { id: '97998195', nombre: 'William Evans', pais: '🇦🇺 Australia', saldoUSD: 210.00, creditos: 2100, tiempoRecarga: 'Hace 28 min', antiguedad: '6 meses', temas: 'Fotografía de paisajes, viajes', statusOnline: '🟢 Online en Chat' },
-            { id: '113579174', nombre: 'Richard Sterling', pais: '🇬🇧 UK', saldoUSD: 340.00, creditos: 3400, tiempoRecarga: 'Hace 20 min', antiguedad: '9 meses', temas: 'Arquitectura en Londres', statusOnline: '🟢 Online en Espera' }
+            { id: '170699370', nombre: 'Sharyn', pais: '🇺🇸 United States', saldoUSD: 320.00, creditos: 3200, tiempoRecarga: '¡AHORA MISMO!', antiguedad: '1953 (71 años) · Viuda', temas: 'Cocina, Mascotas, Ver TV', statusOnline: '⚡ Recarga en Vivo' },
+            { id: '97998195', nombre: 'William Evans', pais: '🇦🇺 Australia', saldoUSD: 210.00, creditos: 2100, tiempoRecarga: 'Hace 28 min', antiguedad: '6 meses', temas: 'Fotografía de paisajes, viajes', statusOnline: '🟢 Online en Chat' }
           ]
         },
         { 
@@ -17974,12 +18046,12 @@
 
       // Ticker de transacciones en vivo con clientes reales (RU)
       var liveFeedItems = [
+        { op: 'Esperanza Jimenez', modelo: 'HORACIO', montoUSD: 4.50, servicio: '💬 Live Chat VIP', time: 'Hace 20 seg', cliente: 'Sharyn', datameId: '170699370', saldoUSD: 320.00, creditos: 3200, antiguedad: '1953 (71 años)', temas: 'Cocina, Mascotas' },
         { op: 'Krystal Gabriela', modelo: 'GUSTAVO', montoUSD: 3.50, servicio: '📸 Foto VIP', time: 'Hace 45 seg', cliente: 'Johnathan Vance', datameId: '99198592', saldoUSD: 450.00, creditos: 4500, antiguedad: '14 meses (Super Whale)', temas: 'Viajes en yate' },
         { op: 'Kevin Jhosneiver', modelo: 'LUIZ', montoUSD: 5.00, servicio: '🎙️ Audio Stream', time: 'Hace 2 min', cliente: 'Valery Tremblay', datameId: '157057754', saldoUSD: 620.00, creditos: 6200, antiguedad: '8 meses', temas: 'Finanzas en Londres' },
         { op: 'Esperanza Jimenez', modelo: 'ROBERTO', montoUSD: 4.00, servicio: '📸 Foto Privada', time: 'Hace 3 min', cliente: 'Thomas J. Wright', datameId: '144023064', saldoUSD: 340.00, creditos: 3400, antiguedad: '15 meses', temas: 'Golf en Texas' },
         { op: 'Josue David H.', modelo: 'MARCOS', montoUSD: 2.00, servicio: '💬 Chat Instantáneo', time: 'Hace 4 min', cliente: 'Cesar Mancini', datameId: '107609294', saldoUSD: 180.00, creditos: 1800, antiguedad: '11 meses', temas: 'Música clásica' },
-        { op: 'Kevin Jhosneiver', modelo: 'AGUSTIN', montoUSD: 3.00, servicio: '🎁 Regalo / Tip', time: 'Hace 5 min', cliente: 'Paul S. Davis', datameId: '181543920', saldoUSD: 190.00, creditos: 1900, antiguedad: '7 meses', temas: 'Premier League' },
-        { op: 'Krystal Gabriela', modelo: 'RONALT', montoUSD: 2.50, servicio: '✉️ Carta / Mail Masivo', time: 'Hace 6 min', cliente: 'Leonardo De Luca', datameId: '94988099', saldoUSD: 95.00, creditos: 950, antiguedad: '4 meses', temas: 'Fútbol en Roma' }
+        { op: 'Kevin Jhosneiver', modelo: 'AGUSTIN', montoUSD: 3.00, servicio: '🎁 Regalo / Tip', time: 'Hace 5 min', cliente: 'Paul S. Davis', datameId: '181543920', saldoUSD: 190.00, creditos: 1900, antiguedad: '7 meses', temas: 'Premier League' }
       ];
 
       var turnosButtons = [
@@ -17989,7 +18061,7 @@
         { key: 'Tarde', label: '🌆 Tarde (14-22)' }
       ].map(function(t) {
         var active = (filterT === t.key);
-        return '<button onclick="window.setRtFilterTurno(\'' + t.key + '\')" style="background:' + (active ? '#ef4444' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (active ? '#ef4444' : 'rgba(255,255,255,0.1)') + '; color:' + (active ? '#fff' : '#94a3b8') + '; padding:4px 10px; border-radius:6px; font-size:0.65rem; font-weight:800; cursor:pointer; transition:0.2s;">' + t.label + '</button>';
+        return '<button onclick="window.setRtFilterTurno(\'' + t.key + '\')" style="background:' + (active ? 'linear-gradient(135deg, #10b981, #00ff88)' : 'rgba(255,255,255,0.05)') + '; border:1px solid ' + (active ? '#00ff88' : 'rgba(255,255,255,0.1)') + '; color:' + (active ? '#0f172a' : '#94a3b8') + '; padding:4px 10px; border-radius:6px; font-size:0.65rem; font-weight:900; cursor:pointer; transition:0.2s;">' + t.label + '</button>';
       }).join('');
 
       var statusButtons = [
@@ -17999,7 +18071,7 @@
         { key: 'espera', label: '🟡 En Espera' }
       ].map(function(s) {
         var active = (filterS === s.key);
-        return '<button onclick="window.setRtFilterStatus(\'' + s.key + '\')" style="background:' + (active ? '#38bdf8' : 'rgba(255,255,255,0.04)') + '; border:1px solid ' + (active ? '#38bdf8' : 'rgba(255,255,255,0.08)') + '; color:' + (active ? '#fff' : '#94a3b8') + '; padding:4px 9px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer; transition:0.2s;">' + s.label + '</button>';
+        return '<button onclick="window.setRtFilterStatus(\'' + s.key + '\')" style="background:' + (active ? 'rgba(0,255,136,0.2)' : 'rgba(255,255,255,0.04)') + '; border:1px solid ' + (active ? '#00ff88' : 'rgba(255,255,255,0.08)') + '; color:' + (active ? '#00ff88' : '#94a3b8') + '; padding:4px 9px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer; transition:0.2s;">' + s.label + '</button>';
       }).join('');
 
       // Render cards de operadores con TODOS los clientes asignados con recarga y servicios completos
@@ -18008,36 +18080,39 @@
         var cop = Math.round(r.ptsNeto * 1400).toLocaleString('es-CO');
         var isTop = idx === 0;
         var statusBadge = r.status === 'facturando' 
-          ? '<span style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.4); color:#34d399; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟢 FACTURANDO</span>'
+          ? '<span style="background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.5); color:#00ff88; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟢 FACTURANDO</span>'
           : r.status === 'chateando'
           ? '<span style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">💬 CHATEANDO</span>'
           : '<span style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:2px 8px; border-radius:6px; font-size:0.58rem; font-weight:900;">🟡 EN ESPERA</span>';
 
         var clientesListHTML = (r.clientes || []).map(function(c) {
-          return '<div style="background:rgba(16,185,129,0.08); padding:7px 10px; border-radius:8px; border:1px solid rgba(16,185,129,0.25); display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">' +
+          return '<div style="background:rgba(16,185,129,0.08); padding:7px 10px; border-radius:8px; border:1px solid rgba(0,255,136,0.3); display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px;">' +
             '<div>' +
               '<div style="font-size:0.72rem; color:#ffffff; font-weight:900;">' +
-                '👤 Cliente Real (RU): <b style="color:#a7f3d0;">' + c.nombre + '</b> ' + (c.pais || '') +
-                ' <span style="font-size:0.55rem; color:#34d399; background:rgba(52,211,153,0.15); padding:1px 5px; border-radius:4px; font-weight:800;">' + (c.statusOnline || '🟢 Online') + '</span>' +
+                '👤 Cliente Real (RU): <b style="color:#00ff88;">' + c.nombre + '</b> ' + (c.pais || '') +
+                ' <span style="font-size:0.55rem; color:#00ff88; background:rgba(0,255,136,0.15); padding:1px 5px; border-radius:4px; font-weight:800;">' + (c.statusOnline || '🟢 Online') + '</span>' +
               '</div>' +
               '<div style="font-size:0.62rem; color:#cbd5e1; margin-top:2px;">' +
-                '🔑 <span style="color:#38bdf8; font-family:monospace; font-weight:900;">ID DATAME: ' + c.id + '</span> · <span style="color:#34d399; font-weight:900;">$' + Number(c.saldoUSD).toFixed(2) + ' USD (' + Number(c.creditos).toLocaleString() + ' cr)</span>' +
+                '🔑 <span style="color:#00ff88; font-family:monospace; font-weight:900;">ID TALKYTIMES: ' + c.id + '</span> · <span style="color:#34d399; font-weight:900;">$' + Number(c.saldoUSD).toFixed(2) + ' USD (' + Number(c.creditos).toLocaleString() + ' cr)</span>' +
               '</div>' +
               '<div style="font-size:0.55rem; color:#94a3b8; margin-top:1px;">' +
                 '⏳ <b>Recarga:</b> ' + c.tiempoRecarga + ' · <b>Antigüedad:</b> ' + (c.antiguedad || 'Cliente VIP') + ' · <i>' + (c.temas || '') + '</i>' +
               '</div>' +
             '</div>' +
             '<div style="display:flex; gap:4px; flex-direction:column;">' +
-              '<button onclick="copiarDatameID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.35); color:#34d399; border-radius:6px; padding:3px 8px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">📋 Copiar ID</button>' +
-              '<button onclick="abrirModalDetalleCliente(\'' + c.id + '\', \'' + r.modelo + '\', \'' + r.op + '\', \'' + c.nombre + '\', ' + c.saldoUSD + ', ' + c.creditos + ', \'' + r.ultimoPulso.servicio + '\', \'' + c.tiempoRecarga + '\', \'' + c.antiguedad + '\', \'' + c.temas + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; border-radius:6px; padding:2px 8px; font-size:0.55rem; font-weight:700; cursor:pointer; white-space:nowrap;">ℹ️ Info CRM</button>' +
+              '<div style="display:flex; gap:4px;">' +
+                '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.4); color:#00ff88; border-radius:6px; padding:3px 6px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">📋 ID</button>' +
+                '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; border-radius:6px; padding:3px 6px; font-size:0.58rem; font-weight:800; cursor:pointer; white-space:nowrap;">🔗 Abrir</button>' +
+              '</div>' +
+              '<button onclick="abrirModalDetalleCliente(\'' + c.id + '\', \'' + r.modelo + '\', \'' + r.op + '\', \'' + c.nombre + '\', ' + c.saldoUSD + ', ' + c.creditos + ', \'' + r.ultimoPulso.servicio + '\', \'' + c.tiempoRecarga + '\', \'' + c.antiguedad + '\', \'' + c.temas + '\')" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); color:#cbd5e1; border-radius:6px; padding:2px 6px; font-size:0.55rem; font-weight:700; cursor:pointer; white-space:nowrap;">ℹ️ Info CRM</button>' +
             '</div>' +
           '</div>';
         }).join('');
 
-        return '<div style="background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.7)); border:1px solid ' + (isTop ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)') + '; border-radius:14px; padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(0,0,0,0.3); position:relative; overflow:hidden;">' +
-          (isTop ? '<div style="position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(to bottom, #ef4444, #f43f5e);"></div>' : '') +
+        return '<div style="background:linear-gradient(135deg, rgba(15,23,42,0.95), rgba(6,78,59,0.25)); border:1px solid ' + (isTop ? 'rgba(0,255,136,0.5)' : 'rgba(255,255,255,0.08)') + '; border-radius:14px; padding:14px 18px; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; box-shadow:0 4px 16px rgba(0,0,0,0.3); position:relative; overflow:hidden;">' +
+          (isTop ? '<div style="position:absolute; top:0; left:0; width:4px; height:100%; background:linear-gradient(to bottom, #00ff88, #10b981);"></div>' : '') +
           
-          '<!-- Bloque de Operador y Perfil Datame -->' +
+          '<!-- Bloque de Operador y Perfil Talkytimes -->' +
           '<div style="flex:1; min-width:320px;">' +
             '<div style="display:flex; align-items:center; gap:8px;">' +
               '<span style="font-size:0.95rem; font-weight:900; color:#ffffff;">' + r.op + '</span>' +
@@ -18045,8 +18120,8 @@
               '<span style="font-size:0.58rem; background:rgba(255,255,255,0.06); color:#94a3b8; padding:1px 6px; border-radius:4px;">Turno: ' + r.jornada + '</span>' +
             '</div>' +
             '<div style="display:flex; align-items:center; gap:8px; margin-top:4px;">' +
-              '<span style="font-size:0.75rem; font-weight:900; color:#38bdf8; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); padding:2px 8px; border-radius:6px;">👤 Modelo TU: ' + r.modelo + '</span>' +
-              '<span style="font-size:0.62rem; color:#64748b; font-weight:700;">ID Datame Modelo: <b style="color:#94a3b8;">' + r.id + '</b></span>' +
+              '<span style="font-size:0.75rem; font-weight:900; color:#00ff88; background:rgba(0,255,136,0.12); border:1px solid rgba(0,255,136,0.3); padding:2px 8px; border-radius:6px;">👤 Modelo TU: ' + r.modelo + '</span>' +
+              '<span style="font-size:0.62rem; color:#64748b; font-weight:700;">ID Modelo: <b style="color:#94a3b8;">' + r.id + '</b></span>' +
               '<span style="font-size:0.58rem; color:#34d399; font-weight:800;">⚡ ' + (r.clientes ? r.clientes.length : 0) + ' Clientes con Recarga</span>' +
             '</div>' +
             
@@ -18086,13 +18161,13 @@
                 statusBadge +
                 '<span style="font-size:0.6rem; color:#94a3b8; font-weight:800;">⚡ ' + r.speedSec + 's</span>' +
               '</div>' +
-              '<div style="font-size:1.15rem; font-weight:900; color:#34d399; margin-top:3px;">' +
+              '<div style="font-size:1.15rem; font-weight:900; color:#00ff88; margin-top:3px;">' +
                 '$' + usd + ' <small style="font-size:0.7rem; color:#a7f3d0;">USD</small>' +
               '</div>' +
               '<div style="font-size:0.62rem; color:#38bdf8; font-weight:800;">' +
                 r.ptsNeto.toFixed(1) + ' pts • $' + cop + ' COP' +
               '</div>' +
-              '<div style="font-size:0.55rem; color:#fca5a5; margin-top:2px; font-weight:700;">' +
+              '<div style="font-size:0.55rem; color:#34d399; margin-top:2px; font-weight:700;">' +
                 'Último pulso: +$' + r.ultimoPulso.montoUSD.toFixed(2) + ' (' + r.ultimoPulso.servicio + ')' +
               '</div>' +
             '</div>' +
@@ -18105,28 +18180,28 @@
       var clientesOnlineHTML = filteredClientesOnline.map(function(c, idx) {
         var isRomero = c.agencia.includes('ROMERO');
         var badgeAgencia = isRomero 
-          ? '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">⭐ NUESTRA AGENCIA</span>'
-          : '<span style="background:rgba(239,68,68,0.15); color:#fca5a5; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">🏢 ' + c.agencia + ' (Interceptar)</span>';
+          ? '<span style="background:rgba(0,255,136,0.15); color:#00ff88; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900; border:1px solid rgba(0,255,136,0.3);">⭐ NUESTRA AGENCIA</span>'
+          : '<span style="background:rgba(251,191,36,0.15); color:#fde047; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900; border:1px solid rgba(251,191,36,0.3);">🏢 ' + c.agencia + ' (Interceptar)</span>';
 
         var montoRecarga = Number(c.recargaUSD || c.saldoUSD || 0);
         var creditosRecarga = Number(c.creditos || (montoRecarga * 10));
 
-        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:0.15s;' + (c.isNewRecharge ? 'background:rgba(239,68,68,0.1);' : '') + '" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'' + (c.isNewRecharge ? 'rgba(239,68,68,0.1)' : 'transparent') + '\'">' +
+        return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:0.15s;' + (c.isNewRecharge ? 'background:rgba(0,255,136,0.12);' : '') + '">' +
           '<td style="padding:10px 8px; font-size:0.65rem; color:#64748b; font-weight:bold;">#' + (idx + 1) + '</td>' +
           '<td style="padding:10px 8px;">' +
             '<div style="font-size:0.88rem; font-weight:900; color:#ffffff; display:flex; align-items:center; gap:6px;">' +
               '<span>👤 ' + c.nombre + ' ' + (c.pais || '') + '</span>' +
-              (c.isNewRecharge ? '<span style="background:#ef4444; color:#fff; font-size:0.52rem; padding:1px 5px; border-radius:4px; font-weight:900;">¡NUEVA RECARGA!</span>' : '') +
+              (c.isNewRecharge ? '<span style="background:#00ff88; color:#0f172a; font-size:0.52rem; padding:1px 5px; border-radius:4px; font-weight:900;">¡NUEVA RECARGA!</span>' : '') +
             '</div>' +
             '<div style="font-size:0.62rem; color:#38bdf8; margin-top:2px;">🎯 <b>' + (c.arquetipo || 'VIP') + '</b> · ⏳ <span style="color:#a7f3d0;">' + (c.antiguedad || 'Activo') + '</span></div>' +
             '<div style="font-size:0.56rem; color:#cbd5e1; margin-top:1px;">💡 <i>' + (c.temasInteres || '') + '</i></div>' +
           '</td>' +
           '<td style="padding:10px 8px;">' +
-            '<div style="font-family:monospace; font-size:0.9rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</div>' +
-            '<div style="font-size:0.55rem; color:#64748b;">ID Datame Cliente (RU)</div>' +
+            '<div style="font-family:monospace; font-size:0.92rem; font-weight:900; color:#00ff88; letter-spacing:0.5px;">' + c.id + '</div>' +
+            '<div style="font-size:0.55rem; color:#64748b;">ID Talkytimes Cliente (RU)</div>' +
           '</td>' +
           '<td style="padding:10px 8px; text-align:right;">' +
-            '<div style="font-size:0.95rem; font-weight:900; color:#34d399;">$' + montoRecarga.toFixed(2) + ' USD</div>' +
+            '<div style="font-size:0.95rem; font-weight:900; color:#00ff88;">$' + montoRecarga.toFixed(2) + ' USD</div>' +
             '<div style="font-size:0.65rem; color:#a7f3d0; font-weight:800;">⚡ ' + creditosRecarga.toLocaleString() + ' Créditos</div>' +
             '<div style="font-size:0.55rem; color:#fbbf24; margin-top:1px;">Recarga: <b>' + (c.tiempoRecarga || 'Reciente') + '</b></div>' +
           '</td>' +
@@ -18135,26 +18210,27 @@
             '<div style="font-size:0.6rem; color:#cbd5e1; margin-top:3px;">Afinidad Modelo: <b style="color:#38bdf8;">' + (c.perfil || 'GUSTAVO') + '</b></div>' +
           '</td>' +
           '<td style="padding:10px 8px; text-align:center;">' +
-            '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:4px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">' + (c.statusOnline || '🟢 Online') + '</span>' +
+            '<span style="background:rgba(0,255,136,0.15); color:#00ff88; padding:4px 8px; border-radius:6px; font-size:0.6rem; font-weight:900; border:1px solid rgba(0,255,136,0.3);">' + (c.statusOnline || '🟢 Online') + '</span>' +
           '</td>' +
           '<td style="padding:10px 8px; text-align:center;">' +
-            '<div style="display:flex; gap:6px; justify-content:center;">' +
-              '<button onclick="copiarDatameID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-              '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + montoRecarga + ', ' + creditosRecarga + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#ef4444,#f43f5e); border:none; color:white; padding:5px 12px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer;">🎯 Atacar</button>' +
+            '<div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">' +
+              '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.4); color:#00ff88; padding:5px 8px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
+              '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 8px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">🔗 Abrir Perfil</button>' +
+              '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + montoRecarga + ', ' + creditosRecarga + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#10b981,#00ff88); border:none; color:#0f172a; padding:5px 12px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer; box-shadow:0 0 10px rgba(0,255,136,0.3);">🎯 Atacar</button>' +
             '</div>' +
           '</td>' +
         '</tr>';
       }).join('');
 
       var liveTickerHTML = liveFeedItems.map(function(item) {
-        return '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.04); border-left:3px solid #ef4444; border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="abrirModalDetalleCliente(\'' + item.datameId + '\', \'' + item.modelo + '\', \'' + item.op + '\', \'' + item.cliente + '\', ' + item.saldoUSD + ', ' + item.creditos + ', \'' + item.servicio + '\', \'' + item.time + '\', \'' + item.antiguedad + '\', \'' + item.temas + '\')">' +
+        return '<div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.04); border-left:3px solid #00ff88; border-radius:8px; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="abrirModalDetalleCliente(\'' + item.datameId + '\', \'' + item.modelo + '\', \'' + item.op + '\', \'' + item.cliente + '\', ' + item.saldoUSD + ', ' + item.creditos + ', \'' + item.servicio + '\', \'' + item.time + '\', \'' + item.antiguedad + '\', \'' + item.temas + '\')">' +
           '<div>' +
-            '<div style="font-size:0.68rem; font-weight:900; color:#fff;">👤 Cliente (RU): <b style="color:#a7f3d0;">' + item.cliente + '</b> <span style="font-size:0.55rem; color:#94a3b8; font-family:monospace;">(' + item.datameId + ')</span></div>' +
+            '<div style="font-size:0.68rem; font-weight:900; color:#fff;">👤 Cliente (RU): <b style="color:#00ff88;">' + item.cliente + '</b> <span style="font-size:0.55rem; color:#94a3b8; font-family:monospace;">(' + item.datameId + ')</span></div>' +
             '<div style="font-size:0.58rem; color:#94a3b8;">' + item.op + ' (' + item.modelo + ') · <b style="color:#38bdf8;">' + item.servicio + '</b></div>' +
             '<div style="font-size:0.52rem; color:#34d399; margin-top:2px;">💰 Recarga disponible: $' + item.saldoUSD.toFixed(0) + ' USD (' + item.creditos.toLocaleString() + ' cr)</div>' +
           '</div>' +
           '<div style="text-align:right;">' +
-            '<div style="font-size:0.75rem; font-weight:900; color:#34d399;">+$' + item.montoUSD.toFixed(2) + '</div>' +
+            '<div style="font-size:0.75rem; font-weight:900; color:#00ff88;">+$' + item.montoUSD.toFixed(2) + '</div>' +
             '<div style="font-size:0.52rem; color:#94a3b8;">' + item.time + '</div>' +
           '</div>' +
         '</div>';
@@ -18163,59 +18239,59 @@
       var subTabOperadoresActive = (window.activeRtSubTab === 'operadores');
       var subTabClientesActive = (window.activeRtSubTab === 'clientes');
 
-      wrap.innerHTML = '<div style="background:rgba(15,23,42,0.85); border:1px solid rgba(239,68,68,0.3); border-radius:18px; box-shadow:0 12px 40px rgba(0,0,0,0.5); overflow:hidden; margin-bottom:24px;">' +
+      wrap.innerHTML = '<div style="background:rgba(15,23,42,0.9); border:1.5px solid rgba(0,255,136,0.35); border-radius:18px; box-shadow:0 12px 40px rgba(0,0,0,0.5), 0 0 20px rgba(0,255,136,0.1); overflow:hidden; margin-bottom:24px;">' +
         
-        '<!-- Header del Módulo -->' +
-        '<div style="background:linear-gradient(135deg, rgba(239,68,68,0.2), rgba(15,23,42,0.9)); padding:18px 24px; border-bottom:1px solid rgba(239,68,68,0.2); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
+        '<!-- Header del Módulo Verde Neón -->' +
+        '<div style="background:linear-gradient(135deg, rgba(6,78,59,0.4), rgba(15,23,42,0.95)); padding:18px 24px; border-bottom:1px solid rgba(0,255,136,0.25); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">' +
           '<div>' +
             '<div style="display:flex; align-items:center; gap:10px;">' +
-              '<span style="display:inline-block; width:12px; height:12px; background:#ef4444; border-radius:50%; box-shadow:0 0 12px #ef4444; animation:rtPulseDot 1.2s infinite;"></span>' +
-              '<h2 style="font-size:1.15rem; font-weight:900; color:#ffffff; margin:0; letter-spacing:0.5px; text-transform:uppercase;">🔴 MÓDULO DE PRODUCCIÓN EN TIEMPO REAL & RADAR DATAME</h2>' +
-              '<span style="background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">DIRECT LIVE</span>' +
+              '<span style="display:inline-block; width:12px; height:12px; background:#00ff88; border-radius:50%; box-shadow:0 0 12px #00ff88; animation:rtPulseDot 1.2s infinite;"></span>' +
+              '<h2 style="font-size:1.15rem; font-weight:900; color:#ffffff; margin:0; letter-spacing:0.5px; text-transform:uppercase;">🟢 MÓDULO DE PRODUCCIÓN EN TIEMPO REAL & RADAR TALKYTIMES</h2>' +
+              '<span style="background:rgba(0,255,136,0.15); color:#00ff88; border:1px solid rgba(0,255,136,0.4); padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">DIRECT LIVE</span>' +
             '</div>' +
-            '<p style="font-size:0.68rem; color:#94a3b8; margin:4px 0 0 22px;">Monitoreo en vivo de operadores por turno, perfiles y <b>radar de clientes reales (RU) con recargas activas</b> listas para atacar.</p>' +
+            '<p style="font-size:0.68rem; color:#94a3b8; margin:4px 0 0 22px;">Monitoreo en vivo de operadores por turno, perfiles y <b>radar de clientes reales (RU) con ID y enlace directo a Talkytimes</b>.</p>' +
           '</div>' +
 
           '<div style="display:flex; align-items:center; gap:12px;">' +
             '<div style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:6px 12px; text-align:center;">' +
               '<div style="font-size:0.55rem; color:#94a3b8; font-weight:800;">PRODUCCIÓN TURNO</div>' +
-              '<div style="font-size:1.1rem; font-weight:900; color:#34d399;">$' + totalUSD.toFixed(2) + ' USD</div>' +
+              '<div style="font-size:1.1rem; font-weight:900; color:#00ff88;">$' + totalUSD.toFixed(2) + ' USD</div>' +
             '</div>' +
-            '<div style="background:rgba(0,0,0,0.5); border:1px solid rgba(52,211,153,0.3); border-radius:10px; padding:6px 12px; text-align:center;">' +
-              '<div style="font-size:0.55rem; color:#a7f3d0; font-weight:800;">SALDO EN VIVO (DATAME)</div>' +
+            '<div style="background:rgba(0,0,0,0.5); border:1px solid rgba(0,255,136,0.3); border-radius:10px; padding:6px 12px; text-align:center;">' +
+              '<div style="font-size:0.55rem; color:#a7f3d0; font-weight:800;">SALDO EN VIVO (TALKYTIMES)</div>' +
               '<div style="font-size:1.1rem; font-weight:900; color:#38bdf8;">$' + totalSaldoOnlineUSD.toFixed(0) + ' USD</div>' +
             '</div>' +
-            '<button onclick="renderProduccionRealtime()" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#f87171; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px;">' +
+            '<button onclick="renderProduccionRealtime()" style="background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.4); color:#00ff88; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px;">' +
               '🔄 Actualizar Radar' +
             '</button>' +
           '</div>' +
         '</div>' +
 
-        '<!-- Sub-pestañas -->' +
+        '<!-- Sub-pestañas Verde Neón -->' +
         '<div style="display:flex; background:rgba(0,0,0,0.4); border-bottom:1px solid rgba(255,255,255,0.06); padding:0 20px;">' +
-          '<button onclick="window.switchRtSubTab(\'operadores\')" style="background:none; border:none; border-bottom:2px solid ' + (subTabOperadoresActive ? '#ef4444' : 'transparent') + '; color:' + (subTabOperadoresActive ? '#fff' : '#94a3b8') + '; padding:12px 18px; font-size:0.72rem; font-weight:900; cursor:pointer; display:flex; align-items:center; gap:8px;">' +
+          '<button onclick="window.switchRtSubTab(\'operadores\')" style="background:none; border:none; border-bottom:2px solid ' + (subTabOperadoresActive ? '#00ff88' : 'transparent') + '; color:' + (subTabOperadoresActive ? '#00ff88' : '#94a3b8') + '; padding:12px 18px; font-size:0.72rem; font-weight:900; cursor:pointer; display:flex; align-items:center; gap:8px;">' +
             '👤 Operadores & Perfiles Asignados' +
           '</button>' +
-          '<button onclick="window.switchRtSubTab(\'clientes\')" style="background:none; border:none; border-bottom:2px solid ' + (subTabClientesActive ? '#ef4444' : 'transparent') + '; color:' + (subTabClientesActive ? '#fff' : '#94a3b8') + '; padding:12px 18px; font-size:0.72rem; font-weight:900; cursor:pointer; display:flex; align-items:center; gap:8px;">' +
-            '🎯 Lista de Clientes con Recarga (Radar Datame)' +
-            '<span style="background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; font-size:0.55rem; font-weight:900;">' + allClientsOnline.length + ' Online</span>' +
+          '<button onclick="window.switchRtSubTab(\'clientes\')" style="background:none; border:none; border-bottom:2px solid ' + (subTabClientesActive ? '#00ff88' : 'transparent') + '; color:' + (subTabClientesActive ? '#00ff88' : '#94a3b8') + '; padding:12px 18px; font-size:0.72rem; font-weight:900; cursor:pointer; display:flex; align-items:center; gap:8px;">' +
+            '🎯 Lista de Clientes con Recarga (Talkytimes Radar)' +
+            '<span style="background:linear-gradient(135deg,#10b981,#00ff88); color:#0f172a; padding:1px 6px; border-radius:10px; font-size:0.55rem; font-weight:900;">' + allClientsOnline.length + ' Online</span>' +
           '</button>' +
         '</div>';
 
       if (subTabClientesActive) {
         // VISTA DEDICADA: RADAR DE CLIENTES CON RECARGA ACTIVA
         wrap.innerHTML += '<div style="padding:20px;">' +
-          '<div style="background:rgba(15,23,42,0.9); border:1px solid rgba(52,211,153,0.3); border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">' +
+          '<div style="background:rgba(15,23,42,0.9); border:1px solid rgba(0,255,136,0.3); border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">' +
             '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:12px;">' +
               '<div>' +
-                '<div style="font-size:0.85rem; font-weight:900; color:#34d399; display:flex; align-items:center; gap:8px;">' +
-                  '<span>🎯 RADAR DE CLIENTES ONLINE CON RECARGAS ACTIVAS (DATAME ID & CRM)</span>' +
-                  '<span style="font-size:0.6rem; background:rgba(52,211,153,0.15); color:#34d399; padding:2px 8px; border-radius:6px; font-weight:800;">' + filteredClientesOnline.length + ' Clientes Detectados</span>' +
+                '<div style="font-size:0.85rem; font-weight:900; color:#00ff88; display:flex; align-items:center; gap:8px;">' +
+                  '<span>🎯 RADAR DE CLIENTES ONLINE CON RECARGAS ACTIVAS (TALKYTIMES & CRM)</span>' +
+                  '<span style="font-size:0.6rem; background:rgba(0,255,136,0.15); color:#00ff88; padding:2px 8px; border-radius:6px; font-weight:800; border:1px solid rgba(0,255,136,0.3);">' + filteredClientesOnline.length + ' Clientes Detectados</span>' +
                 '</div>' +
-                '<div style="font-size:0.62rem; color:#94a3b8; margin-top:2px;">Copia el ID exacto de Datame y pégalo en la barra de búsqueda de Datame para abrir el chat y captar los créditos antes que otras agencias.</div>' +
+                '<div style="font-size:0.62rem; color:#94a3b8; margin-top:2px;">Haz clic en <b>Copiar ID</b> o en <b>Abrir Perfil</b> para acceder directamente a <code>https://talkytimes.com/user/[ID]</code>.</div>' +
               '</div>' +
               '<div style="display:flex; gap:8px; align-items:center;">' +
-                '<input type="text" placeholder="Buscar por Nombre, ID, País o Afinidad..." value="' + (window.activeRtSearchOp || '') + '" oninput="window.setRtSearchOp(this.value)" style="background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 12px; color:#fff; font-size:0.65rem; width:260px;">' +
+                '<input type="text" placeholder="Buscar por Nombre, ID, País o Afinidad..." value="' + (window.activeRtSearchOp || '') + '" oninput="window.setRtSearchOp(this.value)" style="background:rgba(0,0,0,0.5); border:1px solid rgba(0,255,136,0.25); border-radius:8px; padding:6px 12px; color:#fff; font-size:0.65rem; width:260px;">' +
               '</div>' +
             '</div>' +
 
@@ -18225,7 +18301,7 @@
                   '<tr style="border-bottom:2px solid rgba(255,255,255,0.08); color:#94a3b8; font-size:0.58rem; text-transform:uppercase;">' +
                     '<th style="padding:8px;">#</th>' +
                     '<th style="padding:8px;">Cliente Real (RU) & CRM</th>' +
-                    '<th style="padding:8px;">ID Datame (Copiar)</th>' +
+                    '<th style="padding:8px;">ID Talkytimes (RU)</th>' +
                     '<th style="padding:8px; text-align:right;">Saldo de Recarga ($ USD)</th>' +
                     '<th style="padding:8px;">Agencia de Recarga</th>' +
                     '<th style="padding:8px; text-align:center;">Estado Online</th>' +
@@ -18250,8 +18326,8 @@
               statusButtons +
             '</div>' +
           '</div>' +
-          '<div style="font-size:0.65rem; color:#f87171; font-weight:800; display:flex; align-items:center; gap:6px;">' +
-            '<span style="display:inline-block; width:8px; height:8px; background:#ef4444; border-radius:50%; animation:rtPulseDot 1.2s infinite;"></span>' +
+          '<div style="font-size:0.65rem; color:#00ff88; font-weight:800; display:flex; align-items:center; gap:6px;">' +
+            '<span style="display:inline-block; width:8px; height:8px; background:#00ff88; border-radius:50%; box-shadow:0 0 8px #00ff88; animation:rtPulseDot 1.2s infinite;"></span>' +
             filteredRoster.length + ' Perfiles en Monitoreo' +
           '</div>' +
         '</div>' +
@@ -18259,34 +18335,34 @@
         '<div style="padding:20px; display:grid; grid-template-columns:2.2fr 1fr; gap:20px; align-items:start;">' +
           '<div style="display:flex; flex-direction:column; gap:12px;">' +
             '<div style="font-size:0.75rem; font-weight:900; color:#f8fafc; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between;">' +
-              '<span>👤 Operadores & Perfiles Asignados en Realtime (Datame IDs)</span>' +
-              '<span style="font-size:0.62rem; color:#94a3b8; font-weight:700;">Haz clic en Copiar ID para buscarlo en Datame</span>' +
+              '<span>👤 Operadores & Perfiles Asignados en Realtime (Talkytimes IDs)</span>' +
+              '<span style="font-size:0.62rem; color:#00ff88; font-weight:700;">Haz clic en Copiar ID o Abrir Perfil</span>' +
             '</div>' +
             '<div style="display:flex; flex-direction:column; gap:10px;">' +
               cardsHTML +
             '</div>' +
           '</div>' +
           '<div style="display:flex; flex-direction:column; gap:16px;">' +
-            '<div style="background:rgba(15,23,42,0.9); border:1px solid rgba(239,68,68,0.25); border-radius:14px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">' +
+            '<div style="background:rgba(15,23,42,0.9); border:1px solid rgba(0,255,136,0.3); border-radius:14px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">' +
               '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:8px;">' +
-                '<div style="font-size:0.7rem; font-weight:900; color:#f87171; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">' +
-                  '<span style="display:inline-block; width:8px; height:8px; background:#ef4444; border-radius:50%; animation:rtPulseDot 1.5s infinite;"></span>' +
+                '<div style="font-size:0.7rem; font-weight:900; color:#00ff88; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">' +
+                  '<span style="display:inline-block; width:8px; height:8px; background:#00ff88; border-radius:50%; box-shadow:0 0 8px #00ff88; animation:rtPulseDot 1.5s infinite;"></span>' +
                   'LIVE TICKER: FACTURACIÓN DIRECTA' +
                 '</div>' +
-                '<span style="font-size:0.58rem; background:rgba(52,211,153,0.15); color:#34d399; padding:2px 6px; border-radius:4px; font-weight:800;">EN DIRECTO</span>' +
+                '<span style="font-size:0.58rem; background:rgba(0,255,136,0.15); color:#00ff88; padding:2px 6px; border-radius:4px; font-weight:800;">EN DIRECTO</span>' +
               '</div>' +
               '<div style="display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto;" class="custom-scrollbar">' +
                 liveTickerHTML +
               '</div>' +
             '</div>' +
-            '<div style="background:linear-gradient(135deg, rgba(20,184,166,0.1), rgba(15,23,42,0.8)); border:1px solid rgba(20,184,166,0.3); border-radius:14px; padding:14px 16px;">' +
-              '<div style="font-size:0.68rem; font-weight:900; color:#2dd4bf; margin-bottom:8px; display:flex; align-items:center; gap:6px;">' +
+            '<div style="background:linear-gradient(135deg, rgba(6,78,59,0.3), rgba(15,23,42,0.9)); border:1px solid rgba(0,255,136,0.3); border-radius:14px; padding:14px 16px;">' +
+              '<div style="font-size:0.68rem; font-weight:900; color:#00ff88; margin-bottom:8px; display:flex; align-items:center; gap:6px;">' +
                 '🧠 ESTRATEGIA DE ATAQUE EN CALIENTE' +
               '</div>' +
               '<ul style="margin:0; padding-left:14px; font-size:0.62rem; color:#cbd5e1; line-height:1.5;">' +
-                '<li><b>Copiar ID Datame:</b> Copia el ID numérico del cliente en 1 clic y búscalo en el panel de Datame.</li>' +
+                '<li><b>Abrir Perfil:</b> Accede directamente a <code>https://talkytimes.com/user/[ID]</code> en un clic.</li>' +
+                '<li><b>Copiar ID Talkytimes:</b> Copia el ID numérico del cliente en 1 clic para pegarlo en la barra de búsqueda.</li>' +
                 '<li><b>Respuesta Inmediata:</b> Si el cliente tiene recarga activa de más de $300 USD, responder en menos de 15 segundos.</li>' +
-                '<li><b>Ataque a Clientes de Otras Agencias:</b> Abre la pestaña de "Lista de Clientes con Recarga" para atacar a clientes de otras agencias antes de que gasten sus créditos.</li>' +
               '</ul>' +
             '</div>' +
           '</div>' +
@@ -18294,21 +18370,21 @@
       }
 
       wrap.innerHTML += '<div id="rt-cliente-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">' +
-        '<div style="background:#0f172a; border:1.5px solid rgba(52,211,153,0.4); border-radius:16px; padding:24px; max-width:440px; width:90%; box-shadow:0 20px 50px rgba(0,0,0,0.8); position:relative;">' +
+        '<div style="background:#0f172a; border:1.5px solid rgba(0,255,136,0.5); border-radius:16px; padding:24px; max-width:440px; width:90%; box-shadow:0 20px 50px rgba(0,0,0,0.8), 0 0 25px rgba(0,255,136,0.2); position:relative;">' +
           '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:12px; margin-bottom:16px;">' +
             '<div style="display:flex; align-items:center; gap:10px;">' +
               '<span style="font-size:1.5rem;">💳</span>' +
               '<div>' +
                 '<h3 id="rt-m-cliente-nombre" style="margin:0; font-size:1.1rem; color:#ffffff; font-weight:900;">Cliente</h3>' +
-                '<span id="rt-m-cliente-id" style="font-size:0.65rem; color:#38bdf8; font-weight:800;">ID DATAME: —</span>' +
+                '<span id="rt-m-cliente-id" style="font-size:0.65rem; color:#00ff88; font-weight:800;">ID TALKYTIMES: —</span>' +
               '</div>' +
             '</div>' +
             '<button onclick="cerrarModalDetalleCliente()" style="background:none; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer;">✕</button>' +
           '</div>' +
           '<div style="display:flex; flex-direction:column; gap:12px;">' +
-            '<div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:12px;">' +
+            '<div style="background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.3); border-radius:10px; padding:12px;">' +
               '<div style="font-size:0.6rem; color:#a7f3d0; font-weight:800;">SALDO DISPONIBLE PARA GASTAR:</div>' +
-              '<div id="rt-m-cliente-saldo" style="font-size:1.2rem; font-weight:900; color:#34d399; margin-top:2px;">$0.00 USD</div>' +
+              '<div id="rt-m-cliente-saldo" style="font-size:1.2rem; font-weight:900; color:#00ff88; margin-top:2px;">$0.00 USD</div>' +
               '<div style="font-size:0.55rem; color:#cbd5e1; margin-top:4px;">Este cliente ya completó el pago de recarga y sus créditos están disponibles de inmediato.</div>' +
             '</div>' +
             '<div style="background:rgba(255,255,255,0.03); border-radius:8px; padding:10px; display:flex; justify-content:space-between; font-size:0.68rem; color:#cbd5e1;">' +
@@ -18322,7 +18398,7 @@
             '</div>' +
             '<div id="rt-m-cliente-extra"></div>' +
           '</div>' +
-          '<button onclick="cerrarModalDetalleCliente()" style="width:100%; margin-top:18px; background:linear-gradient(135deg, #10b981, #059669); color:white; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.75rem;">Entendido</button>' +
+          '<button onclick="cerrarModalDetalleCliente()" style="width:100%; margin-top:18px; background:linear-gradient(135deg, #10b981, #00ff88); color:#0f172a; border:none; padding:10px; border-radius:8px; font-weight:900; cursor:pointer; font-size:0.75rem;">Entendido</button>' +
         '</div>' +
       '</div>';
 
@@ -20924,9 +21000,9 @@ function exportarDatos() {
           b.style.color = '#94a3b8';
         });
         if (btnEl) {
-          btnEl.style.background = 'rgba(52,211,153,0.2)';
-          btnEl.style.border = '1px solid rgba(52,211,153,0.5)';
-          btnEl.style.color = '#34d399';
+          btnEl.style.background = 'rgba(0,255,136,0.2)';
+          btnEl.style.border = '1px solid rgba(0,255,136,0.5)';
+          btnEl.style.color = '#00ff88';
         }
         window.renderTablaClientesRadar();
       };
@@ -20954,32 +21030,32 @@ function exportarDatos() {
         var rowsHTML = filtered.map(function(c, idx) {
           var isRomero = c.agencia.includes('ROMERO');
           var badgeAgencia = isRomero 
-            ? '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">⭐ NUESTRA AGENCIA</span>' 
-            : '<span style="background:rgba(239,68,68,0.15); color:#fca5a5; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">🏢 ' + c.agencia + ' (Interceptar)</span>';
+            ? '<span style="background:rgba(0,255,136,0.15); color:#00ff88; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900; border:1px solid rgba(0,255,136,0.3);">⭐ NUESTRA AGENCIA</span>' 
+            : '<span style="background:rgba(251,191,36,0.15); color:#fde047; padding:3px 8px; border-radius:6px; font-size:0.6rem; font-weight:900; border:1px solid rgba(251,191,36,0.3);">🏢 ' + c.agencia + ' (Interceptar)</span>';
 
           var montoRecarga = Number(c.recargaUSD || c.saldoUSD || 0);
           var creditosRecarga = Number(c.creditos || (montoRecarga * 10));
 
-          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:0.15s;' + (c.isNewRecharge ? 'background:rgba(239,68,68,0.1);' : '') + '">' +
+          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.05); transition:0.15s;' + (c.isNewRecharge ? 'background:rgba(0,255,136,0.12);' : '') + '">' +
             '<td style="padding:10px 8px; font-size:0.65rem; color:#64748b; font-weight:bold;">#' + (idx + 1) + '</td>' +
             '<td style="padding:10px 8px;">' +
               '<div style="font-size:0.85rem; font-weight:900; color:#ffffff; display:flex; align-items:center; gap:6px;">' +
                 '<span>👤 ' + c.nombre + ' ' + (c.pais || '') + '</span>' +
-                (c.isNewRecharge ? '<span style="background:#ef4444; color:#fff; font-size:0.52rem; padding:1px 5px; border-radius:4px; font-weight:900;">¡NUEVA RECARGA!</span>' : '') +
+                (c.isNewRecharge ? '<span style="background:#00ff88; color:#0f172a; font-size:0.52rem; padding:1px 5px; border-radius:4px; font-weight:900;">¡NUEVA RECARGA!</span>' : '') +
               '</div>' +
               '<div style="font-size:0.6rem; color:#cbd5e1; margin-top:2px;">' +
-                '🎯 <b style="color:#38bdf8;">' + (c.arquetipo || 'VIP') + '</b> · ⏳ <span style="color:#a7f3d0;">' + (c.antiguedad || 'Activo') + '</span>' +
+                '🎯 <b style="color:#00ff88;">' + (c.arquetipo || 'VIP') + '</b> · ⏳ <span style="color:#a7f3d0;">' + (c.antiguedad || 'Activo') + '</span>' +
               '</div>' +
               '<div style="font-size:0.58rem; color:#94a3b8; margin-top:2px;">' +
                 '💡 <i>' + (c.temasInteres || '') + '</i>' +
               '</div>' +
             '</td>' +
             '<td style="padding:10px 8px;">' +
-              '<div style="font-family:monospace; font-size:0.9rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</div>' +
-              '<div style="font-size:0.55rem; color:#64748b;">ID Datame Oficial (RU)</div>' +
+              '<div style="font-family:monospace; font-size:0.92rem; font-weight:900; color:#00ff88; letter-spacing:0.5px;">' + c.id + '</div>' +
+              '<div style="font-size:0.55rem; color:#64748b;">ID Talkytimes (RU)</div>' +
             '</td>' +
             '<td style="padding:10px 8px; text-align:right;">' +
-              '<div style="font-size:0.95rem; font-weight:900; color:#34d399;">$' + montoRecarga.toFixed(2) + ' USD</div>' +
+              '<div style="font-size:0.95rem; font-weight:900; color:#00ff88;">$' + montoRecarga.toFixed(2) + ' USD</div>' +
               '<div style="font-size:0.65rem; color:#a7f3d0; font-weight:800;">⚡ ' + creditosRecarga.toLocaleString() + ' Créditos</div>' +
               '<div style="font-size:0.55rem; color:#94a3b8; margin-top:2px;">Recarga: <b style="color:#fbbf24;">' + (c.tiempoRecarga || 'Reciente') + '</b></div>' +
             '</td>' +
@@ -20989,12 +21065,13 @@ function exportarDatos() {
               '<div style="font-size:0.55rem; color:#94a3b8;">Estado: ' + (c.op || 'Operador en turno') + '</div>' +
             '</td>' +
             '<td style="padding:10px 8px; text-align:center;">' +
-              '<span style="background:rgba(52,211,153,0.15); color:#34d399; padding:4px 10px; border-radius:8px; font-size:0.62rem; font-weight:900;">' + (c.statusOnline || '🟢 Online') + '</span>' +
+              '<span style="background:rgba(0,255,136,0.15); color:#00ff88; padding:4px 10px; border-radius:8px; font-size:0.62rem; font-weight:900; border:1px solid rgba(0,255,136,0.3);">' + (c.statusOnline || '🟢 Online') + '</span>' +
             '</td>' +
             '<td style="padding:10px 8px; text-align:center;">' +
               '<div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">' +
-                '<button onclick="copiarDatameID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-                '<button onclick="copiarTacticsCopy(\'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#ef4444,#f43f5e); border:none; color:white; padding:5px 12px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer;">🎯 Copiar Ataque</button>' +
+                '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(0,255,136,0.15); border:1px solid rgba(0,255,136,0.4); color:#00ff88; padding:5px 8px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
+                '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 8px; border-radius:6px; font-size:0.62rem; font-weight:800; cursor:pointer;">🔗 Abrir</button>' +
+                '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + montoRecarga + ', ' + creditosRecarga + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#10b981,#00ff88); border:none; color:#0f172a; padding:5px 10px; border-radius:6px; font-size:0.62rem; font-weight:900; cursor:pointer; box-shadow:0 0 10px rgba(0,255,136,0.3);">🎯 Atacar</button>' +
               '</div>' +
             '</td>' +
           '</tr>';
@@ -21004,8 +21081,8 @@ function exportarDatos() {
           '<thead>' +
             '<tr style="border-bottom:2px solid rgba(255,255,255,0.08); color:#94a3b8; font-size:0.6rem; text-transform:uppercase;">' +
               '<th style="padding:8px;">#</th>' +
-              '<th style="padding:8px;">Cliente Real (RU) & Inteligencia CRM</th>' +
-              '<th style="padding:8px;">ID Datame Cliente</th>' +
+              '<th style="padding:8px;">Cliente Real Talkytimes (RU)</th>' +
+              '<th style="padding:8px;">ID Talkytimes</th>' +
               '<th style="padding:8px; text-align:right;">Saldo Recarga & Tiempo</th>' +
               '<th style="padding:8px;">Agencia & Afinidad</th>' +
               '<th style="padding:8px; text-align:center;">Estado Online</th>' +
@@ -21029,7 +21106,7 @@ function exportarDatos() {
                 showConfirmButton: false,
                 timer: 2500,
                 background: '#0f172a',
-                color: '#fff'
+                color: '#00ff88'
               });
             } else {
               alert('📋 Mensaje copiado al portapapeles:\n' + texto);

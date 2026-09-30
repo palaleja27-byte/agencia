@@ -18582,7 +18582,8 @@
     };
 
     // 🚀 LANZADOR INTELIGENTE MULTIRUTA Y COMUNICACIÓN CON EXTENSIÓN RYR-HUD
-    window.abrirTalkytimes = function(talkytimesId, rutaTipo) {
+    // 🚀 APERTURA OFICIAL Y DIRECTA DE PERFIL TALKYTIMES: HTTPS://TALKYTIMES.COM/USER/[ID]
+    window.abrirTalkytimes = function(talkytimesId) {
       if (!talkytimesId) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({ icon: 'warning', title: 'ID de Talkytimes Faltante', text: 'Por favor ingresa o selecciona un ID válido.', background: '#0f172a', color: '#fff' });
@@ -18608,7 +18609,7 @@
         navigator.clipboard.writeText(cleanId).catch(function(){});
       }
 
-      // 2. Notificar a la extensión agenteRYR-HUD si está activa
+      // 2. Notificar a la extensión agenteRYR-HUD para auto-búsqueda en Talkytimes
       try {
         if (window._ryrHudBC) {
           window._ryrHudBC.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId });
@@ -18616,22 +18617,17 @@
         window.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId }, '*');
       } catch(e) {}
 
-      // 3. Determinar URL óptima de Talkytimes (Soporte Multiruta para Chat / Perfil / Búsqueda)
-      var targetUrl = 'https://talkytimes.com/chat/' + cleanId;
-      if (rutaTipo === 'user' || rutaTipo === 'perfil') {
-        targetUrl = 'https://talkytimes.com/user/' + cleanId;
-      } else if (rutaTipo === 'search') {
-        targetUrl = 'https://talkytimes.com/search?userId=' + cleanId;
-      }
+      // 3. RUTA OFICIAL TALKYTIMES: https://talkytimes.com/user/[ID]
+      var targetUrl = 'https://talkytimes.com/user/' + cleanId;
 
-      // Notificación Toast de confirmación para el operador
+      // Notificación Toast de confirmación con el ID copiado
       if (typeof Swal !== 'undefined') {
         Swal.fire({
           toast: true,
           position: 'top-end',
           icon: 'success',
           title: '🔑 ID ' + cleanId + ' Copiado',
-          text: 'Abriendo Talkytimes... Si no carga directo, pega el ID (' + cleanId + ') en el buscador del chat.',
+          text: 'Abriendo perfil talkytimes.com/user/' + cleanId + '... ¡Listo para interactuar!',
           showConfirmButton: false,
           timer: 3500,
           background: 'rgba(15, 23, 42, 0.95)',
@@ -18651,42 +18647,8 @@
       }
     };
 
-    // Modal de opciones de apertura para el operador
     window.lanzarModalOpcionesApertura = function(cleanId, nombreCliente) {
-      if (!cleanId) return;
-      if (typeof Swal === 'undefined') {
-        window.abrirTalkytimes(cleanId, 'chat');
-        return;
-      }
-
-      Swal.fire({
-        title: '🎯 ABRIR CLIENTE EN TALKYTIMES',
-        html: '<div style="text-align:left; font-size:0.8rem; color:#cbd5e1; display:flex; flex-direction:column; gap:12px;">' +
-          '<div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); padding:10px; border-radius:8px;">' +
-            '👤 <b>Cliente:</b> ' + (nombreCliente || 'Usuario Talkytimes') + '<br>' +
-            '🔑 <b>ID Numérico (RU):</b> <span style="color:#38bdf8; font-family:monospace; font-weight:900; font-size:0.95rem;">' + cleanId + '</span>' +
-          '</div>' +
-          '<div style="font-size:0.7rem; color:#94a3b8;">Elige cómo deseas abrir al usuario en Talkytimes (El ID ya se copió al portapapeles):</div>' +
-          '<div style="display:flex; flex-direction:column; gap:8px;">' +
-            '<button onclick=\"window.abrirTalkytimes(\'' + cleanId + '\', \'chat\'); Swal.close();\" style=\"background:linear-gradient(135deg,#0ea5e9,#3b82f6); color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:900; font-size:0.75rem; cursor:pointer; text-align:left; display:flex; align-items:center; justify-content:space-between;\">' +
-              '<span>💬 Abrir Chat Directo</span> <span style=\"font-size:0.6rem; opacity:0.8;\">/chat/' + cleanId + '</span>' +
-            '</button>' +
-            '<button onclick=\"window.abrirTalkytimes(\'' + cleanId + '\', \'user\'); Swal.close();\" style=\"background:rgba(255,255,255,0.06); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:10px 14px; border-radius:8px; font-weight:900; font-size:0.75rem; cursor:pointer; text-align:left; display:flex; align-items:center; justify-content:space-between;\">' +
-              '<span>👤 Ver Perfil de Usuario</span> <span style=\"font-size:0.6rem; opacity:0.8;\">/user/' + cleanId + '</span>' +
-            '</button>' +
-            '<button onclick=\"window.abrirTalkytimes(\'' + cleanId + '\', \'search\'); Swal.close();\" style=\"background:rgba(255,255,255,0.06); color:#fbbf24; border:1px solid rgba(251,191,36,0.4); padding:10px 14px; border-radius:8px; font-weight:900; font-size:0.75rem; cursor:pointer; text-align:left; display:flex; align-items:center; justify-content:space-between;\">' +
-              '<span>🔍 Buscar en Talkytimes por ID</span> <span style=\"font-size:0.6rem; opacity:0.8;\">search?userId=' + cleanId + '</span>' +
-            '</button>' +
-            '<button onclick=\"copiarTalkytimesID(\'' + cleanId + '\', \'' + (nombreCliente||'') + '\');\" style=\"background:rgba(52,211,153,0.12); color:#34d399; border:1px solid rgba(52,211,153,0.4); padding:8px 14px; border-radius:8px; font-weight:900; font-size:0.72rem; cursor:pointer; text-align:center;\">' +
-              '📋 Copiar ID (' + cleanId + ') al Portapapeles' +
-            '</button>' +
-          '</div>' +
-        '</div>',
-        showConfirmButton: false,
-        showCloseButton: true,
-        background: '#0f172a',
-        color: '#fff'
-      });
+      window.abrirTalkytimes(cleanId);
     };
 
     window.abrirTalkytimesDirectoInput = function() {
@@ -19727,10 +19689,9 @@
             '</div>' +
           '</div>' +
           '<div style="display:flex; align-items:center; gap:8px; flex:1; max-width:480px; min-width:280px;">' +
-            '<input id="quick-tt-search-input" type="text" placeholder="Ingresa ID Talkytimes (ej: 170699370) o URL completa..." style="flex:1; min-width:240px; background:#0b132b; border:1.5px solid rgba(56,189,248,0.5); color:#38bdf8; padding:8px 12px; border-radius:8px; font-size:0.72rem; font-family:monospace; font-weight:800; outline:none;" onkeydown="if(event.key===\'Enter\') window.abrirTalkytimesDirectoInput();">' +
-            '<button onclick="window.abrirTalkytimesDirectoInput(\'chat\')" title="Abrir chat directo con el cliente" style="background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(14,165,233,0.4); display:inline-flex; align-items:center; gap:4px;">💬 Chat</button>' +
-            '<button onclick="window.abrirTalkytimesDirectoInput(\'user\')" title="Ver perfil de usuario en Talkytimes" style="background:rgba(255,255,255,0.06); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:8px 12px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:4px;">👤 Perfil</button>' +
-            '<button onclick="window.abrirTalkytimesDirectoInput(\'modal\')" title="Ver todas las opciones de apertura" style="background:rgba(251,191,36,0.15); color:#fbbf24; border:1px solid rgba(251,191,36,0.4); padding:8px 10px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap;">🎯 Opciones</button>' +
+            '<input id="quick-tt-search-input" type="text" placeholder="Ingresa ID Talkytimes (ej: 170699370) o URL completa..." style="flex:1; min-width:260px; background:#0b132b; border:1.5px solid rgba(56,189,248,0.5); color:#38bdf8; padding:8px 14px; border-radius:8px; font-size:0.75rem; font-family:monospace; font-weight:800; outline:none;" onkeydown="if(event.key===\'Enter\') window.abrirTalkytimesDirectoInput();">' +
+            '<button onclick="window.abrirTalkytimesDirectoInput()" title="Abrir perfil del usuario en Talkytimes" style="background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:#fff; border:none; padding:8px 18px; border-radius:8px; font-size:0.72rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(14,165,233,0.4); display:inline-flex; align-items:center; gap:5px;">🔗 Abrir Perfil (/user/ID)</button>' +
+            '<button onclick="var v=document.getElementById(\'quick-tt-search-input\')?.value; if(v) copiarTalkytimesID(v, \'Cliente\');" title="Copiar ID al portapapeles" style="background:rgba(255,255,255,0.06); color:#38bdf8; border:1px solid rgba(56,189,248,0.4); padding:8px 14px; border-radius:8px; font-size:0.72rem; font-weight:900; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:4px;">📋 Copiar ID</button>' +
           '</div>' +
         '</div>' +
 

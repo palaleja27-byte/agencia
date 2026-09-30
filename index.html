@@ -18345,6 +18345,164 @@
     // 💎 FUNCIONES DE NAVEGACIÓN & ATAQUE DIRECTO A TALKYTIMES
     // ═════════════════════════════════════════════════════════════════════════
     // Extractor quirúrgico universal de ID numérico de Talkytimes (soporta URLs completas, parámetros o IDs crudos)
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🔌 API OFICIAL RyR-HUD BRIDGE (Para Extensión 'agenteRYR-HUD')
+    // ═════════════════════════════════════════════════════════════════════════
+    // Enriquecer clientes existentes con gasto histórico y saldo estimado
+    (function() {
+      if (!window.masterRadarClientes) return;
+      window.masterRadarClientes.forEach(function(c) {
+        var isRomero = (c.agencia || '').includes('ROMERO');
+        var isCamilo = (c.agencia || '').includes('CAMILO');
+        if (typeof c.gastoHistoricoUSD === 'undefined') {
+          c.gastoHistoricoUSD = (isRomero || isCamilo) ? Math.round((Number(c.recargaUSD || c.saldoUSD || 100) * 2.8) * 100) / 100 : 0;
+          c.gastoHistoricoPts = c.gastoHistoricoUSD * 1.0;
+        }
+        if (typeof c.saldoEstimadoUSD === 'undefined') {
+          var rec = Number(c.recargaUSD || c.saldoUSD || 0);
+          c.saldoEstimadoUSD = (isRomero || isCamilo) ? Math.max(0, Math.round((rec * 0.92) * 100) / 100) : rec;
+          c.creditosEstimados = Math.round(c.saldoEstimadoUSD * 10);
+        }
+        if (!c.poderFuego) {
+          var s = c.saldoEstimadoUSD || c.recargaUSD || 0;
+          c.poderFuego = s >= 700 ? '🔥 SUPER WHALE' : s >= 400 ? '⚡ ALTO PODER' : s >= 200 ? '💎 VIP ACTIVO' : '🎯 REGULAR';
+        }
+      });
+    })();
+
+    window.RyR_HUD_Bridge_API = {
+      version: '2.5.0-PRO',
+      name: 'RyR_HUD_Bridge_API',
+      status: 'ONLINE',
+      channelName: 'RyR_HUD_Channel',
+
+      // Extrae ID numérico limpio
+      extractId: function(raw) {
+        if (!raw) return '';
+        var m = String(raw).match(/\b(\d{6,11})\b/);
+        return m ? m[1] : String(raw).replace(/\D/g, '').trim();
+      },
+
+      // Consulta perfil y saldo de cliente en tiempo real
+      getClientProfile: function(talkytimesId) {
+        var cleanId = this.extractId(talkytimesId);
+        if (!cleanId) return null;
+        var cl = (window.masterRadarClientes || []).find(function(c) {
+          return c.id === cleanId;
+        });
+        if (!cl) {
+          return {
+            id: cleanId,
+            found: false,
+            nombre: 'Cliente Talkytimes (' + cleanId + ')',
+            gastoHistoricoUSD: 0,
+            saldoEstimadoUSD: 0,
+            creditosEstimados: 0,
+            poderFuego: 'Desconocido (Sin Historial)',
+            talkytimesUrl: 'https://talkytimes.com/user/' + cleanId
+          };
+        }
+        return {
+          found: true,
+          id: cl.id,
+          nombre: cl.nombre,
+          pais: cl.pais,
+          gastoHistoricoUSD: Number(cl.gastoHistoricoUSD || 0),
+          gastoHistoricoPts: Number(cl.gastoHistoricoPts || 0),
+          ultimaRecargaUSD: Number(cl.recargaUSD || cl.saldoUSD || 0),
+          saldoEstimadoUSD: Number(cl.saldoEstimadoUSD || cl.saldoUSD || cl.recargaUSD || 0),
+          creditosEstimados: Number(cl.creditosEstimados || cl.creditos || 0),
+          poderFuego: cl.poderFuego || '⚡ ACTIVO',
+          tiempoRecarga: cl.tiempoRecarga,
+          arquetipo: cl.arquetipo,
+          afinidadModelo: cl.perfil,
+          operadorEnTurno: cl.op,
+          agencia: cl.agencia,
+          temasInteres: cl.temasInteres,
+          copyAtaque: cl.copy,
+          statusOnline: cl.statusOnline,
+          talkytimesUrl: 'https://talkytimes.com/user/' + cl.id
+        };
+      },
+
+      // Obtener todos los clientes monitoreados
+      getAllClients: function() {
+        return (window.masterRadarClientes || []).map(function(cl) {
+          return {
+            id: cl.id,
+            nombre: cl.nombre,
+            pais: cl.pais,
+            agencia: cl.agencia,
+            gastoHistoricoUSD: Number(cl.gastoHistoricoUSD || 0),
+            saldoEstimadoUSD: Number(cl.saldoEstimadoUSD || cl.saldoUSD || 0),
+            creditosEstimados: Number(cl.creditosEstimados || cl.creditos || 0),
+            poderFuego: cl.poderFuego || '⚡ ACTIVO',
+            afinidadModelo: cl.perfil,
+            operador: cl.op,
+            talkytimesUrl: 'https://talkytimes.com/user/' + cl.id
+          };
+        });
+      },
+
+      // Registrar consumo en vivo para descontar del saldo estimado
+      recordClientSpend: function(talkytimesId, amountUSD, serviceType) {
+        var cleanId = this.extractId(talkytimesId);
+        var cl = (window.masterRadarClientes || []).find(function(c) { return c.id === cleanId; });
+        if (cl) {
+          var spent = Number(amountUSD) || 0;
+          cl.gastoHistoricoUSD = (cl.gastoHistoricoUSD || 0) + spent;
+          cl.gastoHistoricoPts = (cl.gastoHistoricoPts || 0) + (spent * 1.0);
+          cl.saldoEstimadoUSD = Math.max(0, (cl.saldoEstimadoUSD || cl.saldoUSD || 0) - spent);
+          cl.creditosEstimados = Math.max(0, Math.round(cl.saldoEstimadoUSD * 10));
+          if (typeof window.renderTablaClientesRadar === 'function') window.renderTablaClientesRadar();
+          return true;
+        }
+        return false;
+      }
+    };
+    window.RyRHudAPI = window.RyR_HUD_Bridge_API;
+
+    // 📡 Canal BroadcastChannel & window.postMessage con Extensión
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        window._ryrHudBC = new BroadcastChannel('RyR_HUD_Channel');
+        window._ryrHudBC.onmessage = function(ev) {
+          var data = ev.data || {};
+          if (data.type === 'RYR_HUD_GET_CLIENT') {
+            var res = window.RyR_HUD_Bridge_API.getClientProfile(data.id);
+            window._ryrHudBC.postMessage({ type: 'RYR_HUD_CLIENT_RESPONSE', payload: res, reqId: data.reqId });
+          } else if (data.type === 'RYR_HUD_GET_ALL') {
+            var list = window.RyR_HUD_Bridge_API.getAllClients();
+            window._ryrHudBC.postMessage({ type: 'RYR_HUD_ALL_CLIENTS_RESPONSE', payload: list, reqId: data.reqId });
+          }
+        };
+      }
+    } catch(e) {}
+
+    window.addEventListener('message', function(ev) {
+      if (!ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.type === 'RYR_HUD_GET_CLIENT') {
+        var resp = window.RyR_HUD_Bridge_API.getClientProfile(ev.data.id);
+        window.postMessage({ type: 'RYR_HUD_CLIENT_RESPONSE', payload: resp, reqId: ev.data.reqId }, '*');
+      } else if (ev.data.type === 'RYR_HUD_GET_ALL') {
+        var all = window.RyR_HUD_Bridge_API.getAllClients();
+        window.postMessage({ type: 'RYR_HUD_ALL_CLIENTS_RESPONSE', payload: all, reqId: ev.data.reqId }, '*');
+      }
+    });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🔔 HUB DE NOTIFICACIONES ADMIN (Solo visible para Admin / Monitores)
+    // ═════════════════════════════════════════════════════════════════════════
+    window.RyR_AdminNotification_Hub = {
+      name: 'RyR_AdminNotification_Hub',
+      isAdminUser: function() {
+        if (typeof currentRole !== 'undefined') {
+          return currentRole === 'admin' || currentRole === 'monitor' || currentRole === 'gerencia';
+        }
+        return true;
+      }
+    };
+
     window.extractTalkytimesId = function(input) {
       if (!input) return '';
       var s = String(input).trim();
@@ -18655,6 +18813,11 @@
     };
 
     window.mostrarToastRecargaEnVivo = function(c) {
+      // 🔒 Control Exclusivo Admin / Monitor
+      if (window.RyR_AdminNotification_Hub && !window.RyR_AdminNotification_Hub.isAdminUser()) {
+        return; // No interrumpir a operadores con alertas de recargas globales
+      }
+
       if (typeof window.playRechargeAlertSound === 'function') {
         window.playRechargeAlertSound();
       }
@@ -18663,38 +18826,49 @@
       if (!toastWrap) {
         toastWrap = document.createElement('div');
         toastWrap.id = 'rt-toast-live-container';
-        toastWrap.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; max-width:410px; width:92%; pointer-events:none;';
+        toastWrap.style.cssText = 'position:fixed; bottom:24px; right:24px; z-index:999999; display:flex; flex-direction:column; gap:10px; max-width:440px; width:92%; pointer-events:none;';
         document.body.appendChild(toastWrap);
       }
 
-      var cleanId = String(c.id).replace(/\D/g, '').trim();
+      var cleanId = window.extractTalkytimesId ? window.extractTalkytimesId(c.id) : String(c.id).replace(/\D/g, '').trim();
+      var gastoHist = Number(c.gastoHistoricoUSD || 0);
+      var saldoEst = Number(c.saldoEstimadoUSD || c.saldoUSD || c.recargaUSD || 150);
+      var crEst = Number(c.creditosEstimados || c.creditos || Math.round(saldoEst * 10));
+
       var toast = document.createElement('div');
-      toast.style.cssText = 'background:rgba(15, 23, 42, 0.94); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1px solid rgba(52, 211, 153, 0.6); border-radius:16px; padding:16px 18px; color:#fff; box-shadow:0 16px 48px rgba(0,0,0,0.8), 0 0 30px rgba(52,211,153,0.3); pointer-events:auto; animation:rtSlideIn 0.3s ease-out;';
+      toast.style.cssText = 'background:rgba(15, 23, 42, 0.95); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border:1.5px solid rgba(52, 211, 153, 0.7); border-radius:16px; padding:16px 18px; color:#fff; box-shadow:0 20px 50px rgba(0,0,0,0.85), 0 0 30px rgba(52,211,153,0.35); pointer-events:auto; animation:rtSlideIn 0.3s ease-out;';
       toast.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
         '<div style="font-size:0.75rem; font-weight:900; color:#34d399; display:flex; align-items:center; gap:6px; letter-spacing:0.5px;">' +
           '<span style="display:inline-block; width:9px; height:9px; background:#34d399; border-radius:50%; box-shadow:0 0 12px #34d399; animation:rtPulseDot 0.8s infinite;"></span>' +
-          '⚡ ¡RECARGA EN VIVO DETECTADA! (ATACAR AHORA)' +
+          '⚡ [ADMIN ALERT] ¡RECARGA EN VIVO DETECTADA!' +
         '</div>' +
         '<button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:#94a3b8; font-size:1.1rem; cursor:pointer;">✕</button>' +
       '</div>' +
       '<div style="font-size:0.95rem; font-weight:900; color:#fff; display:flex; align-items:center; justify-content:space-between;">' +
         '<span>👤 ' + c.nombre + ' <span style="font-size:0.7rem; color:#94a3b8; font-weight:normal;">' + (c.pais || '') + '</span></span>' +
-        '<span style="background:rgba(52,211,153,0.18); color:#34d399; border:1px solid rgba(52,211,153,0.4); padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">SALDO LISTO</span>' +
+        '<span style="background:rgba(52,211,153,0.18); color:#34d399; border:1px solid rgba(52,211,153,0.4); padding:2px 8px; border-radius:6px; font-size:0.6rem; font-weight:900;">' + (c.poderFuego || 'SALDO ACTIVO') + '</span>' +
       '</div>' +
-      '<div style="font-size:0.85rem; color:#34d399; font-weight:900; margin-top:3px;">' +
-        '💰 Recarga: $' + Number(c.recargaUSD || c.saldoUSD || 150).toFixed(2) + ' USD (' + Number(c.creditos || 1500).toLocaleString() + ' créditos)' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; background:rgba(255,255,255,0.04); padding:6px 10px; border-radius:8px;">' +
+        '<div>' +
+          '<div style="font-size:0.55rem; color:#94a3b8; text-transform:uppercase;">Gasto Con Nosotros</div>' +
+          '<div style="font-size:0.85rem; color:#38bdf8; font-weight:900;">$' + gastoHist.toFixed(2) + ' USD</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:0.55rem; color:#94a3b8; text-transform:uppercase;">Saldo Estimado Disponible</div>' +
+          '<div style="font-size:0.9rem; color:#34d399; font-weight:900;">$' + saldoEst.toFixed(2) + ' USD (' + crEst.toLocaleString() + ' cr)</div>' +
+        '</div>' +
       '</div>' +
-      '<div style="font-size:0.65rem; color:#cbd5e1; margin-top:4px;">' +
-        '🔑 ID Talkytimes (RU): <b style="color:#38bdf8; font-family:monospace; font-size:0.8rem;">' + cleanId + '</b> · Afinidad: <b style="color:#c084fc;">' + (c.perfil || 'HORACIO') + '</b>' +
+      '<div style="font-size:0.65rem; color:#cbd5e1; margin-top:6px;">' +
+        '🔑 ID Talkytimes: <b style="color:#38bdf8; font-family:monospace; font-size:0.85rem;">' + cleanId + '</b> · Agencia: <b style="color:#c084fc;">' + (c.agencia || 'GRUPO ROMERO') + '</b>' +
       '</div>' +
       '<div style="display:flex; gap:6px; margin-top:12px;">' +
-        '<button onclick="copiarTalkytimesID(\'' + cleanId + '\', \'' + c.nombre + '\')" style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-        '<a href="https://talkytimes.com/user/' + cleanId + '" target="_blank" onclick="window.abrirTalkytimes(\'' + cleanId + '\');" style="flex:1; background:rgba(56,189,248,0.2); border:1px solid rgba(56,189,248,0.5); color:#38bdf8; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:900; cursor:pointer; text-decoration:none; text-align:center; display:flex; align-items:center; justify-content:center;">🔗 Abrir Perfil</a>' +
-        '<button onclick="atacarClienteDatame(\'' + cleanId + '\', \'' + c.nombre + '\', ' + c.recargaUSD + ', ' + c.creditos + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\'); this.parentElement.parentElement.remove();" style="flex:1.4; background:linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; padding:7px; border-radius:8px; font-size:0.68rem; font-weight:900; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🎯 Atacar Ahora</button>' +
+        '<button onclick=\"copiarTalkytimesID(\'' + cleanId + '\', \'' + (c.nombre || '').replace(/'/g, '') + '\')\" style="flex:1; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:7px; border-radius:8px; font-size:0.65rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
+        '<a href="https://talkytimes.com/user/' + cleanId + '" target="_blank" rel="noopener noreferrer" onclick=\"window.abrirTalkytimes(\'' + cleanId + '\');\" style="flex:1; background:rgba(56,189,248,0.25); border:1px solid rgba(56,189,248,0.6); color:#38bdf8; padding:7px; border-radius:8px; font-size:0.68rem; font-weight:900; cursor:pointer; text-decoration:none; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px;">🔗 Abrir Perfil</a>' +
+        '<button onclick=\"atacarClienteDatame(\'' + cleanId + '\', \'' + (c.nombre || '').replace(/'/g, '') + '\', ' + saldoEst + ', ' + crEst + ', \'' + (c.copy || '').replace(/'/g, '') + '\'); this.parentElement.parentElement.remove();\" style="flex:1.4; background:linear-gradient(135deg, #10b981, #059669); border:none; color:#fff; padding:7px; border-radius:8px; font-size:0.68rem; font-weight:900; cursor:pointer; box-shadow:0 4px 15px rgba(16,185,129,0.4);">🎯 Atacar Ahora</button>' +
       '</div>';
 
       toastWrap.appendChild(toast);
-      setTimeout(function() { if (toast.parentElement) toast.remove(); }, 18000);
+      setTimeout(function() { if (toast.parentElement) toast.remove(); }, 20000);
     };
 
 

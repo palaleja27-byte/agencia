@@ -18344,6 +18344,21 @@
     // ═════════════════════════════════════════════════════════════════════════
     // 💎 FUNCIONES DE NAVEGACIÓN & ATAQUE DIRECTO A TALKYTIMES
     // ═════════════════════════════════════════════════════════════════════════
+    // Extractor quirúrgico universal de ID numérico de Talkytimes (soporta URLs completas, parámetros o IDs crudos)
+    window.extractTalkytimesId = function(input) {
+      if (!input) return '';
+      var s = String(input).trim();
+      // 1. Extraer si viene en formato URL /user/12345678 o /profile/12345678
+      var matchUrl = s.match(/(?:\/user\/|\/profile\/|\/u\/|id=)(\d{5,12})/i);
+      if (matchUrl && matchUrl[1]) return matchUrl[1];
+      // 2. Extraer cualquier bloque numérico de 5 a 11 dígitos
+      var matchDigits = s.match(/\b\d{5,11}\b/);
+      if (matchDigits && matchDigits[0]) return matchDigits[0];
+      // 3. Fallback: remover todo lo que no sea dígito
+      var digitsOnly = s.replace(/\D/g, '');
+      return digitsOnly.length >= 5 ? digitsOnly : '';
+    };
+
     window.abrirTalkytimes = function(talkytimesId) {
       if (!talkytimesId) {
         if (typeof Swal !== 'undefined') {
@@ -18351,13 +18366,13 @@
         }
         return;
       }
-      var cleanId = String(talkytimesId).replace(/\D/g, '').trim();
+      var cleanId = window.extractTalkytimesId(talkytimesId);
       if (!cleanId || cleanId.length < 5) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'error',
             title: 'ID Talkytimes Inválido',
-            text: 'El valor "' + talkytimesId + '" no es un ID numérico válido de Talkytimes (debe tener entre 6 y 10 dígitos, ej: 170699370).',
+            text: 'El valor "' + talkytimesId + '" no es un ID numérico válido de Talkytimes (debe tener entre 6 y 10 dígitos numéricos, ej: 170699370).',
             background: '#0f172a',
             color: '#fff'
           });
@@ -18367,14 +18382,13 @@
       var url = 'https://talkytimes.com/user/' + cleanId;
       var win = window.open(url, '_blank');
       if (!win || win.closed || typeof win.closed === 'undefined') {
-        // En caso de que el navegador bloquee la ventana emergente, crear un enlace temporal y simular click
         var a = document.createElement('a');
         a.href = url;
         a.target = '_blank';
         a.rel = 'noopener noreferrer';
         document.body.appendChild(a);
         a.click();
-        a.remove();
+        setTimeout(function() { a.remove(); }, 100);
       }
     };
 
@@ -18387,20 +18401,20 @@
           Swal.fire({
             icon: 'info',
             title: 'Ingresa un ID de Talkytimes',
-            text: 'Escribe o pega el ID numérico del usuario de Talkytimes (ej: 170699370) o su URL completa.',
+            text: 'Escribe o pega el ID numérico del usuario de Talkytimes (ej: 170699370) o su URL completa (ej: https://talkytimes.com/user/170699370).',
             background: '#0f172a',
             color: '#fff'
           });
         }
         return;
       }
-      var cleanId = String(raw).replace(/\D/g, '').trim();
+      var cleanId = window.extractTalkytimesId(raw);
       if (!cleanId || cleanId.length < 5) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             icon: 'error',
-            title: 'ID No Válido',
-            text: 'No se detectaron suficientes dígitos numéricos en "' + raw + '". Ejemplo válido: 170699370',
+            title: 'ID No Detectado',
+            text: 'No se detectó un ID numérico válido de Talkytimes en "' + raw + '". Ejemplo válido: 170699370',
             background: '#0f172a',
             color: '#fff'
           });
@@ -18537,39 +18551,37 @@
     window.copiarDatameID = window.copiarTalkytimesID;
 
     window.atacarClienteDatame = function(talkytimesId, nombreCliente, saldoUSD, creditos, hookText) {
-      var cleanId = String(talkytimesId).replace(/\D/g, '').trim();
-      var msg = hookText || ('Hola ' + nombreCliente + ', me encantaría charlar contigo ahora que estás en línea... ✨');
+      var cleanId = window.extractTalkytimesId(talkytimesId);
+      var msg = hookText || ('Hola ' + (nombreCliente || 'lindo') + ', me encantaría charlar contigo ahora que estás en línea... ✨');
+      var profileUrl = 'https://talkytimes.com/user/' + cleanId;
+      
       if (navigator.clipboard) {
-        navigator.clipboard.writeText(msg).then(function() {
-          if (typeof Swal !== 'undefined') {
-            Swal.fire({
-              icon: 'success',
-              title: '🎯 ABORDAR CLIENTE EN TALKYTIMES',
-              html: '<div style="text-align:left; font-size:0.8rem; color:#cbd5e1; line-height:1.5;">' +
-                '<p style="margin:4px 0;"><b>👤 Cliente:</b> <span style="color:#fff; font-weight:800;">' + nombreCliente + '</span> (ID: <code style="color:#38bdf8;">' + cleanId + '</code>)</p>' +
-                '<p style="margin:4px 0;"><b>💰 Saldo de Recarga:</b> <span style="color:#34d399; font-weight:800;">$' + Number(saldoUSD).toFixed(2) + ' USD</span> (' + Number(creditos).toLocaleString() + ' créditos)</p>' +
-                '<div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:10px; margin:10px 0;">' +
-                  '<b style="color:#38bdf8; font-size:0.75rem;">💬 Mensaje de Ataque Copiado al Portapapeles:</b><br>' +
-                  '<i style="color:#f8fafc; font-size:0.78rem;">"' + msg + '"</i>' +
-                '</div>' +
-                '<p style="font-size:0.72rem; color:#94a3b8; margin:0;">Haz clic en <b>Abrir Perfil</b> para iniciar el chat de inmediato en Talkytimes.</p>' +
-              '</div>',
-              showCancelButton: true,
-              confirmButtonText: '🔗 Abrir Perfil en Talkytimes',
-              cancelButtonText: 'Cerrar',
-              confirmButtonColor: '#0ea5e9',
-              cancelButtonColor: '#475569',
-              background: 'rgba(15, 23, 42, 0.95)',
-              color: '#fff'
-            }).then(function(result) {
-              if (result.isConfirmed) {
-                window.abrirTalkytimes(cleanId);
-              }
-            });
-          } else {
-            alert('🎯 DATOS COPIADOS AL PORTAPAPELES:\n• ID Talkytimes: ' + cleanId + '\n• Cliente: ' + nombreCliente + '\n• Recarga: $' + saldoUSD + ' USD\n• Mensaje copiado.');
-            window.abrirTalkytimes(cleanId);
-          }
+        navigator.clipboard.writeText(msg).catch(function(){});
+      }
+      
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: '🎯 ABORDAR CLIENTE EN TALKYTIMES',
+          html: '<div style="text-align:left; font-size:0.8rem; color:#cbd5e1; line-height:1.5;">' +
+            '<p style="margin:4px 0;"><b>👤 Cliente:</b> <span style="color:#fff; font-weight:800;">' + (nombreCliente || 'Cliente') + '</span> (ID: <code style="color:#38bdf8; font-weight:900;">' + cleanId + '</code>)</p>' +
+            '<p style="margin:4px 0;"><b>💰 Saldo Detectado:</b> <span style="color:#34d399; font-weight:800;">$' + Number(saldoUSD).toFixed(2) + ' USD</span> (' + Number(creditos).toLocaleString() + ' créditos)</p>' +
+            '<div style="background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:10px; margin:10px 0;">' +
+              '<b style="color:#38bdf8; font-size:0.75rem;">📋 Mensaje de Captación (Copiado al Portapapeles):</b><br>' +
+              '<i style="color:#f8fafc; font-size:0.78rem;">"' + msg + '"</i>' +
+            '</div>' +
+            '<div style="margin-top:12px; text-align:center;">' +
+              '<a href="' + profileUrl + '" target="_blank" onclick="window.abrirTalkytimes(\'' + cleanId + '\'); Swal.close();" style="display:inline-block; background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:#fff; font-weight:900; font-size:0.85rem; padding:10px 22px; border-radius:8px; text-decoration:none; box-shadow:0 4px 15px rgba(14,165,233,0.4);">' +
+                '🔗 Abrir Perfil en Talkytimes (' + cleanId + ')' +
+              '</a>' +
+            '</div>' +
+          '</div>',
+          showConfirmButton: false,
+          showCancelButton: true,
+          cancelButtonText: 'Cerrar',
+          cancelButtonColor: '#475569',
+          background: 'rgba(15, 23, 42, 0.95)',
+          color: '#fff'
         });
       } else {
         window.abrirTalkytimes(cleanId);
@@ -19393,18 +19405,17 @@
             '<span style="font-size:1.4rem;">🎯</span>' +
             '<div>' +
               '<div style="font-size:0.75rem; font-weight:900; color:#ffffff; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:8px;">' +
-                '<span>Apertura de Perfil de Cliente en Talkytimes</span>' +
+                '<span>Apertura Directa de Perfil de Cliente (Talkytimes)</span>' +
                 '<span style="background:rgba(52,211,153,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.3); padding:1px 6px; border-radius:4px; font-size:0.55rem; font-weight:800;">RUTA OFICIAL: https://talkytimes.com/user/[ID]</span>' +
               '</div>' +
               '<div style="font-size:0.6rem; color:#94a3b8; margin-top:2px;">' +
-                'Pega el ID o URL del cliente que recargó para abrirlo de inmediato en Talkytimes y agregarlo al radar en vivo.' +
+                'Pega el ID numérico o enlace del cliente que recargó para abrir directamente su perfil en Talkytimes e iniciar interacción.' +
               '</div>' +
             '</div>' +
           '</div>' +
-          '<div style="display:flex; align-items:center; gap:8px; flex:1; max-width:580px; min-width:280px;">' +
+          '<div style="display:flex; align-items:center; gap:8px; flex:1; max-width:480px; min-width:280px;">' +
             '<input id="quick-tt-search-input" type="text" placeholder="Ej: 170699370 o https://talkytimes.com/user/170699370" style="flex:1; background:#0b132b; border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:8px 12px; border-radius:8px; font-size:0.72rem; font-family:monospace; font-weight:800; outline:none;" onkeydown="if(event.key===\'Enter\') window.abrirTalkytimesDirectoInput();">' +
-            '<button onclick="window.abrirTalkytimesDirectoInput()" style="background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(14,165,233,0.4);">🔗 Abrir Perfil</button>' +
-            '<button onclick="window.modalAgregarClienteRecarga()" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:0.7rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(16,185,129,0.4);">⚡ + Registrar Recarga</button>' +
+            '<button onclick="window.abrirTalkytimesDirectoInput()" style="background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:#fff; border:none; padding:8px 16px; border-radius:8px; font-size:0.72rem; font-weight:900; cursor:pointer; white-space:nowrap; box-shadow:0 4px 14px rgba(14,165,233,0.4); display:inline-flex; align-items:center; gap:4px;">🔗 Abrir Perfil</button>' +
           '</div>' +
         '</div>' +
 

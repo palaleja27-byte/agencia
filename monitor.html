@@ -2,432 +2,625 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>RYR TITAN APEX - SUPERVISIÓN LIVE</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APEX CYBERPUNK COMMAND MATRIX | AGENCIA RR</title>
   <style>
-    :root { --bg-main: #060913; --bg-card: #0e1526; --accent-green: #10b981; --accent-cyan: #00ffcc; --accent-red: #ef4444; --accent-gold: #f59e0b; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg-main); color: #fff; font-family: system-ui, sans-serif; padding: 12px; }
-    header { display: flex; justify-content: space-between; align-items: center; background: #0b132b; border: 1px solid #1e293b; border-left: 4px solid var(--accent-cyan); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; }
-    .btn-action { background: #1e293b; color: #fff; border: 1px solid #3a506b; padding: 5px 11px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
-    .btn-action:hover { border-color: var(--accent-green); color: var(--accent-green); }
-    .btn-fines { border-color: var(--accent-gold); color: var(--accent-gold); background: rgba(245, 158, 11, 0.15); }
-    .btn-productivity { border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.15); }
-    .grid-operators { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-    .operator-card { background: var(--bg-card); border: 1px solid #1e293b; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; }
-    .profile-live-box { background: #060913; border: 1px solid #1e293b; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
-    .live-timers-container { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-    .live-chat-timer-badge { font-size: 10px; font-weight: bold; font-family: monospace; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
-    .timer-ok { background: #064e3b; color: #34d399; border: 1px solid #10b981; }
-    .timer-expired { background: #450a0a; color: #f87171; border: 1px solid #ef4444; }
-    
-    .btn-chat-op { background: #1e1b4b; border: 1px solid #8b5cf6; color: #c4b5fd; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; margin-top: 6px; }
-    .btn-chat-op:hover { background: #8b5cf6; color: #060913; }
+    :root {
+      --bg-dark: #050811;
+      --bg-card: rgba(11, 19, 43, 0.90);
+      --border-neon: #10b981;
+      --neon-emerald: #10b981;
+      --neon-violet: #8b5cf6;
+      --neon-cyan: #06b6d4;
+      --neon-red: #ef4444;
+      --neon-amber: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
 
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.88); backdrop-filter: blur(5px); z-index: 99999; justify-content: center; align-items: center; }
-    .modal-content { background: #0e1526; border: 1px solid var(--accent-cyan); border-radius: 10px; width: 940px; max-width: 95%; max-height: 88vh; padding: 20px; display: flex; flex-direction: column; gap: 12px; color: #fff; }
-    .chat-transcript { background: #0b132b; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 250px; overflow-y: auto; line-height: 1.6; color: #cbd5e1; }
-    
-    table.prod-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
-    table.prod-table th, table.prod-table td { padding: 8px 10px; border-bottom: 1px solid #1e293b; }
-    table.prod-table th { background: #060913; color: var(--accent-cyan); font-weight: bold; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: radial-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 0);
+      background-size: 24px 24px;
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace, system-ui, sans-serif;
+      padding: 14px;
+      min-height: 100vh;
+    }
+
+    /* HEADER CYBERPUNK */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      background: rgba(11, 19, 43, 0.95);
+      border: 1px solid var(--neon-emerald);
+      border-left: 4px solid var(--neon-emerald);
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+      margin-bottom: 14px;
+    }
+
+    .matrix-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: var(--neon-emerald);
+      text-transform: uppercase;
+    }
+
+    .matrix-status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11.5px;
+    }
+
+    .badge-status {
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      border: 1px solid;
+    }
+    .badge-online { background: rgba(16, 185, 129, 0.15); border-color: var(--neon-emerald); color: var(--neon-emerald); }
+    .badge-alert { background: rgba(239, 68, 68, 0.15); border-color: var(--neon-red); color: var(--neon-red); animation: pulseAlert 1.2s infinite; }
+
+    /* BOTONERA MAESTRA */
+    .master-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .btn-nuke {
+      flex: 1;
+      background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      color: #060913;
+      border: 1px solid var(--neon-emerald);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-weight: 900;
+      font-size: 12px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+      transition: all 0.2s;
+    }
+
+    .btn-nuke:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.7);
+    }
+
+    .btn-broadcast {
+      background: rgba(139, 92, 246, 0.2);
+      color: var(--neon-violet);
+      border: 1px solid var(--neon-violet);
+      padding: 0 18px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 11.5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-broadcast:hover {
+      background: var(--neon-violet);
+      color: #060913;
+    }
+
+    /* GRID TÁCTICO DE OPERADORES */
+    .tactical-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .operator-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(10px);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      position: relative;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .operator-card.active-card {
+      border-color: var(--neon-emerald);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.15);
+    }
+
+    .operator-card.sla-expired {
+      border-color: var(--neon-red) !important;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4) !important;
+      animation: pulseAlert 1s infinite;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 6px;
+    }
+
+    .op-name { font-weight: 900; color: #fff; font-size: 12.5px; }
+    .op-profile { color: var(--neon-cyan); font-size: 11px; }
+
+    .card-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-size: 10.5px;
+    }
+
+    .metric-box {
+      background: rgba(6, 9, 19, 0.6);
+      padding: 5px 7px;
+      border-radius: 4px;
+      border: 1px solid #1e293b;
+    }
+    .metric-box b { color: var(--neon-amber); }
+
+    .card-timers {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .timer-pill {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .timer-ok { background: rgba(16, 185, 129, 0.15); color: var(--neon-emerald); border: 1px solid var(--neon-emerald); }
+    .timer-warning { background: rgba(245, 158, 11, 0.15); color: var(--neon-amber); border: 1px solid var(--neon-amber); }
+    .timer-danger { background: rgba(239, 68, 68, 0.25); color: var(--neon-red); border: 1px solid var(--neon-red); }
+
+    .card-footer-btns {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .card-btn {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: bold;
+      cursor: pointer;
+      border: 1px solid #334155;
+      background: #1c2541;
+      color: #cbd5e1;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .card-btn:hover { background: var(--neon-violet); color: #fff; border-color: var(--neon-violet); }
+
+    /* PANEL INFERIOR: FIREWALL Y AUDITORÍA */
+    .bottom-matrix {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 14px;
+    }
+
+    .matrix-panel {
+      background: var(--bg-card);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel-header {
+      font-weight: 900;
+      color: var(--neon-cyan);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 6px;
+    }
+
+    /* TAG CLOUD FIREWALL */
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+
+    .firewall-tag {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid var(--neon-red);
+      color: #fca5a5;
+      padding: 3px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .firewall-tag span { cursor: pointer; color: #fff; font-weight: bold; }
+    .firewall-tag span:hover { color: var(--neon-red); }
+
+    .firewall-input-wrap {
+      display: flex;
+      gap: 6px;
+    }
+
+    .firewall-input-wrap input {
+      flex: 1;
+      background: #060913;
+      border: 1px solid #334155;
+      color: #fff;
+      padding: 7px 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      outline: none;
+    }
+
+    .firewall-input-wrap button {
+      background: var(--neon-red);
+      color: #fff;
+      border: none;
+      padding: 0 14px;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 11px;
+    }
+
+    /* MODAL DE CHAT SUPERVISOR */
+    #live-chat-drawer {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 380px;
+      height: 480px;
+      background: rgba(11, 19, 43, 0.98);
+      backdrop-filter: blur(16px);
+      border: 2px solid var(--neon-violet);
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+      z-index: 99999;
+    }
+
+    @keyframes pulseAlert {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
+
+  <!-- HEADER DE MANDO -->
   <header>
-    <div style="font-size:14px; font-weight:900; color:var(--accent-cyan);">⚡ RYR TITAN APEX - SUPERVISIÓN LIVE & RENDIMIENTO</div>
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <button id="mon-voice-toggle-btn" class="btn-action" onclick="toggleVoiceAlerts()" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#34d399;">🔊 Voz: ON</button>
-      <button id="mon-task-toggle-btn" class="btn-action" onclick="toggleTaskAlerts()" style="background:rgba(56,189,248,0.2); border:1px solid #38bdf8; color:#38bdf8;">📋 Tareas: ON</button>
-      <button class="btn-action" style="border-color:#8b5cf6; color:#c4b5fd;" onclick="openAllHandoversModal()">📑 Relevos de Turno (IA) (<span id="total-handovers-count">0</span>)</button>
-      <button class="btn-action btn-productivity" onclick="openProductivityModal()">📊 Productividad & Tiempos</button>
-      <button class="btn-action btn-fines" onclick="openFinesModal()">💰 Multas ($10.000 COP) (<span id="total-fines-count">0</span>)</button>
-      <button class="btn-action" onclick="openChatAuditsModal()">📄 Historial de Chats (MD)</button>
-      <button class="btn-action" onclick="openBannedWordsModal()">🛡️ Palabras Prohibidas</button>
+    <div class="matrix-title">
+      <span>⚡ APEX CYBERPUNK COMMAND MATRIX | AGENCIA RR</span>
+    </div>
+    <div class="matrix-status-bar">
+      <span id="active-ops-count" class="badge-status badge-online">🟢 0 OPERADORES EN LÍNEA</span>
+      <span id="sla-alert-count" class="badge-status badge-alert" style="display:none;">🚨 0 VENCIDOS</span>
+      <span id="clock" style="color:var(--text-muted);">00:00:00</span>
     </div>
   </header>
-  <div id="operators-grid" class="grid-operators"></div>
 
-  <!-- MODAL PRODUCTIVIDAD Y TIEMPOS DE RESPUESTA -->
-  <div id="modal-productivity" class="modal-overlay">
-    <div class="modal-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span style="font-weight:bold; color:#38bdf8;">📊 PANEL DE PRODUCTIVIDAD Y TIEMPOS DE RESPUESTA EN VIVO</span>
-        <button class="btn-action" onclick="closeModals()">✕</button>
+  <!-- BOTONERA MAESTRA -->
+  <div class="master-actions">
+    <button id="btn-nuke-sync" class="btn-nuke">⚡ EXTRAER & AUDITAR TODAS LAS CONVERSACIONES DEL TURNO (NUKE SYNC)</button>
+    <button id="btn-open-broadcast" class="btn-broadcast">📢 ANUNCIO GENERAL</button>
+  </div>
+
+  <!-- RADAR TÁCTICO DE OPERADORES -->
+  <div id="tactical-radar-grid" class="tactical-grid">
+    <!-- Render dinámico de tarjetas -->
+  </div>
+
+  <!-- PANEL INFERIOR -->
+  <div class="bottom-matrix">
+    <!-- GESTIÓN DE SEGURIDAD (FIREWALL 3 CAPAS) -->
+    <div class="matrix-panel">
+      <div class="panel-header">
+        <span>🛡️ GESTIÓN DE SEGURIDAD & ANTI-TRAVEL MISLEADING (FIREWALL)</span>
+        <span id="total-tags-count" style="font-size:10.5px; color:var(--text-muted);">0 Reglas Activas</span>
       </div>
-      <div style="overflow-y:auto; flex:1;">
-        <table class="prod-table">
-          <thead>
-            <tr>
-              <th>Operador</th>
-              <th>Turno</th>
-              <th>Perfiles</th>
-              <th>Cartas (Read)</th>
-              <th>Chats Pendientes</th>
-              <th>Seguimiento (Tráfico)</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody id="productivity-table-body">
-            <tr><td colspan="7" style="color:#64748b; text-align:center;">Cargando métricas...</td></tr>
-          </tbody>
-        </table>
+      <div class="firewall-input-wrap">
+        <input type="text" id="input-banned-word" placeholder="Ej: when we meet, hotel, whatsapp, promet...">
+        <button id="btn-add-banned">Bloquear Raíz</button>
+      </div>
+      <div id="tag-cloud-container" class="tag-cloud">
+        <!-- Tags dinámicos con ✕ -->
+      </div>
+    </div>
+
+    <!-- GESTIÓN DE MULTAS Y AUDITORÍA -->
+    <div class="matrix-panel">
+      <div class="panel-header">
+        <span>⚖️ AUDITORÍA DE MULTAS AUTOMÁTICAS ($10.000 COP)</span>
+        <button id="btn-refresh-fines" style="background:none; border:none; color:var(--neon-emerald); cursor:pointer; font-size:10.5px;">🔄 Actualizar</button>
+      </div>
+      <div id="fines-container" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+        <div style="color:var(--text-muted); font-size:11px; text-align:center; padding:15px;">Cargando registro de multas...</div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL RELEVOS DE TURNO SUPERVISOR -->
-  <div id="modal-handovers-sup" class="modal-overlay">
-    <div class="modal-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span style="font-weight:bold; color:var(--accent-cyan);">📑 HISTORIAL DE RELEVOS DE TURNO CON IA (ENTREGAS)</span>
-        <button class="btn-action" onclick="closeModals()">✕</button>
-      </div>
-      <div id="handovers-list-container" style="overflow-y:auto; flex:1;"></div>
+  <!-- DRAWER DE CHAT CON OPERADOR -->
+  <div id="live-chat-drawer">
+    <div style="background:#1e1b4b; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3730a3;">
+      <span id="chat-target-name" style="font-weight:bold; color:var(--neon-violet); font-size:12px;">💬 COMMS CON OPERADOR</span>
+      <span style="cursor:pointer; font-size:16px;" onclick="document.getElementById('live-chat-drawer').style.display='none'">✕</span>
     </div>
-  </div>
-
-  <!-- MODAL CHAT SUPERVISOR -> OPERADOR -->
-  <div id="modal-supervisor-chat" class="modal-overlay">
-    <div class="modal-content" style="width:500px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span id="sup-chat-title" style="font-weight:bold; color:var(--accent-cyan);">💬 COMUNICACIÓN DIRECTA CON OPERADOR</span>
-        <button class="btn-action" onclick="closeModals()">✕</button>
-      </div>
-      <div id="sup-chat-history" style="background:#060913; border:1px solid #1e293b; border-radius:6px; padding:10px; height:200px; overflow-y:auto; font-size:12px;"></div>
-      <div style="display:flex; gap:6px;">
-        <input type="text" id="input-msg-to-op" placeholder="Escribe un mensaje o advertencia directa..." style="flex:1; padding:8px; background:#0b132b; border:1px solid #3a506b; color:#fff; border-radius:6px; outline:none; font-size:12px;">
-        <button class="btn-action" style="background:#8b5cf6; color:#060913;" onclick="sendSupervisorMsg()">Enviar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL MULTAS -->
-  <div id="modal-fines" class="modal-overlay">
-    <div class="modal-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span style="font-weight:bold; color:var(--accent-gold);">💰 HISTORIAL DE MULTAS GENERADAS ($10.000 COP)</span>
-        <button class="btn-action" onclick="closeModals()">✕</button>
-      </div>
-      <div id="fines-list-container" style="overflow-y:auto; flex:1;"></div>
-    </div>
-  </div>
-
-  <div id="modal-chats" class="modal-overlay">
-    <div class="modal-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span style="font-weight:bold; color:var(--accent-cyan);">📄 HISTORIAL DE CHATS</span>
-        <button class="btn-action" onclick="closeModals()">✕</button>
-      </div>
-      <div id="chat-audits-list" style="overflow-y:auto; flex:1;"></div>
-    </div>
-  </div>
-
-  <div id="modal-banned" class="modal-overlay">
-    <div class="modal-content" style="width:550px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span style="font-weight:bold; color:var(--accent-cyan);">🛡️ PALABRAS PROHIBIDAS</span>
-        <button class="btn-action" onclick="closeModals()">✕</button>
-      </div>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="input-new-word" placeholder="Nueva palabra..." style="flex:1; padding:8px; background:#060913; border:1px solid #3a506b; color:#fff; border-radius:6px;">
-        <button class="btn-action" style="background:#10b981; color:#000;" onclick="addBannedWord()">+ Agregar</button>
-      </div>
-      <div id="banned-words-list" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;"></div>
+    <div id="chat-stream-box" style="flex:1; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; font-size:11.5px;"></div>
+    <div style="padding:10px; border-top:1px solid #1e293b; display:flex; gap:6px;">
+      <input type="text" id="input-chat-msg" placeholder="Escribe al operador..." style="flex:1; padding:7px 10px; background:#060913; border:1px solid #334155; color:#fff; border-radius:4px; font-size:11px;">
+      <button id="btn-send-chat-msg" style="background:var(--neon-violet); color:#fff; border:none; padding:0 14px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">Enviar</button>
     </div>
   </div>
 
   <script>
-    const API_URL = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) 
-      ? window.location.origin 
-      : 'https://ryr-titan-backend.onrender.com';
-    let activeChatOperator = '';
-    let supChatPollingInterval = null;
-    let cachedLiveOperators = [];
+    const API_URL = 'https://ryr-titan-backend.onrender.com';
+    let activeChatOperator = null;
 
-    let _renderBackendOffline = false;
-    let _renderOfflineRetryCount = 0;
-    async function fetchLive() {
+    // RELOJ
+    setInterval(() => {
+      document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+    }, 1000);
+
+    // 1. POLLING DEL GRID TÁCTICO (CADA 1.5s)
+    async function refreshTacticalGrid() {
       try {
-        const res = await fetch(API_URL + '/api/telemetry/live', { signal: AbortSignal.timeout(5000) });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const res = await fetch(`${API_URL}/api/telemetry/live-grid`);
         const data = await res.json();
-        _renderBackendOffline = false;
-        _renderOfflineRetryCount = 0;
-        cachedLiveOperators = data.operators || [];
-        const grid = document.getElementById('operators-grid');
-        
-        if (cachedLiveOperators.length === 0) {
-          grid.innerHTML = '<div style="grid-column:1/-1; padding:40px 20px; text-align:center; color:#94a3b8; font-size:13px; background:#0e1526; border:1px solid #1e293b; border-radius:8px;"><span style="font-size:28px; display:block; margin-bottom:8px;">📡</span><strong>Conexión establecida con Titan Backend</strong><br><span style="font-size:11px; color:#64748b;">Esperando transmisiones en vivo de la extensión de los operadores...</span></div>';
+        if (data.success) {
+          renderGrid(data.operators);
+        }
+      } catch (e) {}
+    }
+    setInterval(refreshTacticalGrid, 1500);
+    refreshTacticalGrid();
+
+    function renderGrid(operators) {
+      const grid = document.getElementById('tactical-radar-grid');
+      const opsCountBadge = document.getElementById('active-ops-count');
+      const slaAlertBadge = document.getElementById('sla-alert-count');
+
+      const onlineOps = (operators || []).filter(o => o.status !== 'OFFLINE');
+      opsCountBadge.innerText = `🟢 ${onlineOps.length} OPERADORES EN LÍNEA`;
+
+      let totalExpired = 0;
+      onlineOps.forEach(o => { if (o.hasExpiredSla) totalExpired++; });
+
+      if (totalExpired > 0) {
+        slaAlertBadge.style.display = 'inline-block';
+        slaAlertBadge.innerText = `🚨 ${totalExpired} CHATS VENCIDOS`;
+      } else {
+        slaAlertBadge.style.display = 'none';
+      }
+
+      if (!operators || operators.length === 0) {
+        grid.innerHTML = '<div style="color:var(--text-muted); padding:30px; text-align:center; grid-column:1/-1;">Esperando transmisiones en vivo de Talkytimes...</div>';
+        return;
+      }
+
+      grid.innerHTML = operators.map(op => {
+        const isExpired = op.hasExpiredSla;
+        const cardClass = op.status === 'OFFLINE' ? 'operator-card' : (isExpired ? 'operator-card active-card sla-expired' : 'operator-card active-card');
+        const statusPill = op.status === 'OFFLINE' ? '🔴 OFFLINE' : (op.isAfk ? `💤 AFK (${Math.floor(op.idleSeconds / 60)}m)` : '🟢 ACTIVO');
+
+        const timersHtml = (op.activeChatTimersList || []).map(t => {
+          const min = Math.floor(t.remaining / 60);
+          const sec = t.remaining % 60;
+          const fmt = `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
+          const pillClass = t.isExpired ? 'timer-pill timer-danger' : (t.remaining < 60 ? 'timer-pill timer-warning' : 'timer-pill timer-ok');
+          return `
+            <div class="${pillClass}">
+              <span>👤 ${t.contact}</span>
+              <span>${t.isExpired ? '🚨 VENCIDO' : `⏱️ ${fmt}`}</span>
+            </div>
+          `;
+        }).join('');
+
+        const prospCount = op.prospectingProgress ? op.prospectingProgress.count : 0;
+        const prospQuota = op.prospectingProgress ? op.prospectingProgress.quota : 10;
+
+        return `
+          <div class="${cardClass}">
+            <div class="card-header">
+              <div>
+                <div class="op-name">👤 ${op.operator} [${op.shift}]</div>
+                <div class="op-profile">🎯 Perfil: ${op.profile}</div>
+              </div>
+              <span class="badge-status ${op.isAfk ? 'badge-alert' : 'badge-online'}" style="font-size:10px;">${statusPill}</span>
+            </div>
+
+            <div class="card-metrics">
+              <div class="metric-box">✉️ Read Deuda: <b>${op.pendingReadLetters || 0}</b></div>
+              <div class="metric-box">🎯 Tráfico: <b>${prospCount}/${prospQuota}</b></div>
+              <div class="metric-box">🛡️ Infracciones: <b>${op.firewallInfractionsCount || 0}</b></div>
+              <div class="metric-box">⚡ Lag: <b>${op.domLagMs || 0}ms</b></div>
+            </div>
+
+            <div class="card-timers">
+              ${timersHtml || '<div style="color:var(--text-muted); font-size:10px;">⏱️ Todos los chats al día</div>'}
+            </div>
+
+            <div class="card-footer-btns">
+              <button class="card-btn" onclick="openDirectComms('${op.operator}')">💬 Chatear con ${op.operator}</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 2. EXTRACCIÓN MASIVA DE TURNO (NUKE SYNC)
+    document.getElementById('btn-nuke-sync').onclick = async () => {
+      if (confirm('⚡ ¿Deseas emitir la orden de EXTRACCIÓN MASIVA para que todas las extensiones activas cosechen todas las conversaciones hacia Supabase?')) {
+        const res = await fetch(`${API_URL}/api/chats/extract-all-shift`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shift: 'Mañana' })
+        });
+        const data = await res.json();
+        alert(data.message || 'Orden emitida con éxito');
+      }
+    };
+
+    // 3. ANUNCIO GENERAL (BROADCAST)
+    document.getElementById('btn-open-broadcast').onclick = async () => {
+      const msg = prompt('📢 Escribe el anuncio para desplegarlo simultáneamente en la pantalla de TODOS los operadores:');
+      if (msg) {
+        await fetch(`${API_URL}/api/supervisor/send-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isBroadcast: true, text: msg })
+        });
+        alert('📢 Anuncio enviado a todas las estaciones de trabajo.');
+      }
+    };
+
+    // 4. FIREWALL TAG CLOUD
+    async function loadFirewallTags() {
+      try {
+        const res = await fetch(`${API_URL}/api/banned-words`);
+        const data = await res.json();
+        const container = document.getElementById('tag-cloud-container');
+        document.getElementById('total-tags-count').innerText = `${data.words.length} Reglas Activas`;
+
+        container.innerHTML = data.words.map(w => `
+          <div class="firewall-tag">
+            ${w}
+            <span onclick="removeFirewallTag('${w}')">✕</span>
+          </div>
+        `).join('');
+      } catch (e) {}
+    }
+    loadFirewallTags();
+
+    document.getElementById('btn-add-banned').onclick = async () => {
+      const input = document.getElementById('input-banned-word');
+      const word = input.value.trim();
+      if (!word) return;
+
+      await fetch(`${API_URL}/api/banned-words`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word: word })
+      });
+      input.value = '';
+      loadFirewallTags();
+    };
+
+    window.removeFirewallTag = async (word) => {
+      if (confirm(`¿Desbloquear la palabra o frase "${word}"?`)) {
+        await fetch(`${API_URL}/api/banned-words/${encodeURIComponent(word)}`, { method: 'DELETE' });
+        loadFirewallTags();
+      }
+    };
+
+    // 5. REGISTRO DE MULTAS
+    async function loadFines() {
+      try {
+        const res = await fetch(`${API_URL}/api/fines`);
+        const data = await res.json();
+        const container = document.getElementById('fines-container');
+
+        if (!data.fines || data.fines.length === 0) {
+          container.innerHTML = '<div style="color:var(--text-muted); font-size:11px; text-align:center; padding:15px;">✅ No hay multas registradas en este turno.</div>';
           return;
         }
 
-        grid.innerHTML = cachedLiveOperators.map(op => {
-          const profilesHtml = op.profiles.map(p => {
-            const timersHtml = (p.activeChatTimersList || []).map(t => {
-              const min = Math.floor(t.remaining / 60);
-              const sec = t.remaining % 60;
-              const timeStr = (min < 10 ? '0' : '') + min + ':' + (sec < 10 ? '0' : '') + sec;
-              return '<span class="live-chat-timer-badge ' + (t.isExpired ? 'timer-expired' : 'timer-ok') + '">💬 ' + t.contact + ': ' + (t.isExpired ? '00:00 (VENCIDO)' : timeStr) + '</span>';
-            }).join('');
-
-            let trackingHtml = '';
-            if (p.prospectingProgress) {
-              const pr = p.prospectingProgress;
-              const min = Math.floor(pr.remainingSeconds / 60);
-              const sec = pr.remainingSeconds % 60;
-              const timeStr = (min < 10 ? '0' : '') + min + ':' + (sec < 10 ? '0' : '') + sec;
-              trackingHtml = pr.isCompleted
-                ? '<div style="font-size:10px; font-weight:bold; color:#10b981; margin-top:4px;">🎯 Seguimiento: OK [' + pr.count + '/' + pr.quota + ']</div>'
-                : '<div style="font-size:10px; font-weight:bold; color:#f59e0b; margin-top:4px;">🎯 Seguimiento: ' + timeStr + ' [' + pr.count + '/' + pr.quota + ']</div>';
-            }
-
-            return '<div class="profile-live-box">' +
-              '<div style="display:flex; justify-content:space-between;">' +
-                '<span style="font-weight:bold; color:#00ffcc;">🎯 ' + p.profileName + '</span>' +
-                '<span style="font-size:11px; color:#38bdf8;">✉️ ' + p.pendingReadLetters + ' cartas</span>' +
-              '</div>' +
-              trackingHtml +
-              (timersHtml ? '<div class="live-timers-container">' + timersHtml + '</div>' : '<div style="font-size:10px; color:#10b981; margin-top:4px;">⏱️ Todos los chats al día</div>') +
-            '</div>';
-          }).join('');
-
-          return '<div class="operator-card">' +
-            '<div>' +
-              '<div style="display:flex; justify-content:space-between; font-weight:bold; border-bottom:1px solid #1e293b; padding-bottom:6px; margin-bottom:8px;">' +
-                '<span>👤 ' + op.operatorName + ' (' + op.profiles.length + ' Perfiles)</span>' +
-                '<span style="font-size:10px; color:#38bdf8;">' + op.shift + '</span>' +
-              '</div>' +
-              profilesHtml +
-            '</div>' +
-            '<button class="btn-chat-op" onclick="openSupervisorChat(\'' + op.operatorName + '\')">💬 Chatear con ' + op.operatorName + '</button>' +
-          '</div>';
-        }).join('');
-        fetchFinesCount();
-        fetchHandoversCount();
+        container.innerHTML = data.fines.map(f => `
+          <div style="background:#060913; border:1px solid #334155; padding:8px; border-radius:4px; font-size:11px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <b style="color:var(--neon-red);">🚨 $10.000 COP</b> | <b>${f.operator_name}</b> (${f.profile_name}) <br>
+              <span style="color:var(--text-muted);">${f.reason} [Cliente: ${f.client_name}]</span>
+            </div>
+            <div style="display:flex; gap:4px;">
+              <button style="background:var(--neon-emerald); color:#000; border:none; padding:4px 8px; border-radius:3px; font-weight:bold; cursor:pointer; font-size:10px;" onclick="updateFineStatus('${f.id}', 'APPROVED')">Aprobar</button>
+              <button style="background:#475569; color:#fff; border:none; padding:4px 8px; border-radius:3px; font-weight:bold; cursor:pointer; font-size:10px;" onclick="updateFineStatus('${f.id}', 'WAIVED')">Perdonar</button>
+            </div>
+          </div>
+        `).join('');
       } catch (e) {}
     }
+    document.getElementById('btn-refresh-fines').onclick = loadFines;
+    loadFines();
 
-    async function openProductivityModal() {
-      document.getElementById('modal-productivity').style.display = 'flex';
-      const tbody = document.getElementById('productivity-table-body');
-      if (cachedLiveOperators.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color:#64748b; text-align:center;">No hay operadores conectados en este momento.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = cachedLiveOperators.map(op => {
-        const profileNames = op.profiles.map(p => p.profileName).join(', ');
-        const totalPending = op.profiles.reduce((acc, p) => acc + (p.pendingReadLetters || 0), 0);
-        const unansweredChats = op.profiles.reduce((acc, p) => acc + (p.unansweredChatsCount || 0), 0);
-        const trackingStatus = op.profiles.map(p => {
-          if (!p.prospectingProgress) return 'N/A';
-          return p.profileName + ': [' + p.prospectingProgress.count + '/' + p.prospectingProgress.quota + ']';
-        }).join('<br>');
+    window.updateFineStatus = async (id, status) => {
+      await fetch(`${API_URL}/api/fines/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      loadFines();
+    };
 
-        return '<tr>' +
-          '<td style="font-weight:bold; color:#fff;">👤 ' + op.operatorName + '</td>' +
-          '<td><span style="color:#38bdf8;">' + op.shift + '</span></td>' +
-          '<td style="color:#00ffcc;">' + profileNames + '</td>' +
-          '<td style="color:#34d399; font-weight:bold;">' + totalPending + '</td>' +
-          '<td style="color:' + (unansweredChats > 0 ? '#ef4444' : '#10b981') + '; font-weight:bold;">' + unansweredChats + '</td>' +
-          '<td style="font-size:11px;">' + trackingStatus + '</td>' +
-          '<td>' + (op.isAfkGlobal ? '<span style="color:#a855f7;">💤 Inactivo</span>' : '<span style="color:#10b981;">⚡ Activo</span>') + '</td>' +
-        '</tr>';
-      }).join('');
-    }
+    // 6. CHAT DIRECTO CON OPERADOR
+    window.openDirectComms = (opName) => {
+      activeChatOperator = opName;
+      document.getElementById('chat-target-name').innerText = `💬 COMMS CON: ${opName.toUpperCase()}`;
+      document.getElementById('live-chat-drawer').style.display = 'flex';
+      refreshChatStream();
+    };
 
-    async function fetchHandoversCount() {
-      try {
-        const res = await fetch(API_URL + '/api/handover/all');
-        const data = await res.json();
-        document.getElementById('total-handovers-count').innerText = data.handovers ? data.handovers.length : 0;
-      } catch (e) {}
-    }
-
-    async function openAllHandoversModal() {
-      document.getElementById('modal-handovers-sup').style.display = 'flex';
-      const container = document.getElementById('handovers-list-container');
-      container.innerHTML = '<p style="color:#c4b5fd;">Cargando relevos de turno...</p>';
-
-      const res = await fetch(API_URL + '/api/handover/all');
-      const data = await res.json();
-      const handovers = data.handovers || [];
-
-      if (handovers.length === 0) {
-        container.innerHTML = '<p style="color:#94a3b8;">No hay relevos generados aún. Los operadores pueden presionar "📋 Entregar Turno" en Talkytimes.</p>';
-        return;
-      }
-
-      container.innerHTML = handovers.map(h => {
-        return '<div style="background:#060913; border:1px solid #8b5cf6; border-radius:6px; padding:12px; margin-bottom:8px;">' +
-          '<div style="font-size:11px; font-weight:bold; color:#c4b5fd; margin-bottom:4px;">👤 Entregado por: ' + h.operator_name + ' [' + h.shift + '] - Perfil: ' + h.profile_name + '</div>' +
-          '<div class="chat-transcript">' + (h.report_markdown || h.reportMarkdown) + '</div>' +
-        '</div>';
-      }).join('');
-    }
-
-    async function openSupervisorChat(operatorName) {
-      activeChatOperator = operatorName;
-      document.getElementById('sup-chat-title').innerText = '💬 COMUNICACIÓN DIRECTA CON: ' + operatorName.toUpperCase();
-      document.getElementById('modal-supervisor-chat').style.display = 'flex';
-      loadSupervisorChatHistory();
-
-      if (supChatPollingInterval) clearInterval(supChatPollingInterval);
-      supChatPollingInterval = setInterval(loadSupervisorChatHistory, 1500);
-    }
-
-    async function loadSupervisorChatHistory() {
+    async function refreshChatStream() {
       if (!activeChatOperator) return;
-      try {
-        const res = await fetch(API_URL + '/api/supervisor/messages/' + activeChatOperator);
-        const data = await res.json();
-        const container = document.getElementById('sup-chat-history');
-        if (!data.messages || data.messages.length === 0) {
-          container.innerHTML = '<p style="color:#64748b;">No hay mensajes previos. Escribe para llamar la atención del operador.</p>';
-          return;
-        }
-        container.innerHTML = data.messages.map(m => {
-          return '<div style="margin-bottom:6px; text-align:' + (m.sender === 'SUPERVISOR' ? 'right' : 'left') + ';">' +
-            '<span style="background:' + (m.sender === 'SUPERVISOR' ? '#1e1b4b' : '#064e3b') + '; border:1px solid ' + (m.sender === 'SUPERVISOR' ? '#8b5cf6' : '#10b981') + '; padding:4px 8px; border-radius:6px; display:inline-block; font-size:11px;">' +
-              '<b>' + m.sender + ':</b> ' + m.text +
-            '</span>' +
-          '</div>';
-        }).join('');
-        container.scrollTop = container.scrollHeight;
-      } catch (e) {}
+      const res = await fetch(`${API_URL}/api/supervisor/messages/${activeChatOperator}`);
+      const data = await res.json();
+      const stream = document.getElementById('chat-stream-box');
+
+      stream.innerHTML = (data.messages || []).map(m => {
+        const isSup = m.sender === 'SUPERVISOR';
+        return `
+          <div style="align-self:${isSup ? 'flex-end' : 'flex-start'}; background:${isSup ? '#1e1b4b' : '#064e3b'}; border:1px solid ${isSup ? '#6366f1' : '#10b981'}; padding:6px 10px; border-radius:6px; max-width:85%;">
+            <div style="font-size:9.5px; opacity:0.75; font-weight:bold;">${isSup ? '👮 Supervisor' : `💼 ${activeChatOperator}`}</div>
+            <div>${m.text}</div>
+          </div>
+        `;
+      }).join('');
+      stream.scrollTop = stream.scrollHeight;
     }
 
-    async function sendSupervisorMsg() {
-      const input = document.getElementById('input-msg-to-op');
+    document.getElementById('btn-send-chat-msg').onclick = async () => {
+      const input = document.getElementById('input-chat-msg');
       const text = input.value.trim();
       if (!text || !activeChatOperator) return;
 
-      await fetch(API_URL + '/api/supervisor/send-message', {
+      await fetch(`${API_URL}/api/supervisor/send-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operatorName: activeChatOperator, text: text })
+        body: JSON.stringify({ operatorName: activeChatOperator, text })
       });
-
       input.value = '';
-      loadSupervisorChatHistory();
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const supInput = document.getElementById('input-msg-to-op');
-      if (supInput) {
-        supInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') sendSupervisorMsg();
-        });
-      }
-    });
-
-    async function fetchFinesCount() {
-      try {
-        const res = await fetch(API_URL + '/api/fines');
-        const data = await res.json();
-        document.getElementById('total-fines-count').innerText = data.fines ? data.fines.length : 0;
-      } catch (e) {}
-    }
-
-    async function openFinesModal() {
-      document.getElementById('modal-fines').style.display = 'flex';
-      const res = await fetch(API_URL + '/api/fines');
-      const data = await res.json();
-      const container = document.getElementById('fines-list-container');
-      if (!data.fines || data.fines.length === 0) {
-        container.innerHTML = '<p style="color:#10b981;">✅ No hay multas registradas en este turno.</p>';
-        return;
-      }
-      container.innerHTML = data.fines.map(f => {
-        return '<div style="background:#060913; border:1px solid #f59e0b; border-radius:6px; padding:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">' +
-          '<div>' +
-            '<div style="font-weight:bold; color:#fde68a;">👤 ' + f.operator_name + ' [' + f.shift + '] - 🎯 ' + f.profile_name + '</div>' +
-            '<div style="font-size:11px; color:#94a3b8;">Cliente: ' + f.client_name + ' | Motivo: ' + f.reason + '</div>' +
-            '<div style="font-size:9px; color:#64748b;">' + new Date(f.created_at).toLocaleString() + '</div>' +
-          '</div>' +
-          '<div style="font-size:14px; font-weight:900; color:#ef4444;">-$' + Number(f.amount).toLocaleString('es-CO') + ' COP</div>' +
-        '</div>';
-      }).join('');
-    }
-
-    async function openChatAuditsModal() {
-      document.getElementById('modal-chats').style.display = 'flex';
-      const res = await fetch(API_URL + '/api/chats/audits');
-      const data = await res.json();
-      const container = document.getElementById('chat-audits-list');
-      if (!data.audits || data.audits.length === 0) {
-        container.innerHTML = '<p style="color:#94a3b8;">No hay conversaciones en Supabase aún. Presiona ⚡ en Talkytimes.</p>';
-        return;
-      }
-      container.innerHTML = data.audits.map(a => {
-        return '<div style="background:#060913; border:1px solid #1e293b; border-radius:6px; padding:12px; margin-bottom:10px;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
-            '<span style="font-weight:bold; color:var(--accent-cyan);">👤 Op: ' + a.operator + ' | 🎯 Perfil: ' + a.profile + ' | 💬 Cliente: ' + a.clientName + ' (ID: ' + a.clientId + ')</span>' +
-            '<a href="data:text/markdown;charset=utf-8,' + encodeURIComponent(a.markdown) + '" download="chat_' + a.profile + '_' + a.clientId + '.md" class="btn-action" style="text-decoration:none;">📥 Descargar .MD</a>' +
-          '</div>' +
-          '<div class="chat-transcript">' + a.markdown + '</div>' +
-        '</div>';
-      }).join('');
-    }
-
-    async function openBannedWordsModal() {
-      document.getElementById('modal-banned').style.display = 'flex';
-      const res = await fetch(API_URL + '/api/banned-words');
-      const data = await res.json();
-      document.getElementById('banned-words-list').innerHTML = (data.words || []).map(w => {
-        return '<div style="background:#1c2541; border:1px solid #ef4444; color:#fca5a5; padding:3px 6px; border-radius:4px; font-size:11px;">' +
-          w + ' <span style="cursor:pointer; font-weight:bold; margin-left:4px;" onclick="delWord(\'' + w + '\')">✕</span>' +
-        '</div>';
-      }).join('');
-    }
-
-    async function addBannedWord() {
-      const word = document.getElementById('input-new-word').value.trim();
-      if (!word) return;
-      await fetch(API_URL + '/api/banned-words', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word: word }) });
-      document.getElementById('input-new-word').value = '';
-      openBannedWordsModal();
-    }
-
-    async function delWord(word) {
-      await fetch(API_URL + '/api/banned-words/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word: word }) });
-      openBannedWordsModal();
-    }
-
-    function updateVoiceAlertBtnUI() {
-      const vEnabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
-      const vBtn = document.getElementById('mon-voice-toggle-btn');
-      if (vBtn) {
-        vBtn.innerText = vEnabled ? '🔊 Voz: ON' : '🔇 Voz: OFF';
-        vBtn.style.background = vEnabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
-        vBtn.style.borderColor = vEnabled ? '#10b981' : '#ef4444';
-        vBtn.style.color = vEnabled ? '#34d399' : '#ef4444';
-      }
-
-      const tEnabled = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
-      const tBtn = document.getElementById('mon-task-toggle-btn');
-      if (tBtn) {
-        tBtn.innerText = tEnabled ? '📋 Tareas: ON' : '⏸️ Tareas: OFF';
-        tBtn.style.background = tEnabled ? 'rgba(56,189,248,0.2)' : 'rgba(239,68,68,0.2)';
-        tBtn.style.borderColor = tEnabled ? '#38bdf8' : '#ef4444';
-        tBtn.style.color = tEnabled ? '#38bdf8' : '#ef4444';
-      }
-    }
-
-    function toggleVoiceAlerts() {
-      const cur = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
-      localStorage.setItem('rr_voice_alerts_enabled', !cur ? 'true' : 'false');
-      updateVoiceAlertBtnUI();
-    }
-
-    function toggleTaskAlerts() {
-      const cur = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
-      localStorage.setItem('rr_task_alerts_enabled', !cur ? 'true' : 'false');
-      updateVoiceAlertBtnUI();
-    }
-
-    setInterval(fetchLive, 15000);
-    fetchLive();
-    updateVoiceAlertBtnUI();
+      refreshChatStream();
+    };
   </script>
 </body>
 </html>

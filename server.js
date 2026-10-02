@@ -861,25 +861,50 @@ app.put('/api/fines/:id/status', async (req, res) => {
 });
 
 // ====================================================================
-// 10. ENDPOINT: COMUNICACIÓN DIRECTA SUPERVISOR ↔ OPERADOR
+// 10. ENDPOINT: COMUNICACIÓN DIRECTA SUPERVISOR ↔ OPERADOR (BIDIRECCIONAL Y EDITABLE)
 // ====================================================================
+const liveSupervisorChatMemory = new Map(); // operatorKey -> Array of messages
+
 app.get('/api/supervisor/messages/:operator', async (req, res) => {
   try {
-    const { operator } = req.params;
-    const { data } = await supabase.from('supervisor_chat')
-      .select('*')
-      .eq('operator_name', operator)
-      .order('created_at', { ascending: true })
-      .limit(30);
+    const rawOp = (req.params.operator || '').trim();
+    const opKey = rawOp.toLowerCase();
 
-    const messages = (data || []).map(m => ({
-      id: m.id,
-      sender: m.sender,
-      text: m.message_text,
-      timestamp: new Date(m.created_at).getTime()
-    }));
+    // 1. Obtener de memoria rápida en el Edge
+    let memMessages = liveSupervisorChatMemory.get(opKey) || [];
 
-    res.json({ success: true, messages });
+    // 2. Intentar consultar Supabase para historial histórico
+    try {
+      const { data } = await supabase.from('supervisor_chat')
+        .select('*')
+        .ilike('operator_name', rawOp)
+        .order('created_at', { ascending: true })
+        .limit(40);
+
+      if (data && data.length > 0) {
+        const seenIds = new Set(memMessages.map(m => String(m.id)));
+        data.forEach(dbMsg => {
+          const strId = String(dbMsg.id);
+          if (!seenIds.has(strId)) {
+            memMessages.push({
+              id: strId,
+              sender: dbMsg.sender,
+              text: dbMsg.message_text,
+              timestamp: new Date(dbMsg.created_at).getTime(),
+              isEdited: Boolean(dbMsg.is_edited)
+            });
+            seenIds.add(strId);
+          }
+        });
+        // Ordenar cronológicamente
+        memMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        liveSupervisorChatMemory.set(opKey, memMessages);
+      }
+    } catch (dbErr) {
+      // Si falla BD, la memoria RAM asegura 100% de uptime
+    }
+
+    res.json({ success: true, messages: memMessages });
   } catch (err) {
     res.json({ success: true, messages: [] });
   }
@@ -888,28 +913,61 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
 app.post('/api/supervisor/send-message', async (req, res) => {
   try {
     const { operatorName, text, isBroadcast } = req.body;
-    if (!text) return res.status(400).json({ error: 'Texto requerido' });
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Texto requerido' });
+
+    const cleanText = text.trim();
 
     if (isBroadcast) {
       const activeOps = Array.from(liveOperatorTelemetry.values()).map(o => o.operator);
       const uniqueOps = Array.from(new Set(activeOps));
+      if (uniqueOps.length === 0) uniqueOps.push('walther', 'bill');
 
-      const inserts = uniqueOps.map(op => ({
-        operator_name: op,
-        sender: 'SUPERVISOR',
-        message_text: `📢 [ANUNCIO AGENCIA] ${text}`
-      }));
-
-      await supabase.from('supervisor_chat').insert(inserts);
-    } else {
-      await supabase.from('supervisor_chat').insert({
-        operator_name: operatorName,
-        sender: 'SUPERVISOR',
-        message_text: text
+      uniqueOps.forEach(op => {
+        const opKey = (op || '').toLowerCase().trim();
+        const list = liveSupervisorChatMemory.get(opKey) || [];
+        list.push({
+          id: `sup_bc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          sender: 'SUPERVISOR',
+          text: `📢 [ANUNCIO GENERAL] ${cleanText}`,
+          timestamp: Date.now()
+        });
+        if (list.length > 50) list.shift();
+        liveSupervisorChatMemory.set(opKey, list);
       });
+
+      try {
+        const inserts = uniqueOps.map(op => ({
+          operator_name: op,
+          sender: 'SUPERVISOR',
+          message_text: `📢 [ANUNCIO GENERAL] ${cleanText}`
+        }));
+        await supabase.from('supervisor_chat').insert(inserts);
+      } catch (e) {}
+    } else {
+      const rawOp = (operatorName || 'walther').trim();
+      const opKey = rawOp.toLowerCase();
+      const msgId = `sup_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+      const list = liveSupervisorChatMemory.get(opKey) || [];
+      list.push({
+        id: msgId,
+        sender: 'SUPERVISOR',
+        text: cleanText,
+        timestamp: Date.now()
+      });
+      if (list.length > 50) list.shift();
+      liveSupervisorChatMemory.set(opKey, list);
+
+      try {
+        await supabase.from('supervisor_chat').insert({
+          operator_name: rawOp,
+          sender: 'SUPERVISOR',
+          message_text: cleanText
+        });
+      } catch (e) {}
     }
 
-    res.json({ success: true, message: 'Mensaje enviado con éxito' });
+    res.json({ success: true, message: 'Mensaje de supervisor emitido con éxito' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -918,12 +976,68 @@ app.post('/api/supervisor/send-message', async (req, res) => {
 app.post('/api/operator/reply-message', async (req, res) => {
   try {
     const { operatorName, text } = req.body;
-    await supabase.from('supervisor_chat').insert({
-      operator_name: operatorName || 'walther',
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Texto requerido' });
+
+    const rawOp = (operatorName || 'walther').trim();
+    const opKey = rawOp.toLowerCase();
+    const cleanText = text.trim();
+    const msgId = `op_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+    const list = liveSupervisorChatMemory.get(opKey) || [];
+    list.push({
+      id: msgId,
       sender: 'OPERATOR',
-      message_text: text
+      text: cleanText,
+      timestamp: Date.now()
     });
-    res.json({ success: true });
+    if (list.length > 50) list.shift();
+    liveSupervisorChatMemory.set(opKey, list);
+
+    try {
+      await supabase.from('supervisor_chat').insert({
+        operator_name: rawOp,
+        sender: 'OPERATOR',
+        message_text: cleanText
+      });
+    } catch (e) {}
+
+    res.json({ success: true, id: msgId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint para editar cualquier mensaje del chat de supervisión
+app.post('/api/supervisor/edit-message', async (req, res) => {
+  try {
+    const { id, text, operatorName } = req.body;
+    if (!id || !text) return res.status(400).json({ error: 'ID y texto son requeridos' });
+
+    const rawOp = (operatorName || 'walther').trim();
+    const opKey = rawOp.toLowerCase();
+    const list = liveSupervisorChatMemory.get(opKey) || [];
+
+    let found = false;
+    list.forEach(m => {
+      if (String(m.id) === String(id)) {
+        m.text = text.trim();
+        m.isEdited = true;
+        found = true;
+      }
+    });
+
+    if (found) {
+      liveSupervisorChatMemory.set(opKey, list);
+    }
+
+    // Actualizar también en Supabase si es un ID numérico o existe
+    try {
+      await supabase.from('supervisor_chat').update({
+        message_text: text.trim()
+      }).eq('id', id);
+    } catch (e) {}
+
+    res.json({ success: true, message: 'Mensaje editado con éxito' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -288,9 +288,10 @@
 
   // 6. CHAT BIDIRECCIONAL SUPERVISOR-OPERADOR (BANNER & MODAL HUD)
   async function checkSupervisorDirectMessages() {
-    if (!sessionData.operator) return;
+    const rawOp = (sessionData.operator || 'walther').trim();
+    if (!rawOp) return;
     try {
-      const res = await fetch(`${API_URL}/api/supervisor/messages/${sessionData.operator}`);
+      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}`);
       const data = await res.json();
       if (data && Array.isArray(data.messages)) {
         supervisorMessagesHistory = data.messages;
@@ -478,23 +479,53 @@
     renderSupervisorChatMessages();
   }
 
+  window.editSupervisorMsgFromHud = async (msgId, currentText) => {
+    const newText = prompt('Editar tu mensaje al supervisor:', currentText);
+    if (newText === null) return;
+    const cleanNewText = newText.trim();
+    if (!cleanNewText || cleanNewText === currentText) return;
+
+    try {
+      await fetch(`${API_URL}/api/supervisor/edit-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: msgId,
+          text: cleanNewText,
+          operatorName: sessionData.operator || 'walther'
+        })
+      });
+      checkSupervisorDirectMessages();
+      showFirewallToast('✅ Mensaje de supervisión editado con éxito.', 'success');
+    } catch (e) {
+      showFirewallToast('⚠️ Error al editar mensaje.');
+    }
+  };
+
   function renderSupervisorChatMessages() {
     const stream = document.getElementById('ryr-sup-chat-stream');
     if (!stream) return;
 
     if (!supervisorMessagesHistory || supervisorMessagesHistory.length === 0) {
-      stream.innerHTML = '<div style="color:#64748b; font-size:11px; text-align:center; padding:20px;">No hay mensajes recientes del supervisor en este turno.</div>';
+      stream.innerHTML = '<div style="color:#64748b; font-size:11px; text-align:center; padding:20px;">No hay mensajes recientes del supervisor en este turno. Escribe abajo para iniciar.</div>';
       return;
     }
 
     stream.innerHTML = supervisorMessagesHistory.map(m => {
       const isSup = m.sender === 'SUPERVISOR';
       const cssClass = isSup ? 'ryr-sup-msg-supervisor' : 'ryr-sup-msg-operator';
-      const label = isSup ? '👮 Supervisor' : `💼 Tú (${sessionData.operator || 'Op'})`;
+      const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      const label = isSup ? `👮 Supervisor • ${timeStr}` : `💼 Tú (${sessionData.operator || 'Op'}) • ${timeStr}`;
+      const editedTag = m.isEdited ? '<span style="font-size:9px; color:#fbbf24; font-style:italic;"> (editado)</span>' : '';
+      const escapedText = (m.text || '').replace(/'/g, "\\'");
+
       return `
         <div class="ryr-sup-msg-item ${cssClass}">
-          <div style="font-size:9.5px; opacity:0.75; margin-bottom:2px; font-weight:bold;">${label}</div>
-          <div>${m.text}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:9.5px; opacity:0.8; margin-bottom:2px; font-weight:bold;">
+            <span>${label}${editedTag}</span>
+            <button type="button" onclick="window.editSupervisorMsgFromHud('${m.id}', '${escapedText}')" style="background:transparent; border:none; color:#cbd5e1; cursor:pointer; font-size:10px;" title="Editar mensaje">✏️</button>
+          </div>
+          <div style="word-break:break-word; font-size:11.5px; line-height:1.4;">${m.text}</div>
         </div>
       `;
     }).join('');

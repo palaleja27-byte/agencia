@@ -785,48 +785,40 @@
   // 10.1 MOTOR DE DETECCIÓN DE IDIOMA Y TRADUCCIÓN INSTANTÁNEA MULTI-LENGUAJE
   function detectLanguage(text) {
     if (!text || typeof text !== 'string') return { code: 'en', name: 'English 🇺🇸', flag: '🇺🇸' };
-    const t = text.toLowerCase();
+    const t = ` ${text.toLowerCase().replace(/[^a-zñáéíóúàâçèêëîïôûùäöüß]/g, ' ')} `;
 
     // Ruso (Cirílico)
-    if (/[\u0400-\u04FF]/.test(t)) {
+    if (/[\u0400-\u04FF]/.test(text)) {
       return { code: 'ru', name: 'Ruso 🇷🇺', flag: '🇷🇺' };
     }
 
+    // Inglés (Palabras clave exclusivas de alto peso)
+    const enWords = [' the ', ' and ', ' you ', ' are ', ' for ', ' with ', ' about ', ' sleep ', ' have ', ' having ', ' headache ', ' bus ', ' feel ', ' hold ', ' tight ', ' home ', ' please ', ' pls ', ' love ', ' good ', ' what ', ' this ', ' from ', ' your ', ' will ', ' that ', ' took ', ' soaked ', ' waiting ', ' leaving ', ' morning ', ' afternoon ', ' night ', ' coffee ', ' smiling ', ' doing '];
+    let enScore = enWords.reduce((acc, w) => acc + (t.includes(w) ? 1.5 : 0), 0);
+
     // Español
-    const esWords = [' que ', ' para ', ' con ', ' hola ', ' cómo ', ' como ', ' estás ', ' estas ', ' bien ', ' amor ', ' gracias ', ' cielo ', ' corazón ', ' corazon ', ' quiero ', ' tengo ', ' cuando ', ' donde ', ' mensaje ', ' carta ', ' fotos ', ' beso ', ' besos ', ' tú ', ' usted ', ' pero '];
+    const esWords = [' que ', ' para ', ' con ', ' hola ', ' como ', ' bien ', ' amor ', ' gracias ', ' cielo ', ' quiero ', ' tengo ', ' cuando ', ' donde ', ' mensaje ', ' carta ', ' fotos ', ' beso ', ' besos ', ' pero ', ' estoy ', ' tarde '];
     let esScore = esWords.reduce((acc, w) => acc + (t.includes(w) ? 1 : 0), 0);
-    if (/[áéíóúñ¿¡]/.test(t)) esScore += 2;
+    if (/[áéíóúñ¿¡]/.test(text)) esScore += 3;
 
     // Francés
-    const frWords = [' bonjour ', ' salut ', ' merci ', ' avec ', ' pour ', ' vous ', ' dans ', ' cette ', ' suis ', ' très ', ' amour ', ' chéri ', ' chérie ', ' bisous ', ' lettre ', ' comment ', ' aller ', ' oui ', ' c\'est '];
+    const frWords = [' bonjour ', ' salut ', ' merci ', ' avec ', ' pour ', ' vous ', ' dans ', ' cette ', ' suis ', ' très ', ' chéri ', ' bisous ', ' lettre ', ' comment ', ' oui '];
     let frScore = frWords.reduce((acc, w) => acc + (t.includes(w) ? 1 : 0), 0);
-    if (/[àâçèêëîïôûù]/.test(t)) frScore += 2;
-
-    // Alemán
-    const deWords = [' hallo ', ' guten ', ' morgen ', ' danke ', ' bitte ', ' liebe ', ' schatz ', ' wie ', ' geht ', ' dir ', ' ich ', ' nicht ', ' sehr ', ' schön ', ' kuss ', ' küsse ', ' brief ', ' und '];
-    let deScore = deWords.reduce((acc, w) => acc + (t.includes(w) ? 1 : 0), 0);
-    if (/[äöüß]/.test(t)) deScore += 2;
-
-    // Italiano
-    const itWords = [' ciao ', ' grazie ', ' amore ', ' cara ', ' caro ', ' come ', ' stai ', ' molto ', ' bella ', ' bello ', ' baci ', ' bacio ', ' per ', ' con ', ' mio ', ' mia ', ' prego '];
-    let itScore = itWords.reduce((acc, w) => acc + (t.includes(w) ? 1 : 0), 0);
+    if (/[àâçèêëîïôûù]/.test(text)) frScore += 2;
 
     // Portugués
-    const ptWords = [' olá ', ' oi ', ' obrigado ', ' obrigada ', ' você ', ' voce ', ' muito ', ' amor ', ' lindo ', ' linda ', ' beijo ', ' beijos ', ' carta ', ' tudo ', ' bem ', ' não ', ' nao '];
+    const ptWords = [' olá ', ' obrigado ', ' obrigada ', ' você ', ' voce ', ' muito ', ' lindo ', ' linda ', ' beijo ', ' beijos ', ' tudo ', ' bem ', ' não ', ' nao '];
     let ptScore = ptWords.reduce((acc, w) => acc + (t.includes(w) ? 1 : 0), 0);
-    if (/[ãõ]/.test(t)) ptScore += 2;
+    if (/[ãõ]/.test(text)) ptScore += 2;
 
-    if (esScore >= 2 && esScore >= frScore && esScore >= deScore && esScore >= itScore && esScore >= ptScore) {
+    if (enScore > 0 && enScore >= esScore && enScore >= frScore && enScore >= ptScore && !/[áéíóúñ¿¡]/.test(text)) {
+      return { code: 'en', name: 'English 🇺🇸', flag: '🇺🇸' };
+    }
+    if (esScore >= 2 && esScore >= frScore && esScore >= ptScore) {
       return { code: 'es', name: 'Español 🇪🇸', flag: '🇪🇸' };
     }
-    if (frScore >= 2 && frScore >= deScore && frScore >= itScore && frScore >= ptScore) {
+    if (frScore >= 2) {
       return { code: 'fr', name: 'Français 🇫🇷', flag: '🇫🇷' };
-    }
-    if (deScore >= 2 && deScore >= itScore && deScore >= ptScore) {
-      return { code: 'de', name: 'Deutsch 🇩🇪', flag: '🇩🇪' };
-    }
-    if (itScore >= 2 && itScore >= ptScore) {
-      return { code: 'it', name: 'Italiano 🇮🇹', flag: '🇮🇹' };
     }
     if (ptScore >= 2) {
       return { code: 'pt', name: 'Português 🇧🇷', flag: '🇧🇷' };
@@ -1252,67 +1244,87 @@
         const lastMsgLower = (lastClientMsg || '').toLowerCase();
         const rawBodyText = document.body.innerText.toLowerCase();
 
-        // 1. Detectar si habla de café, comida, bebida o foto de café
+        // 1. Detectar si habla de dolor de cabeza, enfermedad, lluvia, frío, autobús, analgésico o reposo
+        const hasSicknessOrHeadache = /(headache|head is aching|pain|analgesic|pill|medicine|fever|sick|ill|flu|rain|cold|bus|hold me|tired|sleep for a while|resting|dolor|cabeza|enferm|medicament|pastilla|fiebre|lluvia|cansad|dormir un rato)/i.test(fullChatString) || /(headache|head is aching|pain|analgesic|fever|sick|pill|medicine|tired|sleep|resting|dolor|cabeza|fiebre)/i.test(lastMsgLower);
+
+        // 2. Detectar si habla de café, comida, bebida o foto de café
         const hasCoffeeOrFood = /(coffee|caf[eé]|tea|drink|drinking|cup|breakfast|dinner|lunch|comiendo|tomando|delici|taza)/i.test(fullChatString) || /(coffee|caf[eé]|tea|cup)/i.test(lastMsgLower);
 
-        // 2. Detectar si pregunta si nos vamos o si estamos ocupados
+        // 3. Detectar si pregunta si nos vamos o si estamos ocupados
         const hasLeavingOrBusy = /(leaving|leaving already|have something to do|going away|say goodbye|busy|ocupad|te vas|tienes algo que hacer|te tienes que ir)/i.test(lastMsgLower) || /(leaving|have something to do)/i.test(fullChatString);
 
-        // 3. Detectar si hubo reacción a Newsfeed / Post
+        // 4. Detectar si hubo reacción a Newsfeed / Post
         const hasNewsfeedLiked = rawBodyText.includes('liked the newsfeed post') || rawBodyText.includes('liked your post') || lastMsgLower.includes('newsfeed') || lastMsgLower.includes('post');
 
-        // 4. Detectar piropos, elogios o nombres cariñosos
-        const isCompliment = /(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)/i.test(lastMsgLower);
+        // 5. Detectar piropos, elogios o nombres cariñosos
+        const isCompliment = /(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|mahal|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)/i.test(lastMsgLower);
 
-        // 5. Detectar saludo o pregunta de cómo está
+        // 6. Detectar saludo o pregunta de cómo está
         const isGreeting = /(how are you|how is your day|how are things|what are you up to|hello|hi\b|hey\b|good morning|good afternoon|good evening|c[oó]mo est[aá]s|qu[eé] tal|hola)/i.test(lastMsgLower);
 
         let options = [];
 
-        if (hasCoffeeOrFood || (hasLeavingOrBusy && hasCoffeeOrFood)) {
+        if (hasSicknessOrHeadache) {
           if (detectedLang.code === 'es') {
             options = [
               {
-                target: `¡Ese café se ve delicioso! ❤️ Jamás me iría sin antes tomarme un lindo momento para hablar contigo... ¿Cómo va tu tarde?`,
-                es: `Le aseguras que no te vas, elogias su café y le das atención cálida y exclusiva.`
+                target: `Quiero quedarme aquí haciéndote compañía hasta que te sientas mucho mejor ❤️ Cierra tus ojitos y dime, ¿qué es lo que más te reconforta cuando estás descansando?`,
+                es: `🪝 GANCHO PARA AVIVAR: Acompañamiento íntimo y pregunta reconfortante para seguir chateando.`
               },
               {
-                target: `¡Ver tu café me dio antojo de uno a mí también! 😉 Cuéntame, ¿estás disfrutando de un momento relajante hoy?`,
-                es: `Complicidad divertida sobre el café y pregunta abierta sobre su descanso.`
+                target: `Por favor descansa, tómate tu analgésico y abrígate mucho del frío y la lluvia... Me encantaría abrazarte muy fuerte justo ahora para que duermas en paz ❤️`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazo.`
               },
               {
-                target: `Disfruta cada sorbo de ese café ❤️ Siempre tengo tiempo para ti... ¿Qué planes tienes para el resto de tu día?`,
-                es: `Validas tu interés sincero en ella y abres conversación sobre su rutina.`
-              }
-            ];
-          } else if (detectedLang.code === 'pt') {
-            options = [
-              {
-                target: `Esse café parece delicioso! ❤️ Eu jamais iria embora sem antes ter um momento especial com você... Como está sendo sua tarde?`,
-                es: `Aseguras tu presencia y elogias su café.`
-              },
-              {
-                target: `Ver o seu café me deu uma vontade de tomar um também! 😉 Me conta, está tendo um momento tranquilo hoje?`,
-                es: `Complicidad sobre el café y su día.`
-              },
-              {
-                target: `Aproveite cada gole desse café ❤️ Sempre tenho tempo para falar com você... O que você vai fazer mais tarde?`,
-                es: `Atención exclusiva y pregunta sobre planes.`
+                target: `Estás en mis pensamientos, cariño. Cuando despiertes, envíame una foto tuya descansando para saber que estás bien 😉 Yo te mandaré una especial también.`,
+                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de descanso con reciprocidad protectora.`
               }
             ];
           } else {
             options = [
               {
-                target: `That coffee looks so delicious! ❤️ I could never just leave without spending some sweet time talking with you... How is your afternoon going?`,
-                es: `Le aseguras que te quedas a hablar, elogias su foto de café y preguntas por su tarde.`
+                target: `I want to stay right here keeping you company until you feel all better ❤️ Close your eyes and tell me, what makes you feel the most comforted when you're resting?`,
+                es: `🪝 GANCHO PARA AVIVAR: Acompañamiento íntimo y pregunta reconfortante para que siga chateando sin esfuerzo.`
               },
               {
-                target: `Seeing your coffee actually made me crave one too 😉 Tell me, are you enjoying a nice and relaxing afternoon?`,
-                es: `Complicidad coqueta sobre el café y curiosidad sobre su momento de relax.`
+                target: `Please rest, take your medicine, and stay warm away from that rain... I wish I could wrap my arms around you and hold you tight right now so you can sleep peacefully ❤️`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazarte.`
               },
               {
-                target: `Enjoy every single sip of that delicious coffee! ❤️ I always love making time just for you... What are your plans for the rest of today?`,
-                es: `Validación afectiva y apertura de diálogo sobre su rutina.`
+                target: `You are in my thoughts, sweetheart. When you wake up, send me a little picture of you resting so I know you're feeling better 😉 I'll send you an exclusive photo too!`,
+                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de descanso con reciprocidad protectora.`
+              }
+            ];
+          }
+        } else if (hasCoffeeOrFood || (hasLeavingOrBusy && hasCoffeeOrFood)) {
+          if (detectedLang.code === 'es') {
+            options = [
+              {
+                target: `¡Ver tu café me dio antojo a mí también! 😉 Cuéntame, ¿cuál es tu postre o antojo favorito para acompañar una buena charla?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
+              },
+              {
+                target: `¡Ese café se ve delicioso! ❤️ Jamás me iría sin antes tomarme un lindo momento para hablar contigo... ¿Cómo va tu tarde?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Aseguras tu atención exclusiva y elogias su café/comida.`
+              },
+              {
+                target: `La próxima vez que tomes café, envíame una foto de tu sonrisa disfrutándolo para sentir que lo compartimos 😉 ¿Trato?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Petición magnética de foto cotidiana vinculada a su café.`
+              }
+            ];
+          } else {
+            options = [
+              {
+                target: `Seeing your coffee actually made me crave one too 😉 Tell me, what's your favorite sweet treat or guilty pleasure when taking a break?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
+              },
+              {
+                target: `That coffee looks so delicious! ❤️ I could never just leave without taking a sweet moment to chat with you... How is your day going?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Respuesta directa sobre su café/comida asegurando tu tiempo exclusivo.`
+              },
+              {
+                target: `Next time you have coffee, send me a picture of your smile enjoying it so we can share the moment together 😉 Deal?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Petición magnética de foto cotidiana vinculada a su café.`
               }
             ];
           }
@@ -1320,31 +1332,31 @@
           if (detectedLang.code === 'es') {
             options = [
               {
-                target: `¡Para nada! Siempre tengo un momento especial reservado solo para ti ❤️ Dime, ¿qué estás haciendo justo ahora?`,
-                es: `Le confirmas que estás disponible y muestras interés genuino.`
+                target: `Siempre tengo un momento especial reservado solo para ti ❤️ Dime, ¿qué es algo curioso o divertido que te haya pasado hoy?`,
+                es: `🪝 GANCHO PARA AVIVAR: Despierta curiosidad y anima el diálogo.`
               },
               {
-                target: `Nunca estoy demasiado ocupada para alguien que me hace sonreír tanto 😉 ¿Cómo te estás sintiendo hoy?`,
-                es: `Elogio afectuoso y pregunta sobre sus emociones.`
+                target: `¡Para nada! Nunca estoy demasiado ocupada para alguien que me hace sonreír tanto 😉 ¿Cómo te estás sintiendo hoy?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
               },
               {
-                target: `Estaba tomándome una pequeña pausa, pero hablar contigo es mi momento favorito del día ✨ ¿Qué tienes planeado para hoy?`,
-                es: `Validación de la conexión y apertura de conversación.`
+                target: `Estaba sonriendo pensando en nuestras charlas ✨ Dime, ¿qué es algo que siempre te alegra el día sin falta?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Validación emocional y anclaje a sensaciones positivas.`
               }
             ];
           } else {
             options = [
               {
-                target: `Not at all! I always want to make a special moment just to chat with you ❤️ Tell me, what's on your mind right now?`,
-                es: `Le aseguras tu atención y preguntas qué piensa en este momento.`
+                target: `I always have a special moment reserved just for you ❤️ Tell me, what's one secret dream or fun thought you've had today?`,
+                es: `🪝 GANCHO PARA AVIVAR: Despierta misterio y curiosidad para mantener el chat activo.`
               },
               {
-                target: `I'm never too busy for someone who brings such a genuine smile to my face 😉 How are you feeling today?`,
-                es: `Halago dulce y pregunta afectuosa sobre su estado de ánimo.`
+                target: `Not at all, sweetie! I'm never too busy for someone who brings such a genuine smile to my face 😉 How are you feeling today?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
               },
               {
-                target: `I was just taking a little breather, but hearing from you is always the highlight of my day ✨ What are you up to?`,
-                es: `Creación de complicidad romántica y pregunta cotidiana.`
+                target: `I was just smiling looking at our messages ✨ Tell me, what is something that always brightens up your mood without fail?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Validación emocional y anclaje a sensaciones positivas.`
               }
             ];
           }
@@ -1352,31 +1364,31 @@
           if (detectedLang.code === 'es') {
             options = [
               {
-                target: `Vi que te gustó mi publicación... Me alegra muchísimo que hayas conectado con ese pensamiento ❤️ ¿Qué tipo de momentos te transmiten más paz?`,
-                es: `Conexión emocional directa con la publicación y pregunta de intimidad.`
+                target: `Me encanta saber que estás tan atento a mis publicaciones 😉 ¿Qué fue lo primero que sentiste o pensaste al verla?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta intrigante sobre su reacción inmediata al post.`
               },
               {
-                target: `Me encanta saber que estás atento a mis pensamientos y fotos 😉 ¿Qué fue lo primero que sentiste al verla?`,
-                es: `Halago sutil sobre su atención y llamada a compartir sensaciones.`
+                target: `Vi que te gustó mi publicación... Me alegra muchísimo que hayas conectado con ese pensamiento ❤️ ¿Qué momentos te dan más paz?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Agradecimiento por su reacción y conexión íntima de tranquilidad.`
               },
               {
-                target: `Esa foto guarda un recuerdo muy especial para mí ✨ Dime, ¿qué fue lo más bonito que te ocurrió hoy?`,
-                es: `Conversación fluida sobre recuerdos y apertura de día.`
+                target: `Esa foto guarda un recuerdo muy lindo para mí ✨ Envíame una foto de lo que estás haciendo hoy para conocer más tu mundo 😉`,
+                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de su entorno con reciprocidad.`
               }
             ];
           } else {
             options = [
               {
+                target: `I love knowing you are paying close attention to my world and my thoughts 😉 What was the first thing that crossed your mind when you saw it?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta intrigante sobre su reacción inmediata al post.`
+              },
+              {
                 target: `I saw you liked my post... It truly warms my heart that you connected with that thought ❤️ What kind of quiet moments bring you the most peace?`,
-                es: `Conexión emocional directa con el post que le gustó y pregunta de calma personal.`
+                es: `💬 CONTESTAR CONVERSACIÓN: Agradecimiento por su like en el post y conexión íntima de tranquilidad.`
               },
               {
-                target: `I love knowing you are paying close attention to my world and my thoughts 😉 What was the first thing that came to your mind when you saw it?`,
-                es: `Validación coqueta sobre su atención a tus fotos y apertura de diálogo.`
-              },
-              {
-                target: `That picture holds such a special place in my thoughts ✨ Tell me, what was the most beautiful thing that happened in your day today?`,
-                es: `Pregunta abierta para conocer detalles de su rutina sin presiones.`
+                target: `That picture holds a very special memory for me ✨ Send me a picture of what you're doing right now so I can see your world too 😉`,
+                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de su entorno a cambio de la foto del post.`
               }
             ];
           }
@@ -1384,31 +1396,31 @@
           if (detectedLang.code === 'es') {
             options = [
               {
-                target: `Siempre sabes exactamente qué decir para hacerme sonreír con tus palabras dulces 😉 ¿Cómo te ha tratado tu día hoy? ❤️`,
-                es: `Devolución de halago con picardía y pregunta sobre su bienestar.`
+                target: `Siempre sabes cómo hacerme suspirar con tus palabras tan dulces 😉 Dime, ¿cuál ha sido el detalle más romántico de tu vida?`,
+                es: `🪝 GANCHO PARA AVIVAR: Indagación romántica profunda para mantenerlo emocionado.`
               },
               {
-                target: `Saber de ti siempre es la parte más linda de mi día ❤️ Dime, ¿qué estás haciendo justo en este momento?`,
-                es: `Afecto recíproco y curiosidad por su actividad actual.`
+                target: `Saber de ti siempre es la parte más linda y especial de mi día ❤️ ¿Cómo te ha tratado la vida hoy, cariño?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Devolución cariñosa y agradecida a su halago.`
               },
               {
-                target: `¡Estaba sonriendo pensando en ti! Envíame una foto de tu sonrisa ahora mismo y yo te enviaré una especial a cambio 😉 ¿Trato?`,
-                es: `Gancho de reciprocidad e intercambio de fotos cotidianas.`
+                target: `¡Estaba sonriendo pensando en ti! Envíame una foto de tu sonrisa ahora mismo y yo te enviaré una exclusiva a cambio 😉 ¿Trato?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Gancho de alto impacto para intercambio recíproco de fotos.`
               }
             ];
           } else {
             options = [
               {
-                target: `You always know how to make my heart flutter with your sweet words 😉 How has your day been treating you so far? ❤️`,
-                es: `Devolución de elogio con dulzura y pregunta abierta sobre su día.`
+                target: `You always know how to make my heart flutter with your sweet words 😉 Tell me, what is the most romantic thing someone has ever done for you?`,
+                es: `🪝 GANCHO PARA AVIVAR: Indagación romántica profunda para mantenerlo soñando despierto.`
               },
               {
-                target: `Hearing from you is honestly the sweetest part of my day ❤️ Tell me, what are you up to right at this moment?`,
-                es: `Afecto recíproco y curiosidad íntima sobre lo que hace.`
+                target: `Hearing from you is honestly the sweetest part of my day ❤️ How has your day been treating you so far, my dear?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Devolución cariñosa y agradecida a su halago.`
               },
               {
-                target: `I was just smiling thinking about you! Send me a picture of your smile right now, and I'll send you an exclusive one in return 😉 Deal?`,
-                es: `Gancho de alto impacto para intercambio recíproco de fotos.`
+                target: `I was just blushing thinking about you! Send me a picture of your smile right now, and I'll send you an exclusive photo in return 😉 Deal?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Desafío de intercambio de fotos con reciprocidad irresistible.`
               }
             ];
           }
@@ -1416,31 +1428,31 @@
           if (detectedLang.code === 'es') {
             options = [
               {
-                target: `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo empezó tu mañana?`,
-                es: `Respuesta cálida a su saludo y pregunta sobre su mañana.`
+                target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es algo que te haya sacado una gran sonrisa hoy?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta positiva y curiosa para dinamizar la conversación.`
               },
               {
-                target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es lo que más te ha tenido ocupado hoy?`,
-                es: `Interés genuino por sus actividades cotidianas.`
+                target: `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo empezó tu día hoy?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Saludo dulce y apertura de diálogo sobre su rutina.`
               },
               {
-                target: `El tiempo siempre se siente más ligero y agradable cuando hablamos ✨ Cuéntame algo que te haya hecho feliz el día de hoy.`,
-                es: `Creación de complicidad y enfoque en emociones positivas.`
+                target: `Cada vez que veo un mensaje tuyo me alegro mucho ✨ Dime, ¿qué estás haciendo justo en este momento?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Validación coqueta para provocar respuesta inmediata.`
               }
             ];
           } else {
             options = [
               {
+                target: `I was just taking a little break and hoping to hear from you 😉 What is one thing that has been keeping you smiling lately?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta positiva y curiosa para dinamizar la conversación.`
+              },
+              {
                 target: `I'm having a calm day, and seeing your message just made it so much brighter ❤️ How did your morning start off?`,
-                es: `Respuesta afectuosa a su saludo y pregunta sobre su inicio de día.`
+                es: `💬 CONTESTAR CONVERSACIÓN: Saludo dulce y apertura de diálogo sobre su rutina.`
               },
               {
-                target: `I was actually just taking a little break and hoping to hear from you 😉 What has been keeping you busy today?`,
-                es: `Interés sincero en su rutina y ocupaciones.`
-              },
-              {
-                target: `Time always feels so much softer and warmer whenever we chat ✨ Tell me, what was one thing that made you smile today?`,
-                es: `Generación de complicidad romántica y búsqueda de emociones positivas.`
+                target: `Every time your name pops up on my screen, my day gets a little sweeter ✨ What are you up to right at this moment?`,
+                es: `✨ LLAMAR LA ATENCIÓN: Validación coqueta para provocar respuesta inmediata.`
               }
             ];
           }
@@ -1449,31 +1461,31 @@
           if (detectedLang.code === 'es') {
             options = [
               {
-                target: `Tienes una mirada muy dulce y una vibra muy tranquila en tus fotos ❤️ Dime, ¿cuál es tu forma favorita de relajarte en un día libre?`,
-                es: `Gancho de atracción basado en su energía y pasatiempos.`
+                target: `Tienes una energía muy dulce y una mirada muy serena en tus fotos ❤️ Dime, ¿qué es algo que te apasione profundamente en la vida?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta de atracción sobre pasiones personales.`
               },
               {
-                target: `Tuve una bonita corazonada de saludarte hoy 😉 Cuéntame un pequeño sueño o secreto tuyo que pocos conozcan...`,
-                es: `Pregunta intrigante de curiosidad y complicidad.`
+                target: `Tuve una hermosa corazonada de saludarte el día de hoy 😉 ¿Cómo te ha estado tratando tu semana?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Saludo espontáneo y abierto.`
               },
               {
-                target: `Tu sonrisa de verdad me llamó la atención ✨ ¿Qué es algo que te apasione profundamente en la vida?`,
-                es: `Conversación profunda sobre pasiones sin compromisos geográficos.`
+                target: `Tu sonrisa de verdad me llamó mucho la atención ✨ Cuéntame un pequeño sueño o secreto tuyo que pocos conozcan...`,
+                es: `✨ LLAMAR LA ATENCIÓN: Gancho intrigante y de misterio.`
               }
             ];
           } else {
             options = [
               {
-                target: `You have such a warm and gentle energy in your photos ❤️ Tell me, what is your favorite way to unwind when you have a moment just for yourself?`,
-                es: `Atracción inicial basada en su aura y momentos de relajación.`
+                target: `You have such a warm and gentle energy in your photos ❤️ Tell me, what is something you are truly passionate about in your everyday life?`,
+                es: `🪝 GANCHO PARA AVIVAR: Pregunta de alto impacto sobre sus pasiones personales.`
               },
               {
-                target: `I had a sudden lovely feeling that I should say hello to you today 😉 Tell me a small dream or passion of yours that few people know about...`,
-                es: `Gancho intrigante que despierta curiosidad y deseo de abrirse.`
+                target: `I had a sudden lovely feeling that I should say hello to you today 😉 How is your day treating you so far?`,
+                es: `💬 CONTESTAR CONVERSACIÓN: Saludo espontáneo y abierto.`
               },
               {
-                target: `Your smile genuinely caught my attention ✨ What is something you are truly passionate about in your everyday life?`,
-                es: `Pregunta de alto impacto sobre sus pasiones sin tocar temas geográficos.`
+                target: `Your smile genuinely caught my attention ✨ Tell me a small dream or secret of yours that few people know about...`,
+                es: `✨ LLAMAR LA ATENCIÓN: Gancho intrigante y de misterio que despierta curiosidad.`
               }
             ];
           }
@@ -2362,12 +2374,12 @@
         </div>
         
         <div class="intel-quick-actions">
-          <button class="intel-quick-btn" onclick="window.sendQuickPrompt('de donde es')">📍 Ubicación</button>
-          <button class="intel-quick-btn" onclick="window.sendQuickPrompt('cuantos años tiene')">🎂 Edad</button>
-          <button class="intel-quick-btn" onclick="window.sendQuickPrompt('tiene hijos, como se llaman')">👨‍👩‍👧 Familia</button>
-          <button class="intel-quick-btn" onclick="window.sendQuickPrompt('pasar a cartas y pedir foto')">💌 Pasar a Cartas</button>
-          <button class="intel-quick-btn" onclick="window.sendQuickPrompt('pedirle fotos de su dia')">📸 Pedir Foto</button>
-          <button class="intel-quick-btn" onclick="window.sendQuickPrompt('dame un gancho para enamorarla')">✨ Gancho</button>
+          <button class="intel-quick-btn" data-prompt="de donde es">📍 Ubicación</button>
+          <button class="intel-quick-btn" data-prompt="cuantos años tiene">🎂 Edad</button>
+          <button class="intel-quick-btn" data-prompt="tiene hijos, como se llaman">👨‍👩‍👧 Familia</button>
+          <button class="intel-quick-btn" data-prompt="pasar a cartas y pedir foto">💌 Pasar a Cartas</button>
+          <button class="intel-quick-btn" data-prompt="pedirle fotos de su dia">📸 Pedir Foto</button>
+          <button class="intel-quick-btn" data-prompt="dame un gancho para enamorarla">✨ Gancho</button>
         </div>
 
         <div id="intel-messages-stream" class="intel-chat-stream">
@@ -2386,10 +2398,19 @@
       panel.classList.remove('open');
     };
 
-    window.sendQuickPrompt = (promptText) => {
-      document.getElementById('input-intel-query').value = promptText;
-      askIntelligenceQuery();
-    };
+    panel.querySelectorAll('.intel-quick-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        const promptText = btn.getAttribute('data-prompt');
+        if (promptText) {
+          const inputEl = document.getElementById('input-intel-query');
+          if (inputEl) {
+            inputEl.value = promptText;
+            askIntelligenceQuery();
+          }
+        }
+      };
+    });
 
     document.getElementById('btn-send-intel-query').onclick = askIntelligenceQuery;
     document.getElementById('input-intel-query').addEventListener('keydown', (e) => {
@@ -2405,7 +2426,7 @@
     const fullCorpus = `${allChatText} ${allLettersText}`;
 
     // Datos demográficos del cliente
-    const country = bioData?.country || 'United States';
+    const country = bioData?.country || 'Registrado en perfil';
     const birthDate = bioData?.birthDate || 'En perfil';
     const marital = bioData?.maritalStatus || 'Single / Soltera';
 
@@ -2418,14 +2439,15 @@
     if (/qu[eé]\s+(sabes|puedes|haces)|capacidades|ayuda|funciones|para qu[eé]\s+sirves/i.test(q)) {
       return `🧠 **Soy tu Co-Piloto Táctico & Asistente IA 360°:**\n\n` +
         `Puedo ayudarte en tiempo real con:\n` +
-        `1. 📍 **Ubicación & Cultura:** Pregúntame *"de dónde es"* para darte su país y ciudad.\n` +
+        `1. 📍 **Ubicación & Cultura:** Pregúntame *"de dónde es"* para darte su país y análisis cultural.\n` +
         `2. 🎂 **Edad & Biografía:** Pregúntame *"cuántos años tiene"* o *"cuándo nació"*.\n` +
         `3. 👨‍👩‍👧 **Familia & Mascotas:** Pregúntame *"tiene hijos"* o *"cómo se llaman"*.\n` +
         `4. 🎨 **Gustos & Pasiones:** Pregúntame *"cuáles son sus gustos"* o *"qué le gusta hacer"*.\n` +
         `5. 💰 **Poder Adquisitivo:** Pregúntame *"cuántos créditos tiene"* o *"cuánto gasta"*.\n` +
-        `6. ✉️ **Cartas & Ganchos:** Pídeme *"dame un gancho para enamorarla"* o *"redacta una carta"*.\n` +
-        `7. 🛡️ **Seguridad:** Monitoreo activo para evitar infracciones de Travel Misleading.\n\n` +
-        `💡 *Tip:* Todas las respuestas incluyen la explicación en español y el mensaje en inglés listo para enviar.`;
+        `6. 💌 **Embudo a Cartas:** Pídeme *"pasar a cartas"* para migrarlo estratégicamente.\n` +
+        `7. 📸 **Pedir Fotos:** Pídeme *"pedir foto"* con gancho de reciprocidad.\n` +
+        `8. ✨ **Ganchos & Seducción:** Pídeme *"dame un gancho para enamorarla"*.\n\n` +
+        `💡 *Tip:* Todas las respuestas incluyen la explicación en español, el mensaje en inglés listo para enviar con 1 clic y su traducción.`;
     }
 
     // 0.1 Gustos / Intereses / Hobbies / Qué le gusta hacer
@@ -2471,9 +2493,9 @@
         `- **País:** ${country}\n` +
         `- **Detalles del Chat:** ${locationDetail}\n\n` +
         `💌 **Mensaje Sugerido en Inglés (Listo para Enviar):**\n` +
-        `"I've always found people from ${country} to have such a beautiful spirit... Tell me, how is the weather over there today? ❤️"\n\n` +
+        `"I've always loved connecting with someone who has such a genuine and warm spirit like yours ❤️ How is your day going today?"\n\n` +
         `📝 **Traducción al Español:**\n` +
-        `*"Siempre he sentido que las personas de ${country} tienen una energía hermosa... Cuéntame, ¿cómo está el clima por allá hoy? ❤️"*`;
+        `*"Siempre me ha encantado conectar con alguien que tiene un espíritu tan genuino y cálido como el tuyo ❤️ ¿Cómo va tu día hoy?"*`;
     }
 
     // 2. Edad / Años / Nacimiento / Cumpleaños
@@ -2522,18 +2544,13 @@
 
     // 4.1 EMBUDO A CARTAS (TRANSICIÓN TÁCTICA CHAT -> CARTAS / MAX RENTABILIDAD)
     if (/pasar a carta|carta|cartas|embudo|funnel|transici[oó]n|enviar carta|cambiar a carta/i.test(q)) {
-      let anchorDetail = 'nuestras conversaciones';
-      if (fullCorpus.includes('dog') || fullCorpus.includes('perro')) anchorDetail = 'tu perrito y tu día a día';
-      else if (fullCorpus.includes('work') || fullCorpus.includes('trabajo')) anchorDetail = 'tus proyectos y lo apasionado que eres';
-      else if (country) anchorDetail = `tu vida en ${country}`;
-
       return `${missingHistoryAlert}💌 **Estrategia del Embudo de Cartas (Máxima Rentabilidad & Fidelización):**\n` +
         `- **Objetivo Táctico:** Tras 1-2 días de chat rápido, migrar la conversación a cartas. Las cartas generan mayor valor y apego emocional.\n` +
         `- **Ancla Psicológica:** Justificar la carta porque el chat es muy veloz y quieres escribirle con calma, desde el corazón y compartir fotos exclusivas.\n\n` +
         `💌 **Mensaje de Transición al Chat (Inglés - Listo para Enviar):**\n` +
-        `"Sweetheart, as much as I love our quick chats, time always flies too fast here... I want to write you a long, meaningful letter where I can open up my heart, tell you about ${anchorDetail}, and attach a private photo I took just for you ❤️ Watch out for my letter in your inbox, okay? Promise you'll reply with a photo of your smile too!"\n\n` +
+        `"Sweetheart, as much as I love our quick chats, time always flies too fast here... I want to write you a long, meaningful letter where I can open up my heart and attach a private photo I took just for you ❤️ Watch out for my letter in your inbox, okay? Promise you'll reply with a photo of your smile too!"\n\n` +
         `📝 **Traducción al Español:**\n` +
-        `*"Cariño, por más que me encantan nuestros chats rápidos, el tiempo vuela muy rápido aquí... Quiero escribirte una carta larga y especial donde pueda abrirte mi corazón, contarte sobre ${anchorDetail} y adjuntarte una foto privada que me tomé solo para ti ❤️ ¡Revisa tu buzón de cartas, prométeme que me responderás con una foto de tu sonrisa también!"*`;
+        `*"Cariño, por más que me encantan nuestros chats rápidos, el tiempo vuela muy rápido aquí... Quiero escribirte una carta larga y especial donde pueda abrirte mi corazón y adjuntarte una foto privada que me tomé solo para ti ❤️ ¡Revisa tu buzón de cartas, prométeme que me responderás con una foto de tu sonrisa también!"*`;
     }
 
     // 4.2 PETICIÓN DE FOTOS (ENGAGEMENT & VÍNCULO PROFUNDO)
@@ -2580,9 +2597,11 @@
       ];
       const selected = hooks[Math.floor(Math.random() * hooks.length)];
 
-      return `${missingHistoryAlert}💌 **Gancho Táctico de Alta Seducción (Español & Inglés):**\n\n` +
-        `🇺🇸 **Inglés:**\n${selected.en}\n\n` +
-        `🇪🇸 **Traducción:**\n${selected.es}\n\n` +
+      return `${missingHistoryAlert}✨ **Gancho Táctico de Seducción (Español & Inglés):**\n\n` +
+        `💌 **Mensaje Sugerido en Inglés (Listo para Enviar):**\n` +
+        `${selected.en}\n\n` +
+        `📝 **Traducción al Español:**\n` +
+        `${selected.es}\n\n` +
         `💡 *Por qué funciona:* Genera validación emocional, reciprocidad y una necesidad irresistible de responder.`;
     }
 
@@ -2637,11 +2656,38 @@
       const englishMatch = rawAnswer.match(/"([^"]+)"/);
       const englishToCopy = englishMatch ? englishMatch[1] : '';
 
-      aiBubble.innerHTML = `<div>${formatMarkdownToHtml(rawAnswer)}</div>` + (englishToCopy ? `
-        <button class="copy-msg-btn" onclick="navigator.clipboard.writeText('${englishToCopy.replace(/'/g, "\\'")}'); this.innerText='✅ Copiado!'; setTimeout(()=>this.innerText='📋 Copiar Inglés', 1500);">
-          📋 Copiar Inglés
-        </button>
-      ` : '');
+      aiBubble.innerHTML = `<div>${formatMarkdownToHtml(rawAnswer)}</div>`;
+
+      if (englishToCopy) {
+        const btnContainer = document.createElement('div');
+        btnContainer.style.cssText = 'display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-msg-btn';
+        copyBtn.innerText = '📋 Copiar Inglés';
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(englishToCopy);
+          copyBtn.innerText = '✅ ¡Copiado!';
+          setTimeout(() => copyBtn.innerText = '📋 Copiar Inglés', 1500);
+        };
+        btnContainer.appendChild(copyBtn);
+
+        const insertBtn = document.createElement('button');
+        insertBtn.className = 'copy-msg-btn';
+        insertBtn.style.background = '#059669';
+        insertBtn.style.borderColor = '#10b981';
+        insertBtn.innerText = '⚡ Insertar en Chat';
+        insertBtn.onclick = () => {
+          const ta = findChatInput();
+          if (ta) {
+            setInputValueSafely(ta, englishToCopy);
+            showFirewallToast('⚡ Mensaje insertado en el chat. ¡Listo para enviar!', 'success');
+          }
+        };
+        btnContainer.appendChild(insertBtn);
+
+        aiBubble.appendChild(btnContainer);
+      }
 
       stream.scrollTop = stream.scrollHeight;
     };

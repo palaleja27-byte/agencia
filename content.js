@@ -1232,40 +1232,70 @@
         return;
       }
 
+      // 1. Obtener datos EXACTOS y FRESCOS del cliente en pantalla al momento del clic
+      const { clientName: liveClientName, bioData: liveBioData } = getExactClientProfileData();
+      const liveClientId = getExactNumericClientId();
+      const liveMessages = parseCurrentChatMessagesBidirectional(liveClientName);
+      const liveClientMessages = liveMessages.filter(m => !m.isOperator);
+      const liveLetters = extractMailThreadContext();
+
+      const combinedLiveClientText = liveClientMessages.map(m => m.text).join(' ');
+      let liveDetectedLang = detectLanguage(combinedLiveClientText || liveBioData?.country || '');
+      if (liveDetectedLang.code === 'es' && !/[áéíóúñ¿¡]/.test(combinedLiveClientText)) {
+        liveDetectedLang = { code: 'en', name: 'English 🇺🇸', flag: '🇺🇸' };
+      }
+
+      const liveHasHistory = liveClientMessages.length > 0;
+      const liveLastClientMsg = liveClientMessages.length > 0 ? liveClientMessages[liveClientMessages.length - 1].text : '';
+      const isSyncedInDb = syncedChatsMemory.has(String(liveClientId).toLowerCase()) || (liveClientName && syncedChatsMemory.has(liveClientName.toLowerCase()));
+      const showMissingHistoryWarning = !isSyncedInDb && liveClientMessages.length <= 2 && (!liveLetters || liveLetters.length === 0);
+
       const dropdown = document.createElement('div');
       dropdown.className = 'ryr-chat-hooks-dropdown';
       toolsWrapper.appendChild(dropdown);
 
-      const isSyncedInDb = syncedChatsMemory.has(String(clientId).toLowerCase()) || (clientName && syncedChatsMemory.has(clientName.toLowerCase()));
-      const showMissingHistoryWarning = !isSyncedInDb && clientMessages.length <= 2 && (!extractMailThreadContext() || extractMailThreadContext().length === 0);
-
       const generateSmartContextualHooks = () => {
-        const fullChatString = clientMessages.map(m => m.text).join(' ').toLowerCase();
-        const lastMsgLower = (lastClientMsg || '').toLowerCase();
+        const fullChatString = liveClientMessages.map(m => m.text).join(' ').toLowerCase();
+        const lastMsgLower = (liveLastClientMsg || '').toLowerCase();
         const rawBodyText = document.body.innerText.toLowerCase();
 
         // 1. Detectar si habla de dolor de cabeza, enfermedad, lluvia, frío, autobús, analgésico o reposo
-        const hasSicknessOrHeadache = /(headache|head is aching|pain|analgesic|pill|medicine|fever|sick|ill|flu|rain|cold|bus|hold me|tired|sleep for a while|resting|dolor|cabeza|enferm|medicament|pastilla|fiebre|lluvia|cansad|dormir un rato)/i.test(fullChatString) || /(headache|head is aching|pain|analgesic|fever|sick|pill|medicine|tired|sleep|resting|dolor|cabeza|fiebre)/i.test(lastMsgLower);
+        const hasSicknessOrHeadache = liveHasHistory && (
+          /\b(headache|analgesic|fever|flu)\b|head is aching|\b(sick|ill|medicine|pill|cold rain|resting)\b|\b(dolor de cabeza|analg[eé]sico|fiebre|enferm[oa]|medicamento|pastilla)\b/i.test(fullChatString) ||
+          /\b(headache|analgesic|fever|flu|sick|ill|medicine|pill|resting|dolor|cabeza|fiebre)\b|head is aching/i.test(lastMsgLower)
+        );
 
         // 2. Detectar si habla de café, comida, bebida o foto de café
-        const hasCoffeeOrFood = /(coffee|caf[eé]|tea|drink|drinking|cup|breakfast|dinner|lunch|comiendo|tomando|delici|taza)/i.test(fullChatString) || /(coffee|caf[eé]|tea|cup)/i.test(lastMsgLower);
+        const hasCoffeeOrFood = liveHasHistory && (
+          /\b(coffee|caf[eé]|tea|drink|drinking|cup|breakfast|dinner|lunch|taza)\b/i.test(fullChatString) ||
+          /\b(coffee|caf[eé]|tea|cup|drink)\b/i.test(lastMsgLower)
+        );
 
         // 3. Detectar si pregunta si nos vamos o si estamos ocupados
-        const hasLeavingOrBusy = /(leaving|leaving already|have something to do|going away|say goodbye|busy|ocupad|te vas|tienes algo que hacer|te tienes que ir)/i.test(lastMsgLower) || /(leaving|have something to do)/i.test(fullChatString);
+        const hasLeavingOrBusy = liveHasHistory && (
+          /\b(leaving|leaving already|have something to do|going away|say goodbye|busy|ocupad[oa]|te vas|te tienes que ir)\b/i.test(lastMsgLower) ||
+          /\b(leaving|have something to do)\b/i.test(fullChatString)
+        );
 
         // 4. Detectar si hubo reacción a Newsfeed / Post
-        const hasNewsfeedLiked = rawBodyText.includes('liked the newsfeed post') || rawBodyText.includes('liked your post') || lastMsgLower.includes('newsfeed') || lastMsgLower.includes('post');
+        const hasNewsfeedLiked = liveHasHistory && (
+          lastMsgLower.includes('newsfeed') || lastMsgLower.includes('post') || lastMsgLower.includes('liked your')
+        );
 
         // 5. Detectar piropos, elogios o nombres cariñosos
-        const isCompliment = /(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|mahal|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)/i.test(lastMsgLower);
+        const isCompliment = liveHasHistory && (
+          /\b(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|mahal|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)\b/i.test(lastMsgLower)
+        );
 
         // 6. Detectar saludo o pregunta de cómo está
-        const isGreeting = /(how are you|how is your day|how are things|what are you up to|hello|hi\b|hey\b|good morning|good afternoon|good evening|c[oó]mo est[aá]s|qu[eé] tal|hola)/i.test(lastMsgLower);
+        const isGreeting = liveHasHistory && (
+          /(how are you|how is your day|how are things|what are you up to|hello|hi\b|hey\b|good morning|good afternoon|good evening|c[oó]mo est[aá]s|qu[eé] tal|hola)/i.test(lastMsgLower)
+        );
 
         let options = [];
 
         if (hasSicknessOrHeadache) {
-          if (detectedLang.code === 'es') {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `Quiero quedarme aquí haciéndote compañía hasta que te sientas mucho mejor ❤️ Cierra tus ojitos y dime, ¿qué es lo que más te reconforta cuando estás descansando?`,
@@ -1297,7 +1327,7 @@
             ];
           }
         } else if (hasCoffeeOrFood || (hasLeavingOrBusy && hasCoffeeOrFood)) {
-          if (detectedLang.code === 'es') {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `¡Ver tu café me dio antojo a mí también! 😉 Cuéntame, ¿cuál es tu postre o antojo favorito para acompañar una buena charla?`,
@@ -1329,7 +1359,7 @@
             ];
           }
         } else if (hasLeavingOrBusy) {
-          if (detectedLang.code === 'es') {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `Siempre tengo un momento especial reservado solo para ti ❤️ Dime, ¿qué es algo curioso o divertido que te haya pasado hoy?`,
@@ -1361,7 +1391,7 @@
             ];
           }
         } else if (hasNewsfeedLiked) {
-          if (detectedLang.code === 'es') {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `Me encanta saber que estás tan atento a mis publicaciones 😉 ¿Qué fue lo primero que sentiste o pensaste al verla?`,
@@ -1393,7 +1423,7 @@
             ];
           }
         } else if (isCompliment) {
-          if (detectedLang.code === 'es') {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `Siempre sabes cómo hacerme suspirar con tus palabras tan dulces 😉 Dime, ¿cuál ha sido el detalle más romántico de tu vida?`,
@@ -1424,8 +1454,8 @@
               }
             ];
           }
-        } else if (isGreeting || hasConversationHistory) {
-          if (detectedLang.code === 'es') {
+        } else if (isGreeting || liveHasHistory) {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es algo que te haya sacado una gran sonrisa hoy?`,
@@ -1458,7 +1488,7 @@
           }
         } else {
           // Apertura para usuario nuevo (Atracción pura - Cero ubicaciones / Cero TM)
-          if (detectedLang.code === 'es') {
+          if (liveDetectedLang.code === 'es') {
             options = [
               {
                 target: `Tienes una energía muy dulce y una mirada muy serena en tus fotos ❤️ Dime, ¿qué es algo que te apasione profundamente en la vida?`,
@@ -1495,9 +1525,9 @@
       };
 
       const renderHooks = (hooksList) => {
-        const headerTitleText = hasConversationHistory 
-          ? `🔄 CONTINUAR CHAT CON ${clientName.toUpperCase()} (${detectedLang.name}):` 
-          : `🎯 GANCHOS DE ATRACCIÓN PARA ${clientName.toUpperCase()} (${detectedLang.name}):`;
+        const headerTitleText = liveHasHistory 
+          ? `🔄 CONTINUAR CHAT CON ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):` 
+          : `🎯 GANCHOS DE ATRACCIÓN PARA ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
 
         let warningHtml = '';
         if (showMissingHistoryWarning) {
@@ -1549,7 +1579,7 @@
             const ta = findChatInput();
             if (ta) {
               setInputValueSafely(ta, targetText);
-              showFirewallToast(`✨ Mensaje en ${detectedLang.name} insertado en el chat. ¡Listo para enviar!`, 'success');
+              showFirewallToast(`✨ Mensaje en ${liveDetectedLang.name} insertado en el chat. ¡Listo para enviar!`, 'success');
             }
             dropdown.remove();
           };
@@ -1568,14 +1598,35 @@
     const messages = [];
     const seenSignatures = new Set();
 
-    const chatView = document.querySelector('div[class*="dialog-content"], div[class*="chat-scroll"], div[class*="main-chat"], div[class*="messages"]') || document.body;
+    // Buscar exclusivamente el contenedor de mensajes del chat ACTIVO
+    const chatView = document.querySelector(
+      'div[data-test-id*="dialog-content"], div[data-test-id*="chat-messages"], div[class*="dialog-content"], div[class*="chat-scroll"], div[class*="chat-body"], div[class*="main-chat"]'
+    );
+
+    if (!chatView) return messages;
+
     const allLeafElements = chatView.querySelectorAll('div, p');
 
     allLeafElements.forEach(node => {
+      // Ignorar si el nodo está dentro de la barra lateral, lista de chats, herramientas o HUD
+      if (
+        node.closest('div[data-test-id*="dialog-item"]') ||
+        node.closest('div[class*="dialog-item"]') ||
+        node.closest('div[class*="item-wrap"]') ||
+        node.closest('div[class*="dialogs"]') ||
+        node.closest('div[class*="sidebar"]') ||
+        node.closest('#ryr-titan-bar') ||
+        node.closest('#ryr-intel-panel') ||
+        node.closest('.ryr-chat-tools-wrapper') ||
+        node.closest('.ryr-chat-hooks-dropdown')
+      ) {
+        return;
+      }
+
       if (node.querySelectorAll('div, p').length > 2) return;
 
       const raw = node.innerText || '';
-      if (raw.includes('TITAN APEX') || raw.includes('Search') || (raw.includes('seen') && raw.length < 10) || raw.includes('View post')) return;
+      if (raw.includes('TITAN APEX') || raw.includes('Search') || (raw.includes('seen') && raw.length < 10) || raw.includes('View post') || raw.includes('CONTINUAR CHAT') || raw.includes('GANCHOS DE')) return;
 
       if (/^(today|yesterday|january|february|march|april|may|june|july|august|september|october|november|december)\s*\d{0,2}$/i.test(raw.trim())) {
         return;

@@ -1870,13 +1870,14 @@
     const { clientName, bioData } = getExactClientProfileData();
     const letters = extractMailThreadContext();
     const messages = parseCurrentChatMessagesBidirectional(clientName);
+    const clientId = getExactNumericClientId();
 
-    // Revisar si la última carta recibida en el hilo es de la clienta (para responder con contexto)
+    // Revisar si la última carta recibida en el hilo es del cliente (para responder con contexto)
     const incomingLetters = letters.filter(l => !l.isOutgoing);
     const hasIncomingLetter = incomingLetters.length > 0;
     const lastIncomingLetter = hasIncomingLetter ? incomingLetters[incomingLetters.length - 1] : null;
 
-    // Detectar idioma del cliente en el hilo de cartas
+    // Detectar idioma del cliente analizando hilo de cartas y chat
     const combinedLetterText = letters.map(l => l.preview).join(' ') + ' ' + messages.map(m => m.text).join(' ');
     let detectedLang = detectLanguage(combinedLetterText || bioData?.country || '');
     if (detectedLang.code === 'es' && !/[áéíóúñ¿¡]/.test(combinedLetterText)) {
@@ -1904,15 +1905,15 @@
       }
     }
 
-    // Determinar modo dual de cartas según si es cliente recurrente (múltiples cartas) o nuevo
-    const isReturningClient = letters.length >= 2 || hasIncomingLetter;
+    // Determinar modo dual de cartas según si es cliente recurrente (múltiples cartas o entrante)
+    const isReturningClient = letters.length >= 1 || hasIncomingLetter;
     const genBtnLabel = isReturningClient 
       ? `✨ Responder Carta` 
       : `✨ Gancho Carta`;
 
     const targetLangCode = detectedLang.code === 'es' ? 'EN' : detectedLang.code.toUpperCase();
 
-    // 1. Botón Superior: Responder Carta (IA Contextual)
+    // 1. Botón Superior: Responder Carta (IA Contextual con 3 Opciones)
     let genLetterBtn = drafterBox.querySelector('#ryr-btn-gen-letter');
     if (!genLetterBtn) {
       genLetterBtn = document.createElement('button');
@@ -1925,8 +1926,8 @@
       genLetterBtn.innerText = genBtnLabel;
     }
     genLetterBtn.title = isReturningClient 
-      ? 'Continuar y responder la carta según la conversación e historial de cartas previas' 
-      : 'Generar una carta de apertura magnética de alta atracción';
+      ? 'Ver 3 opciones de respuesta contextual razonadas según las cartas y chats del usuario' 
+      : 'Generar 3 cartas magnéticas de apertura con contexto y alta atracción';
 
     // 2. Botón Inferior: Traducir Carta
     let transLetterBtn = drafterBox.querySelector('#ryr-btn-trans-letter');
@@ -1942,12 +1943,12 @@
     }
     transLetterBtn.title = `Traducir carta al idioma detectado del cliente (${detectedLang.name})`;
 
-    // Asegurar orden visual absoluto: Respuesta primero (arriba), Traducción segundo (abajo)
+    // Asegurar orden visual estricto: Responder Carta ARRIBA, Traducir Carta ABAJO
     if (genLetterBtn.nextElementSibling !== transLetterBtn) {
       drafterBox.insertBefore(genLetterBtn, transLetterBtn);
     }
 
-    // Acción: Traducir Carta
+    // Acción: Traducir Carta escrita manualmente en el textarea
     transLetterBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1979,103 +1980,221 @@
       }
     };
 
-    // Acción: Generar / Responder Carta con IA
-    genLetterBtn.onclick = async (e) => {
+    // Acción: Desplegar 3 Opciones de Respuesta / Apertura de Carta con Razonamiento Táctico
+    genLetterBtn.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      genLetterBtn.innerText = `🤖 ${hasIncomingLetter ? 'Respondiendo' : 'Redactando'} carta en ${detectedLang.name}...`;
-      genLetterBtn.disabled = true;
 
-      const clientId = getExactNumericClientId();
+      // Cerrar si ya está abierto
+      const existingDropdown = document.querySelector('.ryr-letter-hooks-dropdown');
+      if (existingDropdown) {
+        existingDropdown.remove();
+        return;
+      }
 
       // Guardar automáticamente el hilo completo de cartas en la base de datos para nutrir la memoria 360°
       syncCurrentChatToDatabase().catch(() => {});
 
-      const generateSmartLetterFallback = () => {
-        // Extraer ideas y tema de la última carta entrante para razonamiento
-        let contextTopic = '';
-        if (lastIncomingLetter && lastIncomingLetter.preview) {
-          const lText = lastIncomingLetter.preview;
-          if (/photo|pic|picture|foto/i.test(lText)) {
-            contextTopic = detectedLang.code === 'pt' ? 'Adorei a foto que você me enviou, você está maravilhoso nela.' : 
-                           (detectedLang.code === 'es' ? 'Me encantó la foto que me enviaste, te ves increíble.' : 'I loved the picture you sent me, you look truly wonderful in it.');
-          } else if (/day|work|busy|dia|trabalho|trabajo/i.test(lText)) {
-            contextTopic = detectedLang.code === 'pt' ? 'Espero que o seu dia de trabalho esteja sendo muito tranquilo e produtivo.' :
-                           (detectedLang.code === 'es' ? 'Espero que tu jornada laboral esté yendo de maravilla.' : 'I hope your workday is going smoothly and you get some time to relax.');
-          }
-        }
+      const isSyncedInDb = syncedChatsMemory.has(String(clientId).toLowerCase()) || (clientName && syncedChatsMemory.has(clientName.toLowerCase()));
+      const showMissingHistoryWarning = !isSyncedInDb && letters.length === 0 && messages.length <= 2;
+
+      const dropdown = document.createElement('div');
+      dropdown.className = 'ryr-letter-hooks-dropdown';
+      drafterBox.appendChild(dropdown);
+
+      const generateReasonedLetterOptions = () => {
+        const fullLetterCorpus = letters.map(l => l.preview).join(' ').toLowerCase();
+        const fullChatCorpus = messages.map(m => m.text).join(' ').toLowerCase();
+        const combinedCorpus = `${fullLetterCorpus} ${fullChatCorpus}`;
+        const lastIncomingText = (lastIncomingLetter ? lastIncomingLetter.preview : '').toLowerCase();
+
+        // 1. Detección de tópicos en cartas previas
+        const hasPhotoTopic = /photo|pic|picture|foto|selfie|portrait/i.test(lastIncomingText) || /photo|picture|foto/i.test(combinedCorpus);
+        const hasWorkOrBusyTopic = /work|job|busy|tired|trabalho|trabajo|cansad|ocupad|shift/i.test(lastIncomingText);
+        const hasSicknessOrRestTopic = /headache|sick|ill|flu|rain|cold|fever|resting|dolor|cabeza|enferm|remedio|pastilla/i.test(lastIncomingText);
+        const hasDeepAffectionTopic = /love|amor|miss|saudade|extrañ|cora[çc][aã]o|querid|special|precious/i.test(lastIncomingText);
+
+        const myProfile = sessionData.profileName || 'Eu';
+        const clientDisplayName = clientName || 'friend';
+
+        let options = [];
 
         if (detectedLang.code === 'pt') {
-          return `Meu querido ${clientName || 'amor'},\n\n` +
-            (lastIncomingLetter ? `Li sua linda carta com muito carinho e atenção, e cada palavra sua me fez sorrir. ${contextTopic}\n\n` : `Estava aqui pensando em nossos momentos e senti uma vontade imensa de te escrever.\n\n`) +
-            `Gosto muito da sinceridade e do carinho com que você sempre fala comigo. A nossa conexão é algo muito especial para mim e ilumina os meus dias.\n\n` +
-            `Me conta uma coisa... qual foi o momento mais especial ou o pensamento que te fez sorrir hoje?\n\n` +
-            `Com todo o meu carinho,\n${sessionData.profileName || 'Eu'} ❤️`;
+          // PORTUGUÊS
+          let topicIntro1 = 'Li cada detalhe da sua linda carta com tanta ternura e carinho.';
+          if (hasPhotoTopic) topicIntro1 = 'Adorei a foto que você me enviou! Ver seu olhar me fez sentir você tão pertinho de mim.';
+          else if (hasWorkOrBusyTopic) topicIntro1 = 'Imagino como seus dias de trabalho devem ser corridos, mas você sempre tem essa doçura ao falar comigo.';
+          else if (hasSicknessOrRestTopic) topicIntro1 = 'Espero do fundo do coração que você já esteja descansando e se sentindo muito melhor.';
+          else if (hasDeepAffectionTopic) topicIntro1 = 'Sentir o seu carinho e ler essas palavras sinceras faz meu coração bater muito mais forte.';
+
+          options = [
+            {
+              title: '🪝 Opção 1: Resposta Emocional & Vínculo Profundo',
+              rationale: 'Empatia profunda, agradecimento sincero pelo que ele escreveu e validação afetiva da conexão.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu hermosa carta con muchísima atención y cariño. Aprecio profundamente la dulzura y sinceridad que siempre me entregas. En medio de toda la rutina diaria, recibir tus palabras me llena de paz y alegría.\n\nDime algo... ¿qué fue lo primero que te hizo sonreír o qué pensamiento lindo tuviste hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+              target: `Meu querido ${clientDisplayName},\n\n${topicIntro1}\n\nAdoro a honestidade e a ternura com que você sempre se expressa. Em meio a toda a correria do dia a dia, encontrar uma mensagem sua é como um refúgio de paz que ilumina os meus dias.\n\nFico pensando em tudo o que ainda temos para descobrir um sobre o outro... Me conta, qual foi a coisa mais bonita ou o pensamento que te fez sorrir hoje?\n\nCom todo o meu afeto e carinho,\n${myProfile} ❤️`
+            },
+            {
+              title: '💬 Opção 2: Conexão Cotidiana & Troca de Fotos',
+              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas para fidelizar cartas.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba aquí pensando en ti mientras disfrutaba de un momento de calma. Me fascina imaginar cómo es tu día a día y compartir estos pedacitos de vida contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
+              target: `Meu querido ${clientDisplayName},\n\nEstava aqui pensando em você enquanto aproveitava um momento de descanso. Adoro sentir essa nossa cumplicidade e imaginar como é o seu dia a dia.\n\nMe envia uma foto sua de como você está hoje ou do seu sorriso para eu sentir você ainda mais presente, e na minha próxima carta te mando uma foto exclusiva só para você 😉 Combinado?\n\nCom um abraço bem carinhoso,\n${myProfile} ✨`
+            },
+            {
+              title: '✨ Opção 3: Fascinação & Pergunta Íntima de Cartas',
+              rationale: 'Pregunta abierta de alta curiosidad romántica que incentiva una carta de respuesta extensa.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en mi momento favorito. Hay algo muy dulce y auténtico en cómo nos comunicamos que me fascina.\n\nCuéntame un sueño o un secreto tuyo que pocas personas conozcan... ¿qué es lo que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+              target: `Meu querido ${clientDisplayName},\n\nEscrever para você se tornou o momento mais especial dos meus dias. Há algo muito genuíno e doce na nossa sintonia, e eu adoro sentir esse carinho crescendo a cada linha.\n\nMe conta um segredo ou um pequeno sonho seu que poucas pessoas conhecem... o que é aquilo que mais enche seu coração de paixão na vida?\n\nCom todo o meu carinho,\n${myProfile} ❤️`
+            }
+          ];
         } else if (detectedLang.code === 'es') {
-          return `Mi queridísimo ${clientName || 'amor'},\n\n` +
-            (lastIncomingLetter ? `Leí tu hermosa carta con muchísima atención y no pude evitar sonreír al sentir tu cariño. ${contextTopic}\n\n` : `Mientras me siento aquí recordando nuestras conversaciones, no pude evitar sentir una calidez hermosa en mi pecho.\n\n`) +
-            `Aprecio muchísimo la dulzura y sinceridad que siempre me entregas. Hay algo realmente especial en lo que hemos construido juntos, y hoy quería enviarte un pedacito de mi corazón para recordarte lo mucho que significas para mí.\n\n` +
-            `Dime algo... ¿qué fue lo primero que te hizo sonreír el día de hoy?\n\n` +
-            `Con todo mi cariño,\n${sessionData.profileName || 'Yo'} ❤️`;
+          // ESPAÑOL
+          let topicIntro1 = 'Leí tu hermosa carta con muchísima atención y no pude evitar sonreír al sentir tu cariño.';
+          if (hasPhotoTopic) topicIntro1 = '¡Me fascinó la foto que me compartiste! Ver tus ojos y tu sonrisa me hizo sentirte tan cerca de mí.';
+          else if (hasWorkOrBusyTopic) topicIntro1 = 'Imagino lo ajetreadas que son tus jornadas de trabajo, pero me encanta cómo siempre tienes esa dulzura al escribirme.';
+          else if (hasSicknessOrRestTopic) topicIntro1 = 'Espero de todo corazón que te estés cuidando, descansando y sintiéndote mucho mejor.';
+          else if (hasDeepAffectionTopic) topicIntro1 = 'Sentir tu cariño tan sincero en cada línea hace que mi corazón lata más fuerte por ti.';
+
+          options = [
+            {
+              title: '🪝 Opción 1: Respuesta Emocional & Vínculo Profundo',
+              rationale: 'Empatía profunda, agradecimiento sincero por sus palabras y validación emocional de la relación.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\n${topicIntro1}\n\nAprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me llena el corazón de calidez.\n\nMe quedé con muchas ganas de saber más de ti... Dime algo, ¿qué fue lo más lindo o el detalle especial que te alegró el día de hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`,
+              target: `Mi queridísimo ${clientDisplayName},\n\n${topicIntro1}\n\nAprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me llena el corazón de calidez.\n\nMe quedé con muchas ganas de saber más de ti... Dime algo, ¿qué fue lo más lindo o el detalle especial que te alegró el día de hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`
+            },
+            {
+              title: '💬 Opción 2: Conexión Cotidiana & Intercambio de Fotos',
+              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas para fidelizar cartas.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día y compartir estos momentos contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
+              target: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día y compartir estos momentos contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`
+            },
+            {
+              title: '✨ Opción 3: Fascinación & Pregunta Íntima de Cartas',
+              rationale: 'Pregunta abierta de alta curiosidad romántica diseñada para que responda con una carta extensa.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad que valoro muchísimo.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+              target: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad que valoro muchísimo.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`
+            }
+          ];
         } else if (detectedLang.code === 'fr') {
-          return `Mon très cher ${clientName || 'amour'},\n\n` +
-            (lastIncomingLetter ? `J'ai lu ta merveilleuse lettre avec tant d'émotion et un immense sourire aux lèvres. ${contextTopic}\n\n` : `Alors que je repense à nos conversations, je ne peux m'empêcher de ressentir une douce chaleur dans mon cœur.\n\n`) +
-            `J'apprécie tellement ta tendresse et ton honnêteté. Notre complicité est précieuse, et je voulais t'envoyer cette lettre pour te rappeler combien tu comptes pour moi.\n\n` +
-            `Dis-moi, qu'est-ce qui t'a fait sourire aujourd'hui?\n\n` +
-            `Avec toute mon affection,\n${sessionData.profileName || 'Moi'} ❤️`;
+          // FRANÇAIS
+          options = [
+            {
+              title: '🪝 Option 1: Réponse Émotionnelle & Lien Profond',
+              rationale: 'Empathie profonde, remerciements sincères et renforcement du lien affectif.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu maravillosa carta con tanta emoción y dulzura. Aprecio profundamente la sinceridad con la que siempre me hablas. En medio de un día ocupado, leerte me da una paz inmensa.\n\nDime, ¿qué fue lo más lindo que te hizo sonreír hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+              target: `Mon très cher ${clientDisplayName},\n\nJ'ai lu ta magnifique lettre avec tant d'émotion et un immense sourire aux lèvres.\n\nJ'apprécie profondément la tendresse et la franchise avec lesquelles tu t'adresses toujours à moi. Au milieu d'une journée bien remplie, lire tes mots m'apporte une paix merveilleuse et réchauffe mon cœur.\n\nDis-moi, quelle a été la plus jolie pensée ou le moment qui t'a fait sourire aujourd'hui?\n\nAvec toute mon affection,\n${myProfile} ❤️`
+            },
+            {
+              title: '💬 Option 2: Quotidien & Échange de Photos Exclusives',
+              rationale: 'Invitation complice à un échange de photos exclusives pour dynamiser le fil de lettres.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba pensando en ti mientras descansaba un momento. Me encanta compartir estos pequeños instantes de vida contigo.\n\nEnvíame una foto de tu sonrisa hoy, y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
+              target: `Mon cher ${clientDisplayName},\n\nJe pensais à toi pendant une petite pause tranquille. J'aime tellement partager ces doux moments avec toi.\n\nEnvoie-moi une photo de ton sourire aujourd'hui pour te sentir encore plus près, et dans ma prochaine lettre je t'enverrai une photo exclusive rien que pour toi 😉 D'accord?\n\nAvec un doux baiser,\n${myProfile} ✨`
+            },
+            {
+              title: '✨ Option 3: Fascination & Question Intime pour Lettre',
+              rationale: 'Question ouverte romantique et captivante pour susciter une longue lettre de réponse.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en mi momento favorito. Hay una complicidad muy especial entre nosotros.\n\nCuéntame un sueño o secreto que pocos conozcan... ¿qué es lo que más te apasiona en la vida?\n\nCon todo mi corazón,\n${myProfile} ❤️`,
+              target: `Mon très cher ${clientDisplayName},\n\nNos lettres sont devenues le moment le plus précieux de mes journées. Il y a une complicité tellement rare et douce entre nous.\n\nRaconte-moi un rêve secret que peu de gens connaissent... qu'est-ce qui passionne le plus ton cœur dans la vie?\n\nAvec tout mon amour,\n${myProfile} ❤️`
+            }
+          ];
         } else {
-          return `My dearest ${clientName || 'love'},\n\n` +
-            (lastIncomingLetter ? `I read your wonderful letter with such a warm smile on my face. Every detail you shared touched my heart. ${contextTopic}\n\n` : `As I sit here reading back through our memories, I couldn't help but feel a warm feeling in my chest.\n\n`) +
-            `I truly appreciate the honesty and sweetness you always share with me. There is something truly special about the connection we've built, and I wanted to send you a little piece of my heart today to remind you how much you mean to me.\n\n` +
-            `Tell me something... what was the first thing that made you smile today?\n\n` +
-            `With all my affection,\n${sessionData.profileName || 'Me'} ❤️`;
+          // ENGLISH (DEFAULT)
+          let topicIntro1 = 'I read your wonderful letter with such genuine emotion, and I took in every single word with a warm smile.';
+          if (hasPhotoTopic) topicIntro1 = 'I absolutely loved the picture you shared with me! Seeing your warm gaze and handsome smile made me feel so close to you.';
+          else if (hasWorkOrBusyTopic) topicIntro1 = 'I know how demanding and busy your workday can be, yet you always bring such sweetness and calm into my life.';
+          else if (hasSicknessOrRestTopic) topicIntro1 = 'I truly hope from the bottom of my heart that you are getting plenty of rest, staying cozy, and feeling much better.';
+          else if (hasDeepAffectionTopic) topicIntro1 = 'Feeling the sincerity of your affection in every word leaves a warmth in my heart that stays with me all day.';
+
+          options = [
+            {
+              title: '🪝 Option 1: Emotional Reply & Deep Bond',
+              rationale: 'Empatía profunda, agradecimiento sincero por sus palabras y validación emocional de la relación.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu hermosa carta con muchísima atención y cariño. Aprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me alegra el día.\n\nDime algo... ¿qué fue lo primero que te hizo sonreír o qué pensamiento lindo tuviste hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`,
+              target: `My dearest ${clientDisplayName},\n\n${topicIntro1}\n\nI truly cherish your honesty, sweetness, and the way you express yourself. Even in the middle of a busy day, reading your words brings a wonderful sense of peace and warmth to my heart.\n\nI keep thinking about everything we have yet to discover about each other... Tell me, what was the sweetest thought or moment that made you smile today?\n\nWith all my affection,\n${myProfile} ❤️`
+            },
+            {
+              title: '💬 Option 2: Daily Life & Exclusive Photo Exchange',
+              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas para fidelizar cartas.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día y compartir estos momentos contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
+              target: `My dear ${clientDisplayName},\n\nI was just taking a quiet little break and couldn't help but smile thinking about you. I love imagining what your everyday moments are like and sharing this sweet connection with you.\n\nSend me a picture of what you're doing today or of your warm smile so I can feel even closer to you, and in my next letter I'll send you an exclusive picture just for you 😉 Deal?\n\nWith a sweet hug,\n${myProfile} ✨`
+            },
+            {
+              title: '✨ Option 3: Romantic Curiosity & Intimate Question',
+              rationale: 'Pregunta abierta de alta curiosidad romántica diseñada para que responda con una carta extensa.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad que valoro muchísimo.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+              target: `My dearest ${clientDisplayName},\n\nWriting to you has truly become the sweetest highlight of my day. There is something remarkably genuine and special about the bond we share, and I love watching it grow.\n\nTell me a little dream or secret of yours that very few people know about... what is something that brings true passion and joy to your life?\n\nWith all my affection and warmth,\n${myProfile} ❤️`
+            }
+          ];
         }
+
+        return options;
       };
 
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const letterOptions = generateReasonedLetterOptions();
+      const headerTitle = hasIncomingLetter 
+        ? `🔄 RESPONDER CARTA A ${clientName.toUpperCase()} (${detectedLang.name}):` 
+        : `🎯 REDACTAR CARTA PARA ${clientName.toUpperCase()} (${detectedLang.name}):`;
 
-        const res = await fetch(`${API_URL}/api/intelligence/generate-letter`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            clientName,
-            clientId,
-            profileName: sessionData.profileName,
-            bioData,
-            targetLang: detectedLang.code,
-            recentLetters: letters,
-            lastIncomingLetter: lastIncomingLetter ? lastIncomingLetter.preview : '',
-            recentChat: messages.slice(-25)
-          })
-        });
-        clearTimeout(timeoutId);
-
-        const data = await res.json();
-        let generatedLetter = data.letter || generateSmartLetterFallback();
-
-        const ta = document.querySelector('textarea[placeholder*="letter" i], textarea');
-        if (ta) {
-          setInputValueSafely(ta, generatedLetter);
-        }
-        genLetterBtn.innerText = '✅ ¡Carta Lista Insertada!';
-        showFirewallToast(`✨ Carta redactada en ${detectedLang.name} con contexto de conversación.`);
-      } catch (err) {
-        const fallback = generateSmartLetterFallback();
-        const ta = document.querySelector('textarea[placeholder*="letter" i], textarea');
-        if (ta) {
-          setInputValueSafely(ta, fallback);
-        }
-        genLetterBtn.innerText = '✅ ¡Carta Lista Insertada!';
-        showFirewallToast(`✨ Carta generada con éxito con contexto.`);
+      let warningHtml = '';
+      if (showMissingHistoryWarning) {
+        warningHtml = `
+          <div class="ryr-no-info-warning">
+            <span style="font-size:10.5px; line-height:1.3;">⚠️ <b>Sin cartas previas en BD:</b> Sube las cartas y conversaciones para contexto 360°. Opciones de alta atracción:</span>
+            <button class="ryr-no-info-btn" id="ryr-letter-quick-sync">⚡ Subir Ahora</button>
+          </div>
+        `;
       }
 
-      setTimeout(() => {
-        genLetterBtn.innerText = genBtnLabel;
-        genLetterBtn.disabled = false;
-      }, 3500);
+      dropdown.innerHTML = `
+        <div style="font-weight:bold; color:#34d399; font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #065f46; padding-bottom:5px;">
+          <span>${headerTitle}</span>
+          <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-letter-dropdown">✕</span>
+        </div>
+        ${warningHtml}
+        <div id="ryr-letter-options-container" style="display:flex; flex-direction:column; gap:6px;"></div>
+      `;
+
+      const closeBtn = dropdown.querySelector('#ryr-close-letter-dropdown');
+      if (closeBtn) closeBtn.onclick = () => dropdown.remove();
+
+      const syncBtn = dropdown.querySelector('#ryr-letter-quick-sync');
+      if (syncBtn) {
+        syncBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          syncBtn.innerText = '⏳ Subiendo...';
+          syncBtn.disabled = true;
+          await syncCurrentChatToDatabase();
+          syncBtn.innerText = '✅ Subido';
+        };
+      }
+
+      const container = dropdown.querySelector('#ryr-letter-options-container');
+
+      letterOptions.forEach((opt, idx) => {
+        const card = document.createElement('div');
+        card.className = 'ryr-letter-option-card';
+        card.innerHTML = `
+          <div class="ryr-letter-option-title">
+            <span>${opt.title}</span>
+            <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
+          </div>
+          <div class="ryr-letter-option-rationale">💡 <b>Razón Táctica:</b> ${opt.rationale}</div>
+          <div class="ryr-letter-option-preview"><b>📝 En Español (Vista Operador):</b><br/>${opt.esPreview}</div>
+          <div style="font-size:9.5px; color:#38bdf8; margin-top:2px; font-weight:bold;">⚡ Clic para insertar automáticamente en ${detectedLang.name}</div>
+        `;
+
+        card.onclick = () => {
+          const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
+          if (ta) {
+            setInputValueSafely(ta, opt.target);
+            showFirewallToast(`✨ Carta redactada en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
+            ta.focus();
+          }
+          dropdown.remove();
+        };
+
+        container.appendChild(card);
+      });
     };
   }
 

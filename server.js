@@ -171,11 +171,11 @@ app.post('/api/chats/audit-deep', async (req, res) => {
       extracted_at: new Date().toISOString()
     }).select().single();
 
-    // C. Inserción Deduplicada de Mensajes Individuales
+    // C. Inserción Deduplicada de Mensajes Individuales (Nunca Sobreescribe ni Duplica)
     const msgCount = Array.isArray(messages) ? messages.length : 0;
     if (msgCount > 0) {
       const messagesToInsert = messages.map(m => ({
-        id: m.id || `msg_${m.isOperator ? 'OP' : 'RU'}_${String(clientId)}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        id: m.id || `msg_${String(clientId).trim()}_${m.isOperator ? 'OP' : 'RU'}_${(m.text || '').substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${(m.time || 'rec').replace(/[^a-z0-9]/gi, '')}`,
         conversation_id: convRow ? convRow.id : null,
         client_id: String(clientId).trim(),
         profile_name: profile || 'HORACIO',
@@ -187,22 +187,30 @@ app.post('/api/chats/audit-deep', async (req, res) => {
         message_date: m.date || new Date().toLocaleDateString()
       }));
 
-      await supabase.from('messages').upsert(messagesToInsert, { onConflict: 'id', ignoreDuplicates: true });
+      await supabase.from('messages').upsert(messagesToInsert, { onConflict: 'id', ignoreDuplicates: true }).catch(() => {});
     }
 
-    // D. Inserción de Cartas / Hilos de Mails
+    // D. Inserción Deduplicada de Cartas / Hilos de Mails (Desde la primera hasta la última)
     const letterCount = Array.isArray(letters) ? letters.length : 0;
     if (letterCount > 0) {
       const mailsToInsert = letters.map(l => ({
+        id: l.id || `mail_${String(clientId).trim()}_${l.isOutgoing ? 'OUT' : 'IN'}_${(l.preview || l.fullText || '').substring(0, 35).replace(/[^a-z0-9]/gi, '_')}_${(l.date || 'rec').replace(/[^a-z0-9]/gi, '')}`,
         client_id: String(clientId).trim(),
         profile_name: profile || 'HORACIO',
         direction: l.isOutgoing ? 'OUTGOING' : 'INCOMING',
         letter_date: l.date || 'Fecha Reciente',
-        letter_preview: l.preview,
+        letter_preview: l.preview || l.fullText || '',
         status: 'read'
       }));
 
-      await supabase.from('mails_history').insert(mailsToInsert);
+      await supabase.from('mails_history').upsert(mailsToInsert, { onConflict: 'id', ignoreDuplicates: true }).catch(async () => {
+        // Fallback si la tabla no tiene constraint id único
+        await supabase.from('mails_history').insert(mailsToInsert.map(m => {
+          const copy = { ...m };
+          delete copy.id;
+          return copy;
+        })).catch(() => {});
+      });
     }
 
     // Guardar en memoria de alta disponibilidad (Garantiza visualización inmediata en modal)

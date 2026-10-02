@@ -1660,7 +1660,8 @@
                       node.className.includes('out');
 
       const isOperator = hasCheck || hasOperatorPrefix || isCreamBubble || isRight;
-      const msgHash = `msg_${isOperator ? 'OP' : 'RU'}_${cleanText.substring(0, 35).replace(/\s+/g, '_')}_${(timeText || 'now').replace(/\s+/g, '')}`;
+      const cleanClientId = getExactNumericClientId() || 'user';
+      const msgHash = `msg_${cleanClientId}_${isOperator ? 'OP' : 'RU'}_${cleanText.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${(timeText || 'now').replace(/[^a-z0-9]/gi, '')}`;
 
       if (!seenSignatures.has(msgHash)) {
         seenSignatures.add(msgHash);
@@ -1680,12 +1681,20 @@
 
   function extractMailThreadContext() {
     const letters = [];
-    if (!window.location.href.includes('/mails/thread/') && !window.location.href.includes('/mails/view/')) {
-      return letters;
-    }
+    const currentClientId = getExactNumericClientId() || 'user';
 
-    const mailCards = document.querySelectorAll('div[class*="mail"], div[class*="message"], div[class*="letter"], div[data-test-id*="letter"]');
+    // Buscar todas las tarjetas de carta en la vista (hilo de cartas o vista de correo)
+    const mailCards = document.querySelectorAll(
+      'div[data-test-id*="letter"], div[data-test-id*="mail-box-item"], div[class*="letter"], div[class*="mail-card"], div[class*="message"], div[class*="wrt-"]'
+    );
+
+    const seenLetterSignatures = new Set();
+
     mailCards.forEach(card => {
+      if (card.parentElement.closest('div[data-test-id*="letter"], div[class*="letter"]')) {
+        return;
+      }
+
       const text = (card.innerText || '').trim();
       if (text.length < 10 || text.includes('TITAN APEX') || text.includes('Send your letter')) return;
 
@@ -1697,20 +1706,29 @@
                    card.className.includes('sent');
 
       const dateMatch = text.match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,\s+\d{1,2}:\d{2})?/i);
+      const dateStr = dateMatch ? dateMatch[0] : 'Fecha Reciente';
 
-      // Limpiar prefijo "Me" o encabezado para quedarnos con el cuerpo real de la carta
       let cleanBody = text
         .replace(/^Me\n/i, '')
         .replace(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,\s+\d{1,2}:\d{2})?/i, '')
+        .replace(/\b(?:Read|Unread|Leído|No leído)\b/gi, '')
         .trim();
 
-      // Guardar el texto completo de la carta (hasta 2500 caracteres) sin truncar a 300
-      letters.push({
-        isOutgoing: Boolean(isMe),
-        date: dateMatch ? dateMatch[0] : 'Fecha Reciente',
-        preview: cleanBody.substring(0, 2500).replace(/\r?\n+/g, '\n'),
-        fullText: cleanBody
-      });
+      if (cleanBody.length < 5) return;
+
+      const letterHash = `mail_${currentClientId}_${isMe ? 'OUT' : 'IN'}_${cleanBody.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${dateStr.replace(/[^a-z0-9]/gi, '')}`;
+
+      if (!seenLetterSignatures.has(letterHash)) {
+        seenLetterSignatures.add(letterHash);
+        letters.push({
+          id: letterHash,
+          clientId: currentClientId,
+          isOutgoing: Boolean(isMe),
+          date: dateStr,
+          preview: cleanBody.substring(0, 3000).replace(/\r?\n+/g, '\n'),
+          fullText: cleanBody
+        });
+      }
     });
 
     return letters;

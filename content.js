@@ -1564,22 +1564,93 @@
 
         const container = dropdown.querySelector('#ryr-hooks-options-container');
 
-        hooksList.forEach(item => {
+        hooksList.forEach((item, idx) => {
           const targetText = typeof item === 'object' ? item.target : item;
           const esText = typeof item === 'object' ? item.es : 'Respuesta contextual generada.';
 
           const option = document.createElement('div');
           option.className = 'ryr-hook-option';
           option.innerHTML = `
+            <div class="ryr-hook-header">
+              <span style="font-weight:bold; color:#a5b4fc; font-size:10px;">OPCIÓN ${idx + 1}</span>
+              <button type="button" class="ryr-hook-edit-btn" title="Editar y personalizar mensaje antes de enviar">✏️ Editar Mensaje</button>
+            </div>
             <div class="ryr-hook-target-text">"${targetText}"</div>
             <div class="ryr-hook-es-text">💡 <i>${esText}</i></div>
+            <div class="ryr-inline-editor" style="display:none;">
+              <textarea placeholder="Edita tu mensaje aquí...">${targetText}</textarea>
+              <div class="ryr-inline-editor-actions">
+                <button type="button" class="ryr-btn-trans-inline" title="Traducir texto editado al idioma del cliente">🌐 Traducir a ${liveDetectedLang.code.toUpperCase()}</button>
+                <button type="button" class="ryr-btn-save-inline">✅ Insertar en Chat</button>
+                <button type="button" class="ryr-btn-cancel-inline">❌ Cancelar</button>
+              </div>
+            </div>
           `;
 
-          option.onclick = () => {
+          const editBtn = option.querySelector('.ryr-hook-edit-btn');
+          const editorBox = option.querySelector('.ryr-inline-editor');
+          const editorTextarea = editorBox.querySelector('textarea');
+          const saveBtn = editorBox.querySelector('.ryr-btn-save-inline');
+          const cancelBtn = editorBox.querySelector('.ryr-btn-cancel-inline');
+          const transBtn = editorBox.querySelector('.ryr-btn-trans-inline');
+
+          // Clic en Editar: Abrir editor integrado dentro de la opción
+          editBtn.onclick = (e) => {
+            e.stopPropagation();
+            editorBox.style.display = editorBox.style.display === 'none' ? 'flex' : 'none';
+            if (editorBox.style.display === 'flex') {
+              editorTextarea.focus();
+              editorTextarea.select();
+            }
+          };
+
+          // Traducir dentro del editor inline si el operador escribe en español
+          transBtn.onclick = async (e) => {
+            e.stopPropagation();
+            const rawVal = editorTextarea.value.trim();
+            if (!rawVal) return;
+            transBtn.innerText = '⏳ Traduciendo...';
+            transBtn.disabled = true;
+            try {
+              const translated = await translateText(rawVal, liveDetectedLang.code);
+              editorTextarea.value = translated;
+              showFirewallToast(`✅ Traducido a ${liveDetectedLang.name}`);
+            } catch (err) {
+              showFirewallToast(`⚠️ Error al traducir`);
+            } finally {
+              transBtn.disabled = false;
+              transBtn.innerText = `🌐 Traducir a ${liveDetectedLang.code.toUpperCase()}`;
+            }
+          };
+
+          // Guardar e Insertar mensaje editado
+          saveBtn.onclick = (e) => {
+            e.stopPropagation();
+            const finalMsg = editorTextarea.value.trim();
+            if (finalMsg) {
+              const ta = findChatInput();
+              if (ta) {
+                setInputValueSafely(ta, finalMsg);
+                showFirewallToast(`✨ Mensaje editado insertado en el chat. ¡Listo para enviar!`, 'success');
+                ta.focus();
+              }
+              dropdown.remove();
+            }
+          };
+
+          cancelBtn.onclick = (e) => {
+            e.stopPropagation();
+            editorBox.style.display = 'none';
+          };
+
+          // Clic directo en la tarjeta (sin clic en botones): Inserción inmediata 1-Click
+          option.onclick = (e) => {
+            if (e.target.closest('.ryr-inline-editor') || e.target.closest('.ryr-hook-edit-btn')) return;
             const ta = findChatInput();
             if (ta) {
               setInputValueSafely(ta, targetText);
               showFirewallToast(`✨ Mensaje en ${liveDetectedLang.name} insertado en el chat. ¡Listo para enviar!`, 'success');
+              ta.focus();
             }
             dropdown.remove();
           };
@@ -1856,12 +1927,13 @@
   function injectAutoLetterDrafter() {
     if (!window.location.href.includes('/mails/') && !document.querySelector('textarea[placeholder*="letter" i]')) return;
 
-    // Buscar área de envío de carta
-    const sendLetterBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
-      if (b.closest('#ryr-titan-bar') || b.closest('#ryr-intel-panel') || b.closest('.ryr-letter-tools-box')) return false;
+    // Buscar área de envío de carta o botón Send (tolerante a cualquier variante del DOM de Talkytimes)
+    const sendLetterBtn = Array.from(document.querySelectorAll('button, div[role="button"], a[role="button"]')).find(b => {
+      if (b.closest('#ryr-titan-bar') || b.closest('#ryr-intel-panel') || b.closest('.ryr-letter-tools-box') || b.closest('.ryr-chat-tools-wrapper')) return false;
       const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
       const testId = (b.getAttribute('data-test-id') || '').toLowerCase();
-      return txt.includes('send letter') || testId.includes('send-letter') || txt.includes('send mail');
+      const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+      return txt === 'send' || txt === 'send letter' || txt === 'send mail' || txt.startsWith('send') || testId.includes('send') || aria.includes('send');
     });
 
     const letterTextarea = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
@@ -1889,19 +1961,21 @@
       drafterBox = document.createElement('div');
       drafterBox.id = 'ryr-letter-drafter-box';
       drafterBox.className = 'ryr-letter-tools-box';
-      
-      if (sendLetterBtn && sendLetterBtn.parentElement) {
-        sendLetterBtn.parentElement.style.display = 'flex';
-        sendLetterBtn.parentElement.style.alignItems = 'center';
-        sendLetterBtn.parentElement.style.overflow = 'visible';
-        sendLetterBtn.parentElement.insertBefore(drafterBox, sendLetterBtn);
-      } else if (letterTextarea && letterTextarea.parentElement) {
-        letterTextarea.parentElement.appendChild(drafterBox);
-      }
-    } else if (sendLetterBtn && sendLetterBtn.parentElement) {
+    }
+
+    if (sendLetterBtn && sendLetterBtn.parentElement) {
       sendLetterBtn.parentElement.style.overflow = 'visible';
-      if (drafterBox.nextElementSibling !== sendLetterBtn) {
+      sendLetterBtn.parentElement.style.minHeight = '52px';
+      sendLetterBtn.parentElement.style.height = 'auto';
+      sendLetterBtn.parentElement.style.display = 'flex';
+      sendLetterBtn.parentElement.style.alignItems = 'center';
+      sendLetterBtn.parentElement.style.flexWrap = 'nowrap';
+      if (drafterBox.parentElement !== sendLetterBtn.parentElement || drafterBox.nextElementSibling !== sendLetterBtn) {
         sendLetterBtn.parentElement.insertBefore(drafterBox, sendLetterBtn);
+      }
+    } else if (letterTextarea && letterTextarea.parentElement) {
+      if (drafterBox.parentElement !== letterTextarea.parentElement) {
+        letterTextarea.parentElement.appendChild(drafterBox);
       }
     }
 
@@ -1943,9 +2017,12 @@
     }
     transLetterBtn.title = `Traducir carta al idioma detectado del cliente (${detectedLang.name})`;
 
-    // Asegurar orden visual estricto: Responder Carta ARRIBA, Traducir Carta ABAJO
+    // Asegurar orden visual estricto en el DOM: Responder Carta ARRIBA, Traducir Carta ABAJO
+    if (drafterBox.firstElementChild !== genLetterBtn) {
+      drafterBox.insertBefore(genLetterBtn, drafterBox.firstElementChild);
+    }
     if (genLetterBtn.nextElementSibling !== transLetterBtn) {
-      drafterBox.insertBefore(genLetterBtn, transLetterBtn);
+      genLetterBtn.after(transLetterBtn);
     }
 
     // Acción: Traducir Carta escrita manualmente en el textarea
@@ -2176,14 +2253,79 @@
         card.innerHTML = `
           <div class="ryr-letter-option-title">
             <span>${opt.title}</span>
-            <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <button type="button" class="ryr-hook-edit-btn" title="Editar y personalizar carta antes de insertar">✏️ Editar Carta</button>
+              <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
+            </div>
           </div>
           <div class="ryr-letter-option-rationale">💡 <b>Razón Táctica:</b> ${opt.rationale}</div>
           <div class="ryr-letter-option-preview"><b>📝 En Español (Vista Operador):</b><br/>${opt.esPreview}</div>
           <div style="font-size:9.5px; color:#38bdf8; margin-top:2px; font-weight:bold;">⚡ Clic para insertar automáticamente en ${detectedLang.name}</div>
+          <div class="ryr-inline-editor" style="display:none; margin-top:8px;">
+            <textarea style="min-height:95px;" placeholder="Personaliza el texto de tu carta aquí...">${opt.target}</textarea>
+            <div class="ryr-inline-editor-actions">
+              <button type="button" class="ryr-btn-trans-inline" title="Traducir carta editada al idioma del cliente">🌐 Traducir a ${detectedLang.code.toUpperCase()}</button>
+              <button type="button" class="ryr-btn-save-inline">✅ Insertar Carta</button>
+              <button type="button" class="ryr-btn-cancel-inline">❌ Cancelar</button>
+            </div>
+          </div>
         `;
 
-        card.onclick = () => {
+        const editBtn = card.querySelector('.ryr-hook-edit-btn');
+        const editorBox = card.querySelector('.ryr-inline-editor');
+        const editorTextarea = editorBox.querySelector('textarea');
+        const saveBtn = editorBox.querySelector('.ryr-btn-save-inline');
+        const cancelBtn = editorBox.querySelector('.ryr-btn-cancel-inline');
+        const transBtn = editorBox.querySelector('.ryr-btn-trans-inline');
+
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          editorBox.style.display = editorBox.style.display === 'none' ? 'flex' : 'none';
+          if (editorBox.style.display === 'flex') {
+            editorTextarea.focus();
+            editorTextarea.select();
+          }
+        };
+
+        transBtn.onclick = async (e) => {
+          e.stopPropagation();
+          const rawVal = editorTextarea.value.trim();
+          if (!rawVal) return;
+          transBtn.innerText = '⏳ Traduciendo...';
+          transBtn.disabled = true;
+          try {
+            const translated = await translateText(rawVal, detectedLang.code);
+            editorTextarea.value = translated;
+            showFirewallToast(`✅ Carta traducida a ${detectedLang.name}`);
+          } catch (err) {
+            showFirewallToast(`⚠️ Error al traducir carta`);
+          } finally {
+            transBtn.disabled = false;
+            transBtn.innerText = `🌐 Traducir a ${detectedLang.code.toUpperCase()}`;
+          }
+        };
+
+        saveBtn.onclick = (e) => {
+          e.stopPropagation();
+          const finalLetter = editorTextarea.value.trim();
+          if (finalLetter) {
+            const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
+            if (ta) {
+              setInputValueSafely(ta, finalLetter);
+              showFirewallToast(`✨ Carta editada en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
+              ta.focus();
+            }
+            dropdown.remove();
+          }
+        };
+
+        cancelBtn.onclick = (e) => {
+          e.stopPropagation();
+          editorBox.style.display = 'none';
+        };
+
+        card.onclick = (e) => {
+          if (e.target.closest('.ryr-inline-editor') || e.target.closest('.ryr-hook-edit-btn')) return;
           const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
           if (ta) {
             setInputValueSafely(ta, opt.target);

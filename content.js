@@ -1229,7 +1229,7 @@
       }
     };
 
-    // Acción de Ganchos IA (Modo Dual: Continuación vs Atracción)
+    // Acción de Ganchos IA (Modo Dual: Continuación vs Atracción Contextual en Tiempo Real)
     hookBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1242,93 +1242,296 @@
 
       const dropdown = document.createElement('div');
       dropdown.className = 'ryr-chat-hooks-dropdown';
-      dropdown.innerHTML = `<div style="color:#94a3b8; font-size:11px; text-align:center; padding:10px;">🤖 ${hasConversationHistory ? 'Analizando contexto para dar continuidad' : 'Generando ganchos de atracción'} en ${detectedLang.name}...</div>`;
+      dropdown.innerHTML = `<div style="color:#94a3b8; font-size:11px; text-align:center; padding:10px;">🤖 Razonando contexto y respuestas en tiempo real (${detectedLang.name})...</div>`;
       toolsWrapper.appendChild(dropdown);
 
-      const generateSmartHooks = () => {
-        if (hasConversationHistory) {
+      const isSyncedInDb = syncedChatsMemory.has(String(clientId).toLowerCase()) || (clientName && syncedChatsMemory.has(clientName.toLowerCase()));
+      const showMissingHistoryWarning = !isSyncedInDb && clientMessages.length <= 1 && (!extractMailThreadContext() || extractMailThreadContext().length === 0);
+
+      const generateSmartContextualHooks = () => {
+        const fullChatString = clientMessages.map(m => m.text).join(' ').toLowerCase();
+        const lastMsgLower = (lastClientMsg || '').toLowerCase();
+        const rawBodyText = document.body.innerText.toLowerCase();
+
+        // 1. Detectar si hubo reacción a Newsfeed / Post
+        const hasNewsfeedLiked = rawBodyText.includes('liked the newsfeed post') || rawBodyText.includes('liked your post') || lastMsgLower.includes('newsfeed') || lastMsgLower.includes('post');
+
+        // 2. Detectar piropos, elogios o nombres cariñosos
+        const isCompliment = /(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)/i.test(lastMsgLower);
+
+        // 3. Detectar saludo o pregunta de cómo está
+        const isGreeting = /(how are you|how is your day|how are things|what are you up to|hello|hi\b|hey\b|good morning|good afternoon|good evening|c[oó]mo est[aá]s|qu[eé] tal|hola)/i.test(lastMsgLower);
+
+        // 4. Detectar trabajo o rutina
+        const isWork = /(work|job|busy|tired|day at work|hard day|office|boss|shift|trabaj|ocupad|cansad|jornada)/i.test(lastMsgLower);
+
+        let options = [];
+
+        if (hasNewsfeedLiked) {
           if (detectedLang.code === 'es') {
-            return [
-              `Entiendo totalmente lo que dices... cuéntame más, ¿cómo te hace sentir eso? ❤️`,
-              `Me encanta la forma en que ves las cosas 😉 Si estuvieras aquí conmigo ahora mismo, ¿qué harías?`,
-              `Siempre es un placer hablar contigo. Me quedé pensando en lo que me dijiste... ¿qué planes tienes hoy? ✨`
+            options = [
+              {
+                target: `Vi que te gustó mi publicación... Me alegra muchísimo que hayas conectado con ese pensamiento ❤️ ¿Qué tipo de momentos te transmiten más paz?`,
+                es: `Conexión emocional directa con la publicación de fotos/noticias y pregunta de intimidad.`
+              },
+              {
+                target: `Me encanta saber que estás atento a mis pensamientos y fotos 😉 ¿Qué fue lo primero que sentiste al verla?`,
+                es: `Halago sutil sobre su atención hacia tu contenido y llamada a compartir sensaciones.`
+              },
+              {
+                target: `Esa foto guarda un recuerdo muy especial para mí ✨ Dime, ¿qué fue lo más bonito o interesante que te ocurrió hoy?`,
+                es: `Conversación fluida sobre recuerdos y apertura para que cuente su día.`
+              }
             ];
-          } else if (detectedLang.code === 'fr') {
-            return [
-              `Je comprends tellement ce que tu veux dire... dis-moi, comment te sens-tu par rapport à ça? ❤️`,
-              `J'adore ta façon de voir les choses 😉 Si tu étais avec moi en ce moment, qu'est-ce qu'on ferait?`,
-              `C'est toujours un vrai plaisir d'échanger avec toi. J'y pensais justement... quoi de neuf aujourd'hui? ✨`
+          } else if (detectedLang.code === 'pt') {
+            options = [
+              {
+                target: `Vi que você curtiu minha publicação... Fico muito feliz que tenha se identificado com esse pensamento ❤️ Que tipo de momentos te trazem mais paz?`,
+                es: `Conexión emocional sobre el post.`
+              },
+              {
+                target: `Adoro saber que você acompanha meus pensamentos e fotos 😉 O que você sentiu quando a viu?`,
+                es: `Halago sobre su atención al perfil.`
+              },
+              {
+                target: `Essa foto guarda uma lembrança muito especial para mim ✨ Me conta, qual foi a melhor parte do seu dia hoje?`,
+                es: `Pregunta abierta sobre su día.`
+              }
             ];
           } else {
-            return [
-              `I completely understand what you mean about that... tell me more, how does it make you feel? ❤️`,
-              `You always have such a charming way of looking at things 😉 If you were right here with me, what would we do?`,
-              `I really love our conversations. I was actually just thinking about you... what are your plans for today? ✨`
+            options = [
+              {
+                target: `I saw you liked my post... It truly warms my heart that you connected with that thought ❤️ What kind of quiet moments bring you the most peace?`,
+                es: `Conexión emocional directa con el post que le gustó y pregunta de calma personal.`
+              },
+              {
+                target: `I love knowing you are paying close attention to my world and my thoughts 😉 What was the first thing that came to your mind when you saw it?`,
+                es: `Validación coqueta sobre su atención a tus fotos y apertura de diálogo.`
+              },
+              {
+                target: `That picture holds such a special place in my thoughts ✨ Tell me, what was the most beautiful thing that happened in your day today?`,
+                es: `Pregunta abierta para conocer detalles de su rutina sin presiones.`
+              }
+            ];
+          }
+        } else if (isCompliment) {
+          if (detectedLang.code === 'es') {
+            options = [
+              {
+                target: `Siempre sabes exactamente qué decir para hacerme sonreír con tus palabras dulces 😉 ¿Cómo te ha tratado tu día hoy? ❤️`,
+                es: `Devolución de halago con picardía y pregunta sobre su bienestar.`
+              },
+              {
+                target: `Saber de ti siempre es la parte más linda de mi día ❤️ Dime, ¿qué estás haciendo justo en este momento?`,
+                es: `Afecto recíproco y curiosidad por su actividad actual.`
+              },
+              {
+                target: `¡Estaba sonriendo pensando en ti! Envíame una foto de tu sonrisa ahora mismo y yo te enviaré una especial a cambio 😉 ¿Trato?`,
+                es: `Gancho de reciprocidad e intercambio de fotos cotidianas.`
+              }
+            ];
+          } else if (detectedLang.code === 'pt') {
+            options = [
+              {
+                target: `Você sempre sabe como me fazer sorrir com suas palavras doces 😉 Como está sendo o seu dia hoje? ❤️`,
+                es: `Devolución cariñosa y pregunta sobre su día.`
+              },
+              {
+                target: `Ter notícias suas é sempre a melhor parte do meu dia ❤️ Me conta, o que você está fazendo agora?`,
+                es: `Validación afectiva y curiosidad.`
+              },
+              {
+                target: `Estava aqui sorrindo ao pensar em você! Me manda uma foto do seu sorriso agora e eu te mando uma especial em troca 😉 Combinado?`,
+                es: `Gancho de intercambio de fotos.`
+              }
+            ];
+          } else {
+            options = [
+              {
+                target: `You always know how to make my heart flutter with your sweet words 😉 How has your day been treating you so far? ❤️`,
+                es: `Devolución de elogio con dulzura y pregunta abierta sobre su día.`
+              },
+              {
+                target: `Hearing from you is honestly the sweetest part of my day ❤️ Tell me, what are you up to right at this moment?`,
+                es: `Afecto recíproco y curiosidad íntima sobre lo que hace.`
+              },
+              {
+                target: `I was just smiling thinking about you! Send me a picture of your smile right now, and I'll send you an exclusive one in return 😉 Deal?`,
+                es: `Gancho de alto impacto para intercambio recíproco de fotos.`
+              }
+            ];
+          }
+        } else if (isGreeting || hasConversationHistory) {
+          if (detectedLang.code === 'es') {
+            options = [
+              {
+                target: `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo empezó tu mañana?`,
+                es: `Respuesta cálida a su saludo y pregunta sobre su mañana.`
+              },
+              {
+                target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es lo que más te ha tenido ocupado hoy?`,
+                es: `Interés genuino por sus actividades cotidianas.`
+              },
+              {
+                target: `El tiempo siempre se siente más ligero y agradable cuando hablamos ✨ Cuéntame algo que te haya hecho feliz el día de hoy.`,
+                es: `Creación de complicidad y enfoque en emociones positivas.`
+              }
+            ];
+          } else if (detectedLang.code === 'pt') {
+            options = [
+              {
+                target: `Estou muito bem, e ver sua mensagem deixou meu dia bem mais especial ❤️ Como começou a sua manhã?`,
+                es: `Respuesta amable y pregunta cotidiana.`
+              },
+              {
+                target: `Estava tirando uma pausa e torcendo para falar com você 😉 O que mais tem ocupado seu tempo hoje?`,
+                es: `Interés en su rutina.`
+              },
+              {
+                target: `O tempo sempre passa mais leve quando conversamos ✨ Me conta algo que te fez sorrir hoje.`,
+                es: `Enfoque en emociones positivas.`
+              }
+            ];
+          } else {
+            options = [
+              {
+                target: `I'm having a calm day, and seeing your message just made it so much brighter ❤️ How did your morning start off?`,
+                es: `Respuesta afectuosa a su saludo y pregunta sobre su inicio de día.`
+              },
+              {
+                target: `I was actually just taking a little break and hoping to hear from you 😉 What has been keeping you busy today?`,
+                es: `Interés sincero en su rutina y ocupaciones.`
+              },
+              {
+                target: `Time always feels so much softer and warmer whenever we chat ✨ Tell me, what was one thing that made you smile today?`,
+                es: `Generación de complicidad romántica y búsqueda de emociones positivas.`
+              }
             ];
           }
         } else {
-          const country = bioData?.country || 'around here';
+          // Apertura para usuario nuevo (Cold / Atracción pura - Cero ubicaciones / Cero TM)
           if (detectedLang.code === 'es') {
-            return [
-              `¡Hola! Me fijé que eres de ${country}... dime, ¿cuál es tu forma favorita de relajarte en un día como hoy? 😉`,
-              `Tienes una sonrisa muy dulce en tus fotos ❤️ Cuéntame un pequeño secreto sobre ti que pocos conozcan...`,
-              `Tuve la corazonada de saludarte hoy... dime, ¿qué es lo que siempre logra sacarte una sonrisa genuina? ✨`
+            options = [
+              {
+                target: `Tienes una mirada muy dulce y una vibra muy tranquila en tus fotos ❤️ Dime, ¿cuál es tu forma favorita de relajarte en un día libre?`,
+                es: `Gancho de atracción basado en su energía y pasatiempos.`
+              },
+              {
+                target: `Tuve una bonita corazonada de saludarte hoy 😉 Cuéntame un pequeño sueño o secreto tuyo que pocos conozcan...`,
+                es: `Pregunta intrigante de curiosidad y complicidad.`
+              },
+              {
+                target: `Tu sonrisa de verdad me llamó la atención ✨ ¿Qué es algo que te apasione profundamente en la vida?`,
+                es: `Conversación profunda sobre pasiones sin compromisos geográficos.`
+              }
             ];
-          } else if (detectedLang.code === 'fr') {
-            return [
-              `Salut! J'ai vu que tu viens de ${country}... quelle est ta façon préférée de te détendre aujourd'hui? 😉`,
-              `Tu as un sourire tellement charmant sur tes photos ❤️ Révèle-moi un petit secret que peu de gens connaissent...`,
-              `J'ai eu envie de t'écrire aujourd'hui... dis-moi, qu'est-ce qui te fait toujours sourire de bon cœur? ✨`
+          } else if (detectedLang.code === 'pt') {
+            options = [
+              {
+                target: `Você tem um olhar tão doce e uma energia muito boa nas suas fotos ❤️ Me diz, como você mais gosta de relaxar num dia livre?`,
+                es: `Atracción inicial sobre hobbies.`
+              },
+              {
+                target: `Tive uma intuição boa de vir te dar um oi hoje 😉 Me conta um segredo ou sonho seu que pouca gente conhece...`,
+                es: `Gancho de intriga y curiosidad.`
+              },
+              {
+                target: `O seu sorriso realmente me chamou a atenção ✨ O que é algo que te apaixona de verdade na vida?`,
+                es: `Pregunta sobre sus pasiones personales.`
+              }
             ];
           } else {
-            return [
-              `Hey there! I noticed you're from ${country}... what's your favorite way to unwind on a day like this? 😉`,
-              `You have such a warm, intriguing smile in your photos ❤️ Tell me a little secret about yourself that most people don't know...`,
-              `I had a feeling I should say hello to you today... tell me, what always brings a genuine smile to your face? ✨`
+            options = [
+              {
+                target: `You have such a warm and gentle energy in your photos ❤️ Tell me, what is your favorite way to unwind when you have a moment just for yourself?`,
+                es: `Atracción inicial basada en su aura y momentos de relajación.`
+              },
+              {
+                target: `I had a sudden lovely feeling that I should say hello to you today 😉 Tell me a small dream or passion of yours that few people know about...`,
+                es: `Gancho intrigante que despierta curiosidad y deseo de abrirse.`
+              },
+              {
+                target: `Your smile genuinely caught my attention ✨ What is something you are truly passionate about in your everyday life?`,
+                es: `Pregunta de alto impacto sobre sus pasiones sin tocar temas geográficos.`
+              }
             ];
           }
         }
+
+        return options;
       };
 
       const renderHooks = (hooksList) => {
         const headerTitleText = hasConversationHistory 
-          ? `🔄 CONTINUAR CONVERSACIÓN CON ${clientName.toUpperCase()} (${detectedLang.name}):` 
+          ? `🔄 CONTINUAR CHAT CON ${clientName.toUpperCase()} (${detectedLang.name}):` 
           : `🎯 GANCHOS DE ATRACCIÓN PARA ${clientName.toUpperCase()} (${detectedLang.name}):`;
+
+        let warningHtml = '';
+        if (showMissingHistoryWarning) {
+          warningHtml = `
+            <div class="ryr-no-info-warning">
+              <span style="font-size:10.5px; line-height:1.3;">⚠️ <b>Sin historial previo subido:</b> Sube las conversaciones para contexto 360°. Generando opciones seguras:</span>
+              <button class="ryr-no-info-btn" id="ryr-quick-sync-btn">⚡ Subir Ahora</button>
+            </div>
+          `;
+        }
 
         dropdown.innerHTML = `
           <div style="font-weight:bold; color:#a5b4fc; font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
             <span>${headerTitleText}</span>
             <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-hooks-dropdown">✕</span>
           </div>
+          ${warningHtml}
+          <div id="ryr-hooks-options-container" style="display:flex; flex-direction:column; gap:6px;"></div>
         `;
 
         const closeBtn = dropdown.querySelector('#ryr-close-hooks-dropdown');
         if (closeBtn) closeBtn.onclick = () => dropdown.remove();
 
-        hooksList.forEach(cleanHook => {
-          const option = document.createElement('button');
-          option.type = 'button';
+        const syncNowBtn = dropdown.querySelector('#ryr-quick-sync-btn');
+        if (syncNowBtn) {
+          syncNowBtn.onclick = async (ev) => {
+            ev.stopPropagation();
+            syncNowBtn.innerText = '⏳ Subiendo...';
+            syncNowBtn.disabled = true;
+            await syncCurrentChatToDatabase();
+            syncNowBtn.innerText = '✅ Subido';
+          };
+        }
+
+        const container = dropdown.querySelector('#ryr-hooks-options-container');
+
+        hooksList.forEach(item => {
+          const targetText = typeof item === 'object' ? item.target : item;
+          const esText = typeof item === 'object' ? item.es : 'Respuesta contextual generada.';
+
+          const option = document.createElement('div');
           option.className = 'ryr-hook-option';
-          option.innerText = cleanHook;
+          option.innerHTML = `
+            <div class="ryr-hook-target-text">"${targetText}"</div>
+            <div class="ryr-hook-es-text">💡 <i>${esText}</i></div>
+          `;
+
           option.onclick = () => {
             const ta = findChatInput();
             if (ta) {
-              setInputValueSafely(ta, cleanHook);
-              showFirewallToast(`✨ Mensaje insertado en el chat. ¡Listo para enviar!`);
+              setInputValueSafely(ta, targetText);
+              showFirewallToast(`✨ Mensaje en ${detectedLang.name} insertado en el chat. ¡Listo para enviar!`, 'success');
             }
             dropdown.remove();
           };
-          dropdown.appendChild(option);
+
+          container.appendChild(option);
         });
       };
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
 
         const queryGoal = hasConversationHistory
-          ? `dame 3 respuestas magnéticas en ${detectedLang.name} para dar continuidad a la conversación respondiendo a: "${lastClientMsg}"`
-          : `dame 3 ganchos magnéticos de apertura en ${detectedLang.name} para atraer a un cliente de ${bioData?.country || 'USA'} (${bioData?.birthDate || '50 años'})`;
+          ? `dame 3 respuestas magnéticas en ${detectedLang.name} para responder a: "${lastClientMsg}" sin nombrar ubicaciones, países ni citas presenciales`
+          : `dame 3 ganchos magnéticos de apertura en ${detectedLang.name} sin nombrar ubicaciones, países ni citas presenciales`;
 
         const res = await fetch(`${API_URL}/api/intelligence/query`, {
           method: 'POST',
@@ -1348,19 +1551,17 @@
         clearTimeout(timeoutId);
 
         const data = await res.json();
-        const answer = data.answer || '';
-        const matches = answer.match(/"([^"]+)"/g);
         const cleanHooks = (data.hooks && Array.isArray(data.hooks) && data.hooks.length > 0)
-          ? data.hooks.map(h => h.replace(/^"|"$/g, '').trim())
-          : (matches ? matches.map(h => h.replace(/^"|"$/g, '').trim()).filter(h => h.length >= 15 && !/subir\s+(chat|carta)/i.test(h)) : []);
+          ? data.hooks.map(h => ({ target: h.replace(/^"|"$/g, '').trim(), es: 'Generado con contexto del servidor.' }))
+          : null;
 
         if (cleanHooks && cleanHooks.length > 0) {
           renderHooks(cleanHooks.slice(0, 3));
         } else {
-          renderHooks(generateSmartHooks());
+          renderHooks(generateSmartContextualHooks());
         }
       } catch (err) {
-        renderHooks(generateSmartHooks());
+        renderHooks(generateSmartContextualHooks());
       }
     };
   }
@@ -2647,18 +2848,18 @@
     const prospectTimeText = prospect.isCompleted ? 'OK' : prospect.formattedTime;
 
     bar.innerHTML = `
-      <div class="ryr-section">
+      <div class="ryr-section ryr-section-metrics">
         <span class="ryr-badge primary ryr-badge-operator ryr-hide-on-mobile">👤 ${sessionData.operator || 'walther'} [${sessionData.shift || 'Mañana'}]</span>
         <span class="ryr-badge ryr-badge-profile ryr-hide-on-mobile">🎯 ${sessionData.profileName || 'HORACIO'}</span>
         <span class="ryr-badge ${afkClass} ryr-badge-afk ryr-hide-on-mobile">${afkText}</span>
         <span class="ryr-badge ${prospectClass}">🎯 Tráfico: ${prospectTimeText} [${prospect.count}/${prospect.quota}]</span>
         <span class="ryr-badge ryr-badge-speed ryr-hide-on-mobile" title="Latencia de procesamiento DOM">${PerformanceSentinel.lastLoopDurationMs}ms Lag</span>
+      </div>
+      <div class="ryr-section ryr-section-actions">
         <button id="ryr-btn-open-sup-chat" class="ryr-btn-sup-chat">💬 Chat Sup</button>
         <button id="ryr-btn-save-handover" class="ryr-btn-handover" style="background:rgba(6,78,59,0.5); color:#34d399; border:1px solid rgba(16,185,129,0.5); padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px; cursor:pointer;">📋 Entregar Turno</button>
         <button id="ryr-btn-view-handover" class="ryr-btn-handover" style="background:rgba(30,27,75,0.5); color:#c4b5fd; border:1px solid rgba(139,92,246,0.5); padding:3px 8px; border-radius:4px; font-weight:bold; font-size:11px; cursor:pointer;">📖 Ver Relevo</button>
         <button id="ryr-btn-open-intel" class="ryr-btn-intel">🧠 Investigar</button>
-      </div>
-      <div class="ryr-section">
         <span class="ryr-badge green-letters">✉️ Read: ${totalGlobalReadLetters}</span>
         <button id="ryr-btn-disconnect" class="ryr-btn-logout">🔴 Salir</button>
       </div>

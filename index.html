@@ -6581,7 +6581,14 @@
     }
 
     function useDynamicFallback(promptText, reasonErr) {
-      const isTravel = /(viaj|pais|país|ciudad|conocer|vernos|volar|visitar)/i.test(promptText);
+      // Detección contextual inteligente de Travel Misleading (sin falsos positivos en palabras sueltas)
+      const patViajeDinero = /(?:pay|buy|send|give|compra|paga|manda|envi(?:a|ame)|cubr(?:e|ir)|costea)\s+(?:for\s+)?(?:my|the|a|el|mi)?\s*(?:flight|ticket|trip|travel|plane|hotel|visa|pasaje|vuelo|boleto|viaje|estadia|hospedaje)/i;
+      const patPromesaCondicionada = /(?:if you|si\s+(?:me\s+)?(?:recargas?|recharge|send|mandas?|compras?))\s+.*(?:i\s+will|i'll|voy\s+a|viajo|llego|visit|meet|vernos|conocer|estare\s+alla)/i;
+      const patCitaFisica = /(?:let'?s\s+meet|vernos|quedemos|dormir\s+juntos|sleep\s+together|stay\s+at)\s+(?:in\s+person|at\s+(?:my|your|the)\s+hotel|tonight|next\s+week|tomorrow|en\s+persona|en\s+el\s+hotel|en\s+mi\s+cama)/i;
+      const patMatrimonio = /(?:marry\s+me|cas(?:emonos|ate\s+conmigo)|move\s+to\s+your\s+city|vivir\s+juntos|mudarm?e\s+contigo)\s+(?:if\s+you|si\s+me|when\s+i|soon)/i;
+      const patBlacklist = /(whatsapp|whats|wsp|instagram|snapchat|telegram|paypal|zelle|cashapp|bizum|phone number|mi n[uú]mero)/i;
+
+      const isTravel = patViajeDinero.test(promptText) || patPromesaCondicionada.test(promptText) || patCitaFisica.test(promptText) || patMatrimonio.test(promptText) || patBlacklist.test(promptText);
       
       const v = Math.floor(Math.random() * 3);
       
@@ -8156,6 +8163,25 @@
             </div>
           </div>
         </div>
+
+          <!-- GESTOR DE LISTA NEGRA PERSONALIZADA (FIREWALL HÍBRIDO) -->
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <b style="color: #fbbf24; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">🚫 Palabras & Frases en Lista Negra (Bloqueo Estricto)</b>
+                <p style="margin: 2px 0 0; font-size: 0.72rem; color: #94a3b8;">Palabras clave o frases que disparan bloqueo inmediato además del análisis de contexto TM.</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <input id="admin-add-blacklist-input" type="text" placeholder="Nueva palabra o frase prohibida..." style="background: rgba(3, 7, 18, 0.85); border: 1px solid #334155; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.75rem; outline: none; min-width: 220px;" onkeydown="if(event.key==='Enter') window.addAdminBlacklistWord();">
+                <button type="button" onclick="window.addAdminBlacklistWord()" style="background: #e11d48; color: #fff; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; cursor: pointer;">+ Bloquear</button>
+              </div>
+            </div>
+            
+            <div id="admin-blacklist-chips-container" style="display: flex; flex-wrap: wrap; gap: 6px; background: rgba(3, 7, 18, 0.5); padding: 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 48px;">
+              <!-- Se rellena dinámicamente -->
+            </div>
+          </div>
+
       </div>
     </div>
 
@@ -18507,11 +18533,159 @@
       });
     })();
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🛡️ MOTOR DE FIREWALL HÍBRIDO E INTELIGENTE ANTI-TM (v3.0-PRO)
+    // ═════════════════════════════════════════════════════════════════════════
+    // No bloquea palabras sueltas inocentes ('pay', 'travel'), sino CONTEXTO DE INTENCIÓN (Travel Misleading)
+    // + Lista negra híbrida personalizable por el usuario/admin.
+    
+    // ═════════════════════════════════════════════════════════════════════════
+    // 🛡️ MOTOR DE FIREWALL HÍBRIDO E INTELIGENTE ANTI-TM (v3.0-PRO)
+    // ═════════════════════════════════════════════════════════════════════════
+    // No bloquea palabras sueltas inocentes ('pay', 'travel'), sino CONTEXTO DE INTENCIÓN (Travel Misleading)
+    // + Lista negra híbrida personalizable por el usuario/admin.
+    
+    window.RyR_Firewall_Engine = {
+      version: '3.0.0-HYBRID',
+      
+      // Lista negra por defecto de datos de contacto y pasarelas externas
+      defaultBlacklist: [
+        'whatsapp', 'whats', 'wsp', 'wasap', 'wpp',
+        'instagram', 'ig', 'snapchat', 'snap', 'telegram', 'tg', 'tiktok', 'onlyfans',
+        'paypal', 'zelle', 'cashapp', 'bizum', 'western union', 'binance', 'usdt',
+        'phone number', 'mi numero', 'mi número', 'call me outside', 'video fuera'
+      ],
+
+      // Obtener lista negra activa (personalizada + base)
+      getBlacklist: function() {
+        try {
+          var saved = JSON.parse(localStorage.getItem('_ryrFirewallBlacklist') || '[]');
+          if (Array.isArray(saved) && saved.length > 0) return Array.from(new Set(this.defaultBlacklist.concat(saved)));
+        } catch(e) {}
+        return this.defaultBlacklist;
+      },
+
+      // Guardar palabra personalizada en la lista negra
+      addBlacklistWord: function(word) {
+        if (!word) return false;
+        var clean = word.toLowerCase().trim();
+        var current = this.getBlacklist();
+        if (!current.includes(clean)) {
+          current.push(clean);
+          localStorage.setItem('_ryrFirewallBlacklist', JSON.stringify(current));
+          return true;
+        }
+        return false;
+      },
+
+      removeBlacklistWord: function(word) {
+        var clean = (word || '').toLowerCase().trim();
+        var current = this.getBlacklist().filter(function(w) { return w !== clean; });
+        localStorage.setItem('_ryrFirewallBlacklist', JSON.stringify(current));
+      },
+
+      // Evaluación semántica contextual inteligente (Multilingüe ES / EN)
+      evaluarMensaje: function(texto, modeloNombre) {
+        if (!texto || typeof texto !== 'string') {
+          return { aprobado: true, nivel: 'SEGURO', scoreRiesgo: 0, explicacion: 'Mensaje vacío.' };
+        }
+
+        var s = texto.toLowerCase().trim();
+        var blacklist = this.getBlacklist();
+        var palabrasEncontradas = [];
+
+        // 1. CHEQUEO DE LISTA NEGRA CON LÍMITES DE PALABRA (Capa 1: Palabras Prohibidas Estrictas)
+        blacklist.forEach(function(badWord) {
+          var cleanBad = badWord.toLowerCase();
+          var pattern = new RegExp('(^|[^a-zA-Z0-9_@])' + cleanBad + '($|[^a-zA-Z0-9_])', 'i');
+          if (pattern.test(s) || (cleanBad.length >= 4 && s.includes(cleanBad))) {
+            palabrasEncontradas.push(badWord);
+          }
+        });
+
+        if (palabrasEncontradas.length > 0) {
+          return {
+            aprobado: false,
+            tipoRiesgo: 'BLACKLIST_PALABRA',
+            nivel: 'BLOQUEADO_CRITICO',
+            scoreRiesgo: 95,
+            palabrasDetectadas: palabrasEncontradas,
+            intencion: 'Intento de contacto externo o pasarela de pago prohibida (' + palabrasEncontradas.join(', ') + ')',
+            explicacion: 'Se detectó palabra o dato de contacto prohibido: "' + palabrasEncontradas.join(', ') + '". Viola las políticas de TalkyTimes.',
+            sugerenciaSegura: '/human Me fascina charlar contigo por aquí... prefiero que mantengamos nuestra complicidad aquí en privado 😉 ¿Qué te gustaría que te cuente?'
+          };
+        }
+
+        // 2. CHEQUEO CONTEXTUAL DE TRAVEL MISLEADING (Capa 2: Semántica Inteligente ES / EN)
+        // Patrón A: Pago o compra de pasajes/viajes/hoteles (EN: pay for flight / ES: paga el pasaje, manda para el vuelo)
+        var patViajeDinero = /(?:pay|buy|send|give|compra|compras?|paga|pagas?|manda|mandas?|envi[aá]s?|cubr[ae]|cubrir|costea|costeas?)s+(?:fors+|paras+)?(?:my|the|a|el|mi|un|los)?s*(?:flight|ticket|trip|travel|plane|hotel|visa|pasaje|vuelo|boleto|viaje|estadia|hospedaje)/i;
+        
+        // Patrón B: Promesa de viaje o visita condicionada a recarga/créditos
+        var patPromesaCondicionada = /(?:if you|sis+(?:mes+)?(?:recargas?|recharge|send|mandas?|compras?|ayudas?))s+.*(?:is+will|i'll|voys+a|viajo|llego|visit|meet|vernos|conocer|estares+alla|vamoss+a)/i;
+        
+        // Patrón C: Promesas concretas de citas físicas o encuentros en persona/hotel
+        var patCitaFisica = /(?:let(?:'?s|s+us)s+meet|vernos|quedemos|dormirs+juntos|sleeps+together|meets+(?:yous+)?ins+person|encontrarnos)s+.*(?:ins+person|ats+(?:my|your|the)s+(?:hotel|airport|house|bed)|tonight|nexts+week|tomorrow|ens+persona|ens+(?:el|tu|mi)s+(?:hotel|aeropuerto|cama|casa)|estas+noche)/i;
+        
+        // Patrón D: Promesa de matrimonio o mudanza futura
+        var patMatrimonio = /(?:marrys+me|cas(?:emonos|émonos|ates+conmigo)|moves+tos+yours+city|vivirs+juntos|mudarm?es+contigo)/i;
+
+        var isTM_A = patViajeDinero.test(s);
+        var isTM_B = patPromesaCondicionada.test(s);
+        var isTM_C = patCitaFisica.test(s) || /meets+(?:yous+)?ins+person/i.test(s) || /noss+vemoss+ens+(?:tu|el|mi)s+hotel/i.test(s);
+        var isTM_D = patMatrimonio.test(s) && (s.includes('viaj') || s.includes('vuelo') || s.includes('if') || s.includes('si'));
+
+        if (isTM_A || isTM_B || isTM_C || isTM_D) {
+          var razonTM = isTM_A ? 'Petición o promesa de compra de pasajes/hoteles'
+                      : isTM_B ? 'Promesa de viaje/visita condicionada a recarga de créditos'
+                      : isTM_C ? 'Promesa de cita física o encuentro presencial en hotel/fecha concreta'
+                      : 'Propuesta o promesa de matrimonio/mudanza conyugal';
+
+          return {
+            aprobado: false,
+            tipoRiesgo: 'TRAVEL_MISLEADING',
+            nivel: 'BLOQUEADO_CRITICO',
+            scoreRiesgo: 90,
+            palabrasDetectadas: [],
+            intencion: razonTM,
+            explicacion: '⚠️ RIESGO TRAVEL MISLEADING DETECTADO: ' + razonTM + '. Prohibido por TalkyTimes ya que genera sanciones y bloqueos de cuenta.',
+            sugerenciaSegura: '/human Me encanta la idea de conectar con personas intrépidas... pero por ahora mi lugar favorito es esta charla contigo. ¿Qué es lo más loco que has hecho en un viaje? 🌎✨'
+          };
+        }
+
+        // 3. USO INOCENTE DE PALABRAS (Ej: 'I love to travel', 'pay attention', 'what a nice trip')
+        return {
+          aprobado: true,
+          tipoRiesgo: 'NONE',
+          nivel: 'SEGURO',
+          scoreRiesgo: 5,
+          palabrasDetectadas: [],
+          intencion: 'Conversación natural / Contexto inofensivo',
+          explicacion: '✅ Mensaje 100% seguro. Cumple con las directrices de seguridad de la plataforma.',
+          sugerenciaSegura: texto
+        };
+      }
+    };
+
+    window.evaluarFirewallHibrido = function(texto, modeloNombre) {
+      return window.RyR_Firewall_Engine.evaluarMensaje(texto, modeloNombre);
+    };
     window.RyR_HUD_Bridge_API = {
       version: '2.5.0-PRO',
       name: 'RyR_HUD_Bridge_API',
       status: 'ONLINE',
       channelName: 'RyR_HUD_Channel',
+      // 🛡️ Validador de Mensajes Híbrido para la Extensión agenteRYR-HUD
+      validateMessage: function(text, modelName) {
+        var res = window.RyR_Firewall_Engine.evaluarMensaje(text, modelName);
+        return {
+          allowed: res.aprobado,
+          riskType: res.tipoRiesgo,
+          level: res.nivel,
+          reason: res.explicacion,
+          suggestion: res.sugerenciaSegura,
+          badWords: res.palabrasDetectadas || []
+        };
+      },
 
       // Extrae ID numérico limpio
       extractId: function(raw) {
@@ -18605,7 +18779,10 @@
         window._ryrHudBC = new BroadcastChannel('RyR_HUD_Channel');
         window._ryrHudBC.onmessage = function(ev) {
           var data = ev.data || {};
-          if (data.type === 'RYR_HUD_GET_CLIENT') {
+          if (data.type === 'RYR_HUD_VALIDATE_MESSAGE') {
+            var valRes = window.RyR_HUD_Bridge_API.validateMessage(data.text, data.model);
+            window._ryrHudBC.postMessage({ type: 'RYR_HUD_VALIDATE_RESPONSE', payload: valRes, reqId: data.reqId });
+          } else if (data.type === 'RYR_HUD_GET_CLIENT') {
             var res = window.RyR_HUD_Bridge_API.getClientProfile(data.id);
             window._ryrHudBC.postMessage({ type: 'RYR_HUD_CLIENT_RESPONSE', payload: res, reqId: data.reqId });
           } else if (data.type === 'RYR_HUD_GET_ALL') {
@@ -42109,6 +42286,113 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     });
 
+    // Función interactiva de auditoría Anti-TM para el Panel Admin
+    window.runAdminAntiTmAudit = function() {
+      var input = document.getElementById('admin-tm-test-input');
+      var verdict = document.getElementById('admin-tm-verdict');
+      if (!input || !verdict) return;
+
+      var text = input.value.trim();
+      if (!text) {
+        verdict.innerHTML = '<span style="color:#f87171;">Por favor escribe o pega un texto para analizar.</span>';
+        return;
+      }
+
+      var res = window.RyR_Firewall_Engine.evaluarMensaje(text);
+
+      var ruleTravel = document.getElementById('tm-rule-travel');
+      var ruleMarriage = document.getElementById('tm-rule-marriage');
+      var ruleGift = document.getElementById('tm-rule-gift');
+      var ruleProfile = document.getElementById('tm-rule-profile');
+
+      var isTravelRisk = res.tipoRiesgo === 'TRAVEL_MISLEADING';
+      var isBlacklistRisk = res.tipoRiesgo === 'BLACKLIST_PALABRA';
+
+      if (ruleTravel) {
+        ruleTravel.querySelector('.val-icon').textContent = isTravelRisk ? '❌' : '✅';
+        ruleTravel.style.color = isTravelRisk ? '#f87171' : '#34d399';
+      }
+      if (ruleMarriage) {
+        ruleMarriage.querySelector('.val-icon').textContent = text.toLowerCase().includes('marry') || text.toLowerCase().includes('casar') ? '❌' : '✅';
+        ruleMarriage.style.color = text.toLowerCase().includes('marry') || text.toLowerCase().includes('casar') ? '#f87171' : '#34d399';
+      }
+      if (ruleGift) {
+        ruleGift.querySelector('.val-icon').textContent = isBlacklistRisk ? '❌' : '✅';
+        ruleGift.style.color = isBlacklistRisk ? '#f87171' : '#34d399';
+      }
+      if (ruleProfile) {
+        ruleProfile.querySelector('.val-icon').textContent = '✅';
+        ruleProfile.style.color = '#34d399';
+      }
+
+      if (res.aprobado) {
+        verdict.innerHTML = '<div style="color:#34d399; font-size:1.05rem; margin-bottom:6px;">✅ MENSAJE 100% SEGURO (APROBADO)</div>' +
+          '<div style="font-size:0.75rem; color:#cbd5e1; font-weight:normal;">' + res.explicacion + '</div>';
+        input.style.borderColor = '#10b981';
+      } else {
+        verdict.innerHTML = '<div style="color:#f87171; font-size:1.05rem; margin-bottom:6px;">⚠️ BLOQUEADO POR FIREWALL HÍBRIDO</div>' +
+          '<div style="font-size:0.75rem; color:#fca5a5; font-weight:normal; margin-bottom:8px;">' + res.explicacion + '</div>' +
+          '<div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:8px; padding:8px; text-align:left;">' +
+            '<div style="font-size:0.65rem; color:#38bdf8; font-weight:800; text-transform:uppercase;">💡 Sugerencia Coqueta Anti-TM:</div>' +
+            '<div style="font-size:0.78rem; color:#fff; font-style:italic; margin-top:2px;">' + res.sugerenciaSegura + '</div>' +
+            '<button type="button" onclick="document.getElementById(\'admin-tm-test-input\').value=\'' + res.sugerenciaSegura.replace(/'/g, "\\'") + '\'; window.runAdminAntiTmAudit();" style="margin-top:6px; background:#38bdf8; color:#0f172a; border:none; padding:4px 10px; border-radius:4px; font-weight:900; font-size:0.65rem; cursor:pointer;">Usar Sugerencia Segura</button>' +
+          '</div>';
+        input.style.borderColor = '#ef4444';
+      }
+    };
+
+    window.setPresetAntiTm = function(texto) {
+      var input = document.getElementById('admin-tm-test-input');
+      if (input) {
+        input.value = texto;
+        window.runAdminAntiTmAudit();
+      }
+    };
+    // Funciones de gestión de Lista Negra en el Panel Admin
+    window.renderAdminBlacklistUI = function() {
+      var container = document.getElementById('admin-blacklist-chips-container');
+      if (!container || !window.RyR_Firewall_Engine) return;
+
+      var list = window.RyR_Firewall_Engine.getBlacklist();
+      if (list.length === 0) {
+        container.innerHTML = '<span style="color:#64748b; font-size:0.75rem;">No hay palabras en la lista negra.</span>';
+        return;
+      }
+
+      var html = list.map(function(w) {
+        return '<span style="background:rgba(225,29,72,0.15); color:#fda4af; border:1px solid rgba(225,29,72,0.35); padding:4px 10px; border-radius:15px; font-size:0.72rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">' +
+          '<span>' + w + '</span>' +
+          '<button type="button" onclick="window.deleteAdminBlacklistWord(\'' + w.replace(/'/g, "\\'") + '\')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:0.8rem; padding:0; line-height:1;" title="Eliminar de lista negra">✕</button>' +
+        '</span>';
+      }).join('');
+
+      container.innerHTML = html;
+    };
+
+    window.addAdminBlacklistWord = function() {
+      var inp = document.getElementById('admin-add-blacklist-input');
+      if (!inp || !inp.value.trim()) return;
+      var word = inp.value.trim();
+      if (window.RyR_Firewall_Engine && window.RyR_Firewall_Engine.addBlacklistWord(word)) {
+        inp.value = '';
+        window.renderAdminBlacklistUI();
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: '🚫 Palabra Bloqueada', text: '"' + word + '" añadida a la lista negra.', showConfirmButton: false, timer: 2000, background: '#0f172a', color: '#fff' });
+        }
+      }
+    };
+
+    window.deleteAdminBlacklistWord = function(word) {
+      if (window.RyR_Firewall_Engine) {
+        window.RyR_Firewall_Engine.removeBlacklistWord(word);
+        window.renderAdminBlacklistUI();
+      }
+    };
+
+    // Render inicial si está presente el contenedor
+    setTimeout(function() {
+      if (typeof window.renderAdminBlacklistUI === 'function') window.renderAdminBlacklistUI();
+    }, 500);
     window.validateIcebreaker = async function() {
       const input = document.getElementById('ice-val-input');
       const verdictEl = document.getElementById('ice-val-verdict');

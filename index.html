@@ -18540,13 +18540,14 @@
     // + Lista negra híbrida personalizable por el usuario/admin.
     
     // ═════════════════════════════════════════════════════════════════════════
-    // 🛡️ MOTOR DE FIREWALL HÍBRIDO E INTELIGENTE ANTI-TM (v3.0-PRO)
+    // 🛡️ MOTOR DE FIREWALL HÍBRIDO E INTELIGENTE ANTI-TM (v3.1.0-PRO-SECURITY)
     // ═════════════════════════════════════════════════════════════════════════
-    // No bloquea palabras sueltas inocentes ('pay', 'travel'), sino CONTEXTO DE INTENCIÓN (Travel Misleading)
-    // + Lista negra híbrida personalizable por el usuario/admin.
-    
+    // Detección semántica contextual inteligente (Anti Travel Misleading) +
+    // Bloqueo estricto de botón Enviar + Modal flotante explicativo +
+    // Lista negra híbrida personalizable con persistencia en localStorage.
+
     window.RyR_Firewall_Engine = {
-      version: '3.0.0-HYBRID',
+      version: '3.1.0-PRO-SECURITY',
       
       // Lista negra por defecto de datos de contacto y pasarelas externas
       defaultBlacklist: [
@@ -18587,7 +18588,7 @@
       // Evaluación semántica contextual inteligente (Multilingüe ES / EN)
       evaluarMensaje: function(texto, modeloNombre) {
         if (!texto || typeof texto !== 'string') {
-          return { aprobado: true, nivel: 'SEGURO', scoreRiesgo: 0, explicacion: 'Mensaje vacío.' };
+          return { aprobado: true, blockSendButton: false, nivel: 'SEGURO', scoreRiesgo: 0, explicacion: 'Mensaje vacío.' };
         }
 
         var s = texto.toLowerCase().trim();
@@ -18597,93 +18598,179 @@
         // 1. CHEQUEO DE LISTA NEGRA CON LÍMITES DE PALABRA (Capa 1: Palabras Prohibidas Estrictas)
         blacklist.forEach(function(badWord) {
           var cleanBad = badWord.toLowerCase();
-          var pattern = new RegExp('(^|[^a-zA-Z0-9_@])' + cleanBad + '($|[^a-zA-Z0-9_])', 'i');
+          var escaped = cleanBad.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          var pattern = new RegExp('(^|[^a-zA-Z0-9_@])' + escaped + '($|[^a-zA-Z0-9_])', 'i');
           if (pattern.test(s) || (cleanBad.length >= 4 && s.includes(cleanBad))) {
             palabrasEncontradas.push(badWord);
           }
         });
 
         if (palabrasEncontradas.length > 0) {
+          var tooltipHtml = 
+            '<div class="ryr-firewall-modal" id="ryr-firewall-floating-alert" style="position:fixed;bottom:24px;right:24px;z-index:999999;max-width:430px;background:#131722;border:2px solid #ef4444;border-radius:14px;box-shadow:0 12px 36px rgba(239,68,68,0.35);padding:18px;color:#f8fafc;font-family:Inter,system-ui,sans-serif;animation:ryrSlideIn 0.25s cubic-bezier(0.16,1,0.3,1);">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:1px solid rgba(239,68,68,0.25);padding-bottom:8px;">' +
+                '<div style="display:flex;align-items:center;gap:8px;">' +
+                  '<span style="font-size:20px;">🛑</span>' +
+                  '<strong style="color:#f87171;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;">Envío Bloqueado: Dato Prohibido</strong>' +
+                '</div>' +
+                '<button onclick="this.closest(\'.ryr-firewall-modal\').remove()" style="background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1;">&times;</button>' +
+              '</div>' +
+              '<p style="margin:0 0 10px;font-size:12px;color:#cbd5e1;line-height:1.45;">' +
+                '<strong style="color:#ef4444;">Motivo:</strong> Se detectó dato de contacto o pasarela externa: <code style="background:rgba(239,68,68,0.2);color:#fca5a5;padding:2px 6px;border-radius:4px;font-weight:700;">' + palabrasEncontradas.join(', ') + '</code>. ' +
+                'Compartir datos externos está estrictamente penado con baneo definitivo en TalkyTimes.' +
+              '</p>' +
+              '<div style="background:rgba(15,23,42,0.7);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.06);margin-bottom:12px;">' +
+                '<div style="font-size:11px;color:#38bdf8;font-weight:700;margin-bottom:4px;text-transform:uppercase;">💡 Alternativa Segura Sugerida:</div>' +
+                '<div style="font-size:12px;color:#e2e8f0;font-style:italic;">"/human Me fascina charlar contigo por aquí... prefiero que mantengamos nuestra complicidad aquí en privado 😉 ¿Qué te gustaría que te cuente?"</div>' +
+              '</div>' +
+              '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">' +
+                '<span style="font-size:11px;color:#fca5a5;font-weight:600;">🔒 Botón Enviar Deshabilitado</span>' +
+                '<button onclick="navigator.clipboard.writeText(\'/human Me fascina charlar contigo por aquí... prefiero que mantengamos nuestra complicidad aquí en privado 😉 ¿Qué te gustaría que te cuente?\');this.innerText=\'¡Copiado!\';" style="background:#0284c7;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Copiar Alternativa</button>' +
+              '</div>' +
+            '</div>';
+
           return {
             aprobado: false,
+            blockSendButton: true,
             tipoRiesgo: 'BLACKLIST_PALABRA',
             nivel: 'BLOQUEADO_CRITICO',
             scoreRiesgo: 95,
             palabrasDetectadas: palabrasEncontradas,
-            intencion: 'Intento de contacto externo o pasarela de pago prohibida (' + palabrasEncontradas.join(', ') + ')',
+            motivoTitulo: 'Dato de Contacto o Pasarela Prohibida',
+            contextoInfraccion: 'Está estrictamente prohibido solicitar o compartir datos de contacto externos (WhatsApp, Telegram, redes sociales) o métodos de pago directo (Zelle, PayPal, etc.). TalkyTimes sanciona esto con suspensión permanente.',
             explicacion: 'Se detectó palabra o dato de contacto prohibido: "' + palabrasEncontradas.join(', ') + '". Viola las políticas de TalkyTimes.',
-            sugerenciaSegura: '/human Me fascina charlar contigo por aquí... prefiero que mantengamos nuestra complicidad aquí en privado 😉 ¿Qué te gustaría que te cuente?'
+            sugerenciaSegura: '/human Me fascina charlar contigo por aquí... prefiero que mantengamos nuestra complicidad aquí en privado 😉 ¿Qué te gustaría que te cuente?',
+            tooltipHtml: tooltipHtml
           };
         }
 
         // 2. CHEQUEO CONTEXTUAL DE TRAVEL MISLEADING (Capa 2: Semántica Inteligente ES / EN)
         // Patrón A: Pago o compra de pasajes/viajes/hoteles (EN: pay for flight / ES: paga el pasaje, manda para el vuelo)
-        var patViajeDinero = /(?:pay|buy|send|give|compra|compras?|paga|pagas?|manda|mandas?|envi[aá]s?|cubr[ae]|cubrir|costea|costeas?)s+(?:fors+|paras+)?(?:my|the|a|el|mi|un|los)?s*(?:flight|ticket|trip|travel|plane|hotel|visa|pasaje|vuelo|boleto|viaje|estadia|hospedaje)/i;
+        var patViajeDinero = /(?:pay|buy|send|give|compra|compras?|paga|pagas?|manda|mandas?|envi[aá]s?|cubr[ae]|cubrir|costea|costeas?)\s+.*(?:flight|ticket|trip|travel|plane|hotel|visa|pasaje|vuelo|boleto|viaje|estadia|hospedaje)/i;
         
-        // Patrón B: Promesa de viaje o visita condicionada a recarga/créditos
-        var patPromesaCondicionada = /(?:if you|sis+(?:mes+)?(?:recargas?|recharge|send|mandas?|compras?|ayudas?))s+.*(?:is+will|i'll|voys+a|viajo|llego|visit|meet|vernos|conocer|estares+alla|vamoss+a)/i;
+        // Patrón B: Promesa de viaje o visita condicionada a recarga/créditos/ayuda
+        var patPromesaCondicionada = /(?:if\s+you|si\s+(?:me\s+)?(?:recargas?|recharge|send|mandas?|compras?|ayudas?|help))\s+.*(?:i\s+will|i'll|voy\s+a|viajo|llego|visit|meet|vernos|conocer|estar\s+alla|vamos\s+a|marry|cas(?:ar|emonos|émonos|arme)|espos[ao]|viaj)/i;
         
         // Patrón C: Promesas concretas de citas físicas o encuentros en persona/hotel
-        var patCitaFisica = /(?:let(?:'?s|s+us)s+meet|vernos|quedemos|dormirs+juntos|sleeps+together|meets+(?:yous+)?ins+person|encontrarnos)s+.*(?:ins+person|ats+(?:my|your|the)s+(?:hotel|airport|house|bed)|tonight|nexts+week|tomorrow|ens+persona|ens+(?:el|tu|mi)s+(?:hotel|aeropuerto|cama|casa)|estas+noche)/i;
+        var patCitaFisica = /(?:let(?:'?s|\s+us)\s+meet|vernos|quedemos|dormir\s+juntos|sleep\s+together|meet\s+(?:you\s+)?in\s+person|encontrarnos)\s+.*(?:in\s+person|at\s+(?:my|your|the)\s+(?:hotel|airport|house|bed)|tonight|next\s+week|tomorrow|en\s+persona|en\s+(?:el|tu|mi)\s+(?:hotel|aeropuerto|cama|casa)|esta\s+noche)/i;
         
-        // Patrón D: Promesa de matrimonio o mudanza futura
-        var patMatrimonio = /(?:marrys+me|cas(?:emonos|émonos|ates+conmigo)|moves+tos+yours+city|vivirs+juntos|mudarm?es+contigo)/i;
+        // Patrón D: Promesa de matrimonio o mudanza conyugal condicionada o vinculada
+        var patMatrimonio = /(?:marry\s+me|cas(?:emonos|émonos|ate\s+conmigo|arme\s+contigo|arnos)|muda(?:te|rse|rme)?\s+(?:conmigo|a\s+mi\s+ciudad)|vivir\s+juntos|mudarm?e\s+contigo|be\s+your\s+wife|ser(?:é|e)?\s+tu\s+esposa|wife)/i;
+        var isMarriageConditioned = patMatrimonio.test(s) && (
+          /(?:if|si|help|ayud|travel|trip|flight|vuelo|pasaje|hotel|ticket|recarg|send|mand|money|dinero|ciudad|credit|credito)/i.test(s) ||
+          patPromesaCondicionada.test(s)
+        );
 
-        var isTM_A = patViajeDinero.test(s);
+        var isTM_A = patViajeDinero.test(s) && !(/love\s+to\s+travel|nice\s+trip|want\s+to\s+travel.*vacation/i.test(s) && !/(?:pay|send|money|buy|paga|manda|dinero)/i.test(s));
         var isTM_B = patPromesaCondicionada.test(s);
-        var isTM_C = patCitaFisica.test(s) || /meets+(?:yous+)?ins+person/i.test(s) || /noss+vemoss+ens+(?:tu|el|mi)s+hotel/i.test(s);
-        var isTM_D = patMatrimonio.test(s) && (s.includes('viaj') || s.includes('vuelo') || s.includes('if') || s.includes('si'));
+        var isTM_C = patCitaFisica.test(s) || /meet\s+(?:you\s+)?in\s+person/i.test(s) || /nos\s+vemos\s+en\s+(?:tu|el|mi)\s+hotel/i.test(s);
+        var isTM_D = isMarriageConditioned;
 
         if (isTM_A || isTM_B || isTM_C || isTM_D) {
-          var razonTM = isTM_A ? 'Petición o promesa de compra de pasajes/hoteles'
-                      : isTM_B ? 'Promesa de viaje/visita condicionada a recarga de créditos'
-                      : isTM_C ? 'Promesa de cita física o encuentro presencial en hotel/fecha concreta'
-                      : 'Propuesta o promesa de matrimonio/mudanza conyugal';
+          var razonTM = isTM_D ? 'Promesa de matrimonio o mudanza condicionada a viaje / ayuda'
+                      : isTM_A ? 'Petición o promesa de compra de pasajes/hoteles'
+                      : isTM_B ? 'Promesa de viaje/visita condicionada a recargas o ayuda'
+                      : 'Promesa de cita física o encuentro presencial en hotel/fecha concreta';
+
+          var tooltipHtmlTM = 
+            '<div class="ryr-firewall-modal" id="ryr-firewall-floating-alert" style="position:fixed;bottom:24px;right:24px;z-index:999999;max-width:440px;background:#18131e;border:2px solid #f59e0b;border-radius:14px;box-shadow:0 12px 36px rgba(245,158,11,0.35);padding:18px;color:#f8fafc;font-family:Inter,system-ui,sans-serif;animation:ryrSlideIn 0.25s cubic-bezier(0.16,1,0.3,1);">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;border-bottom:1px solid rgba(245,158,11,0.25);padding-bottom:8px;">' +
+                '<div style="display:flex;align-items:center;gap:8px;">' +
+                  '<span style="font-size:20px;">🛡️</span>' +
+                  '<strong style="color:#fbbf24;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;">Bloqueo Anti-TM: ' + razonTM + '</strong>' +
+                '</div>' +
+                '<button onclick="this.closest(\'.ryr-firewall-modal\').remove()" style="background:transparent;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1;">&times;</button>' +
+              '</div>' +
+              '<p style="margin:0 0 10px;font-size:12px;color:#cbd5e1;line-height:1.45;">' +
+                '<strong style="color:#f59e0b;">Contexto de Infracción:</strong> Las políticas de TalkyTimes prohíben estrictamente prometer viajes, citas presenciales o matrimonio condicionadas a ayuda, recargas o pasajes. Esto genera multas y suspensión inmediata de la cuenta.' +
+              '</p>' +
+              '<div style="background:rgba(15,23,42,0.7);border-radius:8px;padding:10px;border:1px solid rgba(255,255,255,0.06);margin-bottom:12px;">' +
+                '<div style="font-size:11px;color:#38bdf8;font-weight:700;margin-bottom:4px;text-transform:uppercase;">💡 Respuesta Segura Recomendada:</div>' +
+                '<div style="font-size:12px;color:#e2e8f0;font-style:italic;">"/human Me encanta la idea de conectar con personas intrépidas... pero por ahora mi lugar favorito es esta charla contigo. ¿Qué es lo más loco que has hecho en un viaje? 🌎✨"</div>' +
+              '</div>' +
+              '<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">' +
+                '<span style="font-size:11px;color:#fcd34d;font-weight:600;">🔒 Botón Enviar Deshabilitado</span>' +
+                '<button onclick="navigator.clipboard.writeText(\'/human Me encanta la idea de conectar con personas intrépidas... pero por ahora mi lugar favorito es esta charla contigo. ¿Qué es lo más loco que has hecho en un viaje? 🌎✨\');this.innerText=\'¡Copiado!\';" style="background:#d97706;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">Copiar Alternativa</button>' +
+              '</div>' +
+            '</div>';
 
           return {
             aprobado: false,
+            blockSendButton: true,
             tipoRiesgo: 'TRAVEL_MISLEADING',
             nivel: 'BLOQUEADO_CRITICO',
             scoreRiesgo: 90,
             palabrasDetectadas: [],
-            intencion: razonTM,
+            motivoTitulo: 'Infracción Travel Misleading',
+            contextoInfraccion: 'Las políticas de TalkyTimes prohíben terminantemente prometer viajes, citas presenciales o matrimonio a cambio de recargas, ayuda económica o compra de pasajes/hoteles. Violar esta regla ocasiona baneo y pérdida de ingresos.',
             explicacion: '⚠️ RIESGO TRAVEL MISLEADING DETECTADO: ' + razonTM + '. Prohibido por TalkyTimes ya que genera sanciones y bloqueos de cuenta.',
-            sugerenciaSegura: '/human Me encanta la idea de conectar con personas intrépidas... pero por ahora mi lugar favorito es esta charla contigo. ¿Qué es lo más loco que has hecho en un viaje? 🌎✨'
+            sugerenciaSegura: '/human Me encanta la idea de conectar con personas intrépidas... pero por ahora mi lugar favorito es esta charla contigo. ¿Qué es lo más loco que has hecho en un viaje? 🌎✨',
+            tooltipHtml: tooltipHtmlTM
           };
         }
 
         // 3. USO INOCENTE DE PALABRAS (Ej: 'I love to travel', 'pay attention', 'what a nice trip')
         return {
           aprobado: true,
+          blockSendButton: false,
           tipoRiesgo: 'NONE',
           nivel: 'SEGURO',
           scoreRiesgo: 5,
           palabrasDetectadas: [],
-          intencion: 'Conversación natural / Contexto inofensivo',
+          motivoTitulo: 'Mensaje Válido',
+          contextoInfraccion: '',
           explicacion: '✅ Mensaje 100% seguro. Cumple con las directrices de seguridad de la plataforma.',
-          sugerenciaSegura: texto
+          sugerenciaSegura: texto,
+          tooltipHtml: ''
         };
       }
     };
 
-    window.evaluarFirewallHibrido = function(texto, modeloNombre) {
-      return window.RyR_Firewall_Engine.evaluarMensaje(texto, modeloNombre);
+    // Renderizador de alerta flotante temporal en pantalla
+    window.mostrarAlertaFirewallFlotante = function(evalRes) {
+      if (!evalRes || evalRes.aprobado || !evalRes.tooltipHtml) return;
+      var existing = document.getElementById('ryr-firewall-floating-alert');
+      if (existing) existing.remove();
+      var div = document.createElement('div');
+      div.innerHTML = evalRes.tooltipHtml;
+      var el = div.firstElementChild;
+      document.body.appendChild(el);
+      setTimeout(function() {
+        if (el && el.parentNode) {
+          el.style.opacity = '0';
+          el.style.transition = 'opacity 0.4s ease';
+          setTimeout(function() { if (el && el.parentNode) el.remove(); }, 400);
+        }
+      }, 9000);
     };
+
+    window.evaluarFirewallHibrido = function(texto, modeloNombre) {
+      var res = window.RyR_Firewall_Engine.evaluarMensaje(texto, modeloNombre);
+      if (!res.aprobado) {
+        window.mostrarAlertaFirewallFlotante(res);
+      }
+      return res;
+    };
+
     window.RyR_HUD_Bridge_API = {
-      version: '2.5.0-PRO',
+      version: '2.6.0-PRO-SECURITY',
       name: 'RyR_HUD_Bridge_API',
       status: 'ONLINE',
       channelName: 'RyR_HUD_Channel',
+      
       // 🛡️ Validador de Mensajes Híbrido para la Extensión agenteRYR-HUD
       validateMessage: function(text, modelName) {
         var res = window.RyR_Firewall_Engine.evaluarMensaje(text, modelName);
         return {
           allowed: res.aprobado,
+          blockSendButton: res.blockSendButton,
           riskType: res.tipoRiesgo,
           level: res.nivel,
           reason: res.explicacion,
+          contextExplanation: res.contextoInfraccion,
           suggestion: res.sugerenciaSegura,
-          badWords: res.palabrasDetectadas || []
+          badWords: res.palabrasDetectadas || [],
+          tooltipHtml: res.tooltipHtml || ''
         };
       },
 
@@ -18795,7 +18882,10 @@
 
     window.addEventListener('message', function(ev) {
       if (!ev.data || typeof ev.data !== 'object') return;
-      if (ev.data.type === 'RYR_HUD_GET_CLIENT') {
+      if (ev.data.type === 'RYR_HUD_VALIDATE_MESSAGE') {
+        var valRes = window.RyR_HUD_Bridge_API.validateMessage(ev.data.text, ev.data.model);
+        window.postMessage({ type: 'RYR_HUD_VALIDATE_RESPONSE', payload: valRes, reqId: ev.data.reqId }, '*');
+      } else if (ev.data.type === 'RYR_HUD_GET_CLIENT') {
         var resp = window.RyR_HUD_Bridge_API.getClientProfile(ev.data.id);
         window.postMessage({ type: 'RYR_HUD_CLIENT_RESPONSE', payload: resp, reqId: ev.data.reqId }, '*');
       } else if (ev.data.type === 'RYR_HUD_GET_ALL') {
@@ -41600,34 +41690,36 @@ CONFIGURACIÓN DE CONTEXTO:
 
     function getMaleSpanishVoice(voices) {
       if (!voices || !voices.length) return null;
-      const maleVoiceNames = ['jorge', 'pablo', 'raul', 'diego', 'carlos', 'alvaro', 'mateo', 'enrique', 'male', 'hombre', 'castilian spanish'];
-      const femaleVoiceNames = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'francisca', 'female', 'mujer', 'victoria'];
+      // Voces masculinas profundas con prioridad de líder táctico
+      const deepMaleVoiceNames = ['jorge', 'pablo', 'raul', 'diego', 'carlos', 'alvaro', 'mateo', 'enrique', 'david', 'male', 'hombre', 'castilian spanish', 'spanish male', 'miguel', 'juan'];
+      const femaleVoiceNames = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'francisca', 'female', 'mujer', 'victoria', 'mia', 'emma'];
 
-      // 1. Match estricto: español + nombre masculino
+      // 1. Match estricto: español + voz masculina grave
       let v = voices.find(voice => {
-        const langOk = voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX');
+        const langOk = voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX') || voice.lang.includes('AR');
         if (!langOk) return false;
         const nameLower = (voice.name || '').toLowerCase();
-        return maleVoiceNames.some(m => nameLower.includes(m)) && !femaleVoiceNames.some(f => nameLower.includes(f));
+        return deepMaleVoiceNames.some(m => nameLower.includes(m)) && !femaleVoiceNames.some(f => nameLower.includes(f));
       });
 
-      // 2. Match secundario: español que no sea explícitamente femenino
+      // 2. Match secundario: cualquier voz en español que no sea explícitamente femenina
       if (!v) {
         v = voices.find(voice => {
-          const langOk = voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX');
+          const langOk = voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX') || voice.lang.includes('AR');
           if (!langOk) return false;
           const nameLower = (voice.name || '').toLowerCase();
           return !femaleVoiceNames.some(f => nameLower.includes(f));
         });
       }
 
-      // 3. Fallback a cualquier voz en español
+      // 3. Fallback a voz neutra en español
       if (!v) {
         v = voices.find(voice => voice.lang.startsWith('es') || voice.lang.includes('ES') || voice.lang.includes('CO') || voice.lang.includes('MX'));
       }
       return v;
     }
 
+    // 🎙️ SÍNTESIS DE VOZ MASCULINA: Voz Gruesa, Imponente y Líder Operativo Inteligente
     function speakText(text, options = {}) {
       if (!window.speechSynthesis) return;
       if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
@@ -41638,8 +41730,8 @@ CONFIGURACIÓN DE CONTEXTO:
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-ES';
         utterance.volume = options.volume || 1.0;
-        utterance.rate = options.rate || 0.98;
-        utterance.pitch = options.pitch || 0.88; // Voz de hombre (timbre grave)
+        utterance.rate = options.rate || 0.94; // Cadencia pausada, firme y de líder operativo
+        utterance.pitch = options.pitch || 0.78; // Tono grave y barítono profundo e imponente
 
         const applyVoiceAndSpeak = () => {
           const voices = window.speechSynthesis.getVoices();
@@ -41647,11 +41739,11 @@ CONFIGURACIÓN DE CONTEXTO:
           if (maleVoice) {
             utterance.voice = maleVoice;
             const nameLower = (maleVoice.name || '').toLowerCase();
-            const femaleKeywords = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'female', 'mujer'];
+            const femaleKeywords = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'female', 'mujer', 'victoria'];
             if (femaleKeywords.some(f => nameLower.includes(f))) {
-              utterance.pitch = 0.72; // Masculinizar si es voz neutra/femenina
+              utterance.pitch = 0.65; // Agresivamente masculinizar/gravar si es voz de fallback
             } else {
-              utterance.pitch = 0.88;
+              utterance.pitch = 0.78; // Voz grave imponente masculina
             }
           }
           window.speechSynthesis.speak(utterance);
@@ -41672,6 +41764,7 @@ CONFIGURACIÓN DE CONTEXTO:
     }
     window.speakText = speakText;
     window.speakAlertVoice = speakText;
+
 
     // 📣 CICLO DE CONSEJOS INTERCALADOS PARA BAJA EN CONVERSACIONES ACTIVAS
     const MANDATORY_TASK_VALIDATION_PHRASE = "Ve a hacer la tarea y cuando acabes envía captura de pantalla al monitor, ya que la tarea será validada.";
@@ -42313,8 +42406,9 @@ CONFIGURACIÓN DE CONTEXTO:
         ruleTravel.style.color = isTravelRisk ? '#f87171' : '#34d399';
       }
       if (ruleMarriage) {
-        ruleMarriage.querySelector('.val-icon').textContent = text.toLowerCase().includes('marry') || text.toLowerCase().includes('casar') ? '❌' : '✅';
-        ruleMarriage.style.color = text.toLowerCase().includes('marry') || text.toLowerCase().includes('casar') ? '#f87171' : '#34d399';
+        var hasMarriage = /(?:marry|casar|casemonos|espos[ao]|boda)/i.test(text);
+        ruleMarriage.querySelector('.val-icon').textContent = hasMarriage ? '❌' : '✅';
+        ruleMarriage.style.color = hasMarriage ? '#f87171' : '#34d399';
       }
       if (ruleGift) {
         ruleGift.querySelector('.val-icon').textContent = isBlacklistRisk ? '❌' : '✅';
@@ -42326,18 +42420,25 @@ CONFIGURACIÓN DE CONTEXTO:
       }
 
       if (res.aprobado) {
-        verdict.innerHTML = '<div style="color:#34d399; font-size:1.05rem; margin-bottom:6px;">✅ MENSAJE 100% SEGURO (APROBADO)</div>' +
-          '<div style="font-size:0.75rem; color:#cbd5e1; font-weight:normal;">' + res.explicacion + '</div>';
+        verdict.innerHTML = '<div style="color:#34d399; font-size:1.05rem; margin-bottom:6px; font-weight:800;">✅ MENSAJE 100% SEGURO (APROBADO)</div>' +
+          '<div style="font-size:0.75rem; color:#cbd5e1; font-weight:normal;">' + res.explicacion + '</div>' +
+          '<div style="margin-top:6px; font-size:0.7rem; color:#34d399;">🔓 Botón Enviar Habilitado</div>';
         input.style.borderColor = '#10b981';
       } else {
-        verdict.innerHTML = '<div style="color:#f87171; font-size:1.05rem; margin-bottom:6px;">⚠️ BLOQUEADO POR FIREWALL HÍBRIDO</div>' +
+        verdict.innerHTML = '<div style="color:#f87171; font-size:1.05rem; margin-bottom:6px; font-weight:800;">🛑 ENVÍO BLOQUEADO POR FIREWALL HÍBRIDO</div>' +
           '<div style="font-size:0.75rem; color:#fca5a5; font-weight:normal; margin-bottom:8px;">' + res.explicacion + '</div>' +
+          '<div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px; margin-bottom:8px; text-align:left;">' +
+            '<div style="font-size:0.68rem; color:#fca5a5; font-weight:800; text-transform:uppercase; margin-bottom:4px;">📋 Contexto de Infracción:</div>' +
+            '<div style="font-size:0.75rem; color:#e2e8f0; line-height:1.4;">' + (res.contextoInfraccion || res.explicacion) + '</div>' +
+          '</div>' +
           '<div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:8px; padding:8px; text-align:left;">' +
-            '<div style="font-size:0.65rem; color:#38bdf8; font-weight:800; text-transform:uppercase;">💡 Sugerencia Coqueta Anti-TM:</div>' +
+            '<div style="font-size:0.65rem; color:#38bdf8; font-weight:800; text-transform:uppercase;">💡 Sugerencia Segura Anti-TM:</div>' +
             '<div style="font-size:0.78rem; color:#fff; font-style:italic; margin-top:2px;">' + res.sugerenciaSegura + '</div>' +
             '<button type="button" onclick="document.getElementById(\'admin-tm-test-input\').value=\'' + res.sugerenciaSegura.replace(/'/g, "\\'") + '\'; window.runAdminAntiTmAudit();" style="margin-top:6px; background:#38bdf8; color:#0f172a; border:none; padding:4px 10px; border-radius:4px; font-weight:900; font-size:0.65rem; cursor:pointer;">Usar Sugerencia Segura</button>' +
-          '</div>';
+          '</div>' +
+          '<div style="margin-top:8px; font-size:0.7rem; color:#ef4444; font-weight:800;">🔒 Botón de Enviar: BLOQUEADO</div>';
         input.style.borderColor = '#ef4444';
+        window.mostrarAlertaFirewallFlotante(res);
       }
     };
 

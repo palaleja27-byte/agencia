@@ -2285,43 +2285,153 @@
   }
 
   // 15. SISTEMA MAESTRO DE RELEVO DE TURNOS (ENTREGAR TURNO & VER RELEVO)
+  function generateTacticalHandoverItem(clientObj, index) {
+    const sLower = clientObj.snippet.toLowerCase();
+    const rawLower = clientObj.fullRaw.toLowerCase();
+
+    let category = 'SEGUIMIENTO ACTIVO';
+    let diagnosis = '';
+    let strategy = '';
+    let openingEn = '';
+    let openingEs = '';
+
+    if (/\b(headache|analgesic|fever|flu|pain|sick|ill|medicine|pill|cold rain|resting)\b|head is aching|\b(dolor|cabeza|fiebre|enferm|medicament)\b/i.test(sLower) || /\b(headache|fever)\b/i.test(rawLower)) {
+      category = 'SALUD / EMPATÍA';
+      diagnosis = 'El cliente reportó malestar físico o cansancio (dolor de cabeza, frío/lluvia o analgésico) y se fue a descansar.';
+      strategy = 'Demostrar cuidado protector y preguntar con dulzura cómo amaneció hoy. No presionar con temas complejos; invitarlo con dulzura a que envíe una foto descansando y proponerle una carta.';
+      openingEn = `"Good morning, sweetheart ❤️ I was thinking about you and truly hoping you woke up feeling so much better... How is your head feeling today?"`;
+      openingEs = `"Buenos días, cariño ❤️ Estaba pensando en ti y deseando de corazón que hayas despertado sintiéndote mucho mejor... ¿Cómo sigue tu dolor de cabeza hoy?"`;
+    } else if (clientObj.isSticker || sLower.includes('sent a sticker') || sLower.includes('sticker')) {
+      category = 'PROSPECCIÓN / ENGANCHE';
+      diagnosis = 'Se le envió un sticker de enganche visual en este turno para activar su atención.';
+      strategy = 'El turno entrante debe romper el hielo con un gancho de curiosidad intrigante para convertir el sticker en una conversación activa sin sonar desesperado.';
+      openingEn = `"I was just smiling looking at my messages and had a lovely feeling to say hello 😉 Tell me, what's one little thing that made you smile today?"`;
+      openingEs = `"Estaba sonriendo mirando mis mensajes y tuve una bonita corazonada de saludarte 😉 Cuéntame, ¿qué es un pequeño detalle que te haya hecho sonreír hoy?"`;
+    } else if (/\b(coffee|caf[eé]|tea|drink|cup|breakfast|dinner|lunch|comiendo|taza)\b/i.test(sLower)) {
+      category = 'RUTINA / CAFÉ';
+      diagnosis = 'Conversación activa sobre un momento de relax, café, comida o descanso.';
+      strategy = 'Validar su momento de bienestar y pedirle un intercambio de fotos cotidianas de su café o día para profundizar la conexión.';
+      openingEn = `"I hope you are having the coziest and most relaxing day ❤️ Tell me, what delicious treat or plan are you enjoying today?"`;
+      openingEs = `"Espero que estés teniendo el día más acogedor y relajante posible ❤️ Cuéntame, ¿qué comida rica o plan estás disfrutando hoy?"`;
+    } else if (/\b(leaving|busy|ocupad|te vas)\b/i.test(sLower)) {
+      category = 'TIEMPO EXCLUSIVO';
+      diagnosis = 'Preguntó si la modelo estaba ocupada o retirándose.';
+      strategy = 'Reafirmar que siempre hay tiempo prioritario reservado para él y hacer una pregunta abierta sobre sus emociones.';
+      openingEn = `"I'm right here with you, love ❤️ Talking to you always brightens up my whole day... What are you up to right at this moment?"`;
+      openingEs = `"Aquí estoy contigo, amor ❤️ Hablar contigo siempre alegra todo mi día... ¿Qué estás haciendo justo en este momento?"`;
+    } else if (/\b(love|beautiful|gorgeous|sexy|angel|queen|honey|sweetheart|mahal|linda|amor|cielo)\b/i.test(sLower)) {
+      category = 'ROMANCE & FIDELIZACIÓN';
+      diagnosis = 'Intercambio de alto afecto romántico y piropos mutuos.';
+      strategy = 'Mantener la reciprocidad romántica al 100%, halagar su ternura y sugerirle que revise el buzón porque le escribiremos una carta con foto privada.';
+      openingEn = `"Hearing your sweet words always makes my heart flutter ❤️ I was just thinking about you... What is on your mind today, my dear?"`;
+      openingEs = `"Escuchar tus palabras dulces siempre hace latir mi corazón ❤️ Estaba pensando en ti... ¿Qué hay en tus pensamientos hoy, cariño?"`;
+    } else {
+      category = 'SEGUIMIENTO ACTIVO';
+      diagnosis = clientObj.isOperatorLast 
+        ? `Último mensaje enviado por el turno anterior ("${clientObj.snippet}").` 
+        : `El cliente dejó un mensaje pendiente ("${clientObj.snippet}").`;
+      strategy = 'Retomar el diálogo con calidez, mostrando atención genuina y abriendo una pregunta que motive respuesta inmediata.';
+      openingEn = `"I was thinking about our conversation and didn't want to go without wishing you a wonderful day ❤️ How has everything been going for you?"`;
+      openingEs = `"Estaba pensando en nuestra conversación y no quería quedarme sin desearte un día maravilloso ❤️ ¿Cómo ha estado yendo todo para ti?"`;
+    }
+
+    return `### 👤 ${index + 1}. **${clientObj.name}** ${clientObj.numericId !== 'N/A' ? `(ID: ${clientObj.numericId})` : ''} - ⏰ *${clientObj.time}*\n` +
+      `- 🏷️ **Categoría:** \`${category}\`\n` +
+      `- 📝 **Diagnóstico del Turno:** ${diagnosis}\n` +
+      `- 🎯 **Cómo Seguir & Por Qué:** ${strategy}\n` +
+      `- 💌 **Mensaje de Apertura Sugerido (Inglés):**\n` +
+      `  > ${openingEn}\n` +
+      `- 📝 **Traducción al Español:**\n` +
+      `  *${openingEs}*\n`;
+  }
+
   async function triggerSaveShiftHandover() {
     const btn = document.getElementById('ryr-btn-save-handover');
     if (btn) {
-      btn.innerText = '⏳ Generando Relevo...';
+      btn.innerText = '⏳ Analizando Relevo...';
       btn.disabled = true;
     }
 
-    // Recolectar clientes calientes visibles en el DOM
-    const activeChatsSummary = [];
-    const dialogRows = document.querySelectorAll('div[data-test-id*="dialog-item"], div[class*="dialog-item"], div[class*="item-wrap"]');
-    dialogRows.forEach(row => {
-      const text = (row.innerText || '').trim();
-      const lines = text.split('\n').filter(Boolean);
-      if (lines.length >= 2) {
-        const name = sanitizeClientName(lines[0]);
-        const snippet = lines.slice(1).join(' - ').substring(0, 120);
-        activeChatsSummary.push(`- **${name}:** ${snippet}`);
+    // 1. Recolectar clientes únicos visibles en el DOM sin duplicaciones
+    const uniqueClients = new Map();
+    const allDialogElements = Array.from(document.querySelectorAll(
+      'div[data-test-id*="dialog-item"], div[class*="dialog-item"], div[class*="item-wrap"]'
+    ));
+
+    allDialogElements.forEach(row => {
+      // Filtrar sub-nodos para tomar solo el contenedor raíz del ítem
+      if (row.parentElement.closest('div[data-test-id*="dialog-item"], div[class*="dialog-item"], div[class*="item-wrap"]')) {
+        return;
       }
+
+      const rawText = (row.innerText || '').trim();
+      if (rawText.length < 2) return;
+      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length === 0) return;
+
+      const rawName = lines[0];
+      const clientName = sanitizeClientName(rawName);
+      if (clientName === 'Cliente' || clientName.length < 2) return;
+
+      const cleanKey = clientName.toLowerCase().split(',')[0].trim();
+      if (uniqueClients.has(cleanKey)) return;
+
+      let numericId = 'N/A';
+      const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
+      if (userLink) {
+        numericId = getExactNumericClientId(userLink.getAttribute('href'));
+      }
+
+      const timeMatch = rawText.match(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/i) || rawText.match(/\b\d+\s*(?:minutes?|hours?|days?)\s*ago\b/i);
+      const timeStr = timeMatch ? timeMatch[0] : 'Reciente';
+
+      let snippet = lines.slice(1).join(' ')
+        .replace(/(\d+\s*(minute|hour|day|week|month)s?\s*ago|\ban hour ago\b|\d+\s*[✉💬]|\bonline\b|\btyping\b|\bSearch\b|\bMessages\b)/gi, '')
+        .trim();
+      snippet = snippet.substring(0, 140);
+
+      const isOperatorLast = /(?:you|tú|tu|você)\s*:/i.test(rawText) || row.querySelector('svg[class*="check"]') !== null || rawText.includes('✔');
+      const isSticker = rawText.toLowerCase().includes('sent a sticker') || rawText.toLowerCase().includes('sticker');
+
+      uniqueClients.set(cleanKey, {
+        name: clientName,
+        numericId,
+        time: timeStr,
+        snippet: snippet || (isSticker ? 'Sticker de saludo enviado' : 'Sin mensaje previo'),
+        isOperatorLast,
+        isSticker,
+        fullRaw: rawText
+      });
     });
+
+    const clientsArray = Array.from(uniqueClients.values());
+    const analyzedHandovers = clientsArray.slice(0, 10).map((c, i) => generateTacticalHandoverItem(c, i));
 
     let fidelizedSection = '';
     if (fidelizedClientsMap.size > 0) {
-      fidelizedSection = `\n### 💎 Clientes Nuevos Fidelizados en este Turno (Activaron Posts):\n` +
-        Array.from(fidelizedClientsMap.values()).map(c => `- **${c.name} (ID: ${c.clientId}):** Cliente nuevo que recargó (${c.credits || 150} cr) y desbloqueó el servicio de Posts. ¡Atención y seguimiento prioritario!`).join('\n') + `\n`;
+      fidelizedSection = `### 💎 Clientes Nuevos Fidelizados en este Turno (Activaron Posts):\n` +
+        Array.from(fidelizedClientsMap.values()).map(c => `- **${c.name} (ID: ${c.clientId}):** Recargó (${c.credits || 150} cr) y desbloqueó el servicio de Posts. ¡Atención prioritaria para continuar monetizando!`).join('\n') + `\n\n`;
     }
 
-    const reportMarkdown = `# 📋 RELEVO DE TURNO | PERFIL: ${sessionData.profileName || 'HORACIO'}\n` +
-      `- **Operador Saliente:** ${sessionData.operator || 'walther'} [Turno: ${sessionData.shift || 'Mañana'}]\n` +
-      `- **Fecha y Hora de Cierre:** ${new Date().toLocaleString()}\n` +
-      `---\n` +
+    const prospect = evaluateProspectingCycle();
+
+    const reportMarkdown = `# 📋 RELEVO DE TURNO TÁCTICO | PERFIL: ${sessionData.profileName || 'HORACIO'}\n\n` +
+      `### 📊 Métricas Operativas de la Entrega:\n` +
+      `- **👤 Operador Saliente:** ${sessionData.operator || 'walther'} [Turno: ${sessionData.shift || 'Mañana'}]\n` +
+      `- **🎯 Perfil Activo:** ${sessionData.profileName || 'HORACIO'}\n` +
+      `- **✉️ Cartas Leídas/Procesadas en Turno:** ${totalGlobalReadLetters} cartas\n` +
+      `- **🎯 Tráfico y Prospecciones:** ${prospect.count}/${prospect.quota} en ciclo actual\n` +
+      `- **📅 Fecha y Hora de Cierre:** ${new Date().toLocaleString()}\n\n` +
+      `---\n\n` +
       fidelizedSection +
-      `### 💬 Resumen de Conversaciones Activas del Turno:\n` +
-      (activeChatsSummary.slice(0, 8).join('\n') || '- No se detectaron chats pendientes inmediatos.') + `\n\n` +
-      `### 🎯 Instrucciones para el Turno Siguiente:\n` +
-      `- Priorizar respuestas a clientes VIP y clientes fidelizados con Posts activos.\n` +
-      `- Mantener la cuota de 10 prospecciones por ciclo de 30 minutos.\n` +
-      `- Usar el botón de Continuar Chat con IA o Ganchos de Atracción según el estado del chat.`;
+      `### 💬 Contexto Quirúrgico de Conversaciones del Turno (${clientsArray.length} Clientes Identificados):\n\n` +
+      (analyzedHandovers.join('\n') || '- No se detectaron chats pendientes en este momento.') + `\n` +
+      `---\n\n` +
+      `### 🎯 Instrucciones Maestras para el Turno Siguiente:\n` +
+      `1. **Prioridad 1:** Responder primero a los clientes con mensajes abiertos o que reportaron malestar/descanso usando las frases sugeridas.\n` +
+      `2. **Prioridad 2:** Monitorear el buzón de cartas (Read: ${totalGlobalReadLetters}) para no dejar hilos sin contestar.\n` +
+      `3. **Prioridad 3:** Mantener la cuota de 10 prospecciones por cada 30 minutos.\n` +
+      `4. **Regla de Oro:** Usar el botón de Continuar Chat con IA para mantener respuestas de 3 opciones y cero Travel Misleading.`;
 
     try {
       chrome.storage.local.set({ lastHandoverReport: reportMarkdown });
@@ -2374,6 +2484,22 @@
     const existing = document.getElementById('ryr-handover-view-modal');
     if (existing) existing.remove();
 
+    const formatMarkdownToHtml = (text) => {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/^#### (.*?)$/gm, '<h4 style="color:#38bdf8; margin:10px 0 4px 0; font-size:12px;">$1</h4>')
+        .replace(/^### (.*?)$/gm, '<h3 style="color:#34d399; margin:12px 0 6px 0; font-size:13px; border-bottom:1px solid #1e293b; padding-bottom:3px;">$1</h3>')
+        .replace(/^# (.*?)$/gm, '<h2 style="color:#a7f3d0; margin:0 0 8px 0; font-size:14px; font-weight:900;">$1</h2>')
+        .replace(/^> (.*?)$/gm, '<div style="background:rgba(56,189,248,0.1); border-left:3px solid #38bdf8; padding:6px 10px; margin:4px 0; color:#e0f2fe; border-radius:3px; font-style:italic;">$1</div>')
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+        .replace(/\*(.*?)\*/g, '<i>$1</i>')
+        .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1); padding:2px 5px; border-radius:3px; color:#f472b6;">$1</code>')
+        .replace(/\n/g, '<br>');
+    };
+
     const modal = document.createElement('div');
     modal.id = 'ryr-handover-view-modal';
     modal.style.cssText = `
@@ -2381,16 +2507,16 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 580px;
-      max-width: 94%;
-      background: #0e1526;
+      width: 620px;
+      max-width: 95%;
+      background: #0b1120;
       border: 2px solid #10b981;
       border-radius: 12px;
       color: #fff;
       padding: 18px;
       z-index: 2147483647;
-      box-shadow: 0 12px 45px rgba(0,0,0,0.9);
-      font-family: system-ui, sans-serif;
+      box-shadow: 0 16px 50px rgba(0,0,0,0.95), 0 0 25px rgba(16,185,129,0.3);
+      font-family: system-ui, -apple-system, sans-serif;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -2398,14 +2524,34 @@
 
     modal.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e293b; padding-bottom:8px;">
-        <span style="font-weight:900; color:#10b981; font-size:12.5px;">${title}</span>
-        <span style="cursor:pointer; font-size:16px; color:#94a3b8;" onclick="this.parentElement.parentElement.remove()">✕</span>
+        <span style="font-weight:900; color:#10b981; font-size:13px; display:flex; align-items:center; gap:6px;">${title}</span>
+        <span style="cursor:pointer; font-size:16px; color:#94a3b8;" id="ryr-close-handover-modal">✕</span>
       </div>
-      <div style="background:#060913; border:1px solid #1e293b; border-radius:6px; padding:12px; max-height:360px; overflow-y:auto; font-size:11.5px; line-height:1.5; color:#cbd5e1; white-space:pre-wrap;">${markdownContent}</div>
-      <button style="background:#10b981; color:#060913; border:none; padding:8px; border-radius:6px; font-weight:bold; cursor:pointer;" onclick="this.parentElement.remove()">Entendido / Cerrar</button>
+      <div id="ryr-handover-modal-content" style="background:#060913; border:1px solid #1e293b; border-radius:8px; padding:14px; max-height:420px; overflow-y:auto; font-size:11.5px; line-height:1.6; color:#cbd5e1;">
+        ${formatMarkdownToHtml(markdownContent)}
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button id="ryr-btn-copy-handover" style="background:rgba(56,189,248,0.2); color:#38bdf8; border:1px solid rgba(56,189,248,0.5); padding:8px 14px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11.5px;">📋 Copiar Relevo Completo</button>
+        <button id="ryr-btn-dismiss-handover" style="background:#10b981; color:#060913; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11.5px;">Entendido / Cerrar</button>
+      </div>
     `;
 
     document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector('#ryr-close-handover-modal');
+    if (closeBtn) closeBtn.onclick = () => modal.remove();
+
+    const dismissBtn = modal.querySelector('#ryr-btn-dismiss-handover');
+    if (dismissBtn) dismissBtn.onclick = () => modal.remove();
+
+    const copyBtn = modal.querySelector('#ryr-btn-copy-handover');
+    if (copyBtn) {
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(markdownContent);
+        copyBtn.innerText = '✅ ¡Copiado al Portapapeles!';
+        setTimeout(() => copyBtn.innerText = '📋 Copiar Relevo Completo', 2000);
+      };
+    }
   }
 
   // 16. MOTOR DE INTELIGENCIA ULTRA-HUMANIZADO (BOTÓN INVESTIGAR)

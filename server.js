@@ -1084,18 +1084,17 @@ app.post('/api/audit/realtime-check', async (req, res) => {
 // ====================================================================
 app.post('/api/handover/generate-and-save', async (req, res) => {
   try {
-    const { operator, shift, profileName, profileId } = req.body;
+    const { operator, shift, profileName, profileId, reportMarkdown: incomingMarkdown } = req.body;
 
-    const reportMarkdown = `# RELEVO DE TURNO | PERFIL: ${profileName || 'HORACIO'}\n` +
+    const reportMarkdown = incomingMarkdown || (`# 📋 RELEVO DE TURNO | PERFIL: ${profileName || 'HORACIO'}\n` +
       `- **Operador Saliente:** ${operator || 'walther'} [Turno: ${shift || 'Mañana'}]\n` +
       `- **Fecha y Hora:** ${new Date().toLocaleString()}\n` +
       `---\n` +
-      `### 📌 Resumen de Clientes Calientes:\n` +
-      `- **Jeanneth (VIP 2726 cartas):** Muy cariñosa, esperando fotos del fin de semana. No ofrecer viajes ni romper su apodo favorito.\n` +
-      `- **Sarah (Nueva 3 cartas):** Conectada y con créditos activos. Mantener preguntas abiertas sobre sus pasatiempos.\n\n` +
+      `### 📌 Resumen de Conversaciones del Turno:\n` +
+      `- Clientes activos monitoreados con éxito en la sesión.\n\n` +
       `### ⚠️ Instrucciones para el Turno Siguiente:\n` +
-      `- Responder con prioridad las cartas leídas pendientes para evitar acumulación.\n` +
-      `- Cumplir con las 10 prospecciones por cada ciclo de 30 minutos.`;
+      `- Responder con prioridad las cartas leídas y chats con balance activo.\n` +
+      `- Cumplir con la cuota de prospecciones por ciclo.`);
 
     await supabase.from('shift_handovers').insert({
       profile_name: profileName || 'HORACIO',
@@ -1105,7 +1104,7 @@ app.post('/api/handover/generate-and-save', async (req, res) => {
       report_markdown: reportMarkdown
     });
 
-    res.json({ success: true, message: 'Relevo guardado' });
+    res.json({ success: true, message: 'Relevo guardado con éxito' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

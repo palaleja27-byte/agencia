@@ -3544,15 +3544,17 @@
       clearInterval(mainLoop);
       return;
     }
-    if (sessionData.monitoringActive) {
-      PerformanceSentinel.measureExecution(() => {
+    PerformanceSentinel.measureExecution(() => {
+      enforceFirewall();
+      injectAutoLetterDrafter();
+      injectAgenciaChatEnhancements();
+      if (sessionData.monitoringActive) {
         renderFloatingBar();
-        enforceFirewall();
         handleInboxTimersAndExtractionButtons();
         runBackgroundPaginationCrawler();
-      });
-    }
-  }, 1000);
+      }
+    });
+  }, 400);
 
   const heartbeatLoop = setInterval(() => {
     if (!isContextValid()) {

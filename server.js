@@ -861,7 +861,7 @@ app.put('/api/fines/:id/status', async (req, res) => {
 });
 
 // ====================================================================
-// 10. ENDPOINT: COMUNICACIÓN DIRECTA SUPERVISOR ↔ OPERADOR (BIDIRECCIONAL Y EDITABLE)
+// 10. ENDPOINT: COMUNICACIÓN DIRECTA SUPERVISOR ↔ OPERADOR (BIDIRECCIONAL, LECTURA Y EDICIÓN)
 // ====================================================================
 const liveSupervisorChatMemory = new Map(); // operatorKey -> Array of messages
 
@@ -869,6 +869,7 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
   try {
     const rawOp = (req.params.operator || '').trim();
     const opKey = rawOp.toLowerCase();
+    const role = (req.query.role || '').toUpperCase(); // 'OPERATOR' o 'SUPERVISOR'
 
     // 1. Obtener de memoria rápida en el Edge
     let memMessages = liveSupervisorChatMemory.get(opKey) || [];
@@ -879,7 +880,7 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
         .select('*')
         .ilike('operator_name', rawOp)
         .order('created_at', { ascending: true })
-        .limit(40);
+        .limit(50);
 
       if (data && data.length > 0) {
         const seenIds = new Set(memMessages.map(m => String(m.id)));
@@ -891,7 +892,8 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
               sender: dbMsg.sender,
               text: dbMsg.message_text,
               timestamp: new Date(dbMsg.created_at).getTime(),
-              isEdited: Boolean(dbMsg.is_edited)
+              isEdited: Boolean(dbMsg.is_edited),
+              read: Boolean(dbMsg.is_read)
             });
             seenIds.add(strId);
           }
@@ -904,9 +906,51 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
       // Si falla BD, la memoria RAM asegura 100% de uptime
     }
 
+    // Si el rol que consulta lee los mensajes del otro, marcar como leídos
+    if (role === 'OPERATOR') {
+      memMessages.forEach(m => {
+        if (m.sender === 'SUPERVISOR') m.read = true;
+      });
+    } else if (role === 'SUPERVISOR') {
+      memMessages.forEach(m => {
+        if (m.sender === 'OPERATOR' || m.sender === rawOp) m.read = true;
+      });
+    }
+
     res.json({ success: true, messages: memMessages });
   } catch (err) {
     res.json({ success: true, messages: [] });
+  }
+});
+
+app.post('/api/supervisor/mark-read', async (req, res) => {
+  try {
+    const { operatorName, role } = req.body;
+    const rawOp = (operatorName || 'walther').trim();
+    const opKey = rawOp.toLowerCase();
+    const list = liveSupervisorChatMemory.get(opKey) || [];
+
+    list.forEach(m => {
+      if (role === 'OPERATOR' && m.sender === 'SUPERVISOR') {
+        m.read = true;
+      } else if (role === 'SUPERVISOR' && (m.sender === 'OPERATOR' || m.sender === rawOp)) {
+        m.read = true;
+      }
+    });
+
+    liveSupervisorChatMemory.set(opKey, list);
+
+    try {
+      if (role === 'OPERATOR') {
+        await supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', rawOp).eq('sender', 'SUPERVISOR');
+      } else if (role === 'SUPERVISOR') {
+        await supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', rawOp).eq('sender', 'OPERATOR');
+      }
+    } catch (e) {}
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -929,7 +973,9 @@ app.post('/api/supervisor/send-message', async (req, res) => {
           id: `sup_bc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           sender: 'SUPERVISOR',
           text: `📢 [ANUNCIO GENERAL] ${cleanText}`,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          read: false,
+          isEdited: false
         });
         if (list.length > 50) list.shift();
         liveSupervisorChatMemory.set(opKey, list);
@@ -939,7 +985,8 @@ app.post('/api/supervisor/send-message', async (req, res) => {
         const inserts = uniqueOps.map(op => ({
           operator_name: op,
           sender: 'SUPERVISOR',
-          message_text: `📢 [ANUNCIO GENERAL] ${cleanText}`
+          message_text: `📢 [ANUNCIO GENERAL] ${cleanText}`,
+          is_read: false
         }));
         await supabase.from('supervisor_chat').insert(inserts);
       } catch (e) {}
@@ -953,7 +1000,9 @@ app.post('/api/supervisor/send-message', async (req, res) => {
         id: msgId,
         sender: 'SUPERVISOR',
         text: cleanText,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        read: false,
+        isEdited: false
       });
       if (list.length > 50) list.shift();
       liveSupervisorChatMemory.set(opKey, list);
@@ -962,7 +1011,8 @@ app.post('/api/supervisor/send-message', async (req, res) => {
         await supabase.from('supervisor_chat').insert({
           operator_name: rawOp,
           sender: 'SUPERVISOR',
-          message_text: cleanText
+          message_text: cleanText,
+          is_read: false
         });
       } catch (e) {}
     }
@@ -988,7 +1038,9 @@ app.post('/api/operator/reply-message', async (req, res) => {
       id: msgId,
       sender: 'OPERATOR',
       text: cleanText,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      read: false,
+      isEdited: false
     });
     if (list.length > 50) list.shift();
     liveSupervisorChatMemory.set(opKey, list);
@@ -997,7 +1049,8 @@ app.post('/api/operator/reply-message', async (req, res) => {
       await supabase.from('supervisor_chat').insert({
         operator_name: rawOp,
         sender: 'OPERATOR',
-        message_text: cleanText
+        message_text: cleanText,
+        is_read: false
       });
     } catch (e) {}
 
@@ -1033,7 +1086,8 @@ app.post('/api/supervisor/edit-message', async (req, res) => {
     // Actualizar también en Supabase si es un ID numérico o existe
     try {
       await supabase.from('supervisor_chat').update({
-        message_text: text.trim()
+        message_text: text.trim(),
+        is_edited: true
       }).eq('id', id);
     } catch (e) {}
 

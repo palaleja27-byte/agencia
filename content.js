@@ -287,20 +287,22 @@
   }
 
   // 6. CHAT BIDIRECCIONAL SUPERVISOR-OPERADOR (BANNER & MODAL HUD)
+  let supervisorChatPollTimer = null;
+
   async function checkSupervisorDirectMessages() {
     const rawOp = (sessionData.operator || 'walther').trim();
     if (!rawOp) return;
     try {
-      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}`);
+      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}?role=${isSupervisorChatOpen ? 'OPERATOR' : ''}`);
       const data = await res.json();
       if (data && Array.isArray(data.messages)) {
         supervisorMessagesHistory = data.messages;
         renderSupervisorChatMessages();
 
-        const unreadSupMessages = data.messages.filter(m => m.sender === 'SUPERVISOR' && !seenSupervisorMessageIds.has(m.id));
+        const unreadSupMessages = data.messages.filter(m => m.sender === 'SUPERVISOR' && !m.read && !seenSupervisorMessageIds.has(m.id));
         const supChatBtn = document.getElementById('ryr-btn-open-sup-chat');
         if (supChatBtn) {
-          if (unreadSupMessages.length > 0) {
+          if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
             supChatBtn.classList.add('unread');
             supChatBtn.innerText = `💬 Chat Supervisor (${unreadSupMessages.length})`;
           } else {
@@ -413,6 +415,10 @@
     if (modal) {
       modal.remove();
       isSupervisorChatOpen = false;
+      if (supervisorChatPollTimer) {
+        clearInterval(supervisorChatPollTimer);
+        supervisorChatPollTimer = null;
+      }
       return;
     }
 
@@ -438,6 +444,10 @@
     document.getElementById('ryr-close-sup-chat').onclick = () => {
       modal.remove();
       isSupervisorChatOpen = false;
+      if (supervisorChatPollTimer) {
+        clearInterval(supervisorChatPollTimer);
+        supervisorChatPollTimer = null;
+      }
     };
 
     const input = document.getElementById('input-sup-chat-live');
@@ -448,22 +458,31 @@
       if (!txt) return;
       input.value = '';
 
+      const tempId = `op_tmp_${Date.now()}`;
       supervisorMessagesHistory.push({
-        sender: sessionData.operator || 'OPERADOR',
+        id: tempId,
+        sender: 'OPERATOR',
         text: txt,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        read: false,
+        isEdited: false
       });
       renderSupervisorChatMessages();
 
       try {
-        await fetch(`${API_URL}/api/operator/reply-message`, {
+        const res = await fetch(`${API_URL}/api/operator/reply-message`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            operatorName: sessionData.operator,
+            operatorName: sessionData.operator || 'walther',
             text: txt
           })
         });
+        const resData = await res.json();
+        if (resData && resData.id) {
+          const item = supervisorMessagesHistory.find(m => m.id === tempId);
+          if (item) item.id = resData.id;
+        }
       } catch (e) {}
     };
 
@@ -476,14 +495,43 @@
       }
     });
 
-    renderSupervisorChatMessages();
+    // Marcar como leídos al abrir el chat
+    fetch(`${API_URL}/api/supervisor/mark-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operatorName: sessionData.operator || 'walther',
+        role: 'OPERATOR'
+      })
+    }).catch(() => {});
+
+    checkSupervisorDirectMessages();
+
+    // Iniciar sondeo en vivo cada 2s mientras esté abierto el modal
+    if (supervisorChatPollTimer) clearInterval(supervisorChatPollTimer);
+    supervisorChatPollTimer = setInterval(() => {
+      if (isSupervisorChatOpen) {
+        checkSupervisorDirectMessages();
+      } else {
+        clearInterval(supervisorChatPollTimer);
+        supervisorChatPollTimer = null;
+      }
+    }, 2000);
   }
 
   window.editSupervisorMsgFromHud = async (msgId, currentText) => {
-    const newText = prompt('Editar tu mensaje al supervisor:', currentText);
+    const newText = prompt('✏️ Editar mensaje:', currentText);
     if (newText === null) return;
     const cleanNewText = newText.trim();
     if (!cleanNewText || cleanNewText === currentText) return;
+
+    // Actualizar localmente de inmediato (optimistic update)
+    const localMsg = supervisorMessagesHistory.find(m => String(m.id) === String(msgId));
+    if (localMsg) {
+      localMsg.text = cleanNewText;
+      localMsg.isEdited = true;
+      renderSupervisorChatMessages();
+    }
 
     try {
       await fetch(`${API_URL}/api/supervisor/edit-message`, {
@@ -496,7 +544,7 @@
         })
       });
       checkSupervisorDirectMessages();
-      showFirewallToast('✅ Mensaje de supervisión editado con éxito.', 'success');
+      showFirewallToast('✅ Mensaje editado con éxito.', 'success');
     } catch (e) {
       showFirewallToast('⚠️ Error al editar mensaje.');
     }
@@ -515,15 +563,34 @@
       const isSup = m.sender === 'SUPERVISOR';
       const cssClass = isSup ? 'ryr-sup-msg-supervisor' : 'ryr-sup-msg-operator';
       const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-      const label = isSup ? `👮 Supervisor • ${timeStr}` : `💼 Tú (${sessionData.operator || 'Op'}) • ${timeStr}`;
-      const editedTag = m.isEdited ? '<span style="font-size:9px; color:#fbbf24; font-style:italic;"> (editado)</span>' : '';
-      const escapedText = (m.text || '').replace(/'/g, "\\'");
+      const label = isSup ? `👮 Supervisor` : `💼 Tú (${sessionData.operator || 'Op'})`;
+      const editedTag = m.isEdited ? '<span style="font-size:9.5px; color:#fbbf24; font-style:italic;"> (editado)</span>' : '';
+      const escapedText = (m.text || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+      // Chulitos tipo WhatsApp: ✓ (Gris - Enviado/No leído) | ✓✓ (Verde - Leído)
+      let checkmarkHtml = '';
+      if (!isSup) {
+        if (m.read) {
+          checkmarkHtml = '<span style="color:#22c55e; font-weight:900; font-size:11.5px; margin-left:3px;" title="Leído por el supervisor">✓✓</span>';
+        } else {
+          checkmarkHtml = '<span style="color:#94a3b8; font-weight:900; font-size:11.5px; margin-left:3px;" title="Enviado al supervisor">✓</span>';
+        }
+      } else {
+        if (m.read) {
+          checkmarkHtml = '<span style="color:#22c55e; font-weight:900; font-size:11.5px; margin-left:3px;" title="Leído">✓✓</span>';
+        } else {
+          checkmarkHtml = '<span style="color:#94a3b8; font-weight:900; font-size:11.5px; margin-left:3px;" title="Entregado">✓</span>';
+        }
+      }
 
       return `
-        <div class="ryr-sup-msg-item ${cssClass}">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:9.5px; opacity:0.8; margin-bottom:2px; font-weight:bold;">
-            <span>${label}${editedTag}</span>
-            <button type="button" onclick="window.editSupervisorMsgFromHud('${m.id}', '${escapedText}')" style="background:transparent; border:none; color:#cbd5e1; cursor:pointer; font-size:10px;" title="Editar mensaje">✏️</button>
+        <div class="ryr-sup-msg-item ${cssClass}" id="ryr-sup-msg-${m.id}">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:9.5px; opacity:0.85; margin-bottom:3px; font-weight:bold;">
+            <span>${label} • ${timeStr}${editedTag}</span>
+            <div style="display:flex; align-items:center; gap:3px;">
+              <button type="button" onclick="window.editSupervisorMsgFromHud('${m.id}', '${escapedText}')" style="background:transparent; border:none; color:#cbd5e1; cursor:pointer; font-size:10px; padding:0 2px;" title="Editar mensaje">✏️</button>
+              ${checkmarkHtml}
+            </div>
           </div>
           <div style="word-break:break-word; font-size:11.5px; line-height:1.4;">${m.text}</div>
         </div>

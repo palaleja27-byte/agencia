@@ -206,14 +206,15 @@
 
         if (data.firewallInfractionsCount) firewallInfractionsCount = data.firewallInfractionsCount;
 
-        if (data.monitoringActive) {
-          sessionData = {
-            operator: data.operator || 'walther',
-            shift: data.shift || 'Mañana',
-            profileName: data.profileName || 'HORACIO',
-            profileId: data.profileId || '118179794',
-            monitoringActive: true
-          };
+        sessionData = {
+          operator: data.operator || 'walther',
+          shift: data.shift || 'Mañana',
+          profileName: data.profileName || 'HORACIO',
+          profileId: data.profileId || '118179794',
+          monitoringActive: !!data.monitoringActive
+        };
+
+        if (sessionData.monitoringActive) {
           renderFloatingBar();
           injectIntelPanel();
           syncServerKnownChats();
@@ -423,11 +424,12 @@
     }
 
     isSupervisorChatOpen = true;
+    const currentOp = (sessionData.operator || 'walther').trim();
     modal = document.createElement('div');
     modal.id = 'ryr-supervisor-chat-modal';
     modal.innerHTML = `
       <div class="ryr-sup-chat-header">
-        <span>💬 CANAL SUPERVISIÓN & MONITOREO</span>
+        <span>💬 CANAL SUPERVISIÓN & MONITOREO (${currentOp.toUpperCase()})</span>
         <span id="ryr-close-sup-chat" style="cursor:pointer; font-size:16px;">✕</span>
       </div>
       <div id="ryr-sup-chat-stream" class="ryr-sup-chat-body">
@@ -3632,10 +3634,10 @@
       clearInterval(heartbeatLoop);
       return;
     }
+    checkSupervisorDirectMessages();
     if (sessionData.monitoringActive) {
       sendTelemetry(false);
       syncServerKnownChats();
-      checkSupervisorDirectMessages();
     }
   }, 2500);
 })();

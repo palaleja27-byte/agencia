@@ -12375,6 +12375,7 @@
         // Avatar o medalla
         const savedAvatar = getAvatar(op.name);
         const safeName = op.name.replace(/'/g, "\'");
+        const inactMins = (typeof window.getOpInactivityMinutes === 'function') ? window.getOpInactivityMinutes(op.name) : 5;
         let avatarHTML;
         if (savedAvatar) {
           avatarHTML = `<img src="${savedAvatar}" class="pos-avatar" title="Cambiar foto"><span class="pos-upload-hint">cambiar</span>`;
@@ -12437,9 +12438,12 @@
               </div>
             </div>
             ${_turnoMesHTML}
-            <div class="rk-card-foot" style="margin-top:${_turnosMesPills.length?'6px':'0'}">
-              <div class="rk-card-cop">$${cop} COP</div>
-              <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
+            <div class="rk-card-foot" style="margin-top:${_turnosMesPills.length?'6px':'0'}; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+              <div class="rk-card-cop">${cop} COP</div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button type="button" class="rk-inact-btn" onclick="configurarInactividadOp('${safeName}', event)" title="Configurar tiempo de alerta por inactividad para ${safeName}" style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.45); color:#fbbf24; border-radius:6px; font-size:.65rem; font-weight:800; padding:4px 8px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all .2s;">⏱️ ${inactMins}m</button>
+                <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
+              </div>
             </div>
           </div>`;
         }
@@ -12506,9 +12510,12 @@
             </div>
           </div>
           ${_turnoDiaHTML}
-          <div class="rk-card-foot" style="margin-top:6px;">
+          <div class="rk-card-foot" style="margin-top:6px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
             <div style="font-size:.68rem;color:#5eead4;font-weight:700;">📊 Mes act: ${pCurr.toFixed(1)} pts</div>
-            <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button type="button" class="rk-inact-btn" onclick="configurarInactividadOp('${safeName}', event)" title="Configurar tiempo de alerta por inactividad para ${safeName}" style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.45); color:#fbbf24; border-radius:6px; font-size:.65rem; font-weight:800; padding:4px 8px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all .2s;">⏱️ ${inactMins}m</button>
+              <button class="view-btn" onclick="abrirDetalle(${globalIndex})">Ver detalle</button>
+            </div>
           </div>
         </div>`;
       }).join('');
@@ -12539,6 +12546,103 @@
 
 
 
+
+    // ══════════════════════════════════════════════════════════════
+    // ⏱️ GESTIÓN DE TIEMPOS DE INACTIVIDAD POR OPERADOR
+    // ══════════════════════════════════════════════════════════════
+    window.getOpInactivityMinutes = function(opName) {
+      if (!opName) return 5;
+      try {
+        const customMap = JSON.parse(localStorage.getItem('rr_op_inactivity_limits') || '{}');
+        const cleanKey = String(opName).toUpperCase().trim();
+        if (customMap[cleanKey] && Number(customMap[cleanKey]) > 0) {
+          return Number(customMap[cleanKey]);
+        }
+      } catch(e) {}
+      return 5;
+    };
+
+    window.setOpInactivityMinutes = function(opName, minutes) {
+      if (!opName) return 5;
+      try {
+        const customMap = JSON.parse(localStorage.getItem('rr_op_inactivity_limits') || '{}');
+        const cleanKey = String(opName).toUpperCase().trim();
+        const mins = Math.max(1, Math.min(120, parseInt(minutes, 10) || 5));
+        customMap[cleanKey] = mins;
+        localStorage.setItem('rr_op_inactivity_limits', JSON.stringify(customMap));
+        if (typeof renderRanking === 'function') renderRanking();
+        return mins;
+      } catch(e) {}
+      return 5;
+    };
+
+    window.configurarInactividadOp = function(opName, ev) {
+      if (ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+      }
+      if (!opName) return;
+      const currentMins = (typeof window.getOpInactivityMinutes === 'function') ? window.getOpInactivityMinutes(opName) : 5;
+      const opShort = opName.split(' ')[0];
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: `<span style="font-size:1.15rem; color:#f8fafc;">⏱️ Inactividad: <strong style="color:#38bdf8;">${opName}</strong></span>`,
+          html: `
+            <p style="font-size:0.8rem; color:#94a3b8; margin-bottom:14px; line-height:1.45;">
+              Define los minutos de inactividad tolerados antes de que la <strong>Voz del Monitor</strong> emita la alerta para este operador de forma individual.
+            </p>
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.75rem; color:#cbd5e1; font-weight:700; display:block; margin-bottom:6px;">Minutos de tolerancia:</label>
+              <input type="number" id="swal-op-inact-input" min="1" max="120" value="${currentMins}" style="width:100px; text-align:center; background:#0f172a; border:2px solid #38bdf8; color:#38bdf8; font-size:1.25rem; font-weight:900; border-radius:8px; padding:6px;">
+            </div>
+            <div style="display:flex; justify-content:center; gap:6px; flex-wrap:wrap;">
+              <button type="button" onclick="document.getElementById(\'swal-op-inact-input\').value=3" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; padding:4px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; cursor:pointer;">3 min</button>
+              <button type="button" onclick="document.getElementById(\'swal-op-inact-input\').value=5" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; padding:4px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; cursor:pointer;">5 min</button>
+              <button type="button" onclick="document.getElementById(\'swal-op-inact-input\').value=8" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; padding:4px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; cursor:pointer;">8 min</button>
+              <button type="button" onclick="document.getElementById(\'swal-op-inact-input\').value=10" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; padding:4px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; cursor:pointer;">10 min</button>
+              <button type="button" onclick="document.getElementById(\'swal-op-inact-input\').value=15" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; padding:4px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; cursor:pointer;">15 min</button>
+            </div>
+          `,
+          showCancelButton: true,
+          confirmButtonText: '💾 Guardar Tiempo',
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#0284c7',
+          cancelButtonColor: '#334155',
+          background: '#1e293b',
+          color: '#f8fafc',
+          preConfirm: () => {
+            const inp = document.getElementById('swal-op-inact-input');
+            const val = parseInt(inp ? inp.value : '5', 10);
+            if (isNaN(val) || val < 1 || val > 120) {
+              Swal.showValidationMessage('Ingresa un valor válido entre 1 y 120 minutos.');
+              return false;
+            }
+            return val;
+          }
+        }).then((result) => {
+          if (result.isConfirmed && result.value) {
+            const saved = window.setOpInactivityMinutes(opName, result.value);
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'success',
+              title: `⏱️ Inactividad: ${opShort}`,
+              text: `Tiempo establecido en ${saved} minutos.`,
+              showConfirmButton: false,
+              timer: 2500,
+              background: '#0f172a',
+              color: '#fff'
+            });
+          }
+        });
+      } else {
+        const val = prompt(`Minutos de inactividad para ${opName} (actual: ${currentMins}m):`, currentMins);
+        if (val !== null && val !== '') {
+          window.setOpInactivityMinutes(opName, val);
+        }
+      }
+    };
 
     function sortRanking(col) {
       if (rkSortCol === col) { rkSortDir *= -1; }
@@ -42064,8 +42168,11 @@ CONFIGURACIÓN DE CONTEXTO:
             return asiInfo?.entradaTS || getShiftStartTs(opName);
           })();
 
+          const opInactMins = (typeof window.getOpInactivityMinutes === 'function') ? window.getOpInactivityMinutes(opName) : 5;
+          const inactThresholdMs = opInactMins * 60 * 1000;
+
           if (assignedProfiles.length >= 2) {
-            // 🎯 Monitoreo Individual de los 2 Perfiles
+            // 🎯 Monitoreo Individual de los 2 Perfiles con tiempo personalizado
             assignedProfiles.forEach(p => {
               const pId = String(p.id || p.id_perfil || '').trim();
               const pName = p.model || p.modelo || ('Perfil ' + pId);
@@ -42075,11 +42182,11 @@ CONFIGURACIÓN DE CONTEXTO:
               const pTelemetryTs = (window._profileLastActivityMap && (window._profileLastActivityMap[pId] || window._profileLastActivityMap[pName])) || 0;
               const lastPActivityTs = Math.max(lastPCutTs, pTelemetryTs);
 
-              if (now - lastPActivityTs >= 300000) {
+              if (now - lastPActivityTs >= inactThresholdMs) {
                 const alertKey = opName + '__' + pId;
                 const lastAlert = _inactivityAlertsLastTime[alertKey] || 0;
-                if (now - lastAlert >= 300000) {
-                  speakText(`${opShortName}, por favor enfócate, llevas más de 5 minutos sin interactuar en el perfil ${pName}. Recuerda mantener activos ambos perfiles.`);
+                if (now - lastAlert >= inactThresholdMs) {
+                  speakText(`${opShortName}, por favor enfócate, llevas más de ${opInactMins} minutos sin interactuar en el perfil ${pName}. Recuerda mantener activos ambos perfiles.`);
                   _inactivityAlertsLastTime[alertKey] = now;
                 }
               } else {
@@ -42097,10 +42204,10 @@ CONFIGURACIÓN DE CONTEXTO:
             const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
             const lastPActivityTs = Math.max(lastPCutTs, pTelemetryTs, lastInteractionTs);
 
-            if (now - lastPActivityTs >= 300000) {
+            if (now - lastPActivityTs >= inactThresholdMs) {
               const lastAlert = _inactivityAlertsLastTime[opName] || 0;
-              if (now - lastAlert >= 300000) {
-                speakText(`${opShortName}, por favor enfócate, llevas más de 5 minutos sin interactuar en tu perfil ${pName}.`);
+              if (now - lastAlert >= inactThresholdMs) {
+                speakText(`${opShortName}, por favor enfócate, llevas más de ${opInactMins} minutos sin interactuar en tu perfil ${pName}.`);
                 _inactivityAlertsLastTime[opName] = now;
               }
             } else {
@@ -42112,10 +42219,10 @@ CONFIGURACIÓN DE CONTEXTO:
             const lastInteractionTs = (window._opLastActivityMap && window._opLastActivityMap[opName.toUpperCase()]) || 0;
             const lastActivityTs = Math.max(lastCutTs, lastInteractionTs);
 
-            if (now - lastActivityTs >= 300000) {
+            if (now - lastActivityTs >= inactThresholdMs) {
               const lastAlert = _inactivityAlertsLastTime[opName] || 0;
-              if (now - lastAlert >= 300000) {
-                speakText(`${opShortName}, por favor enfócate, llevas 5 minutos sin hacer click ni chatear. Si tienes perfiles asignados interactúa con ellos.`);
+              if (now - lastAlert >= inactThresholdMs) {
+                speakText(`${opShortName}, por favor enfócate, llevas ${opInactMins} minutos sin hacer click ni chatear. Si tienes perfiles asignados interactúa con ellos.`);
                 _inactivityAlertsLastTime[opName] = now;
               }
             } else {

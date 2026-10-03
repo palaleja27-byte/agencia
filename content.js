@@ -2003,10 +2003,12 @@
     }
 
     let drafterBox = document.getElementById('ryr-letter-drafter-box');
-    if (!drafterBox) {
+    if (!drafterBox || !drafterBox.isConnected) {
+      if (drafterBox) drafterBox.remove();
       drafterBox = document.createElement('div');
       drafterBox.id = 'ryr-letter-drafter-box';
       drafterBox.className = 'ryr-letter-tools-box';
+      drafterBox.style.cssText = 'display:inline-flex !important; flex-direction:row !important; align-items:center !important; gap:6px !important; margin-right:8px !important; margin-left:4px !important; z-index:999999 !important; position:relative !important; height:auto !important; visibility:visible !important; opacity:1 !important; flex-shrink:0 !important;';
     }
 
     if (anchorBtn && anchorBtn.parentElement) {
@@ -2040,6 +2042,7 @@
       genLetterBtn.id = 'ryr-btn-gen-letter';
       genLetterBtn.type = 'button';
       genLetterBtn.className = 'ryr-letter-drafter-btn';
+      genLetterBtn.style.cssText = 'background:linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color:#ffffff !important; border:1px solid #34d399 !important; padding:0 12px !important; border-radius:6px !important; font-size:11px !important; font-weight:800 !important; cursor:pointer !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; gap:4px !important; height:32px !important; line-height:32px !important; white-space:nowrap !important; min-width:130px !important; flex-shrink:0 !important; visibility:visible !important; opacity:1 !important;';
       drafterBox.appendChild(genLetterBtn);
     }
     if (!genLetterBtn.disabled) {
@@ -2056,6 +2059,7 @@
       transLetterBtn.id = 'ryr-btn-trans-letter';
       transLetterBtn.type = 'button';
       transLetterBtn.className = 'ryr-letter-translate-btn';
+      transLetterBtn.style.cssText = 'background:linear-gradient(135deg, #06b6d4 0%, #0284c7 100%) !important; color:#ffffff !important; border:1px solid #38bdf8 !important; padding:0 12px !important; border-radius:6px !important; font-size:11px !important; font-weight:800 !important; cursor:pointer !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; gap:4px !important; height:32px !important; line-height:32px !important; white-space:nowrap !important; min-width:135px !important; flex-shrink:0 !important; visibility:visible !important; opacity:1 !important;';
       drafterBox.appendChild(transLetterBtn);
     }
     if (!transLetterBtn.disabled) {

@@ -1,61 +1,85 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const SERVER_IP = "10.21.41.168"; // Servidor ZeroTier
-    
-    chrome.storage.local.get(['operador_activo'], (result) => {
-        if (result.operador_activo) mostrarPanelActivo(result.operador_activo.nombre);
-    });
+  const inputOperator = document.getElementById('input-operator');
+  const selectShift = document.getElementById('select-shift');
+  const selectProfile = document.getElementById('select-profile');
+  const btnStart = document.getElementById('btn-start');
+  const btnLogout = document.getElementById('btn-logout');
+  const statusDiv = document.getElementById('status-container');
 
-    document.getElementById('btn-login').addEventListener('click', async () => {
-        const user = document.getElementById('username').value.trim();
-        const pass = document.getElementById('password').value.trim();
-        const status = document.getElementById('status-msg');
-
-        if (!user || !pass) {
-            status.style.color = "#ff4d4d";
-            status.innerText = "🛑 Faltan credenciales.";
-            return;
-        }
-
-        status.style.color = "#00ffcc";
-        status.innerText = "Autenticando en la Matriz...";
-
-        try {
-            const response = await fetch(`http://${SERVER_IP}:18791/api/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: user, password: pass })
-            });
-            const data = await response.json();
-
-            if (data.success) {
-                chrome.storage.local.set({ operador_activo: { id: data.operador.id, nombre: data.operador.nombre } }, () => {
-                    mostrarPanelActivo(data.operador.nombre);
-                    status.innerText = "";
-                });
-            } else {
-                status.style.color = "#ff4d4d";
-                status.innerText = `🛑 Error: ${data.message}`;
-            }
-        } catch (error) {
-            status.style.color = "#ff4d4d";
-            status.innerText = "🛑 Error de red. ¿Servidor apagado?";
-        }
-    });
-
-    document.getElementById('btn-logout').addEventListener('click', () => {
-        chrome.storage.local.remove(['operador_activo'], () => {
-            document.getElementById('login-form').style.display = "block";
-            document.getElementById('panel-activo').style.display = "none";
-            document.getElementById('username').value = "";
-            document.getElementById('password').value = "";
-            document.getElementById('status-msg').innerText = "Turno cerrado.";
-            document.getElementById('status-msg').style.color = "#aaa";
-        });
-    });
-
-    function mostrarPanelActivo(nombre) {
-        document.getElementById('login-form').style.display = "none";
-        document.getElementById('panel-activo').style.display = "block";
-        document.getElementById('op-name').innerText = nombre;
+  // Cargar datos previos
+  chrome.storage.local.get(['operator', 'shift', 'profileName', 'profileId', 'monitoringActive'], (data) => {
+    if (data.operator) inputOperator.value = data.operator;
+    if (data.shift) selectShift.value = data.shift;
+    if (data.profileId) {
+      const optById = Array.from(selectProfile.options).find(o => o.getAttribute('data-id') === String(data.profileId));
+      if (optById) {
+        optById.selected = true;
+      } else if (data.profileName) {
+        selectProfile.value = data.profileName;
+      }
+    } else if (data.profileName) {
+      selectProfile.value = data.profileName;
     }
+
+    if (data.monitoringActive && statusDiv) {
+      statusDiv.innerText = '🟢 Monitoreo Activo en este Turno';
+      statusDiv.style.color = '#10b981';
+    }
+  });
+
+  btnStart.addEventListener('click', () => {
+    const selectedOperator = inputOperator.value.trim();
+    const selectedShift = selectShift.value;
+    const selectedOption = selectProfile.options[selectProfile.selectedIndex];
+    const selectedProfileName = selectProfile.value;
+    const selectedProfileId = selectedOption ? selectedOption.getAttribute('data-id') : selectedProfileName;
+
+    if (!selectedOperator) {
+      alert('Por favor escribe el nombre del operador.');
+      return;
+    }
+
+    const sessionPayload = {
+      operator: selectedOperator,
+      shift: selectedShift,
+      profileName: selectedProfileName,
+      profileId: selectedProfileId,
+      monitoringActive: true,
+      sessionStartTime: Date.now()
+    };
+
+    chrome.storage.local.set(sessionPayload, () => {
+      if (statusDiv) {
+        statusDiv.innerText = '🟢 Monitoreo Iniciado';
+        statusDiv.style.color = '#10b981';
+      }
+
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0] && tabs[0].url && tabs[0].url.includes('talkytimes.com')) {
+          chrome.tabs.reload(tabs[0].id);
+        }
+      });
+
+      setTimeout(() => window.close(), 300);
+    });
+  });
+
+  // Botón de Cerrar Sesión en el Popup
+  btnLogout.addEventListener('click', () => {
+    chrome.storage.local.clear(() => {
+      if (statusDiv) {
+        statusDiv.innerText = '⚪ Sesión Cerrada';
+        statusDiv.style.color = '#f87171';
+      }
+      inputOperator.value = '';
+
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0] && tabs[0].url && tabs[0].url.includes('talkytimes.com')) {
+          chrome.tabs.reload(tabs[0].id);
+        }
+      });
+
+      setTimeout(() => window.close(), 300);
+    });
+  });
 });

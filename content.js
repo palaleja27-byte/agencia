@@ -1193,7 +1193,7 @@
     const oldLangBadge = toolsWrapper.querySelector('.ryr-lang-badge');
     if (oldLangBadge) oldLangBadge.remove();
 
-    // 1. Botón de Continuar Chat / Ganchos IA
+    // 1. Botón de Continuar Chat / Responder Chat
     let hookBtn = toolsWrapper.querySelector('.ryr-chat-hooks-btn');
     if (!hookBtn) {
       hookBtn = document.createElement('button');
@@ -1201,10 +1201,8 @@
       hookBtn.className = 'ryr-chat-hooks-btn';
       toolsWrapper.appendChild(hookBtn);
     }
-    hookBtn.innerHTML = hasConversationHistory ? '✨ Continuar Chat' : '✨ Ganchos IA';
-    hookBtn.title = hasConversationHistory 
-      ? 'Generar 3 respuestas inteligentes para dar continuidad fluida a la conversación' 
-      : 'Generar 3 ganchos magnéticos de apertura según sus gustos y biografía';
+    hookBtn.innerHTML = '✨ Responder Chat';
+    hookBtn.title = 'Generar 3 respuestas inteligentes y humanizadas con contexto de la conversación';
 
     // 2. Botón de Traducir Mensaje (Inteligente y Bidireccional)
     const targetLabel = detectedLang.code.toUpperCase();
@@ -1252,7 +1250,7 @@
       }
     };
 
-    // Acción de Ganchos IA (Modo Dual: Continuación vs Atracción Contextual en Tiempo Real)
+    // Acción de Responder Chat (Modo Contextual con 3 Opciones Compactas en Tiempo Real)
     hookBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1288,7 +1286,6 @@
       const generateSmartContextualHooks = () => {
         const fullChatString = liveClientMessages.map(m => m.text).join(' ').toLowerCase();
         const lastMsgLower = (liveLastClientMsg || '').toLowerCase();
-        const rawBodyText = document.body.innerText.toLowerCase();
 
         // 1. Detectar si habla de dolor de cabeza, enfermedad, lluvia, frío, autobús, analgésico o reposo
         const hasSicknessOrHeadache = liveHasHistory && (
@@ -1329,31 +1326,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `Quiero quedarme aquí haciéndote compañía hasta que te sientas mucho mejor ❤️ Cierra tus ojitos y dime, ¿qué es lo que más te reconforta cuando estás descansando?`,
-                es: `🪝 GANCHO PARA AVIVAR: Acompañamiento íntimo y pregunta reconfortante para seguir chateando.`
+                es: `Acompañamiento íntimo y pregunta reconfortante para que siga chateando.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Por favor descansa, tómate tu analgésico y abrígate mucho del frío y la lluvia... Me encantaría abrazarte muy fuerte justo ahora para que duermas en paz ❤️`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazo.`
+                es: `Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazo.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `Estás en mis pensamientos, cariño. Cuando despiertes, envíame una foto tuya descansando para saber que estás bien 😉 Yo te mandaré una especial también.`,
-                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de descanso con reciprocidad protectora.`
+                es: `Petición de foto de descanso con reciprocidad protectora.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `I want to stay right here keeping you company until you feel all better ❤️ Close your eyes and tell me, what makes you feel the most comforted when you're resting?`,
-                es: `🪝 GANCHO PARA AVIVAR: Acompañamiento íntimo y pregunta reconfortante para que siga chateando sin esfuerzo.`
+                es: `Acompañamiento íntimo y pregunta reconfortante para que siga chateando sin esfuerzo.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Please rest, take your medicine, and stay warm away from that rain... I wish I could wrap my arms around you and hold you tight right now so you can sleep peacefully ❤️`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazarte.`
+                es: `Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazarte.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `You are in my thoughts, sweetheart. When you wake up, send me a little picture of you resting so I know you're feeling better 😉 I'll send you an exclusive photo too!`,
-                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de descanso con reciprocidad protectora.`
+                es: `Petición de foto de descanso con reciprocidad protectora.`
               }
             ];
           }
@@ -1361,31 +1364,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `¡Ver tu café me dio antojo a mí también! 😉 Cuéntame, ¿cuál es tu postre o antojo favorito para acompañar una buena charla?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
+                es: `Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `¡Ese café se ve delicioso! ❤️ Jamás me iría sin antes tomarme un lindo momento para hablar contigo... ¿Cómo va tu tarde?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Aseguras tu atención exclusiva y elogias su café/comida.`
+                es: `Aseguras tu atención exclusiva y elogias su café/comida.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `La próxima vez que tomes café, envíame una foto de tu sonrisa disfrutándolo para sentir que lo compartimos 😉 ¿Trato?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Petición magnética de foto cotidiana vinculada a su café.`
+                es: `Petición magnética de foto cotidiana vinculada a su café.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `Seeing your coffee actually made me crave one too 😉 Tell me, what's your favorite sweet treat or guilty pleasure when taking a break?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
+                es: `Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `That coffee looks so delicious! ❤️ I could never just leave without taking a sweet moment to chat with you... How is your day going?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Respuesta directa sobre su café/comida asegurando tu tiempo exclusivo.`
+                es: `Respuesta directa sobre su café/comida asegurando tu tiempo exclusivo.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `Next time you have coffee, send me a picture of your smile enjoying it so we can share the moment together 😉 Deal?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Petición magnética de foto cotidiana vinculada a su café.`
+                es: `Petición magnética de foto cotidiana vinculada a su café.`
               }
             ];
           }
@@ -1393,31 +1402,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `Siempre tengo un momento especial reservado solo para ti ❤️ Dime, ¿qué es algo curioso o divertido que te haya pasado hoy?`,
-                es: `🪝 GANCHO PARA AVIVAR: Despierta curiosidad y anima el diálogo.`
+                es: `Despierta curiosidad y anima el diálogo.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `¡Para nada! Nunca estoy demasiado ocupada para alguien que me hace sonreír tanto 😉 ¿Cómo te estás sintiendo hoy?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
+                es: `Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención',
                 target: `Estaba sonriendo pensando en nuestras charlas ✨ Dime, ¿qué es algo que siempre te alegra el día sin falta?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Validación emocional y anclaje a sensaciones positivas.`
+                es: `Validación emocional y anclaje a sensaciones positivas.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `I always have a special moment reserved just for you ❤️ Tell me, what's one secret dream or fun thought you've had today?`,
-                es: `🪝 GANCHO PARA AVIVAR: Despierta misterio y curiosidad para mantener el chat activo.`
+                es: `Despierta misterio y curiosidad para mantener el chat activo.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Not at all, sweetie! I'm never too busy for someone who brings such a genuine smile to my face 😉 How are you feeling today?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
+                es: `Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención',
                 target: `I was just smiling looking at our messages ✨ Tell me, what is something that always brightens up your mood without fail?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Validación emocional y anclaje a sensaciones positivas.`
+                es: `Validación emocional y anclaje a sensaciones positivas.`
               }
             ];
           }
@@ -1425,31 +1440,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `Me encanta saber que estás tan atento a mis publicaciones 😉 ¿Qué fue lo primero que sentiste o pensaste al verla?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta intrigante sobre su reacción inmediata al post.`
+                es: `Pregunta intrigante sobre su reacción inmediata al post.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Vi que te gustó mi publicación... Me alegra muchísimo que hayas conectado con ese pensamiento ❤️ ¿Qué momentos te dan más paz?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Agradecimiento por su reacción y conexión íntima de tranquilidad.`
+                es: `Agradecimiento por su reacción y conexión íntima de tranquilidad.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `Esa foto guarda un recuerdo muy lindo para mí ✨ Envíame una foto de lo que estás haciendo hoy para conocer más tu mundo 😉`,
-                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de su entorno con reciprocidad.`
+                es: `Petición de foto de su entorno con reciprocidad.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `I love knowing you are paying close attention to my world and my thoughts 😉 What was the first thing that crossed your mind when you saw it?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta intrigante sobre su reacción inmediata al post.`
+                es: `Pregunta intrigante sobre su reacción inmediata al post.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `I saw you liked my post... It truly warms my heart that you connected with that thought ❤️ What kind of quiet moments bring you the most peace?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Agradecimiento por su like en el post y conexión íntima de tranquilidad.`
+                es: `Agradecimiento por su like en el post y conexión íntima de tranquilidad.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `That picture holds a very special memory for me ✨ Send me a picture of what you're doing right now so I can see your world too 😉`,
-                es: `✨ LLAMAR LA ATENCIÓN: Petición de foto de su entorno a cambio de la foto del post.`
+                es: `Petición de foto de su entorno a cambio de la foto del post.`
               }
             ];
           }
@@ -1457,31 +1478,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `Siempre sabes cómo hacerme suspirar con tus palabras tan dulces 😉 Dime, ¿cuál ha sido el detalle más romántico de tu vida?`,
-                es: `🪝 GANCHO PARA AVIVAR: Indagación romántica profunda para mantenerlo emocionado.`
+                es: `Indagación romántica profunda para mantenerlo emocionado.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Saber de ti siempre es la parte más linda y especial de mi día ❤️ ¿Cómo te ha tratado la vida hoy, cariño?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Devolución cariñosa y agradecida a su halago.`
+                es: `Devolución cariñosa y agradecida a su halago.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `¡Estaba sonriendo pensando en ti! Envíame una foto de tu sonrisa ahora mismo y yo te enviaré una exclusiva a cambio 😉 ¿Trato?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Gancho de alto impacto para intercambio recíproco de fotos.`
+                es: `Gancho de alto impacto para intercambio recíproco de fotos.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `You always know how to make my heart flutter with your sweet words 😉 Tell me, what is the most romantic thing someone has ever done for you?`,
-                es: `🪝 GANCHO PARA AVIVAR: Indagación romántica profunda para mantenerlo soñando despierto.`
+                es: `Indagación romántica profunda para mantenerlo soñando despierto.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Hearing from you is honestly the sweetest part of my day ❤️ How has your day been treating you so far, my dear?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Devolución cariñosa y agradecida a su halago.`
+                es: `Devolución cariñosa y agradecida a su halago.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención (Foto)',
                 target: `I was just blushing thinking about you! Send me a picture of your smile right now, and I'll send you an exclusive photo in return 😉 Deal?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Desafío de intercambio de fotos con reciprocidad irresistible.`
+                es: `Desafío de intercambio de fotos con reciprocidad irresistible.`
               }
             ];
           }
@@ -1489,31 +1516,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es algo que te haya sacado una gran sonrisa hoy?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta positiva y curiosa para dinamizar la conversación.`
+                es: `Pregunta positiva y curiosa para dinamizar la conversación.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo empezó tu día hoy?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Saludo dulce y apertura de diálogo sobre su rutina.`
+                es: `Saludo dulce y apertura de diálogo sobre su rutina.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención',
                 target: `Cada vez que veo un mensaje tuyo me alegro mucho ✨ Dime, ¿qué estás haciendo justo en este momento?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Validación coqueta para provocar respuesta inmediata.`
+                es: `Validación coqueta para provocar respuesta inmediata.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho para Avivarlo',
                 target: `I was just taking a little break and hoping to hear from you 😉 What is one thing that has been keeping you smiling lately?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta positiva y curiosa para dinamizar la conversación.`
+                es: `Pregunta positiva y curiosa para dinamizar la conversación.`
               },
               {
+                title: '💬 Opción 2: Contestar Conversación',
                 target: `I'm having a calm day, and seeing your message just made it so much brighter ❤️ How did your morning start off?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Saludo dulce y apertura de diálogo sobre su rutina.`
+                es: `Saludo dulce y apertura de diálogo sobre su rutina.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención',
                 target: `Every time your name pops up on my screen, my day gets a little sweeter ✨ What are you up to right at this moment?`,
-                es: `✨ LLAMAR LA ATENCIÓN: Validación coqueta para provocar respuesta inmediata.`
+                es: `Validación coqueta para provocar respuesta inmediata.`
               }
             ];
           }
@@ -1522,31 +1555,37 @@
           if (liveDetectedLang.code === 'es') {
             options = [
               {
+                title: '🪝 Opción 1: Gancho de Atracción',
                 target: `Tienes una energía muy dulce y una mirada muy serena en tus fotos ❤️ Dime, ¿qué es algo que te apasione profundamente en la vida?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta de atracción sobre pasiones personales.`
+                es: `Pregunta de atracción sobre pasiones personales.`
               },
               {
+                title: '💬 Opción 2: Contestar / Saludo Inicial',
                 target: `Tuve una hermosa corazonada de saludarte el día de hoy 😉 ¿Cómo te ha estado tratando tu semana?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Saludo espontáneo y abierto.`
+                es: `Saludo espontáneo y abierto.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención',
                 target: `Tu sonrisa de verdad me llamó mucho la atención ✨ Cuéntame un pequeño sueño o secreto tuyo que pocos conozcan...`,
-                es: `✨ LLAMAR LA ATENCIÓN: Gancho intrigante y de misterio.`
+                es: `Gancho intrigante y de misterio que despierta curiosidad.`
               }
             ];
           } else {
             options = [
               {
+                title: '🪝 Opción 1: Gancho de Atracción',
                 target: `You have such a warm and gentle energy in your photos ❤️ Tell me, what is something you are truly passionate about in your everyday life?`,
-                es: `🪝 GANCHO PARA AVIVAR: Pregunta de alto impacto sobre sus pasiones personales.`
+                es: `Pregunta de alto impacto sobre sus pasiones personales.`
               },
               {
+                title: '💬 Opción 2: Contestar / Saludo Inicial',
                 target: `I had a sudden lovely feeling that I should say hello to you today 😉 How is your day treating you so far?`,
-                es: `💬 CONTESTAR CONVERSACIÓN: Saludo espontáneo y abierto.`
+                es: `Saludo espontáneo y abierto.`
               },
               {
+                title: '✨ Opción 3: Llamar la Atención',
                 target: `Your smile genuinely caught my attention ✨ Tell me a small dream or secret of yours that few people know about...`,
-                es: `✨ LLAMAR LA ATENCIÓN: Gancho intrigante y de misterio que despierta curiosidad.`
+                es: `Gancho intrigante y de misterio que despierta curiosidad.`
               }
             ];
           }
@@ -1556,15 +1595,13 @@
       };
 
       const renderHooks = (hooksList) => {
-        const headerTitleText = liveHasHistory 
-          ? `🔄 CONTINUAR CHAT CON ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):` 
-          : `🎯 GANCHOS DE ATRACCIÓN PARA ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
+        const headerTitleText = `🔄 RESPONDER CHAT A ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
 
         let warningHtml = '';
         if (showMissingHistoryWarning) {
           warningHtml = `
             <div class="ryr-no-info-warning">
-              <span style="font-size:10.5px; line-height:1.3;">⚠️ <b>Sin historial previo subido:</b> Sube las conversaciones para contexto 360°. Opciones seguras:</span>
+              <span style="font-size:10px; line-height:1.2;">⚠️ <b>Sin historial previo en BD:</b> Sube las conversaciones para contexto 360°.</span>
               <button class="ryr-no-info-btn" id="ryr-quick-sync-btn">⚡ Subir Ahora</button>
             </div>
           `;
@@ -1576,7 +1613,7 @@
             <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-hooks-dropdown">✕</span>
           </div>
           ${warningHtml}
-          <div id="ryr-hooks-options-container" style="display:flex; flex-direction:column; gap:6px;"></div>
+          <div id="ryr-hooks-options-container" style="display:flex; flex-direction:column; gap:5px;"></div>
         `;
 
         const closeBtn = dropdown.querySelector('#ryr-close-hooks-dropdown');
@@ -1598,85 +1635,21 @@
         hooksList.forEach((item, idx) => {
           const targetText = typeof item === 'object' ? item.target : item;
           const esText = typeof item === 'object' ? item.es : 'Respuesta contextual generada.';
+          const optTitle = typeof item === 'object' && item.title ? item.title : `Opción ${idx + 1}`;
 
           const option = document.createElement('div');
           option.className = 'ryr-hook-option';
           option.innerHTML = `
-            <div class="ryr-hook-header">
-              <span style="font-weight:bold; color:#a5b4fc; font-size:10px;">OPCIÓN ${idx + 1}</span>
-              <button type="button" class="ryr-hook-edit-btn" title="Editar y personalizar mensaje antes de enviar">✏️ Editar Mensaje</button>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-weight:bold; color:#a5b4fc; font-size:10px;">${optTitle.toUpperCase()}</span>
+              <span style="font-size:9.5px; color:#38bdf8; font-weight:bold;">⚡ Clic para Enviar</span>
             </div>
             <div class="ryr-hook-target-text">"${targetText}"</div>
-            <div class="ryr-hook-es-text">💡 <i>${esText}</i></div>
-            <div class="ryr-inline-editor" style="display:none;">
-              <textarea placeholder="Edita tu mensaje aquí...">${targetText}</textarea>
-              <div class="ryr-inline-editor-actions">
-                <button type="button" class="ryr-btn-trans-inline" title="Traducir texto editado al idioma del cliente">🌐 Traducir a ${liveDetectedLang.code.toUpperCase()}</button>
-                <button type="button" class="ryr-btn-save-inline">✅ Insertar en Chat</button>
-                <button type="button" class="ryr-btn-cancel-inline">❌ Cancelar</button>
-              </div>
-            </div>
+            <div class="ryr-hook-es-text">💡 <b>Explicación en Español:</b> <i>${esText}</i></div>
           `;
 
-          const editBtn = option.querySelector('.ryr-hook-edit-btn');
-          const editorBox = option.querySelector('.ryr-inline-editor');
-          const editorTextarea = editorBox.querySelector('textarea');
-          const saveBtn = editorBox.querySelector('.ryr-btn-save-inline');
-          const cancelBtn = editorBox.querySelector('.ryr-btn-cancel-inline');
-          const transBtn = editorBox.querySelector('.ryr-btn-trans-inline');
-
-          // Clic en Editar: Abrir editor integrado dentro de la opción
-          editBtn.onclick = (e) => {
-            e.stopPropagation();
-            editorBox.style.display = editorBox.style.display === 'none' ? 'flex' : 'none';
-            if (editorBox.style.display === 'flex') {
-              editorTextarea.focus();
-              editorTextarea.select();
-            }
-          };
-
-          // Traducir dentro del editor inline si el operador escribe en español
-          transBtn.onclick = async (e) => {
-            e.stopPropagation();
-            const rawVal = editorTextarea.value.trim();
-            if (!rawVal) return;
-            transBtn.innerText = '⏳ Traduciendo...';
-            transBtn.disabled = true;
-            try {
-              const translated = await translateText(rawVal, liveDetectedLang.code);
-              editorTextarea.value = translated;
-              showFirewallToast(`✅ Traducido a ${liveDetectedLang.name}`);
-            } catch (err) {
-              showFirewallToast(`⚠️ Error al traducir`);
-            } finally {
-              transBtn.disabled = false;
-              transBtn.innerText = `🌐 Traducir a ${liveDetectedLang.code.toUpperCase()}`;
-            }
-          };
-
-          // Guardar e Insertar mensaje editado
-          saveBtn.onclick = (e) => {
-            e.stopPropagation();
-            const finalMsg = editorTextarea.value.trim();
-            if (finalMsg) {
-              const ta = findChatInput();
-              if (ta) {
-                setInputValueSafely(ta, finalMsg);
-                showFirewallToast(`✨ Mensaje editado insertado en el chat. ¡Listo para enviar!`, 'success');
-                ta.focus();
-              }
-              dropdown.remove();
-            }
-          };
-
-          cancelBtn.onclick = (e) => {
-            e.stopPropagation();
-            editorBox.style.display = 'none';
-          };
-
-          // Clic directo en la tarjeta (sin clic en botones): Inserción inmediata 1-Click
-          option.onclick = (e) => {
-            if (e.target.closest('.ryr-inline-editor') || e.target.closest('.ryr-hook-edit-btn')) return;
+          // Clic directo: Inserción inmediata 1-Click
+          option.onclick = () => {
             const ta = findChatInput();
             if (ta) {
               setInputValueSafely(ta, targetText);
@@ -1690,7 +1663,7 @@
         });
       };
 
-      // Generación instantánea en 0ms con razonamiento contextual de 3 opciones
+      // Generación instantánea en 0ms con razonamiento contextual de 3 opciones compactas
       renderHooks(generateSmartContextualHooks());
     };
   }
@@ -1958,17 +1931,24 @@
   function injectAutoLetterDrafter() {
     if (!window.location.href.includes('/mails/') && !document.querySelector('textarea[placeholder*="letter" i]')) return;
 
-    // Buscar área de envío de carta o botón Send (tolerante a cualquier variante del DOM de Talkytimes)
+    // Buscar botones de acción en el pie de página de cartas (Send Media y Send Letter)
+    const sendMediaBtn = Array.from(document.querySelectorAll('button, div[role="button"], a[role="button"]')).find(b => {
+      if (b.closest('#ryr-titan-bar') || b.closest('#ryr-intel-panel') || b.closest('.ryr-letter-tools-box') || b.closest('.ryr-chat-tools-wrapper')) return false;
+      const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+      return txt.includes('send media') || txt.includes('media');
+    });
+
     const sendLetterBtn = Array.from(document.querySelectorAll('button, div[role="button"], a[role="button"]')).find(b => {
       if (b.closest('#ryr-titan-bar') || b.closest('#ryr-intel-panel') || b.closest('.ryr-letter-tools-box') || b.closest('.ryr-chat-tools-wrapper')) return false;
       const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
       const testId = (b.getAttribute('data-test-id') || '').toLowerCase();
       const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-      return txt === 'send' || txt === 'send letter' || txt === 'send mail' || txt.startsWith('send') || testId.includes('send') || aria.includes('send');
+      return (txt === 'send' || txt === 'send letter' || txt === 'send mail' || txt.startsWith('send') || testId.includes('send') || aria.includes('send')) && !txt.includes('media');
     });
 
     const letterTextarea = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
-    if (!letterTextarea && !sendLetterBtn) return;
+    const anchorBtn = sendMediaBtn || sendLetterBtn;
+    if (!letterTextarea && !anchorBtn) return;
 
     const { clientName, bioData } = getExactClientProfileData();
     const letters = extractMailThreadContext();
@@ -1994,15 +1974,15 @@
       drafterBox.className = 'ryr-letter-tools-box';
     }
 
-    if (sendLetterBtn && sendLetterBtn.parentElement) {
-      sendLetterBtn.parentElement.style.overflow = 'visible';
-      sendLetterBtn.parentElement.style.minHeight = '52px';
-      sendLetterBtn.parentElement.style.height = 'auto';
-      sendLetterBtn.parentElement.style.display = 'flex';
-      sendLetterBtn.parentElement.style.alignItems = 'center';
-      sendLetterBtn.parentElement.style.flexWrap = 'nowrap';
-      if (drafterBox.parentElement !== sendLetterBtn.parentElement || drafterBox.nextElementSibling !== sendLetterBtn) {
-        sendLetterBtn.parentElement.insertBefore(drafterBox, sendLetterBtn);
+    if (anchorBtn && anchorBtn.parentElement) {
+      anchorBtn.parentElement.style.overflow = 'visible';
+      anchorBtn.parentElement.style.minHeight = '52px';
+      anchorBtn.parentElement.style.height = 'auto';
+      anchorBtn.parentElement.style.display = 'flex';
+      anchorBtn.parentElement.style.alignItems = 'center';
+      anchorBtn.parentElement.style.flexWrap = 'nowrap';
+      if (drafterBox.parentElement !== anchorBtn.parentElement || drafterBox.nextElementSibling !== anchorBtn) {
+        anchorBtn.parentElement.insertBefore(drafterBox, anchorBtn);
       }
     } else if (letterTextarea && letterTextarea.parentElement) {
       if (drafterBox.parentElement !== letterTextarea.parentElement) {
@@ -2138,20 +2118,20 @@
           options = [
             {
               title: '🪝 Opção 1: Resposta Emocional & Vínculo Profundo',
-              rationale: 'Empatia profunda, agradecimento sincero pelo que ele escreveu e validação afetiva da conexão.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu hermosa carta con muchísima atención y cariño. Aprecio profundamente la dulzura y sinceridad que siempre me entregas. En medio de toda la rutina diaria, recibir tus palabras me llena de paz y alegría.\n\nDime algo... ¿qué fue lo primero que te hizo sonreír o qué pensamiento lindo tuviste hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+              rationale: 'Empatia profunda, agradecimento sincero e validação afetiva.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu hermosa carta con muchísima atención y cariño. Aprecio profundamente la dulzura y sinceridad que siempre me entregas. En medio de toda la rutina diaria, recibir tus palabras me llena de paz y alegría.\n\nDime algo... ¿qué fue lo primero que te hizo sonreír hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
               target: `Meu querido ${clientDisplayName},\n\n${topicIntro1}\n\nAdoro a honestidade e a ternura com que você sempre se expressa. Em meio a toda a correria do dia a dia, encontrar uma mensagem sua é como um refúgio de paz que ilumina os meus dias.\n\nFico pensando em tudo o que ainda temos para descobrir um sobre o outro... Me conta, qual foi a coisa mais bonita ou o pensamento que te fez sorrir hoje?\n\nCom todo o meu afeto e carinho,\n${myProfile} ❤️`
             },
             {
               title: '💬 Opção 2: Conexão Cotidiana & Troca de Fotos',
-              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas para fidelizar cartas.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba aquí pensando en ti mientras disfrutaba de un momento de calma. Me fascina imaginar cómo es tu día a día y compartir estos pedacitos de vida contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
+              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba aquí pensando en ti mientras disfrutaba de un momento de calma. Me fascina imaginar cómo es tu día a día.\n\nEnvíame una foto tuya de lo que estás haciendo hoy y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
               target: `Meu querido ${clientDisplayName},\n\nEstava aqui pensando em você enquanto aproveitava um momento de descanso. Adoro sentir essa nossa cumplicidade e imaginar como é o seu dia a dia.\n\nMe envia uma foto sua de como você está hoje ou do seu sorriso para eu sentir você ainda mais presente, e na minha próxima carta te mando uma foto exclusiva só para você 😉 Combinado?\n\nCom um abraço bem carinhoso,\n${myProfile} ✨`
             },
             {
               title: '✨ Opção 3: Fascinação & Pergunta Íntima de Cartas',
-              rationale: 'Pregunta abierta de alta curiosidad romántica que incentiva una carta de respuesta extensa.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en mi momento favorito. Hay algo muy dulce y auténtico en cómo nos comunicamos que me fascina.\n\nCuéntame un sueño o un secreto tuyo que pocas personas conozcan... ¿qué es lo que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+              rationale: 'Pregunta abierta de alta curiosidad romántica que incentiva una carta extensa.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en mi momento favorito. Hay algo muy dulce y auténtico en cómo nos comunicamos.\n\nCuéntame un secreto o sueño tuyo que pocas personas conozcan... ¿qué es lo que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
               target: `Meu querido ${clientDisplayName},\n\nEscrever para você se tornou o momento mais especial dos meus dias. Há algo muito genuíno e doce na nossa sintonia, e eu adoro sentir esse carinho crescendo a cada linha.\n\nMe conta um segredo ou um pequeno sonho seu que poucas pessoas conhecem... o que é aquilo que mais enche seu coração de paixão na vida?\n\nCom todo o meu carinho,\n${myProfile} ❤️`
             }
           ];
@@ -2166,21 +2146,21 @@
           options = [
             {
               title: '🪝 Opción 1: Respuesta Emocional & Vínculo Profundo',
-              rationale: 'Empatía profunda, agradecimiento sincero por sus palabras y validación emocional de la relación.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\n${topicIntro1}\n\nAprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me llena el corazón de calidez.\n\nMe quedé con muchas ganas de saber más de ti... Dime algo, ¿qué fue lo más lindo o el detalle especial que te alegró el día de hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`,
-              target: `Mi queridísimo ${clientDisplayName},\n\n${topicIntro1}\n\nAprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me llena el corazón de calidez.\n\nMe quedé con muchas ganas de saber más de ti... Dime algo, ¿qué fue lo más lindo o el detalle especial que te alegró el día de hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`
+              rationale: 'Empatía profunda, agradecimiento sincero y validación emocional de la relación.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\n${topicIntro1}\n\nAprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me llena el corazón de calidez.\n\nMe quedé con muchas ganas de saber más de ti... Dime algo, ¿qué fue lo más lindo que te alegró el día de hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`,
+              target: `Mi queridísimo ${clientDisplayName},\n\n${topicIntro1}\n\nAprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me llena el corazón de calidez.\n\nMe quedé con muchas ganas de saber más de ti... Dime algo, ¿qué fue lo más lindo que te alegró el día de hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`
             },
             {
               title: '💬 Opción 2: Conexión Cotidiana & Intercambio de Fotos',
-              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas para fidelizar cartas.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día y compartir estos momentos contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
-              target: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día y compartir estos momentos contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`
+              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día.\n\nEnvíame una foto tuya de lo que estás haciendo hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
+              target: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día.\n\nEnvíame una foto tuya de lo que estás haciendo hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`
             },
             {
               title: '✨ Opción 3: Fascinación & Pregunta Íntima de Cartas',
-              rationale: 'Pregunta abierta de alta curiosidad romántica diseñada para que responda con una carta extensa.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad que valoro muchísimo.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
-              target: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad que valoro muchísimo.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`
+              rationale: 'Pregunta abierta de alta curiosidad romántica diseñada para respuesta extensa.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+              target: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`
             }
           ];
         } else if (detectedLang.code === 'fr') {
@@ -2189,19 +2169,19 @@
             {
               title: '🪝 Option 1: Réponse Émotionnelle & Lien Profond',
               rationale: 'Empathie profonde, remerciements sincères et renforcement du lien affectif.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu maravillosa carta con tanta emoción y dulzura. Aprecio profundamente la sinceridad con la que siempre me hablas. En medio de un día ocupado, leerte me da una paz inmensa.\n\nDime, ¿qué fue lo más lindo que te hizo sonreír hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
-              target: `Mon très cher ${clientDisplayName},\n\nJ'ai lu ta magnifique lettre avec tant d'émotion et un immense sourire aux lèvres.\n\nJ'apprécie profondément la tendresse et la franchise avec lesquelles tu t'adresses toujours à moi. Au milieu d'une journée bien remplie, lire tes mots m'apporte une paix merveilleuse et réchauffe mon cœur.\n\nDis-moi, quelle a été la plus jolie pensée ou le moment qui t'a fait sourire aujourd'hui?\n\nAvec toute mon affection,\n${myProfile} ❤️`
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu maravillosa carta con tanta emoción y dulzura. Aprecio profundamente la sinceridad con la que siempre me hablas.\n\nDime, ¿qué fue lo más lindo que te hizo sonreír hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+              target: `Mon très cher ${clientDisplayName},\n\nJ'ai lu ta magnifique lettre avec tant d'émotion et un immense sourire aux lèvres.\n\nJ'apprécie profondément la tendresse et la franchise avec lesquelles tu t'adresses toujours à moi. Au milieu d'une journée bien remplie, lire tes mots m'apporte une paix merveilleuse.\n\nDis-moi, quelle a été la plus jolie pensée qui t'a fait sourire aujourd'hui?\n\nAvec toute mon affection,\n${myProfile} ❤️`
             },
             {
               title: '💬 Option 2: Quotidien & Échange de Photos Exclusives',
-              rationale: 'Invitation complice à un échange de photos exclusives pour dynamiser le fil de lettres.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba pensando en ti mientras descansaba un momento. Me encanta compartir estos pequeños instantes de vida contigo.\n\nEnvíame una foto de tu sonrisa hoy, y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
+              rationale: 'Invitation complice à un échange de photos exclusives pour dynamiser les lettres.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba pensando en ti mientras descansaba un momento. Me encanta compartir estos pequeños instantes contigo.\n\nEnvíame una foto de tu sonrisa hoy y te enviaré una foto exclusiva 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
               target: `Mon cher ${clientDisplayName},\n\nJe pensais à toi pendant une petite pause tranquille. J'aime tellement partager ces doux moments avec toi.\n\nEnvoie-moi une photo de ton sourire aujourd'hui pour te sentir encore plus près, et dans ma prochaine lettre je t'enverrai une photo exclusive rien que pour toi 😉 D'accord?\n\nAvec un doux baiser,\n${myProfile} ✨`
             },
             {
               title: '✨ Option 3: Fascination & Question Intime pour Lettre',
-              rationale: 'Question ouverte romantique et captivante pour susciter une longue lettre de réponse.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en mi momento favorito. Hay una complicidad muy especial entre nosotros.\n\nCuéntame un sueño o secreto que pocos conozcan... ¿qué es lo que más te apasiona en la vida?\n\nCon todo mi corazón,\n${myProfile} ❤️`,
+              rationale: 'Question ouverte romantique et captivante pour susciter une longue lettre.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNos lettres sont devenues mon moment favori. Raconte-moi un rêve secret que peu de gens connaissent... qu'est-ce qui passionne le plus ton cœur?\n\nCon todo mi corazón,\n${myProfile} ❤️`,
               target: `Mon très cher ${clientDisplayName},\n\nNos lettres sont devenues le moment le plus précieux de mes journées. Il y a une complicité tellement rare et douce entre nous.\n\nRaconte-moi un rêve secret que peu de gens connaissent... qu'est-ce qui passionne le plus ton cœur dans la vie?\n\nAvec tout mon amour,\n${myProfile} ❤️`
             }
           ];
@@ -2216,20 +2196,20 @@
           options = [
             {
               title: '🪝 Option 1: Emotional Reply & Deep Bond',
-              rationale: 'Empatía profunda, agradecimiento sincero por sus palabras y validación emocional de la relación.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu hermosa carta con muchísima atención y cariño. Aprecio profundamente la dulzura y sinceridad con la que siempre me hablas. En medio de un día ocupado, leer tus palabras me da una paz inmensa y me alegra el día.\n\nDime algo... ¿qué fue lo primero que te hizo sonreír o qué pensamiento lindo tuviste hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`,
+              rationale: 'Empatía profunda, agradecimiento sincero por sus palabras y validación emocional.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí tu hermosa carta con muchísima atención y cariño. Aprecio profundamente la dulzura y sinceridad con la que siempre me hablas.\n\nDime algo... ¿qué fue lo primero que te hizo sonreír hoy?\n\nCon todo mi cariño y ternura,\n${myProfile} ❤️`,
               target: `My dearest ${clientDisplayName},\n\n${topicIntro1}\n\nI truly cherish your honesty, sweetness, and the way you express yourself. Even in the middle of a busy day, reading your words brings a wonderful sense of peace and warmth to my heart.\n\nI keep thinking about everything we have yet to discover about each other... Tell me, what was the sweetest thought or moment that made you smile today?\n\nWith all my affection,\n${myProfile} ❤️`
             },
             {
               title: '💬 Option 2: Daily Life & Exclusive Photo Exchange',
-              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas para fidelizar cartas.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día y compartir estos momentos contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy o de tu sonrisa para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
+              rationale: 'Conexión con su rutina y propuesta magnética de intercambio de fotos exclusivas.',
+              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar pensar en ti. Me encanta imaginar cómo es tu día a día.\n\nEnvíame una foto tuya de lo que estás haciendo hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
               target: `My dear ${clientDisplayName},\n\nI was just taking a quiet little break and couldn't help but smile thinking about you. I love imagining what your everyday moments are like and sharing this sweet connection with you.\n\nSend me a picture of what you're doing today or of your warm smile so I can feel even closer to you, and in my next letter I'll send you an exclusive picture just for you 😉 Deal?\n\nWith a sweet hug,\n${myProfile} ✨`
             },
             {
               title: '✨ Option 3: Romantic Curiosity & Intimate Question',
-              rationale: 'Pregunta abierta de alta curiosidad romántica diseñada para que responda con una carta extensa.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad que valoro muchísimo.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+              rationale: 'Pregunta abierta de alta curiosidad romántica para que responda con una carta extensa.',
+              esPreview: `Mi queridísimo ${clientDisplayName},\n\nEscribirte se ha convertido en mi momento favorito del día. Hay algo verdaderamente mágico en nuestra complicidad.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
               target: `My dearest ${clientDisplayName},\n\nWriting to you has truly become the sweetest highlight of my day. There is something remarkably genuine and special about the bond we share, and I love watching it grow.\n\nTell me a little dream or secret of yours that very few people know about... what is something that brings true passion and joy to your life?\n\nWith all my affection and warmth,\n${myProfile} ❤️`
             }
           ];
@@ -2247,19 +2227,19 @@
       if (showMissingHistoryWarning) {
         warningHtml = `
           <div class="ryr-no-info-warning">
-            <span style="font-size:10.5px; line-height:1.3;">⚠️ <b>Sin cartas previas en BD:</b> Sube las cartas y conversaciones para contexto 360°. Opciones de alta atracción:</span>
+            <span style="font-size:10px; line-height:1.2;">⚠️ <b>Sin cartas previas en BD:</b> Sube las cartas y conversaciones para contexto 360°.</span>
             <button class="ryr-no-info-btn" id="ryr-letter-quick-sync">⚡ Subir Ahora</button>
           </div>
         `;
       }
 
       dropdown.innerHTML = `
-        <div style="font-weight:bold; color:#34d399; font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #065f46; padding-bottom:5px;">
+        <div style="font-weight:bold; color:#34d399; font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #065f46; padding-bottom:4px;">
           <span>${headerTitle}</span>
           <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-letter-dropdown">✕</span>
         </div>
         ${warningHtml}
-        <div id="ryr-letter-options-container" style="display:flex; flex-direction:column; gap:6px;"></div>
+        <div id="ryr-letter-options-container" style="display:flex; flex-direction:column; gap:5px;"></div>
       `;
 
       const closeBtn = dropdown.querySelector('#ryr-close-letter-dropdown');
@@ -2284,83 +2264,18 @@
         card.innerHTML = `
           <div class="ryr-letter-option-title">
             <span>${opt.title}</span>
-            <div style="display:flex; align-items:center; gap:5px;">
-              <button type="button" class="ryr-hook-edit-btn" title="Editar y personalizar carta antes de insertar">✏️ Editar Carta</button>
-              <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
-            </div>
+            <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
           </div>
           <div class="ryr-letter-option-rationale">💡 <b>Razón Táctica:</b> ${opt.rationale}</div>
           <div class="ryr-letter-option-preview"><b>📝 En Español (Vista Operador):</b><br/>${opt.esPreview}</div>
-          <div style="font-size:9.5px; color:#38bdf8; margin-top:2px; font-weight:bold;">⚡ Clic para insertar automáticamente en ${detectedLang.name}</div>
-          <div class="ryr-inline-editor" style="display:none; margin-top:8px;">
-            <textarea style="min-height:95px;" placeholder="Personaliza el texto de tu carta aquí...">${opt.target}</textarea>
-            <div class="ryr-inline-editor-actions">
-              <button type="button" class="ryr-btn-trans-inline" title="Traducir carta editada al idioma del cliente">🌐 Traducir a ${detectedLang.code.toUpperCase()}</button>
-              <button type="button" class="ryr-btn-save-inline">✅ Insertar Carta</button>
-              <button type="button" class="ryr-btn-cancel-inline">❌ Cancelar</button>
-            </div>
-          </div>
+          <div style="font-size:9.5px; color:#38bdf8; margin-top:2px; font-weight:bold;">⚡ Clic para insertar carta en ${detectedLang.name}</div>
         `;
 
-        const editBtn = card.querySelector('.ryr-hook-edit-btn');
-        const editorBox = card.querySelector('.ryr-inline-editor');
-        const editorTextarea = editorBox.querySelector('textarea');
-        const saveBtn = editorBox.querySelector('.ryr-btn-save-inline');
-        const cancelBtn = editorBox.querySelector('.ryr-btn-cancel-inline');
-        const transBtn = editorBox.querySelector('.ryr-btn-trans-inline');
-
-        editBtn.onclick = (e) => {
-          e.stopPropagation();
-          editorBox.style.display = editorBox.style.display === 'none' ? 'flex' : 'none';
-          if (editorBox.style.display === 'flex') {
-            editorTextarea.focus();
-            editorTextarea.select();
-          }
-        };
-
-        transBtn.onclick = async (e) => {
-          e.stopPropagation();
-          const rawVal = editorTextarea.value.trim();
-          if (!rawVal) return;
-          transBtn.innerText = '⏳ Traduciendo...';
-          transBtn.disabled = true;
-          try {
-            const translated = await translateText(rawVal, detectedLang.code);
-            editorTextarea.value = translated;
-            showFirewallToast(`✅ Carta traducida a ${detectedLang.name}`);
-          } catch (err) {
-            showFirewallToast(`⚠️ Error al traducir carta`);
-          } finally {
-            transBtn.disabled = false;
-            transBtn.innerText = `🌐 Traducir a ${detectedLang.code.toUpperCase()}`;
-          }
-        };
-
-        saveBtn.onclick = (e) => {
-          e.stopPropagation();
-          const finalLetter = editorTextarea.value.trim();
-          if (finalLetter) {
-            const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
-            if (ta) {
-              setInputValueSafely(ta, finalLetter);
-              showFirewallToast(`✨ Carta editada en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
-              ta.focus();
-            }
-            dropdown.remove();
-          }
-        };
-
-        cancelBtn.onclick = (e) => {
-          e.stopPropagation();
-          editorBox.style.display = 'none';
-        };
-
-        card.onclick = (e) => {
-          if (e.target.closest('.ryr-inline-editor') || e.target.closest('.ryr-hook-edit-btn')) return;
+        card.onclick = () => {
           const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
           if (ta) {
             setInputValueSafely(ta, opt.target);
-            showFirewallToast(`✨ Carta redactada en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
+            showFirewallToast(`✨ Carta en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
             ta.focus();
           }
           dropdown.remove();

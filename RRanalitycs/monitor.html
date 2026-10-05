@@ -563,6 +563,7 @@
       : 'https://ryr-titan-backend.onrender.com';
 
     let activeChatOperator = null;
+    let latestTelemetry = [];
 
     // RELOJ
     setInterval(() => {
@@ -575,8 +576,9 @@
         const res = await fetch(`${API_URL}/api/telemetry/live-grid`);
         const data = await res.json();
         if (data.success) {
-          renderGrid(data.operators);
-          renderShiftProfilesAccordion(data.operators);
+          latestTelemetry = data.operators || [];
+          renderGrid(latestTelemetry);
+          renderShiftProfilesAccordion(latestTelemetry);
         }
       } catch (e) {}
     }
@@ -587,6 +589,10 @@
       const grid = document.getElementById('tactical-radar-grid');
       const opsCountBadge = document.getElementById('active-ops-count');
       const slaAlertBadge = document.getElementById('sla-alert-count');
+
+      // Si el usuario está escribiendo en algún input de tiempo de respuesta, evitar re-render destructivo
+      const focusedEl = document.activeElement;
+      const isEditingTime = focusedEl && focusedEl.id && focusedEl.id.startsWith('resp-input-');
 
       const onlineOps = (operators || []).filter(o => o.status !== 'OFFLINE');
       opsCountBadge.innerText = `🟢 ${onlineOps.length} OPERADORES EN LÍNEA`;
@@ -610,11 +616,14 @@
         return;
       }
 
+      if (isEditingTime) return; // Mantener el foco si el usuario está escribiendo
+
       grid.innerHTML = operators.map(op => {
         const timerList = Array.isArray(op.activeChatTimersList) ? op.activeChatTimersList : [];
         const hasRealExpired = op.hasExpiredSla && timerList.length > 0 && timerList.some(t => t.isExpired);
         const opRespMins = op.responseTimeMinutes || 2;
         const opRespSeconds = opRespMins * 60;
+        const cleanOpId = (op.operator || 'op').replace(/[^a-zA-Z0-9_-]/g, '');
 
         let cardClass = 'operator-card';
         if (op.status !== 'OFFLINE') cardClass += ' active-card';
@@ -696,15 +705,18 @@
               <div class="metric-box">💎 Fidelizados: <b style="color:#f472b6;">${op.fidelizedCount || 0}</b></div>
             </div>
 
-            <!-- CONTROLADOR DINÁMICO DE TIEMPO DE RESPUESTA SLA -->
+            <!-- CONTROLADOR DINÁMICO DE TIEMPO DE RESPUESTA SLA (EDITABLE) -->
             <div style="background:rgba(15,23,42,0.85); border:1px solid #334155; border-radius:6px; padding:6px 10px; display:flex; justify-content:space-between; align-items:center;">
               <span style="font-size:11px; color:#cbd5e1; display:flex; align-items:center; gap:5px;">
                 ⏱️ <b>Tiempo de Respuesta:</b>
               </span>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <button onclick="changeResponseTime('${op.operator}', -1)" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:4px; width:26px; height:24px; font-weight:bold; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center;" title="Reducir 1 minuto">➖</button>
-                <span style="font-size:12px; font-weight:900; color:#34d399; min-width:44px; text-align:center; background:#040711; border:1px solid #1e293b; padding:2px 6px; border-radius:4px;">${opRespMins} min</span>
-                <button onclick="changeResponseTime('${op.operator}', 1)" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:4px; width:26px; height:24px; font-weight:bold; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center;" title="Aumentar 1 minuto">➕</button>
+              <div style="display:flex; align-items:center; gap:5px;">
+                <button type="button" onclick="changeResponseTime('${op.operator}', -1)" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:4px; width:26px; height:24px; font-weight:bold; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center;" title="Reducir 1 minuto">➖</button>
+                <div style="display:flex; align-items:center; background:#040711; border:1px solid #3b82f6; border-radius:4px; padding:1px 4px;">
+                  <input type="number" min="1" max="60" value="${opRespMins}" id="resp-input-${cleanOpId}" onchange="setResponseTimeDirect('${op.operator}', this.value)" style="width:34px; text-align:center; font-size:12px; font-weight:900; color:#34d399; background:transparent; border:none; outline:none;" title="Haz clic para escribir los minutos">
+                  <span style="font-size:11px; color:#94a3b8; font-weight:bold; margin-right:2px;">min</span>
+                </div>
+                <button type="button" onclick="changeResponseTime('${op.operator}', 1)" style="background:#1e293b; color:#38bdf8; border:1px solid #475569; border-radius:4px; width:26px; height:24px; font-weight:bold; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center;" title="Aumentar 1 minuto">➕</button>
               </div>
             </div>
 
@@ -732,11 +744,28 @@
       }).join('');
     }
 
+    window.setResponseTimeDirect = async function(operator, newMinsVal) {
+      if (!operator) return;
+      const newMins = Math.max(1, Math.min(60, parseInt(newMinsVal, 10) || 2));
+      const currentOp = latestTelemetry.find(o => o.operator === operator);
+      if (currentOp) currentOp.responseTimeMinutes = newMins;
+
+      try {
+        await fetch(`${API_URL}/api/settings/response-time`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operator, minutes: newMins })
+        });
+      } catch (err) {
+        console.warn('Error al actualizar tiempo de respuesta:', err);
+      }
+    };
+
     window.changeResponseTime = async function(operator, delta) {
       if (!operator) return;
       const currentOp = latestTelemetry.find(o => o.operator === operator);
       let currentMins = (currentOp && currentOp.responseTimeMinutes) ? currentOp.responseTimeMinutes : 2;
-      let newMins = Math.max(1, Math.min(30, currentMins + delta));
+      let newMins = Math.max(1, Math.min(60, currentMins + delta));
 
       if (currentOp) currentOp.responseTimeMinutes = newMins;
       renderGrid(latestTelemetry);

@@ -676,119 +676,163 @@
   syncBannedWords();
   setInterval(syncBannedWords, 15000);
 
-  // 9. FIREWALL DE 3 CAPAS & PREVENCIÓN DE TRAVEL MISLEADING (TM)
+  // 9. FIREWALL MULTILINGÜE DE 3 CAPAS & PREVENCIÓN DE TRAVEL MISLEADING (TM)
   function checkViolationInText(text) {
     if (!text || text.length < 2) return null;
-    const lower = text.toLowerCase().trim();
+    
+    // Normalización universal (remueve tildes, acentos y diacríticos para compatibilidad total con PT, ES, EN, FR, IT, DE, RU)
+    const rawLower = text.toLowerCase().trim();
+    const normalized = text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // remove accents (você -> voce, dónde -> donde, etc.)
+      .replace(/[\r\n\t]+/g, " ")
+      .trim();
 
-    // 1. Travel Misleading (Ubicación, Vuelos, Encuentros, Dónde vives / De dónde eres, Ciudades)
-    const tmPatterns = [
-      /\bwhere\s*(are|r)\s*(you|u)\s*(from|living|located)\b/i,
-      /\bwhere\s*(do|d)\s*(you|u)\s*live\b/i,
-      /\bwhere\s*(you|u)\s*from\b/i,
-      /\bwhat\s*(city|country|state)\s*(are|do)\s*(you|u)\b/i,
-      /\bwhich\s*(city|country|state)\b/i,
-      /\bde\s*d[oó]nde\s*(eres|vienes|sos)\b/i,
-      /\bd[oó]nde\s*vives\b/i,
-      /\bde\s*qu[eé]\s*(ciudad|pa[ií]s)\b/i,
-      /\ben\s*qu[eé]\s*(ciudad|pa[ií]s)\s*vives\b/i,
-      /\bwhen\s*(we|can\s*we|will\s*we)\s*meet\b/i,
-      /\bwhen\s*(i|you)\s*visit\b/i,
-      /\bmeet\s*(up|in\s*person|each\s*other)\b/i,
-      /\bsee\s*(you|each\s*other)\s*in\s*person\b/i,
-      /\bvisit\s*(you|me|each\s*other)\b/i,
-      /\bcome\s*(and\s*|to\s*)?see\s*(you|me)\b/i,
-      /\b(book|buy)\s*(a\s*)?(flight|plane\s*ticket|hotel|room)\b/i,
-      /\bflight\s*to\b/i,
-      /\bflying\s*to\b/i,
-      /\bplane\s*ticket\b/i,
-      /\bmy\s*flight\b/i,
-      /\byour\s*flight\b/i,
-      /\bvacation\s*together\b/i,
-      /\btrip\s*together\b/i,
-      /\btravel\s*together\b/i,
-      /\btravel\s*to\b/i,
-      /\bhotel\b/i,
-      /\bairport\b/i,
-      /\bairbnb\b/i,
-      /\bviajar\s*a\b/i,
-      /\bviaje\s*a\b/i,
-      /\bir\s*a\s*verte\b/i,
-      /\bvenir\s*a\s*ver\b/i,
-      /\bconocernos\s*en\s*persona\b/i,
-      /\bvernos\s*en\s*persona\b/i,
-      /\bcomprar\s*(el\s*)?vuelo\b/i,
-      /\bboletos?\s*de\s*avi[oó]n\b/i,
-      /\bpasajes?\s*a[eé]reos?\b/i,
-      /\baeropuerto\b/i
+    // 1. TRAVEL MISLEADING MULTILINGÜE (PT, ES, EN, FR, IT, DE, RU)
+    const tmNormalizedPatterns = [
+      // PORTUGUÊS 🇧🇷 🇵🇹
+      /\b(de\s+onde|d\s*onde)\s+(voce|voces|vc|vcs|tu|o\s+senhor|a\s+senhora)\s+(e|eh|mora|vive|vem|esta|ta)\b/i,
+      /\b(onde|aonde)\s+(voce|vc|tu)\s+(mora|vive|esta|ta|fica|reside)\b/i,
+      /\b(qual|de\s+qual|em\s+qual)\s+(cidade|pais|estado|lugar|regiao)\b/i,
+      /\b(qual\s+e\s+a\s+sua\s+cidade|qual\s+o\s+seu\s+pais)\b/i,
+      /\b(quando|qdo)\s+(a\s+gente|nos|vc|voce)\s+(vai|vamos|pode|podemos)?\s*(se\s+ver|se\s+encontra|se\s+conhecer|viajar)\b/i,
+      /\b(quando\s+voce\s+vem|quando\s+vc\s+vem|vem\s+me\s+ver|vem\s+me\s+visitar)\b/i,
+      /\b(me\s+visita|te\s+visitar|visitar\s+voce|ir\s+te\s+ver|ir\s+na\s+sua\s+casa|ir\s+ao\s+seu\s+encontro)\b/i,
+      /\b(conhecer\s+pessoalmente|nos\s+vermos\s+pessoalmente|encontro\s+em\s+pessoa)\b/i,
+      /\b(comprar|compro|compro\s+uma)\s+(passagem|passagens|voo|passagem\s+aerea|bilhete)\b/i,
+      /\b(passagem\s+aerea|passagens\s+aereas|meu\s+voo|seu\s+voo|comprar\s+o\s+voo)\b/i,
+      /\b(aeroporto|pousada|resort|hotel)\b/i,
+      /\b(viajar\s+juntos|viajar\s+juntas|nossa\s+viagem|viajar\s+para)\b/i,
+
+      // ESPAÑOL 🇪🇸 🇨🇴 🇲🇽 🇦🇷
+      /\bde\s+donde\s+(eres|vienes|sos|estas)\b/i,
+      /\bdonde\s+(vives|estas|te\s+encuentras|viviendo|paras|resides)\b/i,
+      /\b(de|en)\s+que\s+(ciudad|pais|estado|lugar)\b/i,
+      /\b(cual\s+es\s+tu\s+ciudad|cual\s+es\s+tu\s+pais)\b/i,
+      /\bcuando\s+(nos\s+vemos|vamos\s+a\s+vernos|te\s+veo|vienes|viajas|viajamos|puedes\s+venir)\b/i,
+      /\b(vernos\s+en\s+persona|conocernos\s+en\s+persona|estar\s+en\s+persona)\b/i,
+      /\b(ir\s+a\s+verte|venir\s+a\s+verme|visitarte|visitarme)\b/i,
+      /\b(comprar\s+(el\s+)?vuelo|comprar\s+boletos?|comprar\s+pasajes?)\b/i,
+      /\b(boletos?\s+(de\s+)?avion|pasajes?\s+aereos?|mi\s+vuelo|tu\s+vuelo)\b/i,
+      /\b(aeropuerto|hotel|airbnb|viajar\s+juntos|viaje\s+juntos)\b/i,
+
+      // ENGLISH 🇺🇸 🇬🇧
+      /\bwhere\s+(are|r|is)\s*(you|u|ya)\s*(from|living|staying|located)\b/i,
+      /\bwhere\s+(do|d)\s*(you|u|ya)\s*live\b/i,
+      /\bwhere\s*(you|u|ya)\s*from\b/i,
+      /\bwhat\s+(city|country|state|place)\s*(are|do|r|d)\s*(you|u)\b/i,
+      /\bwhich\s+(city|country|state)\b/i,
+      /\bwhen\s*(are\s*we|can\s*we|will\s*we|do\s*we)\s*(meet|see\s*each\s*other|catch\s*up|hang\s*out)\b/i,
+      /\bwhen\s*(will\s*you|can\s*you|do\s*you|are\s*you\s*gonna)\s*(visit|come\s*over|come\s*see|fly)\b/i,
+      /\b(meet\s*up|in\s*person|come\s*see\s*(me|you)|come\s*visit\s*(me|you)|visit\s*(me|you))\b/i,
+      /\b(book|buy)\s*(a\s*)?(flight|plane\s*ticket|hotel|room|airbnb)\b/i,
+      /\b(flight\s*to|flying\s*to|plane\s*ticket|my\s*flight|your\s*flight)\b/i,
+      /\b(vacation\s*together|trip\s*together|travel\s*together|travel\s*to)\b/i,
+      /\b(hotel|airport|airbnb|motel|resort)\b/i,
+
+      // FRANÇAIS 🇫🇷
+      /\b(d\s*ou\s*tu\s*es|d\s*ou\s*viens\s*tu|d\s*ou\s*venez\s*vous|tu\s+es\s+d\s*ou|tu\s+viens\s+d\s*ou)\b/i,
+      /\b(ou\s+tu\s+habites|tu\s+habites\s+ou|ou\s+vous\s+habitez|ou\s+vis\s+tu|tu\s+vis\s+ou)\b/i,
+      /\b(quelle\s+ville|quel\s+pays)\b/i,
+      /\b(quand\s+on\s+se\s+voit|quand\s+tu\s+viens|se\s+voir\s+en\s+vrai|rencontrer\s+en\s+personne)\b/i,
+      /\b(billet\s+d\s*avion|vol\s+pour|aeroport|hotel)\b/i,
+
+      // ITALIANO 🇮🇹
+      /\b(di\s+dove\s+sei|dove\s+vivi|dove\s+abiti|di\s+che\s+citta|di\s+quale\s+paese)\b/i,
+      /\b(quando\s+ci\s+vediamo|quando\s+vieni|incontrarci\s+di\s+persona|vederci\s+di\s+persona)\b/i,
+      /\b(biglietto\s+aereo|volo\s+per|aeroporto|hotel)\b/i,
+
+      // DEUTSCH 🇩🇪
+      /\b(woher\s+kommst\s+du|woher\s+kommen\s+sie|wo\s+wohnst\s+du|wo\s+lebst\s+du|welche\s+stadt|welches\s+land)\b/i,
+      /\b(wann\s+treffen\s+wir\s+uns|wann\s+kommst\s+du|personlich\s+treffen|in\s+person\s+treffen)\b/i,
+      /\b(flugticket|flug\s+nach|flughafen|hotel)\b/i
     ];
 
-    for (const pat of tmPatterns) {
-      if (pat.test(lower)) {
+    for (const pat of tmNormalizedPatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
         return {
           type: 'TRAVEL_MISLEADING',
           title: '✈️ Travel Misleading (Ubicación / Encuentro / Vuelos)',
-          sample: lower.match(pat)?.[0] || 'Ubicación/Viaje'
+          sample: normalized.match(pat)?.[0] || 'Ubicación/Viaje'
         };
       }
     }
 
-    // 2. Fuga de Contacto / Datos Privados
+    // RUSSIAN / CIRÍLICO 🇷🇺
+    const tmCyrillicPatterns = [
+      /\b(откуда\s+ты|где\s+ты\s+живешь|где\s+живешь|в\s+каком\s+городе|в\s+какой\s+стране|какой\s+город|какая\s+страна)\b/i,
+      /\b(когда\s+увидимся|когда\s+встретимся|приедешь\s+ко\s+мне|прилетишь\s+ко\s+мне|встретиться\s+вживую|увидеться\s+вживую)\b/i,
+      /\b(билет\s+на\s+самолет|купить\s+билет|самолет|аэропорт|отель|гостиница)\b/i
+    ];
+    for (const pat of tmCyrillicPatterns) {
+      if (pat.test(rawLower)) {
+        return {
+          type: 'TRAVEL_MISLEADING',
+          title: '✈️ Travel Misleading (Ubicación / Encuentro / Vuelos - RU)',
+          sample: rawLower.match(pat)?.[0] || 'Ubicación/Viaje'
+        };
+      }
+    }
+
+    // 2. FUGA DE CONTACTO / DATOS PRIVADOS MULTILINGÜE
     const contactPatterns = [
-      /\bwhatsapp\b/i, /\btelegram\b/i, /\binstagram\b/i, /\bskype\b/i,
-      /\bemail\b/i, /\bcorreo\b/i, /\bgmail\b/i, /\bhotmail\b/i, /\byahoo\b/i,
-      /\b(phone\s*number|n[uú]mero\s*de\s*tel[eé]fono|my\s*number|mi\s*n[uú]mero)\b/i,
+      /\bwhatsapp\b/i, /\btelegram\b/i, /\binstagram\b/i, /\bskype\b/i, /\bfacebook\b/i, /\btiktok\b/i,
+      /\bemail\b/i, /\bcorreo\b/i, /\bgmail\b/i, /\bhotmail\b/i, /\byahoo\b/i, /\boutlook\b/i,
+      /\b(phone\s*number|numero\s*de\s*telefono|numero\s*de\s*celular|meu\s*numero|mi\s*numero|my\s*number|mon\s*numero|meu\s*zap|meu\s*whats)\b/i,
       /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/,
       /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
     ];
 
     for (const pat of contactPatterns) {
-      if (pat.test(lower)) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
         return {
           type: 'CONTACT_LEAK',
           title: '📱 Fuga de Contacto / Datos Externos',
-          sample: lower.match(pat)?.[0] || 'Contacto externo'
+          sample: normalized.match(pat)?.[0] || 'Contacto externo'
         };
       }
     }
 
-    // 3. Manipulación de Regalos / Tokens / Dinero
+    // 3. MANIPULACIÓN DE REGALOS / TOKENS / DINERO MULTILINGÜE
     const giftPatterns = [
       /\b(send|buy)\s*me\s*(a\s*)?(gift|present|token|money|credit)\b/i,
       /\bgift\s*me\b/i,
-      /\b(reg[aá]lame|c[oó]mprame|m[aá]ndame)\s*(un\s*)?(regalo|detalle|token|moneda|dinero)\b/i,
-      /\bpaypal\b/i, /\bcash\s*app\b/i, /\bwestern\s*union\b/i, /\btransferenc\b/i, /\bcrypto\b/i
+      /\b(regalame|comprame|mandame)\s*(un\s*)?(regalo|detalle|token|moneda|dinero)\b/i,
+      /\b(me\s+da\s+um\s+presente|me\s+manda\s+um\s+presente|compra\s+um\s+presente|me\s+manda\s+dinheiro|me\s+manda\s+tokens)\b/i,
+      /\bpaypal\b/i, /\bcash\s*app\b/i, /\bwestern\s*union\b/i, /\btransferenc\b/i, /\bcrypto\b/i, /\bpix\b/i
     ];
 
     for (const pat of giftPatterns) {
-      if (pat.test(lower)) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
         return {
           type: 'GIFT_MANIPULATION',
           title: '🎁 Manipulación de Regalos / Dinero Prohibida',
-          sample: lower.match(pat)?.[0] || 'Solicitud de regalo'
+          sample: normalized.match(pat)?.[0] || 'Solicitud de regalo'
         };
       }
     }
 
-    // 4. Promesas de Matrimonio
+    // 4. PROMESAS DE MATRIMONIO MULTILINGÜE
     const marriagePatterns = [
       /\bmarry\s*me\b/i, /\bwhen\s*we\s*marry\b/i, /\bget\s*married\b/i,
-      /\bcasarnos\b/i, /\bmatrimonio\b/i, /\bboda\b/i, /\bmi\s*espos[oa]\b/i, /\bmy\s*(husband|wife)\b/i
+      /\bcasarnos\b/i, /\bmatrimonio\b/i, /\bboda\b/i, /\bmi\s*espos[oa]\b/i, /\bmy\s*(husband|wife)\b/i,
+      /\bcasar\s+comigo\b/i, /\bquando\s+a\s+gente\s+casar\b/i, /\bmeu\s+marido\b/i, /\bmi\s+esposa\b/i, /\bminha\s+esposa\b/i
     ];
 
     for (const pat of marriagePatterns) {
-      if (pat.test(lower)) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
         return {
           type: 'MARRIAGE_PROMISE',
           title: '💍 Promesa de Matrimonio / Compromiso',
-          sample: lower.match(pat)?.[0] || 'Matrimonio'
+          sample: normalized.match(pat)?.[0] || 'Matrimonio'
         };
       }
     }
 
     // 5. Raíces dinámicas adicionales desde backend
     for (const root of bannedRoots) {
-      if (root && root.length > 2 && lower.includes(root.toLowerCase())) {
+      if (root && root.length > 2 && (normalized.includes(root.toLowerCase()) || rawLower.includes(root.toLowerCase()))) {
         return {
           type: 'CUSTOM_BANNED_ROOT',
           title: `🛡️ Término Restringido ("${root}")`,

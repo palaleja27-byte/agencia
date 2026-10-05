@@ -10743,28 +10743,26 @@
       }
     }
 
-    // ────────────────────────────────────────────────────────────────────────────
-    // _applyManualProfiles(): Lee TODOS los rr_profile_* del localStorage e inyecta
-    // los profiles guardados manualmente en operatorsData. FUNCION GLOBAL.
-    // Llamar despues de cualquier merge/carga de operatorsData para asegurar que
-    // las asignaciones manuales de perfiles siempre tienen prioridad sobre los datos
-    // que llegan de Supabase (primeOperatorsData2026).
-    // ────────────────────────────────────────────────────────────────────────────
-    function _applyManualProfiles() {
-      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s).toUpperCase().trim());
-      if (!Array.isArray(operatorsData)) return;
-      operatorsData.forEach(op => {
-        const normN = _safeN(op.name);
-        if (!normN) return;
+    function _sanitizeAllOperatorProfiles() {
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s || '').toUpperCase().trim());
+      if (typeof OPERATORS_SOURCE === 'undefined' || !Array.isArray(OPERATORS_SOURCE)) return;
+      OPERATORS_SOURCE.forEach(srcOp => {
+        if (!srcOp || !srcOp.name || !Array.isArray(srcOp.profiles) || srcOp.profiles.length === 0) return;
+        const normN = _safeN(srcOp.name);
         const key = 'rr_profile_' + normN;
-        const savedProf = localStorage.getItem(key);
-        if (savedProf) {
-          try {
-            const parsed = JSON.parse(savedProf);
-            if (Array.isArray(parsed)) op.profiles = parsed;
-          } catch(e) {}
+        const targetOp = Array.isArray(operatorsData) ? operatorsData.find(o => _safeN(o.name) === normN) : null;
+        if (targetOp) {
+          targetOp.profiles = srcOp.profiles.map(p => ({ ...p }));
         }
+        localStorage.setItem(key, JSON.stringify(srcOp.profiles));
       });
+      if (Array.isArray(operatorsData) && operatorsData.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(operatorsData));
+      }
+    }
+
+    function _applyManualProfiles() {
+      _sanitizeAllOperatorProfiles();
     }
 
     function recalcGrowth() {
@@ -11736,37 +11734,15 @@
 
         let turnosLeer = Array.from(turnosSet);
 
-        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados en asistencia/PSA de TODOS los turnos y fechas
-        let combinedProfiles = [...(op.profiles || [])];
+        // 🧠 DELTA-SHIFT™: Asignación limpia y autoritativa de perfiles del operador
         const _safeNLocal = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
         const _opNameNorm = _safeNLocal(op.name);
-
-        // Merge con primeOperatorsData2026 de localStorage si coincide el turno
-        try {
-          const rawPrime = localStorage.getItem('primeOperatorsData2026');
-          if (rawPrime) {
-            const parsedPrime = JSON.parse(rawPrime);
-            if (Array.isArray(parsedPrime)) {
-              const matchPrimeOp = parsedPrime.find(po => _safeNLocal(po.name) === _opNameNorm);
-              if (matchPrimeOp && Array.isArray(matchPrimeOp.profiles) && (!matchPrimeOp.turno || matchPrimeOp.turno === op.turno)) {
-                matchPrimeOp.profiles.forEach(pp => {
-                  if (pp && pp.id && !combinedProfiles.some(p => String(p.id).trim() === String(pp.id).trim())) {
-                    combinedProfiles.push(pp);
-                  }
-                });
-              }
-            }
-          }
-        } catch(e) {}
-
-        // Merge con asiAsignaciones en memoria
-        if (typeof asiAsignaciones !== 'undefined' && Array.isArray(asiAsignaciones[op.name])) {
-          asiAsignaciones[op.name].forEach(ap => {
-            if (ap && ap.id && !combinedProfiles.some(p => String(p.id).trim() === String(ap.id).trim())) {
-              combinedProfiles.push(ap);
-            }
-          });
-        }
+        const _srcOp = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
+          ? OPERATORS_SOURCE.find(o => _safeNLocal(o.name) === _opNameNorm)
+          : null;
+        let combinedProfiles = (_srcOp && Array.isArray(_srcOp.profiles) && _srcOp.profiles.length > 0)
+          ? _srcOp.profiles.map(p => ({ ...p }))
+          : [...(op.profiles || [])];
 
         const _calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         const datesToCheck = new Set([_hoy, _calHoy]);
@@ -11894,13 +11870,13 @@
         const targetOps = (rkViewMode === 'dia') ? operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A') : rkDataFiltered;
         
         targetOps.forEach(op => {
-          const combinedProfiles = [...(op.profiles || [])];
-          const draftEntry = (typeof _draftFull !== 'undefined') ? _draftFull[op.name + '||operador'] : null;
-          if (draftEntry && Array.isArray(draftEntry.perfiles)) {
-            draftEntry.perfiles.forEach(dp => {
-              if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) combinedProfiles.push(dp);
-            });
-          }
+          const _safeNLocalRt = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
+          const _srcOpRt = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
+            ? OPERATORS_SOURCE.find(o => _safeNLocalRt(o.name) === _safeNLocalRt(op.name))
+            : null;
+          const combinedProfiles = (_srcOpRt && Array.isArray(_srcOpRt.profiles) && _srcOpRt.profiles.length > 0)
+            ? _srcOpRt.profiles.map(p => ({ ...p }))
+            : [...(op.profiles || [])];
 
           // Calculate historical virtual points for the operator (base from past)
           const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
@@ -12400,16 +12376,13 @@
         op.growth = growthReal; // Actualizar para que la clase CSS sea correcta
         const hora = _horaMap[op.name];
 
-        // 🧠 DELTA-SHIFT™ COMBINED PROFILES FOR CARD SERVICES (Fase 8)
-        let combinedProfiles = [...(op.profiles || [])];
-        const draftEntry = _draftFull[op.name + '||operador'] || Object.values(_draftFull).find(d => d.autoMarcado && _n(d.name || '') === _n(op.name));
-        if (draftEntry && Array.isArray(draftEntry.perfiles) && draftEntry.perfiles.length > 0) {
-          draftEntry.perfiles.forEach(dp => {
-            if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
-              combinedProfiles.push(dp);
-            }
-          });
-        }
+        const _safeNCard = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
+        const _srcOpCard = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
+          ? OPERATORS_SOURCE.find(o => _safeNCard(o.name) === _safeNCard(op.name))
+          : null;
+        let combinedProfiles = (_srcOpCard && Array.isArray(_srcOpCard.profiles) && _srcOpCard.profiles.length > 0)
+          ? _srcOpCard.profiles.map(p => ({ ...p }))
+          : [...(op.profiles || [])];
 
         // Avatar o medalla
         const savedAvatar = getAvatar(op.name);
@@ -16610,26 +16583,15 @@
       if (typeof _dpTurnosData !== 'undefined' && typeof operatorsData !== 'undefined' && operatorsData) {
          const op = operatorsData.find(o => _normName(o.name) === _normName(opName));
          
-         // Combinar perfiles estáticos + dinámicos del turno (DELTA-SHIFT™)
-         let combinedProfiles = op ? [...(op.profiles || [])] : [];
+         // Asignación autoritativa de perfiles del operador (DELTA-SHIFT™)
          const realName = op ? op.name : opName;
-         
-         const hoyStr = typeof localDateStr === 'function' ? localDateStr() : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-         const jornadaActual = typeof _opRtJornada === 'function' ? _opRtJornada() : 'Mañana';
-         const shKey = jornadaActual === 'Mañana' ? 'manana' : jornadaActual === 'Tarde' ? 'tarde' : 'noche';
-         const asiKeyDraft = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + hoyStr + '_' + shKey;
-         
-         try {
-           const draftFull = JSON.parse(localStorage.getItem(asiKeyDraft) || '{}');
-           const draftEntry = draftFull[realName + '||operador'] || draftFull[realName.toUpperCase() + '||operador'];
-           if (draftEntry && Array.isArray(draftEntry.perfiles)) {
-             draftEntry.perfiles.forEach(dp => {
-               if (!combinedProfiles.some(p => String(p.id) === String(dp.id))) {
-                 combinedProfiles.push(dp);
-               }
-             });
-           }
-         } catch (e) {}
+         const _safeNLocal2 = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
+         const _srcOp2 = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
+           ? OPERATORS_SOURCE.find(o => _safeNLocal2(o.name) === _safeNLocal2(realName))
+           : null;
+         let combinedProfiles = (_srcOp2 && Array.isArray(_srcOp2.profiles) && _srcOp2.profiles.length > 0)
+           ? _srcOp2.profiles.map(p => ({ ...p }))
+           : (op ? [...(op.profiles || [])] : []);
 
          if (combinedProfiles.length > 0) {
             // Determinar jornada del operador (su turno oficial o la actual si está logueado)

@@ -61,6 +61,7 @@
   let lastUserInteraction = Date.now();
   const AFK_THRESHOLD_SECONDS = 300;
 
+  let configuredSlaDurationSeconds = 120; // Tiempo de respuesta por defecto (2 minutos)
   let activeSlaTimers = {};
   let finedTimerKeys = new Set();
   let syncedChatsMemory = new Set();
@@ -185,6 +186,10 @@
       chrome.storage.local.get(null, (data) => {
         if (!isContextValid() || !data) return;
         
+        if (data.configuredSlaDurationSeconds) {
+          configuredSlaDurationSeconds = Number(data.configuredSlaDurationSeconds) || 120;
+        }
+
         if (data.activeSlaTimers && typeof data.activeSlaTimers === 'object') {
           activeSlaTimers = { ...data.activeSlaTimers };
         }
@@ -2650,16 +2655,23 @@
         return;
       }
 
-      let existingTimestamp = activeSlaTimers[nameKey] || (idKey ? activeSlaTimers[idKey] : null);
-      if (!existingTimestamp) {
-        existingTimestamp = Date.now();
-        activeSlaTimers[nameKey] = existingTimestamp;
-        if (idKey) activeSlaTimers[idKey] = existingTimestamp;
+      let existingTimerData = activeSlaTimers[nameKey] || (idKey ? activeSlaTimers[idKey] : null);
+      if (!existingTimerData) {
+        existingTimerData = {
+          startedAt: Date.now(),
+          duration: configuredSlaDurationSeconds,
+          contact: contactName,
+          numericId: rowNumericId
+        };
+        activeSlaTimers[nameKey] = existingTimerData;
+        if (idKey) activeSlaTimers[idKey] = existingTimerData;
         persistTimersToStorage();
       }
 
-      const elapsedSeconds = Math.floor((Date.now() - existingTimestamp) / 1000);
-      const remainingSeconds = Math.max(0, 120 - elapsedSeconds);
+      const startedAt = (typeof existingTimerData === 'object' && existingTimerData?.startedAt) ? existingTimerData.startedAt : (typeof existingTimerData === 'number' ? existingTimerData : Date.now());
+      const totalDuration = (typeof existingTimerData === 'object' && existingTimerData?.duration) ? existingTimerData.duration : configuredSlaDurationSeconds;
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      const remainingSeconds = Math.max(0, totalDuration - elapsedSeconds);
 
       const min = Math.floor(remainingSeconds / 60);
       const sec = remainingSeconds % 60;
@@ -2689,50 +2701,57 @@
       }
     });
 
-    // RECONCILIACIÓN ESTRICTA ANTI-FANTASMAS: Si hay timers guardados que ya no corresponden a ningún chat pendiente visible, eliminarlos de inmediato
-    const activeRowKeys = new Set();
-    rootRows.forEach(row => {
-      const fullText = row.innerText || '';
-      if (fullText.length < 3) return;
-      const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
-      const contactName = sanitizeClientName(lines[0]);
-      const cleanSimpleName = contactName.split(',')[0].trim().toLowerCase();
-      const nameKey = `name_${cleanSimpleName.replace(/[^a-z0-9]/g, '')}`;
-      let rowNumericId = 'N/A';
-      const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
-      if (userLink) {
-        rowNumericId = getExactNumericClientId(userLink.getAttribute('href'));
-      }
-      const idKey = (rowNumericId && rowNumericId !== 'N/A') ? `id_${rowNumericId}` : null;
+    // RECONCILIACIÓN ESTRICTA ANTI-FANTASMAS PROTEGIDA (INMUNE A RECARGAS F5)
+    if (rootRows.length >= 3) {
+      const activeRowKeys = new Set();
+      rootRows.forEach(row => {
+        const fullText = row.innerText || '';
+        if (fullText.length < 3) return;
+        const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
+        const contactName = sanitizeClientName(lines[0]);
+        const cleanSimpleName = contactName.split(',')[0].trim().toLowerCase();
+        const nameKey = `name_${cleanSimpleName.replace(/[^a-z0-9]/g, '')}`;
+        let rowNumericId = 'N/A';
+        const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
+        if (userLink) {
+          rowNumericId = getExactNumericClientId(userLink.getAttribute('href'));
+        }
+        const idKey = (rowNumericId && rowNumericId !== 'N/A') ? `id_${rowNumericId}` : null;
 
-      const hasOperatorSent = /(?:you|tú|tu|você)\s*:/i.test(fullText) || 
-                              row.querySelector('svg[class*="check"]') !== null ||
-                              fullText.includes('✔');
-      const isTyping = fullText.toLowerCase().includes('typing') || row.querySelector('[class*="typing"]');
-      const isLiked = fullText.toLowerCase().includes('liked');
-      const isKnownZeroCredits = zeroCreditsClientsSet.has(cleanSimpleName) || 
-                                 (rowNumericId !== 'N/A' && zeroCreditsClientsSet.has(rowNumericId.toLowerCase())) ||
-                                 (openChatHasZeroCredits && (rowNumericId === openChatNumericId || cleanSimpleName === openChatCleanName)) ||
-                                 /\b0\s+0\b/.test(fullText) || 
-                                 /[💬✉]\s*0\b/i.test(fullText);
+        const hasOperatorSent = /(?:you|tú|tu|você)\s*:/i.test(fullText) || 
+                                row.querySelector('svg[class*="check"]') !== null ||
+                                fullText.includes('✔');
+        const isTyping = fullText.toLowerCase().includes('typing') || row.querySelector('[class*="typing"]');
+        const isLiked = fullText.toLowerCase().includes('liked');
+        const isKnownZeroCredits = zeroCreditsClientsSet.has(cleanSimpleName) || 
+                                   (rowNumericId !== 'N/A' && zeroCreditsClientsSet.has(rowNumericId.toLowerCase())) ||
+                                   (openChatHasZeroCredits && (rowNumericId === openChatNumericId || cleanSimpleName === openChatCleanName)) ||
+                                   /\b0\s+0\b/.test(fullText) || 
+                                   /[💬✉]\s*0\b/i.test(fullText);
 
-      const isPending = !isKnownZeroCredits && (!hasOperatorSent || isTyping || isLiked);
-      if (isPending) {
-        activeRowKeys.add(nameKey);
-        if (idKey) activeRowKeys.add(idKey);
-      }
-    });
+        const isPending = !isKnownZeroCredits && (!hasOperatorSent || isTyping || isLiked);
+        if (isPending) {
+          activeRowKeys.add(nameKey);
+          if (idKey) activeRowKeys.add(idKey);
+        }
+      });
 
-    let cleanedAny = false;
-    for (const key of Object.keys(activeSlaTimers)) {
-      if (!activeRowKeys.has(key)) {
-        delete activeSlaTimers[key];
-        cleanedAny = true;
+      let cleanedAny = false;
+      const now = Date.now();
+      for (const [key, timerVal] of Object.entries(activeSlaTimers)) {
+        if (!activeRowKeys.has(key)) {
+          const startTime = (typeof timerVal === 'object' && timerVal?.startedAt) ? timerVal.startedAt : (typeof timerVal === 'number' ? timerVal : now);
+          const elapsed = Math.floor((now - startTime) / 1000);
+          if (elapsed > 7200 || /deleted|search/i.test(key)) {
+            delete activeSlaTimers[key];
+            cleanedAny = true;
+          }
+        }
       }
-    }
-    if (cleanedAny) {
-      persistTimersToStorage();
-      sendTelemetry(true);
+      if (cleanedAny) {
+        persistTimersToStorage();
+        sendTelemetry(true);
+      }
     }
   }
 
@@ -3649,7 +3668,7 @@
     const activeTimersList = [];
     const processedKeys = new Set();
 
-    for (let [key, startTime] of Object.entries(activeSlaTimers)) {
+    for (let [key, timerVal] of Object.entries(activeSlaTimers)) {
       const cleanName = key.replace(/^id_/, '').replace(/^name_/, '');
       if (/deleted|eliminado|search|messages|cliente/i.test(cleanName)) {
         delete activeSlaTimers[key];
@@ -3657,8 +3676,10 @@
         continue;
       }
 
+      const startTime = (typeof timerVal === 'object' && timerVal?.startedAt) ? timerVal.startedAt : (typeof timerVal === 'number' ? timerVal : now);
+      const totalDuration = (typeof timerVal === 'object' && timerVal?.duration) ? timerVal.duration : configuredSlaDurationSeconds;
       const elapsed = Math.floor((now - startTime) / 1000);
-      if (elapsed > 300) {
+      if (elapsed > 7200) {
         delete activeSlaTimers[key];
         persistTimersToStorage();
         continue;
@@ -3667,12 +3688,13 @@
       if (processedKeys.has(cleanName)) continue;
       processedKeys.add(cleanName);
 
-      const remaining = Math.max(0, 120 - elapsed);
+      const remaining = Math.max(0, totalDuration - elapsed);
       activeTimersList.push({
         contact: cleanName,
         elapsed: elapsed,
         remaining: remaining,
-        isExpired: elapsed >= 120
+        duration: totalDuration,
+        isExpired: elapsed >= totalDuration
       });
     }
 
@@ -3751,6 +3773,14 @@
     })
     .then(r => r.json())
     .then(data => {
+      if (data && data.responseTimeSeconds) {
+        if (configuredSlaDurationSeconds !== data.responseTimeSeconds) {
+          configuredSlaDurationSeconds = data.responseTimeSeconds;
+          if (isContextValid()) {
+            chrome.storage.local.set({ configuredSlaDurationSeconds });
+          }
+        }
+      }
       if (data && data.triggerMassExtraction) {
         triggerLocalBatchHarvest();
       }

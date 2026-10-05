@@ -347,7 +347,7 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
   // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
   // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
-  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100 && baseline === 0 && diaHoyColombia() > 3) {
+  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100 && diaHoyColombia() > 3) {
     const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
     const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
     log(`  🔴 SANITY ${modelo}: baseline corrupto (0.0 pts y neto ${netoTurno.toFixed(1)} > 60% de total ${monthlyTotal.toFixed(1)}) → Estableciendo baseline del 97% (${baselineCorr})`);
@@ -803,3 +803,4 @@ async function watchPanel(panel, perfiles) {
 
   log('🏁 WATCHER MODE completado por límite de tiempo. GitHub Actions lo reiniciará automáticamente.');
 })();
+

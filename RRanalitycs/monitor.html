@@ -817,16 +817,24 @@
       };
     }
 
+    const openProfileAccordions = new Set(); // Guarda los perfiles que el usuario decidió abrir explícitamente
+
     window.toggleProfileAccordionItem = function(profileKey) {
+      if (openProfileAccordions.has(profileKey)) {
+        openProfileAccordions.delete(profileKey);
+      } else {
+        openProfileAccordions.add(profileKey);
+      }
+
       const body = document.getElementById(`profile-body-${profileKey}`);
       const arrow = document.getElementById(`profile-arrow-${profileKey}`);
-      if (!body) return;
-      if (body.classList.contains('open')) {
-        body.classList.remove('open');
-        if (arrow) arrow.textContent = '▶';
-      } else {
-        body.classList.add('open');
-        if (arrow) arrow.textContent = '▼';
+      const isOpen = openProfileAccordions.has(profileKey);
+      if (body) {
+        body.className = `profile-acc-body ${isOpen ? 'open' : ''}`;
+        body.style.display = isOpen ? 'block' : 'none';
+      }
+      if (arrow) {
+        arrow.textContent = isOpen ? '▼' : '▶';
       }
     };
 
@@ -970,6 +978,7 @@
         const pendingCount = p.syncAudit?.pendingCount || 0;
         const syncedCount = p.syncAudit?.syncedCount || 0;
         const pendingClients = p.syncAudit?.pendingClients || [];
+        const isOpen = openProfileAccordions.has(key);
 
         const statusPill = hasPending
           ? `<span style="background:rgba(245,158,11,0.2); border:1px solid #f59e0b; color:#fbbf24; padding:3px 8px; border-radius:4px; font-weight:800; font-size:10px;">🟡 ${pendingCount} Por Subir</span>`
@@ -984,7 +993,7 @@
           <div class="${cardClass}">
             <div class="profile-acc-head" onclick="toggleProfileAccordionItem('${key}')">
               <div style="display:flex; align-items:center; gap:10px;">
-                <span id="profile-arrow-${key}" style="color:var(--neon-emerald); font-size:11px;">▼</span>
+                <span id="profile-arrow-${key}" style="color:var(--neon-emerald); font-size:11px;">${isOpen ? '▼' : '▶'}</span>
                 <div>
                   <b style="color:#fff; font-size:12.5px;">🎯 PERFIL: ${p.profileName}</b>
                   <span style="font-size:10.5px; color:#94a3b8; margin-left:8px;">[Operador: ${p.operator || 'walther'} | Turno: ${p.shift}]</span>
@@ -1008,7 +1017,7 @@
               </div>
             </div>
 
-            <div id="profile-body-${key}" class="profile-acc-body open">
+            <div id="profile-body-${key}" class="profile-acc-body ${isOpen ? 'open' : ''}" style="display: ${isOpen ? 'block' : 'none'};">
               <!-- BARRA DE REGLAS SUPREMAS DE AUDITORÍA -->
               <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
                 <span style="font-size:10.5px; color:#94a3b8; font-weight:800; margin-right:4px;">REGLAS ACTIVAS:</span>
@@ -1523,6 +1532,8 @@
 
         listPane.innerHTML = convs.map((c, i) => {
           const dateStr = c.extracted_at ? new Date(c.extracted_at).toLocaleString('es-CO') : 'Reciente';
+          const msgCount = c.total_messages || 0;
+          const letterCount = c.total_letters || 0;
           return `
             <div class="conv-item-card" onclick="viewConversationDetail(${i})" style="background:#0b132b; border:1px solid #1e293b; border-radius:6px; padding:8px 10px; cursor:pointer; transition:border-color 0.2s;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1532,8 +1543,8 @@
               <div style="font-size:10px; color:#cbd5e1; margin-top:3px;">
                 🎯 <b>Perfil:</b> ${c.profile_name || 'HORACIO'} | 💼 <b>Op:</b> ${c.operator_name || 'walther'}
               </div>
-              <div style="font-size:9.5px; color:#64748b; margin-top:3px; display:flex; justify-content:space-between;">
-                <span>💬 ${c.total_messages || 0} mensajes</span>
+              <div style="font-size:9.5px; color:#64748b; margin-top:3px; display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#10b981; font-weight:bold;">💬 ${msgCount} msgs • ✉️ ${letterCount} cartas</span>
                 <span>📅 ${dateStr}</span>
               </div>
             </div>

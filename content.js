@@ -1006,12 +1006,20 @@
   // 10. EXTRACTOR QUIRÚRGICO DE DATOS DE CLIENTE & INYECCIÓN DE AGENCIA
   function sanitizeClientName(raw) {
     if (!raw) return 'Cliente';
-    const clean = raw
-      .split('\n')[0]
+    const firstLine = raw.split('\n')[0].trim();
+    let clean = firstLine
       .replace(/(\d+\s*(minute|hour|day|week|month)s?\s*ago|\ban hour ago\b|\d+\s*[✉💬]|\bonline\b|\btyping\b|\bSearch\b|\bMessages\b)/gi, '')
       .replace(/\s+/g, ' ')
       .replace(/^,\s*/, '')
       .trim();
+
+    // Descartar si es timestamp, fecha o etiqueta de previsualización
+    if (/^\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)?$/i.test(clean) ||
+        /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{0,2}$/i.test(clean) ||
+        /^(?:today|yesterday|hoy|ayer)$/i.test(clean) ||
+        /^(?:you:|tú:|tu:|você:|photo|sticker|audio|video|gift|seen|media|unread|sent)$/i.test(clean)) {
+      return 'Cliente';
+    }
 
     const noisyWords = ['yes', 'no', 'open', 'search', 'messages', 'mail', 'gifts', 'account', 'titan apex', 'mute', 'listened', 'public photos', 'my content'];
     if (noisyWords.includes(clean.toLowerCase()) || clean.length < 2) {
@@ -1958,96 +1966,107 @@
     };
   }
 
-  // 12. RECOLECTOR 360° BIDIRECCIONAL (CHAT + CARTAS)
-  function parseCurrentChatMessagesBidirectional(realClientName) {
-    const messages = [];
-    const seenSignatures = new Set();
+  // 12. RECOLECTOR 360° BIDIRECCIONAL & ACUMULATIVO (CHAT + CARTAS)
+  const persistentClientChatHistoryMap = new Map(); // clientId -> Map(msgHash -> msgObj)
+  const persistentClientLettersMap = new Map(); // clientId -> Map(letterHash -> letterObj)
 
-    // Buscar exclusivamente el contenedor de mensajes del chat ACTIVO
+  function parseCurrentChatMessagesBidirectional(realClientName) {
+    const cleanClientId = getExactNumericClientId() || 'user';
+    if (!persistentClientChatHistoryMap.has(cleanClientId)) {
+      persistentClientChatHistoryMap.set(cleanClientId, new Map());
+    }
+    const clientHistory = persistentClientChatHistoryMap.get(cleanClientId);
+
+    // Buscar el contenedor de mensajes del chat ACTIVO
     const chatView = document.querySelector(
       'div[data-test-id*="dialog-content"], div[data-test-id*="chat-messages"], div[class*="dialog-content"], div[class*="chat-scroll"], div[class*="chat-body"], div[class*="main-chat"]'
     );
 
-    if (!chatView) return messages;
-
-    const allLeafElements = chatView.querySelectorAll('div, p');
-
-    allLeafElements.forEach(node => {
-      // Ignorar si el nodo está dentro de la barra lateral, lista de chats, herramientas o HUD
-      if (
-        node.closest('div[data-test-id*="dialog-item"]') ||
-        node.closest('div[class*="dialog-item"]') ||
-        node.closest('div[class*="item-wrap"]') ||
-        node.closest('div[class*="dialogs"]') ||
-        node.closest('div[class*="sidebar"]') ||
-        node.closest('#ryr-titan-bar') ||
-        node.closest('#ryr-intel-panel') ||
-        node.closest('.ryr-chat-tools-wrapper') ||
-        node.closest('.ryr-chat-hooks-dropdown')
-      ) {
-        return;
+    if (chatView) {
+      // Intentar disparar carga de mensajes anteriores si estamos scrolleando
+      const scrollEl = chatView.closest('[class*="scroll"], [class*="dialog-content"], [class*="messages"]') || chatView;
+      if (scrollEl && scrollEl.scrollTop > 100) {
+        // Puede haber más mensajes arriba
       }
 
-      if (node.querySelectorAll('div, p').length > 2) return;
+      const allLeafElements = chatView.querySelectorAll('div, p');
+      allLeafElements.forEach(node => {
+        // Ignorar si el nodo está dentro de la barra lateral, lista de chats, herramientas o HUD
+        if (
+          node.closest('div[data-test-id*="dialog-item"]') ||
+          node.closest('div[class*="dialog-item"]') ||
+          node.closest('div[class*="item-wrap"]') ||
+          node.closest('div[class*="dialogs"]') ||
+          node.closest('div[class*="sidebar"]') ||
+          node.closest('#ryr-titan-bar') ||
+          node.closest('#ryr-intel-panel') ||
+          node.closest('.ryr-chat-tools-wrapper') ||
+          node.closest('.ryr-chat-hooks-dropdown')
+        ) {
+          return;
+        }
 
-      const raw = node.innerText || '';
-      if (raw.includes('TITAN APEX') || raw.includes('Search') || (raw.includes('seen') && raw.length < 10) || raw.includes('View post') || raw.includes('CONTINUAR CHAT') || raw.includes('GANCHOS DE')) return;
+        if (node.querySelectorAll('div, p').length > 2) return;
 
-      if (/^(today|yesterday|january|february|march|april|may|june|july|august|september|october|november|december)\s*\d{0,2}$/i.test(raw.trim())) {
-        return;
-      }
+        const raw = node.innerText || '';
+        if (raw.includes('TITAN APEX') || raw.includes('Search') || (raw.includes('seen') && raw.length < 10) || raw.includes('View post') || raw.includes('CONTINUAR CHAT') || raw.includes('GANCHOS DE')) return;
 
-      const timeMatch = raw.match(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/i);
-      const timeText = timeMatch ? timeMatch[0] : '';
+        if (/^(today|yesterday|january|february|march|april|may|june|july|august|september|october|november|december)\s*\d{0,2}$/i.test(raw.trim())) {
+          return;
+        }
 
-      let cleanText = raw
-        .replace(/(?:You:|Tú:|Tu:|Você:)/gi, '')
-        .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/gi, '')
-        .replace(/\bseen\b/gi, '')
-        .replace(/\bView post\b/gi, '')
-        .replace(/\bShow original\b/gi, '')
-        .trim();
+        const timeMatch = raw.match(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/i);
+        const timeText = timeMatch ? timeMatch[0] : '';
 
-      if (!cleanText || cleanText.length < 1) return;
+        let cleanText = raw
+          .replace(/(?:You:|Tú:|Tu:|Você:)/gi, '')
+          .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/gi, '')
+          .replace(/\bseen\b/gi, '')
+          .replace(/\bView post\b/gi, '')
+          .replace(/\bShow original\b/gi, '')
+          .trim();
 
-      const hasCheck = node.querySelector('svg[class*="check"], [class*="status-sent"]') !== null || 
-                       node.innerHTML.includes('polyline') || 
-                       node.innerHTML.includes('check') || 
-                       raw.includes('✔');
+        if (!cleanText || cleanText.length < 1) return;
 
-      const hasOperatorPrefix = /(?:you:|tú:|tu:|você:)/i.test(raw);
-      
-      const bgColor = window.getComputedStyle(node).backgroundColor;
-      const isCreamBubble = bgColor.includes('254, 249') || bgColor.includes('254, 240') || bgColor.includes('255, 251') || bgColor.includes('224, 231');
-      const isRight = window.getComputedStyle(node).justifyContent === 'flex-end' || 
-                      window.getComputedStyle(node.parentElement || node).justifyContent === 'flex-end' ||
-                      node.className.includes('right') || 
-                      node.className.includes('out');
+        const hasCheck = node.querySelector('svg[class*="check"], [class*="status-sent"]') !== null || 
+                         node.innerHTML.includes('polyline') || 
+                         node.innerHTML.includes('check') || 
+                         raw.includes('✔');
 
-      const isOperator = hasCheck || hasOperatorPrefix || isCreamBubble || isRight;
-      const cleanClientId = getExactNumericClientId() || 'user';
-      const msgHash = `msg_${cleanClientId}_${isOperator ? 'OP' : 'RU'}_${cleanText.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${(timeText || 'now').replace(/[^a-z0-9]/gi, '')}`;
+        const hasOperatorPrefix = /(?:you:|tú:|tu:|você:)/i.test(raw);
+        
+        const bgColor = window.getComputedStyle(node).backgroundColor;
+        const isCreamBubble = bgColor.includes('254, 249') || bgColor.includes('254, 240') || bgColor.includes('255, 251') || bgColor.includes('224, 231');
+        const isRight = window.getComputedStyle(node).justifyContent === 'flex-end' || 
+                        window.getComputedStyle(node.parentElement || node).justifyContent === 'flex-end' ||
+                        node.className.includes('right') || 
+                        node.className.includes('out');
 
-      if (!seenSignatures.has(msgHash)) {
-        seenSignatures.add(msgHash);
-        messages.push({
-          id: msgHash,
-          isOperator: Boolean(isOperator),
-          senderName: isOperator ? (sessionData.profileName || 'HORACIO') : realClientName,
-          time: timeText || 'Reciente',
-          date: new Date().toLocaleDateString(),
-          text: cleanText
-        });
-      }
-    });
+        const isOperator = hasCheck || hasOperatorPrefix || isCreamBubble || isRight;
+        const msgHash = `msg_${cleanClientId}_${isOperator ? 'OP' : 'RU'}_${cleanText.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${(timeText || 'now').replace(/[^a-z0-9]/gi, '')}`;
 
-    return messages;
+        if (!clientHistory.has(msgHash)) {
+          clientHistory.set(msgHash, {
+            id: msgHash,
+            isOperator: Boolean(isOperator),
+            senderName: isOperator ? (sessionData.profileName || 'HORACIO') : realClientName,
+            time: timeText || 'Reciente',
+            date: new Date().toLocaleDateString(),
+            text: cleanText
+          });
+        }
+      });
+    }
+
+    return Array.from(clientHistory.values());
   }
 
   function extractMailThreadContext() {
-    const letters = [];
     const currentClientId = getExactNumericClientId() || 'user';
-    const seenLetterSignatures = new Set();
+    if (!persistentClientLettersMap.has(currentClientId)) {
+      persistentClientLettersMap.set(currentClientId, new Map());
+    }
+    const clientLettersHistory = persistentClientLettersMap.get(currentClientId);
 
     // 1. Buscar tarjetas y elementos de carta en Talkytimes
     const mailCards = document.querySelectorAll(
@@ -2085,9 +2104,8 @@
 
       const letterHash = `mail_${cleanBody.substring(0, 40).replace(/[^a-z0-9]/gi, '_')}`;
 
-      if (!seenLetterSignatures.has(letterHash)) {
-        seenLetterSignatures.add(letterHash);
-        letters.push({
+      if (!clientLettersHistory.has(letterHash)) {
+        clientLettersHistory.set(letterHash, {
           id: letterHash,
           clientId: currentClientId,
           isOutgoing: Boolean(isMe),
@@ -2099,7 +2117,7 @@
     });
 
     // 2. Fallback: Capturar cualquier párrafo de carta visible en la página de hilos
-    if (letters.length === 0 && window.location.href.includes('/mails/')) {
+    if (clientLettersHistory.size === 0 && window.location.href.includes('/mails/')) {
       const allParagraphs = document.querySelectorAll('p, div');
       allParagraphs.forEach(p => {
         if (p.children.length > 1) return;
@@ -2107,9 +2125,8 @@
         const txt = (p.innerText || '').trim();
         if (txt.length >= 35 && !txt.includes('Send your letter') && !txt.includes('File size limit') && !txt.includes('Up to 10 photos')) {
           const letterHash = `mail_p_${txt.substring(0, 40).replace(/[^a-z0-9]/gi, '_')}`;
-          if (!seenLetterSignatures.has(letterHash)) {
-            seenLetterSignatures.add(letterHash);
-            letters.push({
+          if (!clientLettersHistory.has(letterHash)) {
+            clientLettersHistory.set(letterHash, {
               id: letterHash,
               clientId: currentClientId,
               isOutgoing: false,
@@ -2122,7 +2139,7 @@
       });
     }
 
-    return letters;
+    return Array.from(clientLettersHistory.values());
   }
 
   function buildCurrentMarkdownTranscript(clientName, clientId, bioData, letters = []) {
@@ -3750,15 +3767,20 @@
     const pendingClientsList = [];
     const syncedClientsList = [];
 
-    const sidebarRows = document.querySelectorAll('div[data-test-id*="dialog-item"], div[class*="dialog-item"], div[class*="item-wrap"]');
+    const sidebarRows = document.querySelectorAll('div[data-test-id="dialog-item"], div[class*="dialog-item"]:not([class*="wrap"]), a[href*="/chat/"], a[href*="/user/"]');
+    const seenContactKeys = new Set();
     sidebarRows.forEach(row => {
-      const text = (row.innerText || '').trim();
-      const firstLine = text.split('\n')[0].trim();
-      const name = sanitizeClientName(firstLine);
-      if (!name || name === 'Cliente') return;
+      const nameEl = row.querySelector('b, strong, [class*="name"], [class*="title"]') || row;
+      const rawText = nameEl.innerText || '';
+      const name = sanitizeClientName(rawText);
+      if (!name || name === 'Cliente' || name.length < 2) return;
+
+      const contactKey = name.toLowerCase();
+      if (seenContactKeys.has(contactKey)) return;
+      seenContactKeys.add(contactKey);
 
       let rowNumericId = 'N/A';
-      const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
+      const userLink = row.matches('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]') ? row : row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
       if (userLink) {
         rowNumericId = getExactNumericClientId(userLink.getAttribute('href'));
       }

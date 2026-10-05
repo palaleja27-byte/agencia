@@ -11769,17 +11769,16 @@
         }
 
         const _calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
-        const datesToCheck = new Set([
-          _hoy,
-          _calHoy,
-          (typeof localDateStr === 'function' ? localDateStr(1) : ''),
-          (typeof localDateStr === 'function' ? localDateStr(-1) : ''),
-          (typeof localDateStr === 'function' ? localDateStr(-2) : '')
+        const datesToCheck = new Set([_hoy, _calHoy]);
+        const shiftKeysToCheck = new Set([
+          (jornadaActual || 'noche').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+          (op.turno || 'noche').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+          'todos'
         ]);
 
         datesToCheck.forEach(dStr => {
           if (!dStr) return;
-          ['manana', 'tarde', 'noche', 'todos'].forEach(shKey => {
+          shiftKeysToCheck.forEach(shKey => {
             const draftKeys = [
               ((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shKey),
               ('rr_prime_asistencia_draft_' + dStr + '_' + shKey)
@@ -12382,10 +12381,14 @@
         // --- CÁLCULO DINÁMICO DE PUNTOS (Base + Virtuales) ---
         const pHoy = _ptsHoyMap[op.name] || 0;
         const pPrevBase = op[prev] != null ? Number(op[prev]) : 0;
-        const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
         
-        if (pHoy > 0) {
-          console.log(`[AUDITORÍA] Match Encontrado para '${op.name}': +${pHoy} pts hoy (Base Mes: ${pCurrBase})`);
+        const _mesActKey = (typeof getMesActualStr === 'function') ? getMesActualStr() : localDateStr().slice(0, 7);
+        const cortesMesPrev = cortesAll.filter(c => c.fecha && c.fecha.slice(0, 7) === _mesActKey && c.fecha !== _hoy && c.fecha !== _calHoy);
+        const ptsMesPrev = cortesMesPrev.reduce((s, c) => s + (Number(c.puntos) || 0), 0);
+        
+        let pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
+        if (pCurrBase === 0 && ptsMesPrev > 0) {
+          pCurrBase = ptsMesPrev;
         }
         
         const pPrev = pPrevBase;
@@ -36548,8 +36551,10 @@ PT._logKey = function (opName) {
       } catch(e) { console.warn('Error purgando cache:', e); }
 
       try {
-        // Obtener TODOS los registros de hoy, ordenados por fecha de corte
-        const { data: ops } = await _sb.from('operaciones').select('*').eq('fecha_dia', hoy).order('fecha_corte', { ascending: true });
+        // Obtener TODOS los registros de la ventana operativa (hoy y calendario actual)
+        const calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+        const targetDates = Array.from(new Set([hoy, calHoy, (typeof localDateStr === 'function' ? localDateStr(-1) : '')])).filter(Boolean);
+        const { data: ops } = await _sb.from('operaciones').select('*').in('fecha_dia', targetDates).order('fecha_corte', { ascending: true });
         if (!ops || ops.length === 0) {
           if (!silent) alert('No hay datos para reparar hoy.');
           if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; btn.style.opacity = '1'; }
@@ -36562,7 +36567,7 @@ PT._logKey = function (opName) {
           const idsHoy = [...new Set(ops.map(o => o.id_perfil))];
           idsHoy.forEach(id => {
             if (_dpTurnosData[id]) {
-              _dpTurnosData[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0 };
+              _dpTurnosData[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Auto': 0, 'LocalFallback': 0 };
             }
           });
           console.log(`🧹 [DELTA-SHIFT] _dpTurnosData limpiado para ${idsHoy.length} perfiles`);
@@ -36615,52 +36620,50 @@ PT._logKey = function (opName) {
             const { data: ultimo } = await _sb.from('operaciones')
               .select('puntos_total, fecha_dia')
               .eq('id_perfil', id)
-              .lt('fecha_dia', hoy)
+              .lt('fecha_dia', rec.fecha_dia || hoy)
               .order('fecha_dia', { ascending: false })
               .order('fecha_corte', { ascending: false })
               .limit(1).maybeSingle();
             
-            const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== hoy.substring(0, 7));
+            const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== (rec.fecha_dia || hoy).substring(0, 7));
 
-            if (rec.jornada === 'Mañana' || i === 0) {
+            // Si el registro ya tiene un baseline fijado válido por Datame que no excede el total, PRESERVARLO
+            if (rec.puntos_baseline > 0 && rec.puntos_baseline <= rec.puntos_total) {
+              nuevoBase = rec.puntos_baseline;
+              nuevoNeto = rec.puntos_total - nuevoBase;
+            } else if (rec.jornada === 'Mañana' || i === 0) {
               if (esNuevoMes) {
-                nuevoBase = 0; // En inicio de mes Datame reinicia el total mensual a 0
+                nuevoBase = 0;
               } else if (ultimo && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
-                // 🧠 EXACTITUD DELTA-SHIFT™: Usar el cierre real del día anterior como baseline del inicio del día
                 nuevoBase = ultimo.puntos_total;
-              } else if (rec.puntos_baseline > 0 && rec.puntos_baseline <= rec.puntos_total) {
-                nuevoBase = rec.puntos_baseline;
               } else {
                 nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
               }
+              nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
             } else {
-              // Si no es el primer registro de hoy (Tarde, Noche, Auto despues de Mañana)
               if (lastTotal !== null && lastTotal <= rec.puntos_total) {
                 nuevoBase = lastTotal;
               } else if (ultimo && !esNuevoMes && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
                 nuevoBase = ultimo.puntos_total;
               } else {
-                nuevoBase = (rec.puntos_baseline > 0 && rec.puntos_baseline <= rec.puntos_total) ? rec.puntos_baseline : 0;
+                nuevoBase = 0;
               }
+              nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
             }
             
             // 🛡️ SANIDAD DE BASELINE: El baseline nunca puede exceder el total actual.
-            // Si el baseline supera el total (p.ej. ajuste ligero de Datame), topar baseline al total actual para que neto = 0
             if (nuevoBase > rec.puntos_total) {
               nuevoBase = rec.puntos_total;
+              nuevoNeto = 0;
             }
 
-            // Calcular el neto tentativo exacto
-            let nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-
             // 🔬 DELTA-SHIFT™ SANITY AUTO-HEAL:
-            // Si el neto calculado representa > 60% del total (para totales > 10 pts) o > 300 pts en 1 sola jornada,
-            // verificar si el baseline previo de ayer corregiría la anomalía.
-            if (rec.puntos_total > 10 && (nuevoNeto > rec.puntos_total * 0.60 || nuevoNeto > 300)) {
+            // Solo auto-curar si no había baseline previo o el baseline era 0 y el neto es descomunal
+            if ((!rec.puntos_baseline || rec.puntos_baseline === 0) && rec.puntos_total > 50 && nuevoNeto > 300) {
               if (ultimo && !esNuevoMes && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
                 nuevoBase = ultimo.puntos_total;
                 nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-              } else if (nuevoNeto > 300) {
+              } else {
                 nuevoBase = Number((rec.puntos_total * 0.97).toFixed(2));
                 nuevoNeto = Number((rec.puntos_total - nuevoBase).toFixed(2));
               }
@@ -37310,34 +37313,42 @@ PT._logKey = function (opName) {
                 let opName = op.agencia;
                 let srcOps = [];
                 if (typeof operatorsData !== 'undefined') {
+                  // 1. Filtrar operadores que tienen este perfil Y son del turno de la operación
                   srcOps = operatorsData.filter(o =>
-                    o.profiles && o.profiles.some(p => String(p.id).trim() === id)
+                    o.profiles && o.profiles.some(p => String(p.id).trim() === id) &&
+                    (!o.turno || o.turno === 'Completo' || o.turno === jClean)
                   );
 
-                  // Buscar también en borradores de asistencia
+                  // 2. Buscar en borradores de asistencia SOLO del turno y fecha correspondientes
                   if (srcOps.length === 0) {
                     const _safeN = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
+                    const shK = jClean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     dCandidates.forEach(dStr => {
-                      ['manana', 'tarde', 'noche', 'todos'].forEach(shKey => {
-                        const dKeys = [
-                          ((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shKey),
-                          ('rr_prime_asistencia_draft_' + dStr + '_' + shKey)
-                        ];
-                        dKeys.forEach(draftKey => {
-                          try {
-                            const dObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
-                            Object.values(dObj).forEach(de => {
-                              if (de && Array.isArray(de.perfiles) && de.perfiles.some(p => String(p.id).trim() === id)) {
-                                const opObj = operatorsData.find(o => _safeN(o.name) === _safeN(de.name || de.operador || ''));
-                                if (opObj && !srcOps.some(c => c.name === opObj.name)) {
-                                  srcOps.push(opObj);
-                                }
+                      const dKeys = [
+                        ((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shK),
+                        ('rr_prime_asistencia_draft_' + dStr + '_' + shK)
+                      ];
+                      dKeys.forEach(draftKey => {
+                        try {
+                          const dObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
+                          Object.values(dObj).forEach(de => {
+                            if (de && Array.isArray(de.perfiles) && de.perfiles.some(p => String(p.id).trim() === id)) {
+                              const opObj = operatorsData.find(o => _safeN(o.name) === _safeN(de.name || de.operador || ''));
+                              if (opObj && !srcOps.some(c => c.name === opObj.name)) {
+                                srcOps.push(opObj);
                               }
-                            });
-                          } catch(e) {}
-                        });
+                            }
+                          });
+                        } catch(e) {}
                       });
                     });
+                  }
+
+                  // 3. Fallback a cualquier operador con el perfil si no hubo coincidencia por turno
+                  if (srcOps.length === 0) {
+                    srcOps = operatorsData.filter(o =>
+                      o.profiles && o.profiles.some(p => String(p.id).trim() === id)
+                    );
                   }
                 }
 

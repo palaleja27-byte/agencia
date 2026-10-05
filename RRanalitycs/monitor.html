@@ -460,8 +460,7 @@
     <button id="btn-nuke-sync" class="btn-nuke">⚡ EXTRAER & AUDITAR TODAS LAS CONVERSACIONES DEL TURNO (NUKE SYNC)</button>
     <button id="btn-open-conv-viewer" class="btn-broadcast" style="background: rgba(14, 165, 233, 0.2); border-color: var(--neon-cyan); color: var(--neon-cyan);" onclick="openConversationsModal()">📚 VER HISTORIAL CONVERSACIONES & CARTAS</button>
     <button id="btn-toggle-shift-accordion" class="btn-broadcast" style="background: rgba(16, 185, 129, 0.2); border-color: var(--neon-emerald); color: var(--neon-emerald);">📂 PERFILES DEL TURNO & AUDITORÍA EN TIEMPO REAL</button>
-    <button id="btn-open-module-info" class="btn-broadcast" style="background: rgba(99, 102, 241, 0.25); border-color: #818cf8; color: #a5b4fc;" onclick="openModuleInfoModal()">ℹ️ CÓMO FUNCIONA & RENTABILIDAD</button>
-    <button id="btn-open-broadcast" class="btn-broadcast">📢 ANUNCIO GENERAL</button>
+    <button id="btn-open-spending-intel" class="btn-broadcast" style="background: rgba(168, 85, 247, 0.25); border-color: #a855f7; color: #d8b4fe;" onclick="openUserSpendingModal()">💎 GASTO DE USUARIOS & RENTABILIDAD</button>
   </div>
 
   <!-- ACORDEÓN MAESTRO: PERFILES DEL TURNO & AUDITORÍA EN TIEMPO REAL -->
@@ -1909,6 +1908,335 @@
         </div>
       `;
     };
+
+    // 9. MODAL DE GASTO DE USUARIOS & RENTABILIDAD 360° (CROSS-AGENCY RADAR)
+    window._spendingIntelData = null;
+    window._activeSpendingFilter = 'all';
+
+    window.openUserSpendingModal = async function() {
+      let modal = document.getElementById('ryr-user-spending-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ryr-user-spending-modal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 1250px;
+          max-width: 96vw;
+          height: 820px;
+          max-height: 94vh;
+          background: rgba(6, 9, 20, 0.98);
+          backdrop-filter: blur(30px);
+          border: 2px solid #a855f7;
+          border-radius: 14px;
+          color: #fff;
+          z-index: 999999;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 25px 70px rgba(0,0,0,0.95), 0 0 40px rgba(168, 85, 247, 0.35);
+          font-family: 'Space Grotesk', system-ui, sans-serif;
+          overflow: hidden;
+        `;
+        document.body.appendChild(modal);
+      }
+
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #1e293b; background:linear-gradient(90deg, rgba(88, 28, 135, 0.8), rgba(15, 23, 42, 0.95));">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.8rem;">💎</span>
+            <div>
+              <h2 style="font-size:16.5px; font-weight:900; color:#d8b4fe; margin:0; letter-spacing:1px; text-transform:uppercase;">
+                Auditoría de Gasto de Usuarios & Radar de Fuga a Otras Agencias
+              </h2>
+              <span style="font-size:11px; color:#94a3b8;">
+                Monitoreo histórico de consumo (Chats 1 Pt / Cartas 10 Pts), Cuota de Billetera (Share of Wallet) y Comparación de Actividad Externa
+              </span>
+            </div>
+          </div>
+          <button onclick="document.getElementById('ryr-user-spending-modal').style.display='none'" style="background:transparent; border:none; color:#cbd5e1; font-size:22px; cursor:pointer; font-weight:bold; padding:4px 8px;">✕</button>
+        </div>
+
+        <!-- KPI SUMMARY BAR -->
+        <div id="spending-kpi-bar" style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; padding:14px 24px; background:rgba(15,23,42,0.75); border-bottom:1px solid #1e293b;">
+          <div style="background:#090d1f; border:1px solid rgba(168,85,247,0.3); border-radius:8px; padding:10px 14px;">
+            <div style="font-size:10.5px; color:#94a3b8; text-transform:uppercase; font-weight:bold;">💰 Total Facturado Agencia</div>
+            <div id="kpi-total-agency-rev" style="font-size:16px; font-weight:900; color:#34d399; margin-top:2px;">Calculando...</div>
+            <div id="kpi-total-agency-cop" style="font-size:10px; color:#64748b;">...</div>
+          </div>
+          <div style="background:#090d1f; border:1px solid rgba(234,179,8,0.3); border-radius:8px; padding:10px 14px;">
+            <div style="font-size:10.5px; color:#94a3b8; text-transform:uppercase; font-weight:bold;">🐋 Top Ballena (Whale)</div>
+            <div id="kpi-top-whale-name" style="font-size:15px; font-weight:900; color:#fbbf24; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Calculando...</div>
+            <div id="kpi-top-whale-spend" style="font-size:10px; color:#64748b;">...</div>
+          </div>
+          <div style="background:#090d1f; border:1px solid rgba(56,189,248,0.3); border-radius:8px; padding:10px 14px;">
+            <div style="font-size:10.5px; color:#94a3b8; text-transform:uppercase; font-weight:bold;">👑 Perfil Más Rentable</div>
+            <div id="kpi-top-profile-name" style="font-size:15px; font-weight:900; color:#38bdf8; margin-top:2px;">Calculando...</div>
+            <div id="kpi-top-profile-spend" style="font-size:10px; color:#64748b;">...</div>
+          </div>
+          <div style="background:#090d1f; border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px;">
+            <div style="font-size:10.5px; color:#94a3b8; text-transform:uppercase; font-weight:bold;">🚨 Fuga Estimada a Otras Agencias</div>
+            <div id="kpi-leakage-count" style="font-size:15px; font-weight:900; color:#f87171; margin-top:2px;">Calculando...</div>
+            <div id="kpi-leakage-usd" style="font-size:10px; color:#64748b;">...</div>
+          </div>
+        </div>
+
+        <!-- FILTROS Y BÚSQUEDA -->
+        <div style="padding:12px 24px; background:rgba(6,9,19,0.9); border-bottom:1px solid #1e293b; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="spending-search-input" placeholder="🔍 Buscar por nombre de usuario, Talkytimes ID (ej: 9928172) o país..." style="flex:1; min-width:280px; padding:8px 12px; background:#0b132b; border:1px solid #334155; color:#fff; border-radius:6px; font-size:12px;" oninput="renderSpendingClientsList()">
+          
+          <select id="spending-profile-filter" style="padding:8px 12px; background:#0b132b; border:1px solid #334155; color:#38bdf8; border-radius:6px; font-size:12px; font-weight:bold;" onchange="renderSpendingClientsList()">
+            <option value="ALL">📁 TODOS LOS PERFILES</option>
+          </select>
+
+          <div style="display:flex; gap:6px;">
+            <button class="spending-filter-btn active" data-tier="all" onclick="setSpendingFilter('all', this)" style="background:#4f46e5; color:#fff; border:none; padding:7px 12px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">Todos</button>
+            <button class="spending-filter-btn" data-tier="whale" onclick="setSpendingFilter('whale', this)" style="background:#1e293b; color:#fbbf24; border:1px solid rgba(234,179,8,0.4); padding:7px 12px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">🐋 Whales (>$80 USD)</button>
+            <button class="spending-filter-btn" data-tier="vip" onclick="setSpendingFilter('vip', this)" style="background:#1e293b; color:#c084fc; border:1px solid rgba(168,85,247,0.4); padding:7px 12px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">💎 VIPs ($25-$80)</button>
+            <button class="spending-filter-btn" data-tier="leakage" onclick="setSpendingFilter('leakage', this)" style="background:#1e293b; color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:7px 12px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">🚨 Fuga a Otras Agencias</button>
+          </div>
+
+          <button onclick="fetchAndRenderSpendingIntel(true)" style="background:#059669; color:#fff; border:none; padding:7px 14px; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:4px;">
+            🔄 Actualizar
+          </button>
+        </div>
+
+        <!-- LISTA DE USUARIOS -->
+        <div id="spending-clients-list" style="flex:1; padding:20px 24px; overflow-y:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); gap:14px; align-content:start;">
+          <div style="grid-column: 1/-1; text-align:center; padding:50px; color:#38bdf8; font-size:13px;">
+            ⏳ Auditando consumo de usuarios y calculando cuota de billetera con Supabase...
+          </div>
+        </div>
+
+        <!-- FOOTER INFO -->
+        <div style="padding:10px 24px; border-top:1px solid #1e293b; background:rgba(6,9,19,0.95); display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#94a3b8;">
+          <div>
+            💡 <b>Cálculo de Consumo:</b> 1 Mensaje de Chat = 1 Punto (~$0.28 USD) | 1 Carta Enviada/Recibida = 10 Puntos (~$2.80 USD). Tasa: 1 USD = $4.200 COP.
+          </div>
+          <button onclick="document.getElementById('ryr-user-spending-modal').style.display='none'" style="background:linear-gradient(135deg, #7c3aed, #4f46e5); color:#fff; border:none; padding:6px 18px; border-radius:6px; font-weight:bold; cursor:pointer;">
+            Cerrar Ventana
+          </button>
+        </div>
+      `;
+
+      await fetchAndRenderSpendingIntel();
+    };
+
+    window.setSpendingFilter = function(tier, btn) {
+      window._activeSpendingFilter = tier;
+      document.querySelectorAll('.spending-filter-btn').forEach(b => {
+        b.style.background = '#1e293b';
+        b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      if (tier === 'all') btn.style.background = '#4f46e5';
+      else if (tier === 'whale') btn.style.background = '#b45309';
+      else if (tier === 'vip') btn.style.background = '#6b21a8';
+      else if (tier === 'leakage') btn.style.background = '#991b1b';
+      renderSpendingClientsList();
+    };
+
+    window.fetchAndRenderSpendingIntel = async function(forceRefresh = false) {
+      try {
+        const res = await fetch(`${API_URL}/api/clients/spending-intel`);
+        const data = await res.json();
+        if (data && data.success) {
+          window._spendingIntelData = data;
+          
+          // Poblar KPIs
+          const summary = data.summary || {};
+          const totalUsdEl = document.getElementById('kpi-total-agency-rev');
+          const totalCopEl = document.getElementById('kpi-total-agency-cop');
+          const topWhaleNameEl = document.getElementById('kpi-top-whale-name');
+          const topWhaleSpendEl = document.getElementById('kpi-top-whale-spend');
+          const topProfileNameEl = document.getElementById('kpi-top-profile-name');
+          const topProfileSpendEl = document.getElementById('kpi-top-profile-spend');
+          const leakageCountEl = document.getElementById('kpi-leakage-count');
+          const leakageUsdEl = document.getElementById('kpi-leakage-usd');
+
+          if (totalUsdEl) totalUsdEl.innerText = `$${(summary.totalAgencyRevenueUSD || 0).toFixed(2)} USD`;
+          if (totalCopEl) totalCopEl.innerText = `≈ $${(summary.totalAgencyRevenueCOP || 0).toLocaleString('es-CO')} COP (${summary.totalClientsCount || 0} Clientes)`;
+          
+          if (topWhaleNameEl) topWhaleNameEl.innerText = summary.topSpender ? summary.topSpender.name : 'N/A';
+          if (topWhaleSpendEl) topWhaleSpendEl.innerText = summary.topSpender ? `$${(summary.topSpender.totalSpentUSD || 0).toFixed(2)} USD (~$${(summary.topSpender.totalSpentCOP || 0).toLocaleString('es-CO')} COP)` : 'Sin datos';
+
+          if (topProfileNameEl) topProfileNameEl.innerText = summary.mostProfitableProfile ? summary.mostProfitableProfile.profile : 'N/A';
+          if (topProfileSpendEl) topProfileSpendEl.innerText = summary.mostProfitableProfile ? `$${(summary.mostProfitableProfile.totalSpentUSD || 0).toFixed(2)} USD generados` : 'Sin datos';
+
+          if (leakageCountEl) leakageCountEl.innerText = `${summary.externalChattingClientsCount || 0} Clientes en Fuga`;
+          if (leakageUsdEl) leakageUsdEl.innerText = `~$${(summary.estimatedExternalSpendingUSD || 0).toFixed(2)} USD gastados en otras agencias`;
+
+          // Poblar Selector de Perfiles
+          const selectProfile = document.getElementById('spending-profile-filter');
+          if (selectProfile) {
+            const currentVal = selectProfile.value;
+            const profiles = summary.profilesBreakdown || [];
+            selectProfile.innerHTML = `<option value="ALL">📁 TODOS LOS PERFILES (${summary.totalClientsCount || 0} usuarios)</option>`;
+            profiles.forEach(p => {
+              const opt = document.createElement('option');
+              opt.value = p.profile;
+              opt.innerText = `👤 ${p.profile} ($${p.totalSpentUSD.toFixed(2)} USD - ${p.clientsCount} clientes)`;
+              selectProfile.appendChild(opt);
+            });
+            selectProfile.value = currentVal;
+          }
+
+          renderSpendingClientsList();
+        }
+      } catch (err) {
+        console.error('Error fetching spending intel:', err);
+        const container = document.getElementById('spending-clients-list');
+        if (container) {
+          container.innerHTML = `
+            <div style="grid-column:1/-1; color:#ef4444; text-align:center; padding:40px;">
+              Error al consultar el gasto de usuarios desde el backend. Intenta nuevamente.
+            </div>
+          `;
+        }
+      }
+    };
+
+    window.renderSpendingClientsList = function() {
+      const container = document.getElementById('spending-clients-list');
+      if (!container || !window._spendingIntelData) return;
+
+      const clients = window._spendingIntelData.clients || [];
+      const search = (document.getElementById('spending-search-input')?.value || '').trim().toLowerCase();
+      const profileFilter = document.getElementById('spending-profile-filter')?.value || 'ALL';
+      const tierFilter = window._activeSpendingFilter || 'all';
+
+      const filtered = clients.filter(c => {
+        // Filtro de búsqueda texto
+        if (search) {
+          const matchName = (c.name || '').toLowerCase().includes(search);
+          const matchId = String(c.id || '').toLowerCase().includes(search) || String(c.talkytimesId || '').toLowerCase().includes(search);
+          const matchCountry = (c.country || '').toLowerCase().includes(search);
+          if (!matchName && !matchId && !matchCountry) return false;
+        }
+
+        // Filtro por perfil
+        if (profileFilter !== 'ALL') {
+          if (!c.profiles || !c.profiles[profileFilter]) return false;
+        }
+
+        // Filtro por Tier / Fuga
+        if (tierFilter === 'whale' && c.spendingTier !== 'WHALE') return false;
+        if (tierFilter === 'vip' && c.spendingTier !== 'VIP') return false;
+        if (tierFilter === 'leakage' && !c.isChattingOtherAgencies) return false;
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column:1/-1; text-align:center; padding:60px 20px; background:rgba(15,23,42,0.5); border:1px dashed #334155; border-radius:10px;">
+            <div style="font-size:2.5rem; margin-bottom:10px;">🔍👤</div>
+            <h3 style="color:#94a3b8; font-size:15px; margin:0 0 6px 0;">No se encontraron usuarios con los filtros seleccionados</h3>
+            <p style="color:#64748b; font-size:11.5px; margin:0;">Prueba modificando el término de búsqueda o cambiando el filtro de perfil.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(c => {
+        // Badges por Tier
+        let tierBadge = `<span style="background:rgba(148,163,184,0.2); color:#cbd5e1; border:1px solid #475569; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:900;">⚡ REGULAR</span>`;
+        if (c.spendingTier === 'WHALE') {
+          tierBadge = `<span style="background:linear-gradient(135deg, rgba(234,179,8,0.3), rgba(202,138,4,0.4)); color:#fbbf24; border:1px solid #eab308; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:900; box-shadow:0 0 10px rgba(234,179,8,0.3);">🐋 WHALE (ALTO VALOR)</span>`;
+        } else if (c.spendingTier === 'VIP') {
+          tierBadge = `<span style="background:linear-gradient(135deg, rgba(168,85,247,0.3), rgba(126,34,206,0.4)); color:#d8b4fe; border:1px solid #a855f7; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:900;">💎 CLIENTE VIP</span>`;
+        }
+
+        // Radar de fuga a otras agencias
+        const agencyShare = Math.min(100, Math.max(0, c.agencySharePercentage || 100));
+        const externalShare = 100 - agencyShare;
+        const isLeaking = c.isChattingOtherAgencies;
+
+        // Desglose por perfiles
+        const profilesEntries = Object.entries(c.profiles || {});
+
+        return `
+          <div style="background:#090d1f; border:1px solid ${isLeaking ? 'rgba(239,68,68,0.45)' : 'rgba(51,65,85,0.7)'}; border-left:4px solid ${isLeaking ? '#ef4444' : (c.spendingTier === 'WHALE' ? '#eab308' : '#8b5cf6')}; border-radius:10px; padding:15px; display:flex; flex-direction:column; gap:12px; box-shadow:0 4px 15px rgba(0,0,0,0.4);">
+            
+            <!-- HEADER USUARIO -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:15px; font-weight:900; color:#f8fafc;">${c.name}</span>
+                  <span style="font-size:11px; color:#94a3b8; font-family:monospace; background:#040711; padding:2px 6px; border-radius:4px; border:1px solid #1e293b;">#${c.id}</span>
+                </div>
+                <div style="font-size:11px; color:#94a3b8; margin-top:2px;">
+                  📍 ${c.country} ${c.age ? `• ${c.age} años` : ''}
+                </div>
+              </div>
+              <div>${tierBadge}</div>
+            </div>
+
+            <!-- GASTO EN NUESTRA AGENCIA -->
+            <div style="background:rgba(15,23,42,0.8); border:1px solid #1e293b; border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:bold;">Facturado con Nuestra Agencia</div>
+                <div style="font-size:16px; font-weight:900; color:#34d399; margin-top:2px;">
+                  $${(c.totalSpentUSD || 0).toFixed(2)} USD
+                </div>
+                <div style="font-size:10.5px; color:#64748b;">
+                  ≈ $${(c.totalSpentCOP || 0).toLocaleString('es-CO')} COP
+                </div>
+              </div>
+              <div style="text-align:right; font-size:11px; color:#cbd5e1;">
+                <div>💬 <b>${c.totalChatMessages || 0}</b> chats <span style="color:#64748b;">($${((c.totalChatMessages || 0) * 0.28).toFixed(2)})</span></div>
+                <div>💌 <b>${c.totalLetters || 0}</b> cartas <span style="color:#64748b;">($${((c.totalLetters || 0) * 2.80).toFixed(2)})</span></div>
+              </div>
+            </div>
+
+            <!-- DESGLOSE POR PERFIL DE NUESTRA AGENCIA -->
+            <div style="font-size:11px;">
+              <div style="color:#94a3b8; font-size:10px; text-transform:uppercase; font-weight:bold; margin-bottom:4px;">Gasto por Perfil:</div>
+              <div style="display:flex; flex-wrap:wrap; gap:5px;">
+                ${profilesEntries.length > 0 ? profilesEntries.map(([prof, stat]) => `
+                  <span style="background:rgba(30,41,59,0.7); border:1px solid rgba(148,163,184,0.2); padding:3px 8px; border-radius:4px; color:#e2e8f0; font-size:10.5px;">
+                    <b style="color:#38bdf8;">${prof}:</b> $${(stat.usd || 0).toFixed(2)} <span style="color:#64748b;">(${stat.messages || 0}m / ${stat.letters || 0}c)</span>
+                  </span>
+                `).join('') : '<span style="color:#64748b; font-size:10px;">Sin desglose</span>'}
+              </div>
+            </div>
+
+            <!-- RADAR DE CUOTA DE BILLETERA / FUGA A OTRAS AGENCIAS -->
+            <div style="background:${isLeaking ? 'rgba(69,10,10,0.35)' : 'rgba(6,78,59,0.2)'}; border:1px solid ${isLeaking ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.3)'}; border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:10.5px; font-weight:900; color:${isLeaking ? '#fca5a5' : '#6ee7b7'};">
+                  ${isLeaking ? '🚨 FUGA A OTRAS AGENCIAS DETECTADA' : '🛡️ CLIENTE 100% EXCLUSIVO'}
+                </span>
+                <span style="font-size:10px; font-weight:bold; color:#cbd5e1;">
+                  Cuota Agencia: <b style="color:#38bdf8;">${agencyShare}%</b>
+                </span>
+              </div>
+
+              <!-- BARRA DE PARTICIPACIÓN -->
+              <div style="width:100%; height:6px; background:#1e293b; border-radius:3px; overflow:hidden; display:flex;">
+                <div style="width:${agencyShare}%; background:#10b981;" title="Nuestra Agencia: ${agencyShare}%"></div>
+                <div style="width:${externalShare}%; background:#ef4444;" title="Otras Cuentas: ${externalShare}%"></div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; font-size:10px; color:#94a3b8;">
+                <span>Nuestra Agencia: <b style="color:#10b981;">$${(c.totalSpentUSD || 0).toFixed(2)} USD</b></span>
+                <span>Otras Cuentas: <b style="color:${isLeaking ? '#f87171' : '#64748b'};">~$${(c.externalAgencySpendUSD || 0).toFixed(2)} USD</b></span>
+              </div>
+
+              ${isLeaking ? `
+                <div style="font-size:10px; color:#fca5a5; background:rgba(239,68,68,0.15); padding:4px 8px; border-radius:4px; margin-top:2px;">
+                  ⚠️ <b>Estrategia Recomendada:</b> El usuario recarga créditos recurrentemente pero consume ~$${(c.externalAgencySpendUSD || 0).toFixed(2)} USD fuera. Priorizar cartas de inmersión para retener el 100% de su gasto.
+                </div>
+              ` : ''}
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    };
   </script>
 </body>
 </html>
+

@@ -950,7 +950,7 @@
                 <span class="audit-rule-badge ok">👤 Nombre Perfil Correcto (${p.profileName})</span>
                 <span class="audit-rule-badge ok">✈️ Cero Promesas Viaje / Encuentro</span>
                 <span class="audit-rule-badge ok">💍 Cero Promesas Matrimonio</span>
-                ${p.infractions > 0 ? `<span class="audit-rule-badge fail">⚠️ ${p.infractions} Alertas Registradas</span>` : ''}
+                ${p.infractions > 0 ? `<span class="audit-rule-badge fail" onclick="openProfileInfractionsModal('${p.profileName}', '${p.operator}')" style="cursor:pointer;" title="Haz clic para ver el detalle y fragmentos de chat de las alertas">⚠️ ${p.infractions} Alertas Registradas 🔍</span>` : ''}
               </div>
 
               <!-- LISTADO DE CLIENTES PENDIENTES VS SINCRONIZADOS -->
@@ -1527,6 +1527,143 @@
           ${cleanMarkdown}
         </div>
       `;
+    };
+
+    // 7.1 MODAL DE ALERTAS E INFRACCIONES DETALLADAS CON FRAGMENTO DE CHAT
+    window.openProfileInfractionsModal = async function(profileName, operatorName) {
+      let modal = document.getElementById('ryr-profile-infractions-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ryr-profile-infractions-modal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 900px;
+          max-width: 95vw;
+          height: 650px;
+          max-height: 90vh;
+          background: rgba(10, 15, 30, 0.98);
+          backdrop-filter: blur(25px);
+          border: 2px solid #ef4444;
+          border-radius: 14px;
+          color: #fff;
+          z-index: 999999;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.95), 0 0 35px rgba(239, 68, 68, 0.35);
+          font-family: 'Space Grotesk', system-ui, sans-serif;
+          overflow: hidden;
+        `;
+        document.body.appendChild(modal);
+      }
+
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #1e293b; background:linear-gradient(90deg, rgba(79, 15, 15, 0.9), rgba(15, 23, 42, 0.9));">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.6rem;">🚨</span>
+            <div>
+              <h2 style="font-size:16px; font-weight:900; color:#fca5a5; margin:0; letter-spacing:1px; text-transform:uppercase;">
+                Expediente de Alertas & Infracciones Preventivas
+              </h2>
+              <span style="font-size:11px; color:#94a3b8;">
+                🎯 Perfil: <b style="color:#38bdf8;">${profileName}</b> | 💼 Operador: <b style="color:#34d399;">${operatorName || 'En Turno'}</b>
+              </span>
+            </div>
+          </div>
+          <button onclick="document.getElementById('ryr-profile-infractions-modal').style.display='none'" style="background:transparent; border:none; color:#cbd5e1; font-size:20px; cursor:pointer; font-weight:bold; padding:4px 8px;">✕</button>
+        </div>
+
+        <div id="ryr-infractions-modal-body" style="flex:1; padding:20px 24px; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
+          <div style="color:#38bdf8; font-size:12px; text-align:center; padding:30px;">⏳ Consultando historial de alertas del perfil en tiempo real...</div>
+        </div>
+
+        <div style="padding:12px 24px; border-top:1px solid #1e293b; background:rgba(6,9,19,0.9); display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:10.5px; color:#94a3b8;">🛡️ El Firewall bloqueó inmediatamente el envío en la caja de texto para evitar sanciones ($10.000 COP) y baneos.</span>
+          <button onclick="document.getElementById('ryr-profile-infractions-modal').style.display='none'" style="background:#334155; color:#fff; border:none; padding:7px 18px; border-radius:6px; font-weight:bold; font-size:11.5px; cursor:pointer;">
+            Cerrar Expediente
+          </button>
+        </div>
+      `;
+
+      // Consultar endpoint backend de infracciones para este perfil
+      try {
+        const res = await fetch(`${API_URL}/api/fines/infractions/${encodeURIComponent(profileName)}`);
+        const data = await res.json();
+        const infractions = data.infractions || [];
+        const bodyEl = document.getElementById('ryr-infractions-modal-body');
+        if (!bodyEl) return;
+
+        if (infractions.length === 0) {
+          bodyEl.innerHTML = `
+            <div style="text-align:center; padding:50px 20px; background:rgba(15,23,42,0.6); border:1px dashed #334155; border-radius:10px;">
+              <div style="font-size:2.5rem; margin-bottom:10px;">🛡️✅</div>
+              <h3 style="color:#34d399; font-size:15px; margin:0 0 6px 0;">¡Operación 100% Limpia y Sin Infracciones!</h3>
+              <p style="color:#94a3b8; font-size:11.5px; margin:0;">
+                No se han registrado intentos de Travel Misleading, solicitud de contacto externo ni manipulación de regalos para <b>${profileName}</b>.
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        bodyEl.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 16px;">
+            <span style="color:#fca5a5; font-size:12px; font-weight:bold;">
+              ⚠️ Total de Infracciones Detectadas & Neutralizadas: <span style="background:#ef4444; color:#fff; padding:2px 8px; border-radius:12px; font-size:11px;">${infractions.length}</span>
+            </span>
+            <span style="font-size:11px; color:#fbbf24;">💰 Multas Evitadas: ~$${(infractions.length * 10000).toLocaleString('es-CO')} COP</span>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            ${infractions.map((inf, i) => {
+              const dateStr = inf.timestamp ? new Date(inf.timestamp).toLocaleString('es-CO') : 'Reciente';
+              const ruleName = inf.rule || 'TRAVEL MISLEADING (PREVENCIÓN DE MULTA)';
+              const snippet = inf.snippet || inf.text || 'Texto bloqueado por el firewall';
+              const client = inf.clientName || inf.clientId || 'Cliente en Pantalla';
+
+              return `
+                <div style="background:#090d1f; border:1px solid rgba(239,68,68,0.35); border-left:4px solid #ef4444; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                    <span style="background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.4); padding:3px 8px; border-radius:4px; font-size:10.5px; font-weight:bold;">
+                      🚨 Alerta #${i + 1}: ${ruleName}
+                    </span>
+                    <span style="font-size:10.5px; color:#94a3b8;">🕒 ${dateStr}</span>
+                  </div>
+
+                  <div style="display:flex; gap:16px; font-size:11px; color:#cbd5e1;">
+                    <span>👤 <b>Cliente:</b> <span style="color:#38bdf8;">${client}</span></span>
+                    <span>💼 <b>Operador:</b> <span style="color:#34d399;">${inf.operator || operatorName || 'En Turno'}</span></span>
+                  </div>
+
+                  <div style="background:#040711; border:1px solid #1e293b; border-radius:6px; padding:10px 12px; font-family:monospace; font-size:11px; color:#e2e8f0; line-height:1.5;">
+                    <div style="color:#f87171; font-size:10px; font-weight:bold; margin-bottom:4px; text-transform:uppercase;">📝 Fragmento Exacto del Chat Detectado:</div>
+                    <div style="background:rgba(239,68,68,0.15); border-left:2px solid #ef4444; padding:6px 10px; border-radius:3px; color:#fca5a5;">
+                      "${snippet}"
+                    </div>
+                  </div>
+
+                  <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#10b981; margin-top:2px;">
+                    <span>🛡️ <b>Acción del Firewall:</b> Botón de envío bloqueado y envío cancelado.</span>
+                    <span style="color:#94a3b8;">ID: ${inf.id || `INF-${i + 1}`}</span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } catch (err) {
+        const bodyEl = document.getElementById('ryr-infractions-modal-body');
+        if (bodyEl) {
+          bodyEl.innerHTML = `
+            <div style="color:#ef4444; font-size:12px; text-align:center; padding:30px;">
+              Error al conectar con el servidor para consultar las alertas. Inténtalo de nuevo.
+            </div>
+          `;
+        }
+      }
     };
 
     // 8. MODAL DE INFORMACIÓN TÁCTICA & RENTABILIDAD

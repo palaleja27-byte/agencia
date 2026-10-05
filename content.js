@@ -69,8 +69,9 @@
   let isSupervisorChatOpen = false;
   let zeroCreditsClientsSet = new Set();
 
-  // CONTADOR DE REINCIDENCIAS DEL FIREWALL
+  // REGISTRO DE ALERTAS E INFRACCIONES DETALLADAS DEL FIREWALL
   let firewallInfractionsCount = 0;
+  let liveInfractionsLog = [];
 
   const PROSPECTING_MIN_QUOTA = 10;
   const PROSPECTING_CYCLE_DURATION = 1800; // 30 min
@@ -85,7 +86,9 @@
     'instagram', 'telegram', 'diner', 'transferenc', 'pay', 'cash', 'paypal',
     'when we meet', 'when i visit you', 'book a flight', 'hotel', 'meet up',
     'airport', 'tickets', 'my flight', 'in person', 'flight to', 'flying to',
-    'visit you', 'come see you', 'ticket to'
+    'visit you', 'come see you', 'ticket to', 'where are you from', 'where do you live',
+    'where r u from', 'where you from', 'de donde eres', 'donde vives', 'what city',
+    'which city', 'what country', 'marry me', 'casarnos', 'matrimonio'
   ];
 
   // 2. REGISTRO DE ACTIVIDAD HUMANA
@@ -205,6 +208,9 @@
         }
 
         if (data.firewallInfractionsCount) firewallInfractionsCount = data.firewallInfractionsCount;
+        if (Array.isArray(data.liveInfractionsLog)) {
+          liveInfractionsLog = [...data.liveInfractionsLog];
+        }
 
         sessionData = {
           operator: data.operator || 'walther',
@@ -260,7 +266,10 @@
   function persistFirewallInfractions() {
     if (!isContextValid()) return;
     try {
-      chrome.storage.local.set({ firewallInfractionsCount });
+      chrome.storage.local.set({
+        firewallInfractionsCount,
+        liveInfractionsLog: liveInfractionsLog.slice(0, 50)
+      });
     } catch (e) {}
   }
 
@@ -664,44 +673,182 @@
 
   // 9. FIREWALL DE 3 CAPAS & PREVENCIÓN DE TRAVEL MISLEADING (TM)
   function checkViolationInText(text) {
-    if (!text || text.length < 2) return false;
-    const lower = text.toLowerCase();
-    return bannedRoots.some(root => lower.includes(root.toLowerCase()));
+    if (!text || text.length < 2) return null;
+    const lower = text.toLowerCase().trim();
+
+    // 1. Travel Misleading (Ubicación, Vuelos, Encuentros, Dónde vives / De dónde eres, Ciudades)
+    const tmPatterns = [
+      /\bwhere\s*(are|r)\s*(you|u)\s*(from|living|located)\b/i,
+      /\bwhere\s*(do|d)\s*(you|u)\s*live\b/i,
+      /\bwhere\s*(you|u)\s*from\b/i,
+      /\bwhat\s*(city|country|state)\s*(are|do)\s*(you|u)\b/i,
+      /\bwhich\s*(city|country|state)\b/i,
+      /\bde\s*d[oó]nde\s*(eres|vienes|sos)\b/i,
+      /\bd[oó]nde\s*vives\b/i,
+      /\bde\s*qu[eé]\s*(ciudad|pa[ií]s)\b/i,
+      /\ben\s*qu[eé]\s*(ciudad|pa[ií]s)\s*vives\b/i,
+      /\bwhen\s*(we|can\s*we|will\s*we)\s*meet\b/i,
+      /\bwhen\s*(i|you)\s*visit\b/i,
+      /\bmeet\s*(up|in\s*person|each\s*other)\b/i,
+      /\bsee\s*(you|each\s*other)\s*in\s*person\b/i,
+      /\bvisit\s*(you|me|each\s*other)\b/i,
+      /\bcome\s*(and\s*|to\s*)?see\s*(you|me)\b/i,
+      /\b(book|buy)\s*(a\s*)?(flight|plane\s*ticket|hotel|room)\b/i,
+      /\bflight\s*to\b/i,
+      /\bflying\s*to\b/i,
+      /\bplane\s*ticket\b/i,
+      /\bmy\s*flight\b/i,
+      /\byour\s*flight\b/i,
+      /\bvacation\s*together\b/i,
+      /\btrip\s*together\b/i,
+      /\btravel\s*together\b/i,
+      /\btravel\s*to\b/i,
+      /\bhotel\b/i,
+      /\bairport\b/i,
+      /\bairbnb\b/i,
+      /\bviajar\s*a\b/i,
+      /\bviaje\s*a\b/i,
+      /\bir\s*a\s*verte\b/i,
+      /\bvenir\s*a\s*ver\b/i,
+      /\bconocernos\s*en\s*persona\b/i,
+      /\bvernos\s*en\s*persona\b/i,
+      /\bcomprar\s*(el\s*)?vuelo\b/i,
+      /\bboletos?\s*de\s*avi[oó]n\b/i,
+      /\bpasajes?\s*a[eé]reos?\b/i,
+      /\baeropuerto\b/i
+    ];
+
+    for (const pat of tmPatterns) {
+      if (pat.test(lower)) {
+        return {
+          type: 'TRAVEL_MISLEADING',
+          title: '✈️ Travel Misleading (Ubicación / Encuentro / Vuelos)',
+          sample: lower.match(pat)?.[0] || 'Ubicación/Viaje'
+        };
+      }
+    }
+
+    // 2. Fuga de Contacto / Datos Privados
+    const contactPatterns = [
+      /\bwhatsapp\b/i, /\btelegram\b/i, /\binstagram\b/i, /\bskype\b/i,
+      /\bemail\b/i, /\bcorreo\b/i, /\bgmail\b/i, /\bhotmail\b/i, /\byahoo\b/i,
+      /\b(phone\s*number|n[uú]mero\s*de\s*tel[eé]fono|my\s*number|mi\s*n[uú]mero)\b/i,
+      /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/,
+      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+    ];
+
+    for (const pat of contactPatterns) {
+      if (pat.test(lower)) {
+        return {
+          type: 'CONTACT_LEAK',
+          title: '📱 Fuga de Contacto / Datos Externos',
+          sample: lower.match(pat)?.[0] || 'Contacto externo'
+        };
+      }
+    }
+
+    // 3. Manipulación de Regalos / Tokens / Dinero
+    const giftPatterns = [
+      /\b(send|buy)\s*me\s*(a\s*)?(gift|present|token|money|credit)\b/i,
+      /\bgift\s*me\b/i,
+      /\b(reg[aá]lame|c[oó]mprame|m[aá]ndame)\s*(un\s*)?(regalo|detalle|token|moneda|dinero)\b/i,
+      /\bpaypal\b/i, /\bcash\s*app\b/i, /\bwestern\s*union\b/i, /\btransferenc\b/i, /\bcrypto\b/i
+    ];
+
+    for (const pat of giftPatterns) {
+      if (pat.test(lower)) {
+        return {
+          type: 'GIFT_MANIPULATION',
+          title: '🎁 Manipulación de Regalos / Dinero Prohibida',
+          sample: lower.match(pat)?.[0] || 'Solicitud de regalo'
+        };
+      }
+    }
+
+    // 4. Promesas de Matrimonio
+    const marriagePatterns = [
+      /\bmarry\s*me\b/i, /\bwhen\s*we\s*marry\b/i, /\bget\s*married\b/i,
+      /\bcasarnos\b/i, /\bmatrimonio\b/i, /\bboda\b/i, /\bmi\s*espos[oa]\b/i, /\bmy\s*(husband|wife)\b/i
+    ];
+
+    for (const pat of marriagePatterns) {
+      if (pat.test(lower)) {
+        return {
+          type: 'MARRIAGE_PROMISE',
+          title: '💍 Promesa de Matrimonio / Compromiso',
+          sample: lower.match(pat)?.[0] || 'Matrimonio'
+        };
+      }
+    }
+
+    // 5. Raíces dinámicas adicionales desde backend
+    for (const root of bannedRoots) {
+      if (root && root.length > 2 && lower.includes(root.toLowerCase())) {
+        return {
+          type: 'CUSTOM_BANNED_ROOT',
+          title: `🛡️ Término Restringido ("${root}")`,
+          sample: root
+        };
+      }
+    }
+
+    return null;
   }
 
   function enforceFirewall(e) {
     const inputs = document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]');
     let anyViolation = false;
+    let currentViolationInfo = null;
 
     inputs.forEach(input => {
       if (input.id?.includes('intel') || input.id?.includes('search') || input.id?.includes('reply') || input.id?.includes('sup')) return;
       
       const text = (input.value || input.innerText || '').trim();
-      const hasViolation = checkViolationInText(text);
+      const violation = checkViolationInText(text);
 
-      if (hasViolation) {
+      if (violation) {
         anyViolation = true;
+        currentViolationInfo = violation;
         input.style.setProperty('border', '2px solid #ef4444', 'important');
+        input.style.setProperty('box-shadow', '0 0 10px rgba(239, 68, 68, 0.5)', 'important');
 
         if (e && e.type === 'keydown' && e.key === 'Enter' && e.target === input) {
           e.preventDefault();
           e.stopPropagation();
-          showFirewallToast('🚨 Infracción de Protocolo: Prohibido Travel Misleading o fuga de datos.');
+          showFirewallToast(`🚨 Infracción Bloqueada: ${violation.title}.`);
+
+          const { clientName } = getExactClientProfileData();
+          const infractionRecord = {
+            id: `inf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            timestamp: Date.now(),
+            timeFormatted: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            rule: violation.type,
+            ruleTitle: violation.title,
+            snippet: text.length > 140 ? text.substring(0, 140) + '...' : text,
+            clientName: clientName || 'Chat en Vivo',
+            operator: sessionData.operator || 'walther',
+            profile: sessionData.profileName || 'HORACIO'
+          };
+          liveInfractionsLog.unshift(infractionRecord);
+          if (liveInfractionsLog.length > 50) liveInfractionsLog.pop();
+
           firewallInfractionsCount++;
           persistFirewallInfractions();
           sendTelemetry(true);
         }
       } else {
-        if (input.style.borderColor === 'rgb(239, 68, 68)') {
+        if (input.style.borderColor === 'rgb(239, 68, 68)' || input.style.border.includes('239, 68, 68')) {
           input.style.removeProperty('border');
+          input.style.removeProperty('box-shadow');
         }
       }
     });
 
-    const sendButtons = document.querySelectorAll('button, [role="button"], div[class*="send"]');
+    // Localizar y bloquear TODOS los botones de envío en el chat y cartas
+    const sendButtons = document.querySelectorAll('button, [role="button"], div[class*="send" i], a[class*="send" i]');
     sendButtons.forEach(btn => {
-      const btnText = btn.innerText.toLowerCase();
-      const isSendBtn = (btnText.includes('send') || btnText.includes('enviar') || btn.querySelector('svg') || (btn.className && btn.className.toLowerCase().includes('send'))) &&
+      const btnText = (btn.innerText || btn.textContent || '').toLowerCase().trim();
+      const isSendBtn = (btnText === 'send' || btnText.startsWith('send') || btnText === 'enviar' || btn.querySelector('svg') || (btn.className && btn.className.toLowerCase().includes('send'))) &&
                         !btn.classList.contains('ryr-row-extract-btn') && 
                         !btn.classList.contains('ryr-btn-logout') &&
                         !btn.classList.contains('ryr-btn-intel') &&
@@ -715,9 +862,11 @@
           btn.classList.add('ryr-btn-blocked-force');
           btn.disabled = true;
           btn.style.setProperty('pointer-events', 'none', 'important');
-          btn.style.setProperty('filter', 'grayscale(100%)', 'important');
-          btn.style.setProperty('opacity', '0.45', 'important');
-          btn.style.setProperty('background', '#9ca3af', 'important');
+          btn.style.setProperty('filter', 'grayscale(90%)', 'important');
+          btn.style.setProperty('opacity', '0.35', 'important');
+          btn.style.setProperty('background', '#ef4444', 'important');
+          btn.style.setProperty('cursor', 'not-allowed', 'important');
+          btn.setAttribute('title', `🚨 ENVÍO BLOQUEADO: ${currentViolationInfo?.title || 'Travel Misleading detectado'}`);
         } else {
           btn.classList.remove('ryr-btn-blocked-force');
           btn.disabled = false;
@@ -725,6 +874,8 @@
           btn.style.removeProperty('filter');
           btn.style.removeProperty('opacity');
           btn.style.removeProperty('background');
+          btn.style.removeProperty('cursor');
+          btn.removeAttribute('title');
         }
       }
     });
@@ -3401,7 +3552,6 @@
           <span id="ryr-badge-profile" class="ryr-badge ryr-badge-profile ryr-hide-on-mobile">🎯 ${sessionData.profileName || 'HORACIO'}</span>
           <span id="ryr-badge-afk" class="ryr-badge ${afkClass} ryr-badge-afk ryr-hide-on-mobile">${afkText}</span>
           <span id="ryr-badge-traffic" class="ryr-badge ${prospectClass}">🎯 Tráfico: ${prospectTimeText} [${prospect.count}/${prospect.quota}]</span>
-          <span id="ryr-badge-lag" class="ryr-badge ryr-badge-speed ryr-hide-on-mobile" title="Latencia de procesamiento DOM">${PerformanceSentinel.lastLoopDurationMs}ms Lag</span>
         </div>
         <div class="ryr-section ryr-section-actions">
           <button id="ryr-btn-open-sup-chat" class="ryr-btn-sup-chat">💬 Chat Sup</button>
@@ -3476,9 +3626,6 @@
         bTraf.className = `ryr-badge ${prospectClass}`;
         bTraf.innerText = `🎯 Tráfico: ${prospectTimeText} [${prospect.count}/${prospect.quota}]`;
       }
-
-      const bLag = document.getElementById('ryr-badge-lag');
-      if (bLag) bLag.innerText = `${PerformanceSentinel.lastLoopDurationMs}ms Lag`;
 
       const bRead = document.getElementById('ryr-badge-read');
       if (bRead) bRead.innerText = `✉️ Read: ${totalGlobalReadLetters}`;
@@ -3589,6 +3736,7 @@
           isCompleted: prospect.isCompleted
         },
         firewallInfractionsCount: firewallInfractionsCount,
+        infractionsList: liveInfractionsLog.slice(0, 30),
         syncAudit: syncAudit,
         fidelizedCount: fidelizedClientsMap.size,
         fidelizedList: Array.from(fidelizedClientsMap.values()),

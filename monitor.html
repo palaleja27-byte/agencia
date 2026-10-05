@@ -1247,29 +1247,56 @@
       stream.scrollTop = stream.scrollHeight;
     }
 
+    const SB_REST_URL = 'https://bhewmidnkldjpdnvassj.supabase.co/rest/v1/kv_store';
+    const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoZXdtaWRua2xkanBkbnZhc3NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NjMyNzAsImV4cCI6MjEwMTAzOTI3MH0.4DXjV8jH9Yj0jwNPg2DvRCqTgObiKULGCxFRf0lwIpI';
+
     async function refreshChatStream() {
       if (!activeChatOperator) return;
       const opKey = activeChatOperator.toLowerCase().replace(/\[.*?\]/g, '').trim();
+      let incomingMessages = null;
+
+      // 1. Intentar Backend API
       try {
-        const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(activeChatOperator)}?role=SUPERVISOR`);
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 2000);
+        const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(activeChatOperator)}?role=SUPERVISOR`, { signal: controller.signal });
+        clearTimeout(tId);
         const data = await res.json();
         if (data && Array.isArray(data.messages)) {
-          let currentList = localChatMessagesMap.get(opKey) || [];
-          const seenIds = new Set(data.messages.map(m => String(m.id)));
-          
-          // Mantener mensajes locales optimistas no confirmados aún
-          currentList.forEach(localM => {
-            if (!seenIds.has(String(localM.id))) {
-              data.messages.push(localM);
-              seenIds.add(String(localM.id));
-            }
-          });
-
-          data.messages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-          localChatMessagesMap.set(opKey, data.messages);
-          renderLocalChatMessages();
+          incomingMessages = data.messages;
         }
       } catch (err) {}
+
+      // 2. Si Backend API no responde o está vacío, consultar Supabase kv_store directamente
+      if (!incomingMessages) {
+        try {
+          const sbRes = await fetch(`${SB_REST_URL}?key=eq.rr_supervisor_chat_${encodeURIComponent(opKey)}&select=value`, {
+            headers: { 'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}` }
+          });
+          const sbData = await sbRes.json();
+          if (Array.isArray(sbData) && sbData.length > 0 && sbData[0].value) {
+            const parsed = typeof sbData[0].value === 'string' ? JSON.parse(sbData[0].value) : sbData[0].value;
+            if (Array.isArray(parsed)) incomingMessages = parsed;
+          }
+        } catch (e) {}
+      }
+
+      if (incomingMessages && Array.isArray(incomingMessages)) {
+        let currentList = localChatMessagesMap.get(opKey) || [];
+        const seenIds = new Set(incomingMessages.map(m => String(m.id)));
+        
+        // Mantener mensajes locales optimistas no confirmados aún
+        currentList.forEach(localM => {
+          if (!seenIds.has(String(localM.id))) {
+            incomingMessages.push(localM);
+            seenIds.add(String(localM.id));
+          }
+        });
+
+        incomingMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        localChatMessagesMap.set(opKey, incomingMessages);
+        renderLocalChatMessages();
+      }
     }
 
     window.editSupervisorMessage = async (msgId, currentText) => {
@@ -1287,6 +1314,23 @@
         }
       });
       renderLocalChatMessages();
+
+      // Directo a Supabase kv_store
+      try {
+        fetch(SB_REST_URL, {
+          method: 'POST',
+          headers: {
+            'apikey': SB_ANON_KEY,
+            'Authorization': `Bearer ${SB_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            key: `rr_supervisor_chat_${opKey}`,
+            value: JSON.stringify(list)
+          })
+        }).catch(() => {});
+      } catch (e) {}
 
       try {
         await fetch(`${API_URL}/api/supervisor/edit-message`, {
@@ -1318,6 +1362,24 @@
       localChatMessagesMap.set(opKey, list);
       renderLocalChatMessages();
 
+      // Dual-sync: 1. Directo a Supabase kv_store para inmediatez absoluta
+      try {
+        fetch(SB_REST_URL, {
+          method: 'POST',
+          headers: {
+            'apikey': SB_ANON_KEY,
+            'Authorization': `Bearer ${SB_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            key: `rr_supervisor_chat_${opKey}`,
+            value: JSON.stringify(list)
+          })
+        }).catch(() => {});
+      } catch (e) {}
+
+      // Dual-sync: 2. Notificar al backend API
       try {
         await fetch(`${API_URL}/api/supervisor/send-message`, {
           method: 'POST',

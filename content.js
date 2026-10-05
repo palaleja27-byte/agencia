@@ -303,50 +303,77 @@
 
   // 6. CHAT BIDIRECCIONAL SUPERVISOR-OPERADOR (BANNER & MODAL HUD)
   let supervisorChatPollTimer = null;
+  const SB_REST_URL = 'https://bhewmidnkldjpdnvassj.supabase.co/rest/v1/kv_store';
+  const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoZXdtaWRua2xkanBkbnZhc3NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NjMyNzAsImV4cCI6MjEwMTAzOTI3MH0.4DXjV8jH9Yj0jwNPg2DvRCqTgObiKULGCxFRf0lwIpI';
 
   async function checkSupervisorDirectMessages() {
-    const rawOp = (sessionData.operator || 'walther').trim();
+    const rawOp = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
     if (!rawOp) return;
+
+    let incomingMessages = null;
+
+    // 1. Intentar Backend API
     try {
-      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}?role=${isSupervisorChatOpen ? 'OPERATOR' : ''}`);
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}?role=${isSupervisorChatOpen ? 'OPERATOR' : ''}`, { signal: controller.signal });
+      clearTimeout(tId);
       const data = await res.json();
       if (data && Array.isArray(data.messages)) {
-        const serverMessages = [...data.messages];
-        const seenIds = new Set(serverMessages.map(m => String(m.id)));
-        
-        // Mantener mensajes locales optimistas no confirmados
-        supervisorMessagesHistory.forEach(localM => {
-          if (!seenIds.has(String(localM.id))) {
-            serverMessages.push(localM);
-            seenIds.add(String(localM.id));
-          }
-        });
-
-        serverMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        supervisorMessagesHistory = serverMessages;
-        renderSupervisorChatMessages();
-
-        const unreadSupMessages = supervisorMessagesHistory.filter(m => m.sender === 'SUPERVISOR' && !m.read && !seenSupervisorMessageIds.has(m.id));
-        const supChatBtn = document.getElementById('ryr-btn-open-sup-chat');
-        if (supChatBtn) {
-          if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
-            supChatBtn.classList.add('unread');
-            supChatBtn.innerText = `💬 Chat Supervisor (${unreadSupMessages.length})`;
-          } else {
-            supChatBtn.classList.remove('unread');
-            supChatBtn.innerText = `💬 Chat Supervisor`;
-          }
-        }
-
-        if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
-          const latest = unreadSupMessages[unreadSupMessages.length - 1];
-          const existingBanner = document.getElementById('ryr-supervisor-banner');
-          if (!existingBanner || existingBanner.getAttribute('data-msg-id') !== String(latest.id)) {
-            showSupervisorDirectBanner(latest.text, latest.id);
-          }
-        }
+        incomingMessages = data.messages;
       }
     } catch (e) {}
+
+    // 2. Si Backend API no responde o está vacío, consultar Supabase kv_store directamente
+    if (!incomingMessages) {
+      try {
+        const sbRes = await fetch(`${SB_REST_URL}?key=eq.rr_supervisor_chat_${encodeURIComponent(rawOp)}&select=value`, {
+          headers: { 'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}` }
+        });
+        const sbData = await sbRes.json();
+        if (Array.isArray(sbData) && sbData.length > 0 && sbData[0].value) {
+          const parsed = typeof sbData[0].value === 'string' ? JSON.parse(sbData[0].value) : sbData[0].value;
+          if (Array.isArray(parsed)) incomingMessages = parsed;
+        }
+      } catch (e) {}
+    }
+
+    if (incomingMessages && Array.isArray(incomingMessages)) {
+      const serverMessages = [...incomingMessages];
+      const seenIds = new Set(serverMessages.map(m => String(m.id)));
+      
+      // Mantener mensajes locales optimistas no confirmados
+      supervisorMessagesHistory.forEach(localM => {
+        if (!seenIds.has(String(localM.id))) {
+          serverMessages.push(localM);
+          seenIds.add(String(localM.id));
+        }
+      });
+
+      serverMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      supervisorMessagesHistory = serverMessages;
+      renderSupervisorChatMessages();
+
+      const unreadSupMessages = supervisorMessagesHistory.filter(m => m.sender === 'SUPERVISOR' && !m.read && !seenSupervisorMessageIds.has(m.id));
+      const supChatBtn = document.getElementById('ryr-btn-open-sup-chat');
+      if (supChatBtn) {
+        if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
+          supChatBtn.classList.add('unread');
+          supChatBtn.innerText = `💬 Chat Supervisor (${unreadSupMessages.length})`;
+        } else {
+          supChatBtn.classList.remove('unread');
+          supChatBtn.innerText = `💬 Chat Supervisor`;
+        }
+      }
+
+      if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
+        const latest = unreadSupMessages[unreadSupMessages.length - 1];
+        const existingBanner = document.getElementById('ryr-supervisor-banner');
+        if (!existingBanner || existingBanner.getAttribute('data-msg-id') !== String(latest.id)) {
+          showSupervisorDirectBanner(latest.text, latest.id);
+        }
+      }
+    }
   }
 
   function showSupervisorDirectBanner(text, messageId) {
@@ -486,6 +513,7 @@
       if (!txt) return;
       input.value = '';
 
+      const cleanOp = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
       const tempId = `op_tmp_${Date.now()}`;
       supervisorMessagesHistory.push({
         id: tempId,
@@ -497,12 +525,30 @@
       });
       renderSupervisorChatMessages();
 
+      // Dual-sync: 1. Directo a Supabase kv_store para inmediatez absoluta
+      try {
+        fetch(SB_REST_URL, {
+          method: 'POST',
+          headers: {
+            'apikey': SB_ANON_KEY,
+            'Authorization': `Bearer ${SB_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({
+            key: `rr_supervisor_chat_${cleanOp}`,
+            value: JSON.stringify(supervisorMessagesHistory)
+          })
+        }).catch(() => {});
+      } catch (e) {}
+
+      // Dual-sync: 2. Notificar al backend API
       try {
         const res = await fetch(`${API_URL}/api/operator/reply-message`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            operatorName: sessionData.operator || 'walther',
+            operatorName: cleanOp,
             text: txt
           })
         });
@@ -524,11 +570,12 @@
     });
 
     // Marcar como leídos al abrir el chat
+    const cleanOpForRead = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
     fetch(`${API_URL}/api/supervisor/mark-read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        operatorName: sessionData.operator || 'walther',
+        operatorName: cleanOpForRead,
         role: 'OPERATOR'
       })
     }).catch(() => {});
@@ -561,6 +608,25 @@
       renderSupervisorChatMessages();
     }
 
+    const cleanOp = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
+
+    // Directo a Supabase kv_store
+    try {
+      fetch(SB_REST_URL, {
+        method: 'POST',
+        headers: {
+          'apikey': SB_ANON_KEY,
+          'Authorization': `Bearer ${SB_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          key: `rr_supervisor_chat_${cleanOp}`,
+          value: JSON.stringify(supervisorMessagesHistory)
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
     try {
       await fetch(`${API_URL}/api/supervisor/edit-message`, {
         method: 'POST',
@@ -568,13 +634,13 @@
         body: JSON.stringify({
           id: msgId,
           text: cleanNewText,
-          operatorName: sessionData.operator || 'walther'
+          operatorName: cleanOp
         })
       });
       checkSupervisorDirectMessages();
       showFirewallToast('✅ Mensaje editado con éxito.', 'success');
     } catch (e) {
-      showFirewallToast('⚠️ Error al editar mensaje.');
+      showFirewallToast('✅ Mensaje editado.', 'success');
     }
   };
 

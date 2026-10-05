@@ -303,77 +303,56 @@
 
   // 6. CHAT BIDIRECCIONAL SUPERVISOR-OPERADOR (BANNER & MODAL HUD)
   let supervisorChatPollTimer = null;
-  const SB_REST_URL = 'https://bhewmidnkldjpdnvassj.supabase.co/rest/v1/kv_store';
-  const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoZXdtaWRua2xkanBkbnZhc3NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NjMyNzAsImV4cCI6MjEwMTAzOTI3MH0.4DXjV8jH9Yj0jwNPg2DvRCqTgObiKULGCxFRf0lwIpI';
 
   async function checkSupervisorDirectMessages() {
-    const rawOp = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
+    const rawOp = (sessionData.operator || 'walther').trim();
     if (!rawOp) return;
-
-    let incomingMessages = null;
-
-    // 1. Intentar Backend API
     try {
-      const controller = new AbortController();
-      const tId = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}?role=${isSupervisorChatOpen ? 'OPERATOR' : ''}`, { signal: controller.signal });
-      clearTimeout(tId);
+      const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(rawOp)}?role=${isSupervisorChatOpen ? 'OPERATOR' : ''}`);
       const data = await res.json();
       if (data && Array.isArray(data.messages)) {
-        incomingMessages = data.messages;
+        const serverMessages = [...data.messages];
+        const seenIds = new Set(serverMessages.map(m => String(m.id)));
+        
+        // Mantener mensajes locales optimistas temporales que aún no están en el servidor
+        supervisorMessagesHistory.forEach(localM => {
+          if (String(localM.id).startsWith('op_tmp_') && !seenIds.has(String(localM.id))) {
+            serverMessages.push(localM);
+            seenIds.add(String(localM.id));
+          }
+        });
+
+        serverMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        supervisorMessagesHistory = serverMessages;
+        renderSupervisorChatMessages();
+
+        const unreadSupMessages = supervisorMessagesHistory.filter(m => m.sender === 'SUPERVISOR' && !m.read && !seenSupervisorMessageIds.has(m.id));
+        const supChatBtn = document.getElementById('ryr-btn-open-sup-chat');
+        if (supChatBtn) {
+          if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
+            supChatBtn.classList.add('unread');
+            supChatBtn.style.setProperty('background', 'linear-gradient(135deg, #dc2626, #b91c1c)', 'important');
+            supChatBtn.style.setProperty('border-color', '#f87171', 'important');
+            supChatBtn.style.setProperty('box-shadow', '0 0 10px rgba(239,68,68,0.7)', 'important');
+            supChatBtn.innerText = `💬 Chat Sup (${unreadSupMessages.length} NUEVO${unreadSupMessages.length > 1 ? 'S' : ''})`;
+          } else {
+            supChatBtn.classList.remove('unread');
+            supChatBtn.style.removeProperty('background');
+            supChatBtn.style.removeProperty('border-color');
+            supChatBtn.style.removeProperty('box-shadow');
+            supChatBtn.innerText = `💬 Chat Sup`;
+          }
+        }
+
+        if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
+          const latest = unreadSupMessages[unreadSupMessages.length - 1];
+          const existingBanner = document.getElementById('ryr-supervisor-banner');
+          if (!existingBanner || existingBanner.getAttribute('data-msg-id') !== String(latest.id)) {
+            showSupervisorDirectBanner(latest.text, latest.id);
+          }
+        }
       }
     } catch (e) {}
-
-    // 2. Si Backend API no responde o está vacío, consultar Supabase kv_store directamente
-    if (!incomingMessages) {
-      try {
-        const sbRes = await fetch(`${SB_REST_URL}?key=eq.rr_supervisor_chat_${encodeURIComponent(rawOp)}&select=value`, {
-          headers: { 'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}` }
-        });
-        const sbData = await sbRes.json();
-        if (Array.isArray(sbData) && sbData.length > 0 && sbData[0].value) {
-          const parsed = typeof sbData[0].value === 'string' ? JSON.parse(sbData[0].value) : sbData[0].value;
-          if (Array.isArray(parsed)) incomingMessages = parsed;
-        }
-      } catch (e) {}
-    }
-
-    if (incomingMessages && Array.isArray(incomingMessages)) {
-      const serverMessages = [...incomingMessages];
-      const seenIds = new Set(serverMessages.map(m => String(m.id)));
-      
-      // Mantener mensajes locales optimistas no confirmados
-      supervisorMessagesHistory.forEach(localM => {
-        if (!seenIds.has(String(localM.id))) {
-          serverMessages.push(localM);
-          seenIds.add(String(localM.id));
-        }
-      });
-
-      serverMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      supervisorMessagesHistory = serverMessages;
-      renderSupervisorChatMessages();
-
-      const unreadSupMessages = supervisorMessagesHistory.filter(m => m.sender === 'SUPERVISOR' && !m.read && !seenSupervisorMessageIds.has(m.id));
-      const supChatBtn = document.getElementById('ryr-btn-open-sup-chat');
-      if (supChatBtn) {
-        if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
-          supChatBtn.classList.add('unread');
-          supChatBtn.innerText = `💬 Chat Supervisor (${unreadSupMessages.length})`;
-        } else {
-          supChatBtn.classList.remove('unread');
-          supChatBtn.innerText = `💬 Chat Supervisor`;
-        }
-      }
-
-      if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
-        const latest = unreadSupMessages[unreadSupMessages.length - 1];
-        const existingBanner = document.getElementById('ryr-supervisor-banner');
-        if (!existingBanner || existingBanner.getAttribute('data-msg-id') !== String(latest.id)) {
-          showSupervisorDirectBanner(latest.text, latest.id);
-        }
-      }
-    }
   }
 
   function showSupervisorDirectBanner(text, messageId) {
@@ -388,34 +367,35 @@
       top: 45px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.95);
+      background: rgba(15, 23, 42, 0.98);
       backdrop-filter: blur(16px);
-      border: 2px solid #6366f1;
+      border: 2px solid #818cf8;
       color: #ffffff;
       padding: 12px 16px;
       border-radius: 10px;
       font-family: system-ui, sans-serif;
       font-size: 12px;
       z-index: 2147483647;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 15px rgba(99, 102, 241, 0.5);
       display: flex;
       flex-direction: column;
       gap: 8px;
-      width: 400px;
+      width: 420px;
       max-width: 92%;
+      animation: ryrToastSlide 0.25s ease-out;
     `;
 
     banner.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-weight:900; color:#a5b4fc; letter-spacing:0.5px;">📢 MENSAJE DEL SUPERVISOR:</span>
+        <span style="font-weight:900; color:#c7d2fe; letter-spacing:0.5px;">📢 MENSAJE DIRECTO DEL SUPERVISOR:</span>
         <span id="btn-close-sup-banner" style="cursor:pointer; font-size:16px; color:#94a3b8; line-height:1;">✕</span>
       </div>
-      <div style="font-size:12px; line-height:1.4; color:#fde68a; font-weight:500;">
+      <div style="font-size:12px; line-height:1.4; color:#fde68a; font-weight:500; background:rgba(30,27,75,0.6); padding:8px 10px; border-radius:6px; border-left:3px solid #818cf8;">
         ${text}
       </div>
       <div style="display:flex; gap:6px;">
-        <input type="text" id="input-reply-sup" placeholder="Responder al supervisor..." style="flex:1; padding:6px 10px; background:rgba(6,9,19,0.8); border:1px solid #3730a3; color:#fff; border-radius:5px; font-size:11px; outline:none;">
-        <button id="btn-reply-sup" style="background:#6366f1; color:#fff; border:none; padding:6px 12px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:11px;">Enviar</button>
+        <input type="text" id="input-reply-sup" placeholder="Responder al supervisor..." style="flex:1; padding:7px 10px; background:rgba(6,9,19,0.9); border:1px solid #4f46e5; color:#fff; border-radius:5px; font-size:11px; outline:none;">
+        <button id="btn-reply-sup" style="background:#6366f1; color:#fff; border:none; padding:7px 14px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:11px;">Enviar</button>
       </div>
     `;
 
@@ -452,7 +432,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            operatorName: sessionData.operator,
+            operatorName: sessionData.operator || 'walther',
             text: replyText
           })
         });
@@ -513,7 +493,6 @@
       if (!txt) return;
       input.value = '';
 
-      const cleanOp = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
       const tempId = `op_tmp_${Date.now()}`;
       supervisorMessagesHistory.push({
         id: tempId,
@@ -525,30 +504,12 @@
       });
       renderSupervisorChatMessages();
 
-      // Dual-sync: 1. Directo a Supabase kv_store para inmediatez absoluta
-      try {
-        fetch(SB_REST_URL, {
-          method: 'POST',
-          headers: {
-            'apikey': SB_ANON_KEY,
-            'Authorization': `Bearer ${SB_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          },
-          body: JSON.stringify({
-            key: `rr_supervisor_chat_${cleanOp}`,
-            value: JSON.stringify(supervisorMessagesHistory)
-          })
-        }).catch(() => {});
-      } catch (e) {}
-
-      // Dual-sync: 2. Notificar al backend API
       try {
         const res = await fetch(`${API_URL}/api/operator/reply-message`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            operatorName: cleanOp,
+            operatorName: sessionData.operator || 'walther',
             text: txt
           })
         });
@@ -557,6 +518,7 @@
           const item = supervisorMessagesHistory.find(m => m.id === tempId);
           if (item) item.id = resData.id;
         }
+        checkSupervisorDirectMessages();
       } catch (e) {}
     };
 
@@ -570,19 +532,18 @@
     });
 
     // Marcar como leídos al abrir el chat
-    const cleanOpForRead = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
     fetch(`${API_URL}/api/supervisor/mark-read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        operatorName: cleanOpForRead,
+        operatorName: sessionData.operator || 'walther',
         role: 'OPERATOR'
       })
     }).catch(() => {});
 
     checkSupervisorDirectMessages();
 
-    // Iniciar sondeo en vivo cada 2s mientras esté abierto el modal
+    // Iniciar sondeo en vivo cada 1.5s mientras esté abierto el modal
     if (supervisorChatPollTimer) clearInterval(supervisorChatPollTimer);
     supervisorChatPollTimer = setInterval(() => {
       if (isSupervisorChatOpen) {
@@ -591,7 +552,7 @@
         clearInterval(supervisorChatPollTimer);
         supervisorChatPollTimer = null;
       }
-    }, 2000);
+    }, 1500);
   }
 
   window.editSupervisorMsgFromHud = async (msgId, currentText) => {
@@ -608,25 +569,6 @@
       renderSupervisorChatMessages();
     }
 
-    const cleanOp = (sessionData.operator || 'walther').replace(/\[.*?\]/g, '').trim().toLowerCase();
-
-    // Directo a Supabase kv_store
-    try {
-      fetch(SB_REST_URL, {
-        method: 'POST',
-        headers: {
-          'apikey': SB_ANON_KEY,
-          'Authorization': `Bearer ${SB_ANON_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({
-          key: `rr_supervisor_chat_${cleanOp}`,
-          value: JSON.stringify(supervisorMessagesHistory)
-        })
-      }).catch(() => {});
-    } catch (e) {}
-
     try {
       await fetch(`${API_URL}/api/supervisor/edit-message`, {
         method: 'POST',
@@ -634,13 +576,13 @@
         body: JSON.stringify({
           id: msgId,
           text: cleanNewText,
-          operatorName: cleanOp
+          operatorName: sessionData.operator || 'walther'
         })
       });
       checkSupervisorDirectMessages();
       showFirewallToast('✅ Mensaje editado con éxito.', 'success');
     } catch (e) {
-      showFirewallToast('✅ Mensaje editado.', 'success');
+      showFirewallToast('⚠️ Error al editar mensaje.');
     }
   };
 

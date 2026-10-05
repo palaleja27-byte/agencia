@@ -546,7 +546,7 @@
   <div id="live-chat-drawer">
     <div style="background:#1e1b4b; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3730a3;">
       <span id="chat-target-name" style="font-weight:bold; color:var(--neon-violet); font-size:12px;">💬 COMMS CON OPERADOR</span>
-      <span style="cursor:pointer; font-size:16px;" onclick="document.getElementById('live-chat-drawer').style.display='none'">✕</span>
+      <span style="cursor:pointer; font-size:16px;" onclick="closeDirectComms()">✕</span>
     </div>
     <div id="chat-stream-box" style="flex:1; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; font-size:11.5px;"></div>
     <div style="padding:10px; border-top:1px solid #1e293b; display:flex; gap:6px;">
@@ -562,6 +562,7 @@
 
     let activeChatOperator = null;
     let latestTelemetry = [];
+    let liveUnreadMessagesMap = {};
 
     // RELOJ
     setInterval(() => {
@@ -571,8 +572,18 @@
     // 1. POLLING DEL GRID TÁCTICO (CADA 1.5s)
     async function refreshTacticalGrid() {
       try {
-        const res = await fetch(`${API_URL}/api/telemetry/live-grid`);
-        const data = await res.json();
+        const [resGrid, resUnread] = await Promise.all([
+          fetch(`${API_URL}/api/telemetry/live-grid`),
+          fetch(`${API_URL}/api/supervisor/unread-summary`).catch(() => ({ json: () => ({ success: true, unread: {} }) }))
+        ]);
+        const data = await resGrid.json();
+        try {
+          const unreadData = await resUnread.json();
+          if (unreadData && unreadData.unread) {
+            liveUnreadMessagesMap = unreadData.unread;
+          }
+        } catch (eUnread) {}
+
         if (data.success) {
           latestTelemetry = data.operators || [];
           renderGrid(latestTelemetry);
@@ -732,7 +743,15 @@
             </div>
 
             <div class="card-footer-btns" style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-              <button class="card-btn" onclick="openDirectComms('${op.operator}')">💬 Chat ${op.operator}</button>
+              ${(() => {
+                const opClean = (op.operator || '').toLowerCase().replace(/\[.*?\]/g, '').trim();
+                const unread = liveUnreadMessagesMap[opClean] || 0;
+                const btnStyle = unread > 0
+                  ? 'background:linear-gradient(135deg, #dc2626, #b91c1c); color:#fff; border:1px solid #f87171; box-shadow:0 0 12px rgba(239, 68, 68, 0.6); animation:pulseAlert 1.2s infinite; font-weight:900;'
+                  : '';
+                const btnText = unread > 0 ? `💬 Chat ${op.operator} (${unread} NUEVO${unread > 1 ? 'S' : ''})` : `💬 Chat ${op.operator}`;
+                return `<button class="card-btn" style="${btnStyle}" onclick="openDirectComms('${op.operator}')">${btnText}</button>`;
+              })()}
               <button class="card-btn" style="background:#1e1b4b; color:#a5b4fc; border-color:#6366f1;" onclick="openConversationsModal('${op.profile}', '${op.operator}')">📖 Ver Chats</button>
               <button class="card-btn" style="background:#064e3b; color:#34d399; border-color:#10b981;" onclick="triggerSyncOperator('${op.shift}', '${op.operator}')">⚡ Subir Chats</button>
               <button class="card-btn" style="background:#0e7490; color:#67e8f9; border-color:#06b6d4;" onclick="triggerSyncOperator('${op.shift}', '${op.operator}')">✉️ Subir Cartas</button>
@@ -1190,6 +1209,11 @@
 
     window.openDirectComms = (opName) => {
       activeChatOperator = (opName || '').trim();
+      const opClean = activeChatOperator.toLowerCase().replace(/\[.*?\]/g, '').trim();
+      
+      // Limpiar indicador de no leídos localmente
+      delete liveUnreadMessagesMap[opClean];
+      
       document.getElementById('chat-target-name').innerText = `💬 COMMS CON: ${activeChatOperator.toUpperCase()}`;
       document.getElementById('live-chat-drawer').style.display = 'flex';
       renderLocalChatMessages();
@@ -1247,56 +1271,29 @@
       stream.scrollTop = stream.scrollHeight;
     }
 
-    const SB_REST_URL = 'https://bhewmidnkldjpdnvassj.supabase.co/rest/v1/kv_store';
-    const SB_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoZXdtaWRua2xkanBkbnZhc3NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NjMyNzAsImV4cCI6MjEwMTAzOTI3MH0.4DXjV8jH9Yj0jwNPg2DvRCqTgObiKULGCxFRf0lwIpI';
-
     async function refreshChatStream() {
       if (!activeChatOperator) return;
       const opKey = activeChatOperator.toLowerCase().replace(/\[.*?\]/g, '').trim();
-      let incomingMessages = null;
-
-      // 1. Intentar Backend API
       try {
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 2000);
-        const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(activeChatOperator)}?role=SUPERVISOR`, { signal: controller.signal });
-        clearTimeout(tId);
+        const res = await fetch(`${API_URL}/api/supervisor/messages/${encodeURIComponent(activeChatOperator)}?role=SUPERVISOR`);
         const data = await res.json();
         if (data && Array.isArray(data.messages)) {
-          incomingMessages = data.messages;
+          let currentList = localChatMessagesMap.get(opKey) || [];
+          const seenIds = new Set(data.messages.map(m => String(m.id)));
+          
+          // Mantener mensajes locales optimistas no confirmados aún
+          currentList.forEach(localM => {
+            if (!seenIds.has(String(localM.id))) {
+              data.messages.push(localM);
+              seenIds.add(String(localM.id));
+            }
+          });
+
+          data.messages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          localChatMessagesMap.set(opKey, data.messages);
+          renderLocalChatMessages();
         }
       } catch (err) {}
-
-      // 2. Si Backend API no responde o está vacío, consultar Supabase kv_store directamente
-      if (!incomingMessages) {
-        try {
-          const sbRes = await fetch(`${SB_REST_URL}?key=eq.rr_supervisor_chat_${encodeURIComponent(opKey)}&select=value`, {
-            headers: { 'apikey': SB_ANON_KEY, 'Authorization': `Bearer ${SB_ANON_KEY}` }
-          });
-          const sbData = await sbRes.json();
-          if (Array.isArray(sbData) && sbData.length > 0 && sbData[0].value) {
-            const parsed = typeof sbData[0].value === 'string' ? JSON.parse(sbData[0].value) : sbData[0].value;
-            if (Array.isArray(parsed)) incomingMessages = parsed;
-          }
-        } catch (e) {}
-      }
-
-      if (incomingMessages && Array.isArray(incomingMessages)) {
-        let currentList = localChatMessagesMap.get(opKey) || [];
-        const seenIds = new Set(incomingMessages.map(m => String(m.id)));
-        
-        // Mantener mensajes locales optimistas no confirmados aún
-        currentList.forEach(localM => {
-          if (!seenIds.has(String(localM.id))) {
-            incomingMessages.push(localM);
-            seenIds.add(String(localM.id));
-          }
-        });
-
-        incomingMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        localChatMessagesMap.set(opKey, incomingMessages);
-        renderLocalChatMessages();
-      }
     }
 
     window.editSupervisorMessage = async (msgId, currentText) => {
@@ -1314,23 +1311,6 @@
         }
       });
       renderLocalChatMessages();
-
-      // Directo a Supabase kv_store
-      try {
-        fetch(SB_REST_URL, {
-          method: 'POST',
-          headers: {
-            'apikey': SB_ANON_KEY,
-            'Authorization': `Bearer ${SB_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          },
-          body: JSON.stringify({
-            key: `rr_supervisor_chat_${opKey}`,
-            value: JSON.stringify(list)
-          })
-        }).catch(() => {});
-      } catch (e) {}
 
       try {
         await fetch(`${API_URL}/api/supervisor/edit-message`, {
@@ -1362,24 +1342,6 @@
       localChatMessagesMap.set(opKey, list);
       renderLocalChatMessages();
 
-      // Dual-sync: 1. Directo a Supabase kv_store para inmediatez absoluta
-      try {
-        fetch(SB_REST_URL, {
-          method: 'POST',
-          headers: {
-            'apikey': SB_ANON_KEY,
-            'Authorization': `Bearer ${SB_ANON_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          },
-          body: JSON.stringify({
-            key: `rr_supervisor_chat_${opKey}`,
-            value: JSON.stringify(list)
-          })
-        }).catch(() => {});
-      } catch (e) {}
-
-      // Dual-sync: 2. Notificar al backend API
       try {
         await fetch(`${API_URL}/api/supervisor/send-message`, {
           method: 'POST',

@@ -546,7 +546,7 @@
   <div id="live-chat-drawer">
     <div style="background:#1e1b4b; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3730a3;">
       <span id="chat-target-name" style="font-weight:bold; color:var(--neon-violet); font-size:12px;">💬 COMMS CON OPERADOR</span>
-      <span style="cursor:pointer; font-size:16px;" onclick="document.getElementById('live-chat-drawer').style.display='none'">✕</span>
+      <span style="cursor:pointer; font-size:16px;" onclick="closeDirectComms()">✕</span>
     </div>
     <div id="chat-stream-box" style="flex:1; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; font-size:11.5px;"></div>
     <div style="padding:10px; border-top:1px solid #1e293b; display:flex; gap:6px;">
@@ -562,6 +562,7 @@
 
     let activeChatOperator = null;
     let latestTelemetry = [];
+    let liveUnreadMessagesMap = {};
 
     // RELOJ
     setInterval(() => {
@@ -571,8 +572,18 @@
     // 1. POLLING DEL GRID TÁCTICO (CADA 1.5s)
     async function refreshTacticalGrid() {
       try {
-        const res = await fetch(`${API_URL}/api/telemetry/live-grid`);
-        const data = await res.json();
+        const [resGrid, resUnread] = await Promise.all([
+          fetch(`${API_URL}/api/telemetry/live-grid`),
+          fetch(`${API_URL}/api/supervisor/unread-summary`).catch(() => ({ json: () => ({ success: true, unread: {} }) }))
+        ]);
+        const data = await resGrid.json();
+        try {
+          const unreadData = await resUnread.json();
+          if (unreadData && unreadData.unread) {
+            liveUnreadMessagesMap = unreadData.unread;
+          }
+        } catch (eUnread) {}
+
         if (data.success) {
           latestTelemetry = data.operators || [];
           renderGrid(latestTelemetry);
@@ -732,7 +743,15 @@
             </div>
 
             <div class="card-footer-btns" style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
-              <button class="card-btn" onclick="openDirectComms('${op.operator}')">💬 Chat ${op.operator}</button>
+              ${(() => {
+                const opClean = (op.operator || '').toLowerCase().replace(/\[.*?\]/g, '').trim();
+                const unread = liveUnreadMessagesMap[opClean] || 0;
+                const btnStyle = unread > 0
+                  ? 'background:linear-gradient(135deg, #dc2626, #b91c1c); color:#fff; border:1px solid #f87171; box-shadow:0 0 12px rgba(239, 68, 68, 0.6); animation:pulseAlert 1.2s infinite; font-weight:900;'
+                  : '';
+                const btnText = unread > 0 ? `💬 Chat ${op.operator} (${unread} NUEVO${unread > 1 ? 'S' : ''})` : `💬 Chat ${op.operator}`;
+                return `<button class="card-btn" style="${btnStyle}" onclick="openDirectComms('${op.operator}')">${btnText}</button>`;
+              })()}
               <button class="card-btn" style="background:#1e1b4b; color:#a5b4fc; border-color:#6366f1;" onclick="openConversationsModal('${op.profile}', '${op.operator}')">📖 Ver Chats</button>
               <button class="card-btn" style="background:#064e3b; color:#34d399; border-color:#10b981;" onclick="triggerSyncOperator('${op.shift}', '${op.operator}')">⚡ Subir Chats</button>
               <button class="card-btn" style="background:#0e7490; color:#67e8f9; border-color:#06b6d4;" onclick="triggerSyncOperator('${op.shift}', '${op.operator}')">✉️ Subir Cartas</button>
@@ -1190,6 +1209,11 @@
 
     window.openDirectComms = (opName) => {
       activeChatOperator = (opName || '').trim();
+      const opClean = activeChatOperator.toLowerCase().replace(/\[.*?\]/g, '').trim();
+      
+      // Limpiar indicador de no leídos localmente
+      delete liveUnreadMessagesMap[opClean];
+      
       document.getElementById('chat-target-name').innerText = `💬 COMMS CON: ${activeChatOperator.toUpperCase()}`;
       document.getElementById('live-chat-drawer').style.display = 'flex';
       renderLocalChatMessages();

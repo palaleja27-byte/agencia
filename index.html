@@ -8459,9 +8459,14 @@
           <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy (Operadores Conectados)</button>
           <span style="font-size: 0.65rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Control de Presencia Real-Time <button onclick="showSmartInfo('ranking')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.75rem;margin-left:4px;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></span>
         </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="rk-sync-datame-btn" onclick="window.forzarSincronizacionDatameCompleta()" title="Sincronizar todos los paneles de Datame en tiempo real" style="background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 8px; padding: 6px 12px; font-size: 0.65rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.25)'" onmouseout="this.style.background='rgba(56,189,248,0.12)'">
+            <span id="rk-sync-icon">🛰️</span> <span id="rk-sync-text">Sincronizar Datame</span>
+          </button>
         <button id="rk-fullscreen-btn" onclick="toggleRkFullscreen()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(45,212,191,0.1)'; this.style.borderColor='#2dd4bf'; this.style.color='#2dd4bf';" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='#94a3b8';">
           <span id="rk-fs-icon">🖵</span> <span id="rk-fs-text">Pantalla Completa</span>
         </button>
+        </div>
       </div>
 
       <script>
@@ -10586,8 +10591,8 @@
       if (d && typeof d !== 'number') {
         return new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
       }
-      const daysOffset = (typeof d === 'number' && d > 0) ? d : 0;
-      const msOffset = (6 * 3600000) + (daysOffset * 24 * 3600000);
+      const daysOffset = (typeof d === 'number') ? d : 0;
+      const msOffset = (6 * 3600000) - (daysOffset * 24 * 3600000);
       const logical = new Date(Date.now() - msOffset);
       return logical.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
     }
@@ -11710,8 +11715,7 @@
         const _horasOp = (_foundHorasKey ? _horasHoyAll[_foundHorasKey] : null) || (op.turno === 'Completo' ? { horas: 12, fecha: _hoy } : { horas: 8, fecha: _hoy });
         const _es12h = _horasOp && _horasOp.horas === 12 && _horasOp.fecha === _hoy;
 
-        // 🔬 DELTA-SHIFT™ EXACT SHIFT SELECTION FIX:
-        // Operadores de 8h NUNCA deben sumar múltiples jornadas pasadas del mismo día (evita puntos duplicados/elevados).
+        // 🔬 DELTA-SHIFT™ EXACT SHIFT SELECTION:
         const turnosSet = new Set();
         if (op.turno === 'Completo') {
           ['Mañana', 'Tarde', 'Noche'].forEach(t => turnosSet.add(t));
@@ -11721,7 +11725,6 @@
           else if (op.turno === 'Noche') { turnosSet.add('Tarde'); turnosSet.add('Noche'); }
           else { turnosSet.add('Mañana'); turnosSet.add('Tarde'); turnosSet.add('Noche'); }
         } else {
-          // Operador 8h: Si está logueado en este momento, lee jornadaActual. Sino, su op.turno oficial.
           if (estaLogueado && jornadaActual) {
             turnosSet.add(jornadaActual);
           } else if (op.turno && op.turno !== 'Completo') {
@@ -11733,35 +11736,68 @@
 
         let turnosLeer = Array.from(turnosSet);
 
-        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados hoy en asistencia/PSA de TODOS los turnos y fechas de hoy
+        // 🧠 DELTA-SHIFT™: Combinar perfiles estáticos + perfiles asignados en asistencia/PSA de TODOS los turnos y fechas
         let combinedProfiles = [...(op.profiles || [])];
         const _safeNLocal = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
         const _opNameNorm = _safeNLocal(op.name);
+
+        // Merge con primeOperatorsData2026 de localStorage
+        try {
+          const rawPrime = localStorage.getItem('primeOperatorsData2026');
+          if (rawPrime) {
+            const parsedPrime = JSON.parse(rawPrime);
+            if (Array.isArray(parsedPrime)) {
+              const matchPrimeOp = parsedPrime.find(po => _safeNLocal(po.name) === _opNameNorm);
+              if (matchPrimeOp && Array.isArray(matchPrimeOp.profiles)) {
+                matchPrimeOp.profiles.forEach(pp => {
+                  if (pp && pp.id && !combinedProfiles.some(p => String(p.id).trim() === String(pp.id).trim())) {
+                    combinedProfiles.push(pp);
+                  }
+                });
+              }
+            }
+          }
+        } catch(e) {}
+
+        // Merge con asiAsignaciones en memoria
+        if (typeof asiAsignaciones !== 'undefined' && Array.isArray(asiAsignaciones[op.name])) {
+          asiAsignaciones[op.name].forEach(ap => {
+            if (ap && ap.id && !combinedProfiles.some(p => String(p.id).trim() === String(ap.id).trim())) {
+              combinedProfiles.push(ap);
+            }
+          });
+        }
 
         const _calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         const datesToCheck = new Set([
           _hoy,
           _calHoy,
           (typeof localDateStr === 'function' ? localDateStr(1) : ''),
-          (typeof localDateStr === 'function' ? localDateStr(-1) : '')
+          (typeof localDateStr === 'function' ? localDateStr(-1) : ''),
+          (typeof localDateStr === 'function' ? localDateStr(-2) : '')
         ]);
 
         datesToCheck.forEach(dStr => {
           if (!dStr) return;
           ['manana', 'tarde', 'noche', 'todos'].forEach(shKey => {
-            const draftKey = (typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shKey;
-            try {
-              const draftObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
-              Object.values(draftObj).forEach(d => {
-                if (d && _safeNLocal(d.name || d.operador || '') === _opNameNorm && Array.isArray(d.perfiles)) {
-                  d.perfiles.forEach(dp => {
-                    if (dp && dp.id && !combinedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
-                      combinedProfiles.push(dp);
-                    }
-                  });
-                }
-              });
-            } catch(e) {}
+            const draftKeys = [
+              ((typeof ASI_KEY !== 'undefined' ? ASI_KEY : 'rr_asi') + '_draft_' + dStr + '_' + shKey),
+              ('rr_prime_asistencia_draft_' + dStr + '_' + shKey)
+            ];
+            draftKeys.forEach(draftKey => {
+              try {
+                const draftObj = JSON.parse(localStorage.getItem(draftKey) || '{}');
+                Object.values(draftObj).forEach(d => {
+                  if (d && _safeNLocal(d.name || d.operador || '') === _opNameNorm && Array.isArray(d.perfiles)) {
+                    d.perfiles.forEach(dp => {
+                      if (dp && dp.id && !combinedProfiles.some(p => String(p.id).trim() === String(dp.id).trim())) {
+                        combinedProfiles.push(dp);
+                      }
+                    });
+                  }
+                });
+              } catch(e) {}
+            });
           });
         });
 
@@ -11792,8 +11828,8 @@
               if (pts === 0 && jornadaActual) {
                 pts += (typeof getShiftPtsSafe === 'function' ? getShiftPtsSafe(turnosPerfil, jornadaActual) : 0);
               }
-              if (op.turno === 'Completo' && pts === 0) {
-                pts += (Number(turnosPerfil['Auto']) || 0);
+              if (pts === 0) {
+                pts += Math.max(Number(turnosPerfil['Auto']) || 0, Number(turnosPerfil['LocalFallback']) || 0);
               }
               if (pts === 0 && _dpPuntosData && (_dpPuntosData[pid] || _dpPuntosData[p.id])) {
                 const pd = _dpPuntosData[pid] || _dpPuntosData[p.id];
@@ -11840,7 +11876,6 @@
         const last = hoyCortes[hoyCortes.length - 1];
         _horaMap[op.name] = datamePts > 0 ? '🛰️ Datame Sync' : (last ? (last.hora || null) : null);
       });
-
       // ── Stats calculation (Moved up to feed Action Map) ────────────────
       const MARCH_VALOR_FIJO = 78852.5; 
       const _mesActStats = getMesActualStr(); 
@@ -36879,6 +36914,47 @@ PT._logKey = function (opName) {
     const _DP_SYNC_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
     let _dpSyncRunning = false;
 
+    // ══════════════════════════════════════════════════════════════
+    // 🛰️ SINCRONIZACIÓN MANUAL Y AUDITORÍA DE PANELES DATAME
+    // ══════════════════════════════════════════════════════════════
+    window.forzarSincronizacionDatameCompleta = async function() {
+      const btn = document.getElementById('rk-sync-datame-btn');
+      const txt = document.getElementById('rk-sync-text');
+      const icon = document.getElementById('rk-sync-icon');
+      if (txt) txt.textContent = 'Sincronizando 4 Paneles...';
+      if (icon) icon.style.transform = 'rotate(360deg)';
+      
+      try {
+        _dpSyncLastRun = 0; // Reset cooldown
+        if (typeof sincronizarDatamePaneles === 'function') {
+          await sincronizarDatamePaneles(true);
+        }
+        if (typeof renderRanking === 'function') {
+          renderRanking();
+        }
+        if (typeof Swal !== 'undefined') {
+          const panelCount = (typeof DP_PANELS_META !== 'undefined') ? DP_PANELS_META.length : 4;
+          const totalPerfs = (typeof _dpTurnosData !== 'undefined') ? Object.keys(_dpTurnosData).length : 0;
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: '🛰️ Datame Sincronizado',
+            text: `${panelCount} paneles verificados. ${totalPerfs} perfiles activos actualizados.`,
+            showConfirmButton: false,
+            timer: 3000,
+            background: '#0f172a',
+            color: '#fff'
+          });
+        }
+      } catch(e) {
+        console.error('Error forzando sincronización Datame:', e);
+      } finally {
+        if (txt) txt.textContent = 'Sincronizar Datame';
+        if (icon) icon.style.transform = '';
+      }
+    };
+
     async function sincronizarDatamePaneles(forceRefresh = false) {
       if (typeof _sb === 'undefined' || !_sb) return;
       if (!_sbBootReady) return; // Esperar boot de Supabase
@@ -36955,7 +37031,7 @@ PT._logKey = function (opName) {
       try {
         // 🛡️ EGRESS GUARD: Descargar registros de la ventana operativa actual (hoy y ayer para cubrir turno noche)
         const hoy = localDateStr();
-        const FECHA_INICIO = (typeof localDateStr === 'function') ? localDateStr(-1) : hoy;
+        const FECHA_INICIO = (typeof localDateStr === 'function') ? localDateStr(-2) : hoy;
         console.log('Iniciando sincronización dinámica...', 'info');
 
         // ── Intento 1: columnas nuevas (SOLO registros de HOY) — sin paginado necesario (máx ~200 rows)

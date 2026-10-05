@@ -34534,13 +34534,16 @@ PT._logKey = function (opName) {
         { id:'113752797', modelo:'ROMARIO' },      { id:'114851358', modelo:'JOHANNA' },
         { id:'132062039', modelo:'BEATRIZ' },      { id:'145839775', modelo:'BRUNO' },
         { id:'151070498', modelo:'VALQUIMAR' },    { id:'151410237', modelo:'EZEQUIEL' },
-        { id:'153037229', modelo:'HORACIO B' },    { id:'153039388', modelo:'AGUSTIN FERNANDO' },
+        { id:'153037229', modelo:'HORACIO' },      { id:'153039388', modelo:'AGUSTIN FERNANDO' },
         { id:'156716207', modelo:'AGNALDO' },      { id:'157067734', modelo:'VALDEMIR' },
         { id:'158644203', modelo:'SERGIO' },       { id:'160352260', modelo:'JUVENAL' },
         { id:'164812184', modelo:'MARCO' },        { id:'166575347', modelo:'MAX' },
         { id:'167273716', modelo:'ARIEL HERNAN' }, { id:'167279664', modelo:'JOSE ROBERTO' },
         { id:'171638277', modelo:'RONALT' },       { id:'93461947',  modelo:'MARIANO' },
-        { id:'99611942',  modelo:'PAOLA' },
+        { id:'99611942',  modelo:'PAOLA' },        { id:'88243516',  modelo:'RICARDO' },
+        { id:'128062998', modelo:'MARCO' },        { id:'190725336', modelo:'GABRIEL' },
+        { id:'190731277', modelo:'LUCAS' },        { id:'174069335', modelo:'FEDERICO' },
+        { id:'167493871', modelo:'HUMBERTO' }
       ],
       3: [
         { id:'101652076', modelo:'CARINA' },       { id:'108018336', modelo:'LUCAS' },
@@ -34558,6 +34561,7 @@ PT._logKey = function (opName) {
         { id:'138130329', modelo:'AGUSTIN' },       { id:'143014129', modelo:'RENEE' },
         { id:'143017065', modelo:'MARIO' },         { id:'144863124', modelo:'FERNANDO' },
         { id:'145211163', modelo:'FERMIN B' },      { id:'95955130',  modelo:'HECTOR' },
+        { id:'128062998', modelo:'MARCO' },         { id:'174069335', modelo:'FEDERICO' },
       ],
     };
     window.DP_PERFILES_MAP = DP_PERFILES_MAP;
@@ -37235,86 +37239,83 @@ PT._logKey = function (opName) {
           const id = String(op.id_perfil || '').trim();
           if (!id) return;
 
-          // Registro más reciente por perfil (solo metadata: fecha, agencia)
+          let pt = Number(op.puntos_total || op.puntos) || 0;
+          let pb = Number(op.puntos_baseline) || 0;
+          let pn = Number(op.puntos_neto);
+          if (isNaN(pn)) pn = 0;
+
+          let netoReal = 0;
+          if (pt > 0 && pb > 0 && pt >= pb) {
+            netoReal = pt - pb;
+          }
+          if (pn > 0) {
+            netoReal = (netoReal > 0) ? Math.max(netoReal, pn) : pn;
+          } else if (netoReal === 0 && pt > 0 && pb === 0) {
+            netoReal = pn > 0 ? pn : pt;
+          }
+
+          if (netoReal > 5000 || isNaN(netoReal)) {
+            netoReal = 0;
+          }
+
+          // Registro más reciente por perfil
           if (!nuevosDatos[id]) {
             nuevosDatos[id] = {
-              puntos_total: 0,
-              puntos_neto:  op.puntos_neto || 0,
+              puntos_total: pt,
+              puntos_neto:  netoReal,
+              puntos_baseline: pb,
               fecha_corte:  op.fecha_corte,
               agencia:      op.agencia
             };
-          }
-
-          if (!nuevosDatos[id]._puntosSet) {
-            const puntosReales = Number(op.puntos_total || op.puntos) || 0;
-            if (puntosReales > 0 && puntosReales < 500000) {
-              nuevosDatos[id].puntos_total = puntosReales;
-              nuevosDatos[id]._puntosSet = true;
-            }
+          } else {
+            if (pt > (nuevosDatos[id].puntos_total || 0)) nuevosDatos[id].puntos_total = pt;
+            if (netoReal > (nuevosDatos[id].puntos_neto || 0)) nuevosDatos[id].puntos_neto = netoReal;
+            if (pb > 0 && !nuevosDatos[id].puntos_baseline) nuevosDatos[id].puntos_baseline = pb;
           }
 
           if (modoCompleto) {
-            const netoSano = Number(op.puntos_neto) || 0;
-            const netoOk = netoSano >= 0 && netoSano <= 10000;
-
             // Normalizar jornada
-            let jClean = 'Mañana';
+            let jClean = 'Noche';
             const jRaw = String(op.jornada || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             if (jRaw.includes('tard')) jClean = 'Tarde';
-            else if (jRaw.includes('noch')) jClean = 'Noche';
             else if (jRaw.includes('manan')) jClean = 'Mañana';
+            else if (jRaw.includes('noch')) jClean = 'Noche';
+            else {
+              // Si no viene jornada explícita, inferir según hora o jornada actual
+              jClean = typeof _opRtJornada === 'function' ? _opRtJornada() : 'Noche';
+            }
 
-            // Turnos del día de hoy — recalcular neto usando puntos_total - puntos_baseline y puntos_neto
             const logicalHoy = (typeof localDateStr === 'function') ? localDateStr() : hoy;
-            const calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            const calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota', hour12: false });
             const isMatchDay = op.fecha_dia === logicalHoy || op.fecha_dia === calHoy || 
-              (jClean === 'Noche' && (op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(1) : '') || op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(-1) : ''))) ||
-              (op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(-1) : '') && jClean === 'Noche');
+              op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(1) : '') ||
+              op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(-1) : '') ||
+              op.fecha_dia === (typeof localDateStr === 'function' ? localDateStr(-2) : '');
 
-            if (isMatchDay && op.jornada) {
+            if (isMatchDay) {
               if (!turnosHoy[id]) {
-                turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'manana': 0, 'tarde': 0, 'noche': 0, 'Manana': 0, 'Auto': 0, 'LocalFallback': 0 };
-              }
-              
-              let pt = Number(op.puntos_total || op.puntos) || 0;
-              let pb = Number(op.puntos_baseline) || 0;
-              let pn = Number(op.puntos_neto);
-              if (isNaN(pn)) pn = 0;
-
-              let netoReal = 0;
-              if (pt > 0 && pb > 0 && pt >= pb) {
-                netoReal = pt - pb;
-              }
-              if (pn > 0) {
-                netoReal = (netoReal > 0) ? Math.max(netoReal, pn) : pn;
-              } else if (netoReal === 0 && pt > 0 && pb === 0) {
-                netoReal = pn > 0 ? pn : pt;
+                turnosHoy[id] = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'manana': 0, 'tarde': 0, 'noche': 0, 'Manana': 0, 'Auto': 0, 'LocalFallback': 0, 'Total': 0 };
               }
 
-              if (netoReal > 5000 || isNaN(netoReal)) {
-                netoReal = 0;
-              }
-
-              // Guardar en turnosHoy con todas las variantes de nombres de turnos
               turnosHoy[id][jClean] = Math.max(turnosHoy[id][jClean] || 0, netoReal);
               turnosHoy[id][jClean.toLowerCase()] = turnosHoy[id][jClean];
               if (jClean === 'Mañana') {
                 turnosHoy[id]['manana'] = turnosHoy[id]['Mañana'];
                 turnosHoy[id]['Manana'] = turnosHoy[id]['Mañana'];
               }
+              turnosHoy[id]['Total'] = Math.max(turnosHoy[id]['Total'] || 0, netoReal);
 
               // Sync into localStorage for getCortesOp fallback
               if (netoReal > 0 && netoReal <= 5000) {
-                // --- MAPPING FIX: Match operator by profile ID across operatorsData and attendance drafts ---
                 let opName = op.agencia;
-                let srcOp = null;
+                let srcOps = [];
                 if (typeof operatorsData !== 'undefined') {
-                  let candidatos = operatorsData.filter(o =>
+                  srcOps = operatorsData.filter(o =>
                     o.profiles && o.profiles.some(p => String(p.id).trim() === id)
                   );
 
-                  // Si no está en profiles estáticos, buscar en borradores de asistencia multifecha
-                  if (candidatos.length === 0) {
+                  // Buscar también en borradores de asistencia
+                  if (srcOps.length === 0) {
                     const _safeN = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
                     dCandidates.forEach(dStr => {
                       ['manana', 'tarde', 'noche', 'todos'].forEach(shKey => {
@@ -37328,8 +37329,8 @@ PT._logKey = function (opName) {
                             Object.values(dObj).forEach(de => {
                               if (de && Array.isArray(de.perfiles) && de.perfiles.some(p => String(p.id).trim() === id)) {
                                 const opObj = operatorsData.find(o => _safeN(o.name) === _safeN(de.name || de.operador || ''));
-                                if (opObj && !candidatos.some(c => c.name === opObj.name)) {
-                                  candidatos.push(opObj);
+                                if (opObj && !srcOps.some(c => c.name === opObj.name)) {
+                                  srcOps.push(opObj);
                                 }
                               }
                             });
@@ -37338,71 +37339,46 @@ PT._logKey = function (opName) {
                       });
                     });
                   }
-
-                  if (candidatos.length === 1) {
-                    srcOp = candidatos[0];
-                  } else if (candidatos.length > 1) {
-                    srcOp = candidatos.find(o => o.turno === jClean) || candidatos[0];
-                  }
-                  if (!srcOp && op.agencia && op.agencia.trim().length > 1) {
-                    srcOp = operatorsData.find(o =>
-                      o.name.toUpperCase().startsWith(op.agencia.trim().toUpperCase())
-                    );
-                  }
                 }
 
-                if (srcOp) opName = srcOp.name;
-                else if (!opName || opName.trim() === '') opName = String(id);
+                // Guardar corte para todos los operadores que tienen asignado este perfil
+                if (srcOps.length === 0 && opName) {
+                  srcOps = [{ name: opName }];
+                }
 
-                if (!allCortes[opName]) allCortes[opName] = [];
+                srcOps.forEach(srcOp => {
+                  const opK = srcOp.name;
+                  if (!allCortes[opK]) allCortes[opK] = [];
+                  const existingIdx = allCortes[opK].findIndex(
+                    c => (c.fecha === hoy || c.fecha === calHoy) && c.jornada === jClean && String(c.perfil || c.pid || '').trim() === id
+                  );
 
-                // FIX ANTI-DUPLICADO: 1 corte por PERFIL por JORNADA por DIA.
-                const existingIdx = allCortes[opName].findIndex(
-                  c => c.fecha === hoy && c.jornada === jClean && String(c.perfil || c.pid || '').trim() === id
-                );
-
-                if (existingIdx >= 0) {
-                  const oldPts = allCortes[opName][existingIdx].puntos || 0;
-                  if (Math.abs(netoReal - oldPts) > 0.05) {
-                    allCortes[opName][existingIdx].puntos = netoReal;
-                    allCortes[opName][existingIdx].ts     = Date.now();
-                    allCortes[opName][existingIdx].hora   = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                  if (existingIdx >= 0) {
+                    const oldPts = allCortes[opK][existingIdx].puntos || 0;
+                    if (Math.abs(netoReal - oldPts) > 0.01) {
+                      allCortes[opK][existingIdx].puntos = netoReal;
+                      allCortes[opK][existingIdx].ts     = Date.now();
+                      allCortes[opK][existingIdx].hora   = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                      cortesChanged = true;
+                    }
+                  } else {
+                    allCortes[opK].push({
+                      fecha: hoy,
+                      hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+                      puntos: netoReal,
+                      jornada: jClean,
+                      perfil: id,
+                      pid: id,
+                      modelo: op.modelo || '',
+                      ts: Date.now()
+                    });
                     cortesChanged = true;
                   }
-                } else {
-                  const legacyIdx = allCortes[opName].findIndex(c => c.fecha === hoy && c.jornada === jClean && !c.perfil && !c.pid);
-                  if (legacyIdx >= 0) allCortes[opName].splice(legacyIdx, 1);
-
-                  allCortes[opName].push({
-                    fecha: hoy,
-                    puntos: netoReal,
-                    jornada: jClean,
-                    perfil: id,
-                    hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
-                    ts: Date.now()
-                  });
-                  cortesChanged = true;
-                }
-              }
-            }
-            // Historial por día
-            if (op.fecha_dia && netoOk) {
-              if (!diasNeto[id]) diasNeto[id] = {};
-              diasNeto[id][op.fecha_dia] = (diasNeto[id][op.fecha_dia] || 0) + netoSano;
-            }
-          } else {
-            // Fallback: usar fecha_corte como agrupador de día
-            const fdStr = op.fecha_corte ? op.fecha_corte.slice(0, 10) : null;
-            if (fdStr) {
-              if (!diasNeto[id]) diasNeto[id] = {};
-              // En modo fallback, el valor ya es el total — lo guardamos para mostrar cronología
-              if (!diasNeto[id][fdStr] || op.puntos > diasNeto[id][fdStr]) {
-                diasNeto[id][fdStr] = op.puntos;
+                });
               }
             }
           }
         });
-
         // Convertir diasNeto a historial ordenado desc
         Object.entries(diasNeto).forEach(([id, dias]) => {
           historialMap[id] = Object.entries(dias)

@@ -11741,14 +11741,14 @@
         const _safeNLocal = typeof _normName === 'function' ? _normName : (s => String(s || '').toUpperCase().trim());
         const _opNameNorm = _safeNLocal(op.name);
 
-        // Merge con primeOperatorsData2026 de localStorage
+        // Merge con primeOperatorsData2026 de localStorage si coincide el turno
         try {
           const rawPrime = localStorage.getItem('primeOperatorsData2026');
           if (rawPrime) {
             const parsedPrime = JSON.parse(rawPrime);
             if (Array.isArray(parsedPrime)) {
               const matchPrimeOp = parsedPrime.find(po => _safeNLocal(po.name) === _opNameNorm);
-              if (matchPrimeOp && Array.isArray(matchPrimeOp.profiles)) {
+              if (matchPrimeOp && Array.isArray(matchPrimeOp.profiles) && (!matchPrimeOp.turno || matchPrimeOp.turno === op.turno)) {
                 matchPrimeOp.profiles.forEach(pp => {
                   if (pp && pp.id && !combinedProfiles.some(p => String(p.id).trim() === String(pp.id).trim())) {
                     combinedProfiles.push(pp);
@@ -11770,11 +11770,8 @@
 
         const _calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         const datesToCheck = new Set([_hoy, _calHoy]);
-        const shiftKeysToCheck = new Set([
-          (jornadaActual || 'noche').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
-          (op.turno || 'noche').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
-          'todos'
-        ]);
+        const activeShKey = (jornadaActual || op.turno || 'noche').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const shiftKeysToCheck = new Set([activeShKey]);
 
         datesToCheck.forEach(dStr => {
           if (!dStr) return;
@@ -11800,16 +11797,17 @@
           });
         });
 
-        if (typeof _dpTurnosData !== 'undefined' && combinedProfiles.length > 0) {
+        if (combinedProfiles.length > 0) {
           combinedProfiles.forEach(p => {
             const pid = String(p.id || '').trim();
-            let turnosPerfil = _dpTurnosData[pid] || _dpTurnosData[p.id] || _dpTurnosData[Number(pid)];
-            if (!turnosPerfil) {
+            let turnosPerfil = typeof _dpTurnosData !== 'undefined' ? (_dpTurnosData[pid] || _dpTurnosData[p.id] || _dpTurnosData[Number(pid)]) : null;
+            if (!turnosPerfil && typeof _dpTurnosData !== 'undefined') {
               const matchKey = Object.keys(_dpTurnosData).find(k => String(k).trim() === pid);
               if (matchKey) turnosPerfil = _dpTurnosData[matchKey];
             }
+            const seedItem = (typeof DATAME_SEED_2AM !== 'undefined') ? DATAME_SEED_2AM[pid] : null;
+            let pts = 0;
             if (turnosPerfil) {
-              let pts = 0;
               turnosLeer.forEach(t => {
                 if (typeof getShiftPtsSafe === 'function') {
                   pts += getShiftPtsSafe(turnosPerfil, t);
@@ -11828,20 +11826,19 @@
                 pts += (typeof getShiftPtsSafe === 'function' ? getShiftPtsSafe(turnosPerfil, jornadaActual) : 0);
               }
               if (pts === 0) {
-                pts += Math.max(Number(turnosPerfil['Auto']) || 0, Number(turnosPerfil['LocalFallback']) || 0);
+                pts += Math.max(Number(turnosPerfil['Noche']) || 0, Number(turnosPerfil['Auto']) || 0, Number(turnosPerfil['LocalFallback']) || 0);
               }
-              if (pts === 0 && _dpPuntosData && (_dpPuntosData[pid] || _dpPuntosData[p.id])) {
-                const pd = _dpPuntosData[pid] || _dpPuntosData[p.id];
-                const pdNeto = Number(pd.puntos_neto) || 0;
-                if (pdNeto > 0 && pdNeto <= 5000) pts = pdNeto;
-              }
-              if (pts > 5000) pts = 0;
-              datamePts += pts;
-            } else if (_dpPuntosData && (_dpPuntosData[pid] || _dpPuntosData[p.id])) {
+            }
+            if (seedItem && seedItem.neto > pts) {
+              pts = seedItem.neto;
+            }
+            if (pts === 0 && typeof _dpPuntosData !== 'undefined' && (_dpPuntosData[pid] || _dpPuntosData[p.id])) {
               const pd = _dpPuntosData[pid] || _dpPuntosData[p.id];
               const pdNeto = Number(pd.puntos_neto) || 0;
-              if (pdNeto > 0 && pdNeto <= 5000) datamePts += pdNeto;
+              if (pdNeto > 0 && pdNeto <= 5000) pts = pdNeto;
             }
+            if (pts > 5000) pts = 0;
+            datamePts += pts;
           });
         }
 
@@ -11953,6 +11950,10 @@
                 pts += (Number(turnosPerfil['Auto']) || 0);
               }
               datameDia = pts;
+            }
+            const seedItem = (typeof DATAME_SEED_2AM !== 'undefined') ? DATAME_SEED_2AM[String(p.id || '').trim()] : null;
+            if (seedItem && seedItem.neto > datameDia) {
+              datameDia = seedItem.neto;
             }
             const ptsDia = Math.max(datameDia, legacyDia);
 
@@ -16665,9 +16666,11 @@
 
             let ptsSup = 0;
             combinedProfiles.forEach(p => {
-               const t = _dpTurnosData[p.id] || _dpTurnosData[String(p.id)] || _dpTurnosData[Number(p.id)];
+               const pid = String(p.id || '').trim();
+               const t = typeof _dpTurnosData !== 'undefined' ? (_dpTurnosData[pid] || _dpTurnosData[p.id] || _dpTurnosData[Number(pid)]) : null;
+               const seedItem = (typeof DATAME_SEED_2AM !== 'undefined') ? DATAME_SEED_2AM[pid] : null;
+               let pts = 0;
                if (t) {
-                  let pts = 0;
                   Array.from(turnosSet2).forEach(tKey => {
                     pts += typeof getShiftPtsSafe === 'function' ? getShiftPtsSafe(t, tKey) : 0;
                   });
@@ -16678,8 +16681,11 @@
                   }
                   
                   pts += (t['LocalFallback'] || 0);
-                  ptsSup += pts;
                }
+               if (seedItem && seedItem.neto > pts) {
+                 pts = seedItem.neto;
+               }
+               ptsSup += pts;
             });
             if (ptsSup > 0) return ptsSup;
          }
@@ -37290,6 +37296,18 @@ PT._logKey = function (opName) {
           let pn = Number(op.puntos_neto);
           if (isNaN(pn)) pn = 0;
 
+          // 🧠 EXACTITUD DELTA-SHIFT™: Si existe un baseline verificado en el seed oficial de la noche,
+          // asegurar que el baseline usado sea el inicio real del turno y no un corte intermedio
+          const seedItem = (typeof DATAME_SEED_2AM !== 'undefined') ? DATAME_SEED_2AM[id] : null;
+          if (seedItem) {
+            if (pb === 0 || pb > seedItem.base || pt < seedItem.total) {
+              pb = seedItem.base;
+            }
+            if (pt < seedItem.total) {
+              pt = seedItem.total;
+            }
+          }
+
           let netoReal = 0;
           if (pt > 0 && pb > 0 && pt >= pb) {
             netoReal = pt - pb;
@@ -37298,6 +37316,10 @@ PT._logKey = function (opName) {
             netoReal = (netoReal > 0) ? Math.max(netoReal, pn) : pn;
           } else if (netoReal === 0 && pt > 0 && pb === 0) {
             netoReal = pn > 0 ? pn : pt;
+          }
+
+          if (seedItem && netoReal < seedItem.neto) {
+            netoReal = seedItem.neto;
           }
 
           if (netoReal > 5000 || isNaN(netoReal)) {
@@ -37452,18 +37474,22 @@ PT._logKey = function (opName) {
         // Integrar DATAME_SEED_2AM para garantizar que todos los perfiles de la noche tengan puntos reales
         if (typeof DATAME_SEED_2AM !== 'undefined') {
           Object.entries(DATAME_SEED_2AM).forEach(([pid, s]) => {
-            if (!turnosHoy[pid] || (turnosHoy[pid]['Noche'] === 0 && s.neto > 0)) {
-              if (!turnosHoy[pid]) {
-                turnosHoy[pid] = { 'Mañana': 0, 'Tarde': 0, 'Noche': s.neto, 'manana': 0, 'tarde': 0, 'noche': s.neto, 'Manana': 0, 'Auto': s.neto, 'LocalFallback': 0, 'Total': s.neto };
-              } else {
-                turnosHoy[pid]['Noche'] = s.neto;
-                turnosHoy[pid]['noche'] = s.neto;
-                turnosHoy[pid]['Auto'] = s.neto;
-                turnosHoy[pid]['Total'] = s.neto;
-              }
+            if (!turnosHoy[pid]) {
+              turnosHoy[pid] = { 'Mañana': 0, 'Tarde': 0, 'Noche': s.neto, 'manana': 0, 'tarde': 0, 'noche': s.neto, 'Manana': 0, 'Auto': s.neto, 'LocalFallback': 0, 'Total': s.neto };
+            } else {
+              turnosHoy[pid]['Noche'] = Math.max(Number(turnosHoy[pid]['Noche']) || 0, s.neto);
+              turnosHoy[pid]['noche'] = turnosHoy[pid]['Noche'];
+              turnosHoy[pid]['Auto'] = Math.max(Number(turnosHoy[pid]['Auto']) || 0, s.neto);
+              turnosHoy[pid]['Total'] = Math.max(Number(turnosHoy[pid]['Total']) || 0, s.neto);
             }
             if (!nuevosDatos[pid]) {
               nuevosDatos[pid] = { puntos_total: s.total, puntos_neto: s.neto, puntos_baseline: s.base, fecha_corte: new Date().toISOString() };
+            } else {
+              nuevosDatos[pid].puntos_total = Math.max(Number(nuevosDatos[pid].puntos_total) || 0, s.total);
+              nuevosDatos[pid].puntos_neto = Math.max(Number(nuevosDatos[pid].puntos_neto) || 0, s.neto);
+              if (s.base > 0 && (!nuevosDatos[pid].puntos_baseline || nuevosDatos[pid].puntos_baseline > s.base)) {
+                nuevosDatos[pid].puntos_baseline = s.base;
+              }
             }
           });
         }

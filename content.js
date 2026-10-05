@@ -1548,7 +1548,7 @@
       }
     };
 
-    // Acción de Responder Chat (Modo Contextual con 3 Opciones Compactas en Tiempo Real)
+    // Acción de Responder Chat (Modo Contextual Ultra-Humanizado con Razonamiento IA en Tiempo Real)
     hookBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1572,8 +1572,6 @@
         liveDetectedLang = { code: 'en', name: 'English 🇺🇸', flag: '🇺🇸' };
       }
 
-      const liveHasHistory = liveClientMessages.length > 0;
-      const liveLastClientMsg = liveClientMessages.length > 0 ? liveClientMessages[liveClientMessages.length - 1].text : '';
       const isSyncedInDb = syncedChatsMemory.has(String(liveClientId).toLowerCase()) || (liveClientName && syncedChatsMemory.has(liveClientName.toLowerCase()));
       const showMissingHistoryWarning = !isSyncedInDb && liveClientMessages.length <= 2 && (!liveLetters || liveLetters.length === 0);
 
@@ -1581,364 +1579,62 @@
       dropdown.className = 'ryr-chat-hooks-dropdown';
       toolsWrapper.appendChild(dropdown);
 
-      const generateSmartContextualHooks = () => {
-        const fullChatString = liveClientMessages.map(m => m.text).join(' ').toLowerCase();
-        const lastMsgLower = (liveLastClientMsg || '').toLowerCase();
+      const headerTitleText = `🔄 RESPONDER CHAT A ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
 
-        // 1. Detectar si habla de dolor de cabeza, enfermedad, lluvia, frío, autobús, analgésico o reposo
-        const hasSicknessOrHeadache = liveHasHistory && (
-          /\b(headache|analgesic|fever|flu)\b|head is aching|\b(sick|ill|medicine|pill|cold rain|resting)\b|\b(dolor de cabeza|analg[eé]sico|fiebre|enferm[oa]|medicamento|pastilla)\b/i.test(fullChatString) ||
-          /\b(headache|analgesic|fever|flu|sick|ill|medicine|pill|resting|dolor|cabeza|fiebre)\b|head is aching/i.test(lastMsgLower)
-        );
-
-        // 2. Detectar si habla de café, comida, bebida o foto de café
-        const hasCoffeeOrFood = liveHasHistory && (
-          /\b(coffee|caf[eé]|tea|drink|drinking|cup|breakfast|dinner|lunch|taza)\b/i.test(fullChatString) ||
-          /\b(coffee|caf[eé]|tea|cup|drink)\b/i.test(lastMsgLower)
-        );
-
-        // 3. Detectar si pregunta si nos vamos o si estamos ocupados
-        const hasLeavingOrBusy = liveHasHistory && (
-          /\b(leaving|leaving already|have something to do|going away|say goodbye|busy|ocupad[oa]|te vas|te tienes que ir)\b/i.test(lastMsgLower) ||
-          /\b(leaving|have something to do)\b/i.test(fullChatString)
-        );
-
-        // 4. Detectar si hubo reacción a Newsfeed / Post
-        const hasNewsfeedLiked = liveHasHistory && (
-          lastMsgLower.includes('newsfeed') || lastMsgLower.includes('post') || lastMsgLower.includes('liked your')
-        );
-
-        // 5. Detectar piropos, elogios o nombres cariñosos
-        const isCompliment = liveHasHistory && (
-          /\b(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|mahal|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)\b/i.test(lastMsgLower)
-        );
-
-        // 6. Detectar saludo o pregunta de cómo está
-        const isGreeting = liveHasHistory && (
-          /(how are you|how is your day|how are things|what are you up to|hello|hi\b|hey\b|good morning|good afternoon|good evening|c[oó]mo est[aá]s|qu[eé] tal|hola)/i.test(lastMsgLower)
-        );
-
-        let options = [];
-
-        if (hasSicknessOrHeadache) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Quiero quedarme aquí haciéndote compañía hasta que te sientas mucho mejor ❤️ Cierra tus ojitos y dime, ¿qué es lo que más te reconforta cuando estás descansando?`,
-                es: `Acompañamiento íntimo y pregunta reconfortante para que siga chateando.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Por favor descansa, tómate tu analgésico y abrígate mucho del frío y la lluvia... Me encantaría abrazarte muy fuerte justo ahora para que duermas en paz ❤️`,
-                es: `Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazo.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `Estás en mis pensamientos, cariño. Cuando despiertes, envíame una foto tuya descansando para saber que estás bien 😉 Yo te mandaré una especial también.`,
-                es: `Petición de foto de descanso con reciprocidad protectora.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I want to stay right here keeping you company until you feel all better ❤️ Close your eyes and tell me, what makes you feel the most comforted when you're resting?`,
-                es: `Acompañamiento íntimo y pregunta reconfortante para que siga chateando sin esfuerzo.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Please rest, take your medicine, and stay warm away from that rain... I wish I could wrap my arms around you and hold you tight right now so you can sleep peacefully ❤️`,
-                es: `Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazarte.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `You are in my thoughts, sweetheart. When you wake up, send me a little picture of you resting so I know you're feeling better 😉 I'll send you an exclusive photo too!`,
-                es: `Petición de foto de descanso con reciprocidad protectora.`
-              }
-            ];
-          }
-        } else if (hasCoffeeOrFood || (hasLeavingOrBusy && hasCoffeeOrFood)) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `¡Ver tu café me dio antojo a mí también! 😉 Cuéntame, ¿cuál es tu postre o antojo favorito para acompañar una buena charla?`,
-                es: `Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `¡Ese café se ve delicioso! ❤️ Jamás me iría sin antes tomarme un lindo momento para hablar contigo... ¿Cómo va tu tarde?`,
-                es: `Aseguras tu atención exclusiva y elogias su café/comida.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `La próxima vez que tomes café, envíame una foto de tu sonrisa disfrutándolo para sentir que lo compartimos 😉 ¿Trato?`,
-                es: `Petición magnética de foto cotidiana vinculada a su café.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Seeing your coffee actually made me crave one too 😉 Tell me, what's your favorite sweet treat or guilty pleasure when taking a break?`,
-                es: `Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `That coffee looks so delicious! ❤️ I could never just leave without taking a sweet moment to chat with you... How is your day going?`,
-                es: `Respuesta directa sobre su café/comida asegurando tu tiempo exclusivo.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `Next time you have coffee, send me a picture of your smile enjoying it so we can share the moment together 😉 Deal?`,
-                es: `Petición magnética de foto cotidiana vinculada a su café.`
-              }
-            ];
-          }
-        } else if (hasLeavingOrBusy) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Siempre tengo un momento especial reservado solo para ti ❤️ Dime, ¿qué es algo curioso o divertido que te haya pasado hoy?`,
-                es: `Despierta curiosidad y anima el diálogo.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `¡Para nada! Nunca estoy demasiado ocupada para alguien que me hace sonreír tanto 😉 ¿Cómo te estás sintiendo hoy?`,
-                es: `Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Estaba sonriendo pensando en nuestras charlas ✨ Dime, ¿qué es algo que siempre te alegra el día sin falta?`,
-                es: `Validación emocional y anclaje a sensaciones positivas.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I always have a special moment reserved just for you ❤️ Tell me, what's one secret dream or fun thought you've had today?`,
-                es: `Despierta misterio y curiosidad para mantener el chat activo.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Not at all, sweetie! I'm never too busy for someone who brings such a genuine smile to my face 😉 How are you feeling today?`,
-                es: `Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `I was just smiling looking at our messages ✨ Tell me, what is something that always brightens up your mood without fail?`,
-                es: `Validación emocional y anclaje a sensaciones positivas.`
-              }
-            ];
-          }
-        } else if (hasNewsfeedLiked) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Me encanta saber que estás tan atento a mis publicaciones 😉 ¿Qué fue lo primero que sentiste o pensaste al verla?`,
-                es: `Pregunta intrigante sobre su reacción inmediata al post.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Vi que te gustó mi publicación... Me alegra muchísimo que hayas conectado con ese pensamiento ❤️ ¿Qué momentos te dan más paz?`,
-                es: `Agradecimiento por su reacción y conexión íntima de tranquilidad.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `Esa foto guarda un recuerdo muy lindo para mí ✨ Envíame una foto de lo que estás haciendo hoy para conocer más tu mundo 😉`,
-                es: `Petición de foto de su entorno con reciprocidad.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I love knowing you are paying close attention to my world and my thoughts 😉 What was the first thing that crossed your mind when you saw it?`,
-                es: `Pregunta intrigante sobre su reacción inmediata al post.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `I saw you liked my post... It truly warms my heart that you connected with that thought ❤️ What kind of quiet moments bring you the most peace?`,
-                es: `Agradecimiento por su like en el post y conexión íntima de tranquilidad.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `That picture holds a very special memory for me ✨ Send me a picture of what you're doing right now so I can see your world too 😉`,
-                es: `Petición de foto de su entorno a cambio de la foto del post.`
-              }
-            ];
-          }
-        } else if (isCompliment) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Siempre sabes cómo hacerme suspirar con tus palabras tan dulces 😉 Dime, ¿cuál ha sido el detalle más romántico de tu vida?`,
-                es: `Indagación romántica profunda para mantenerlo emocionado.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Saber de ti siempre es la parte más linda y especial de mi día ❤️ ¿Cómo te ha tratado la vida hoy, cariño?`,
-                es: `Devolución cariñosa y agradecida a su halago.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `¡Estaba sonriendo pensando en ti! Envíame una foto de tu sonrisa ahora mismo y yo te enviaré una exclusiva a cambio 😉 ¿Trato?`,
-                es: `Gancho de alto impacto para intercambio recíproco de fotos.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `You always know how to make my heart flutter with your sweet words 😉 Tell me, what is the most romantic thing someone has ever done for you?`,
-                es: `Indagación romántica profunda para mantenerlo soñando despierto.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Hearing from you is honestly the sweetest part of my day ❤️ How has your day been treating you so far, my dear?`,
-                es: `Devolución cariñosa y agradecida a su halago.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `I was just blushing thinking about you! Send me a picture of your smile right now, and I'll send you an exclusive photo in return 😉 Deal?`,
-                es: `Desafío de intercambio de fotos con reciprocidad irresistible.`
-              }
-            ];
-          }
-        } else if (isGreeting || liveHasHistory) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es algo que te haya sacado una gran sonrisa hoy?`,
-                es: `Pregunta positiva y curiosa para dinamizar la conversación.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo empezó tu día hoy?`,
-                es: `Saludo dulce y apertura de diálogo sobre su rutina.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Cada vez que veo un mensaje tuyo me alegro mucho ✨ Dime, ¿qué estás haciendo justo en este momento?`,
-                es: `Validación coqueta para provocar respuesta inmediata.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I was just taking a little break and hoping to hear from you 😉 What is one thing that has been keeping you smiling lately?`,
-                es: `Pregunta positiva y curiosa para dinamizar la conversación.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `I'm having a calm day, and seeing your message just made it so much brighter ❤️ How did your morning start off?`,
-                es: `Saludo dulce y apertura de diálogo sobre su rutina.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Every time your name pops up on my screen, my day gets a little sweeter ✨ What are you up to right at this moment?`,
-                es: `Validación coqueta para provocar respuesta inmediata.`
-              }
-            ];
-          }
-        } else {
-          // Apertura para usuario nuevo (Atracción pura - Cero ubicaciones / Cero TM)
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho de Atracción',
-                target: `Tienes una energía muy dulce y una mirada muy serena en tus fotos ❤️ Dime, ¿qué es algo que te apasione profundamente en la vida?`,
-                es: `Pregunta de atracción sobre pasiones personales.`
-              },
-              {
-                title: '💬 Opción 2: Contestar / Saludo Inicial',
-                target: `Tuve una hermosa corazonada de saludarte el día de hoy 😉 ¿Cómo te ha estado tratando tu semana?`,
-                es: `Saludo espontáneo y abierto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Tu sonrisa de verdad me llamó mucho la atención ✨ Cuéntame un pequeño sueño o secreto tuyo que pocos conozcan...`,
-                es: `Gancho intrigante y de misterio que despierta curiosidad.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho de Atracción',
-                target: `You have such a warm and gentle energy in your photos ❤️ Tell me, what is something you are truly passionate about in your everyday life?`,
-                es: `Pregunta de alto impacto sobre sus pasiones personales.`
-              },
-              {
-                title: '💬 Opción 2: Contestar / Saludo Inicial',
-                target: `I had a sudden lovely feeling that I should say hello to you today 😉 How is your day treating you so far?`,
-                es: `Saludo espontáneo y abierto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Your smile genuinely caught my attention ✨ Tell me a small dream or secret of yours that few people know about...`,
-                es: `Gancho intrigante y de misterio que despierta curiosidad.`
-              }
-            ];
-          }
-        }
-
-        return options;
-      };
-
-      const renderHooks = (hooksList) => {
-        const headerTitleText = `🔄 RESPONDER CHAT A ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
-
-        let warningHtml = '';
-        if (showMissingHistoryWarning) {
-          warningHtml = `
-            <div class="ryr-no-info-warning">
-              <span style="font-size:10px; line-height:1.2;">⚠️ <b>Sin historial previo en BD:</b> Sube las conversaciones para contexto 360°.</span>
-              <button class="ryr-no-info-btn" id="ryr-quick-sync-btn">⚡ Subir Ahora</button>
-            </div>
-          `;
-        }
-
-        dropdown.innerHTML = `
-          <div style="font-weight:bold; color:#a5b4fc; font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
-            <span>${headerTitleText}</span>
-            <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-hooks-dropdown">✕</span>
+      let warningHtml = '';
+      if (showMissingHistoryWarning) {
+        warningHtml = `
+          <div class="ryr-no-info-warning">
+            <span style="font-size:10px; line-height:1.2;">⚠️ <b>Sin historial previo en BD:</b> Sube las conversaciones para contexto 360°.</span>
+            <button class="ryr-no-info-btn" id="ryr-quick-sync-btn">⚡ Subir Ahora</button>
           </div>
-          ${warningHtml}
-          <div id="ryr-hooks-options-container" style="display:flex; flex-direction:column; gap:5px;"></div>
         `;
+      }
 
-        const closeBtn = dropdown.querySelector('#ryr-close-hooks-dropdown');
-        if (closeBtn) closeBtn.onclick = () => dropdown.remove();
+      dropdown.innerHTML = `
+        <div style="font-weight:bold; color:#a5b4fc; font-size:11px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+          <span>${headerTitleText}</span>
+          <span style="cursor:pointer; color:#94a3b8; font-size:14px;" id="ryr-close-hooks-dropdown">✕</span>
+        </div>
+        ${warningHtml}
+        <div id="ryr-hooks-loading" style="text-align:center; padding:18px 10px; color:#38bdf8; font-size:11px; font-weight:bold;">
+          🧠 Razonando contexto y analizando conversación con IA...
+        </div>
+        <div id="ryr-hooks-options-container" style="display:none; flex-direction:column; gap:6px;"></div>
+      `;
 
-        const syncNowBtn = dropdown.querySelector('#ryr-quick-sync-btn');
-        if (syncNowBtn) {
-          syncNowBtn.onclick = async (ev) => {
-            ev.stopPropagation();
-            syncNowBtn.innerText = '⏳ Subiendo...';
-            syncNowBtn.disabled = true;
-            await syncCurrentChatToDatabase();
-            syncNowBtn.innerText = '✅ Subido';
-          };
-        }
+      const closeBtn = dropdown.querySelector('#ryr-close-hooks-dropdown');
+      if (closeBtn) closeBtn.onclick = () => dropdown.remove();
 
-        const container = dropdown.querySelector('#ryr-hooks-options-container');
+      const syncNowBtn = dropdown.querySelector('#ryr-quick-sync-btn');
+      if (syncNowBtn) {
+        syncNowBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          syncNowBtn.innerText = '⏳ Subiendo...';
+          syncNowBtn.disabled = true;
+          await syncCurrentChatToDatabase();
+          syncNowBtn.innerText = '✅ Subido';
+        };
+      }
+
+      const container = dropdown.querySelector('#ryr-hooks-options-container');
+      const loadingEl = dropdown.querySelector('#ryr-hooks-loading');
+
+      const renderOptionsList = (hooksList) => {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (!container) return;
+        container.style.display = 'flex';
+        container.innerHTML = '';
 
         hooksList.forEach((item, idx) => {
           const targetText = typeof item === 'object' ? item.target : item;
-          const esText = typeof item === 'object' ? item.es : 'Respuesta contextual generada.';
+          const esText = typeof item === 'object' ? item.es : 'Respuesta contextual razonada.';
           const optTitle = typeof item === 'object' && item.title ? item.title : `Opción ${idx + 1}`;
 
           const option = document.createElement('div');
           option.className = 'ryr-hook-option';
           option.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
               <span style="font-weight:bold; color:#a5b4fc; font-size:10px;">${optTitle.toUpperCase()}</span>
               <span style="font-size:9.5px; color:#38bdf8; font-weight:bold;">⚡ Clic para Enviar</span>
             </div>
@@ -1961,8 +1657,62 @@
         });
       };
 
-      // Generación instantánea en 0ms con razonamiento contextual de 3 opciones compactas
-      renderHooks(generateSmartContextualHooks());
+      // 2. Consultar el endpoint de razonamiento IA en el backend con contexto completo
+      try {
+        const res = await fetch(`${API_URL}/api/intelligence/generate-chat-reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: liveClientName,
+            clientId: liveClientId,
+            profileName: sessionData.profileName,
+            targetLang: liveDetectedLang.code,
+            bioData: liveBioData,
+            recentMessages: liveMessages,
+            recentLetters: liveLetters
+          })
+        });
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.options) && data.options.length > 0) {
+          renderOptionsList(data.options);
+          return;
+        }
+      } catch (err) {
+        console.warn('[AgenteRYR] Fallback local a razonamiento heurístico de chat:', err);
+      }
+
+      // 3. Fallback Heurístico Local Dinámico si el servidor no responde
+      const lastMsg = liveClientMessages.length > 0 ? liveClientMessages[liveClientMessages.length - 1].text : '';
+      const fallbackOptions = [
+        {
+          title: '🪝 Opción 1: Gancho de Curiosidad & Continuidad',
+          target: liveDetectedLang.code === 'pt'
+            ? `Estava tirando uma pausa e esperando muito uma mensagem sua 😉 Me conta, o que foi a coisa mais curiosa ou bonita que te aconteceu hoje?`
+            : (liveDetectedLang.code === 'es'
+                ? `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es algo que te haya sacado una gran sonrisa hoy?`
+                : `I was just taking a little breather and really hoping to see a message from you 😉 Tell me, what was one fun or unexpected thing that happened in your day today?`),
+          es: `Pregunta abierta para incentivar que el cliente hable de su vida y continúe el chat.`
+        },
+        {
+          title: '💬 Opción 2: Respuesta Cálida & Empatía Directa',
+          target: liveDetectedLang.code === 'pt'
+            ? `Meu dia está tão calmo, e ver sua mensagem tornou tudo mais especial ❤️ Estava pensando na nossa conversa... Como você está se sentindo?`
+            : (liveDetectedLang.code === 'es'
+                ? `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo te estás sintiendo hoy?`
+                : `I'm having a quiet, peaceful day, and seeing your message just made it so much brighter ❤️ How are you feeling today, my dear?`),
+          es: `Apertura afectuosa respondiendo directamente a su presencia.`
+        },
+        {
+          title: '✨ Opción 3: Chispa Coqueta & Intercambio de Fotos',
+          target: liveDetectedLang.code === 'pt'
+            ? `Cada vez que o seu nome aparece na minha tela meu coração dá um pulinho ✨ Me manda uma foto do seu sorriso agora para alegrar o meu dia? 😉`
+            : (liveDetectedLang.code === 'es'
+                ? `Cada vez que veo tu nombre en pantalla sonrío de inmediato ✨ ¿Me mandas una foto de tu sonrisa ahora mismo para alegrarme el día? 😉`
+                : `Every time your name pops up on my screen, my day gets a little sweeter ✨ Send me a picture of that smile of yours right now to brighten up my day 😉`),
+          es: `Petición juguetona de foto para acelerar la complicidad y el consumo.`
+        }
+      ];
+      renderOptionsList(fallbackOptions);
     };
   }
 

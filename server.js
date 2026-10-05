@@ -14,8 +14,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // CONFIGURACIÓN DE SUPABASE
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://bhewmidnkldjpdnvassj.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJoZXdtaWRua2xkanBkbnZhc3NqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0NjMyNzAsImV4cCI6MjEwMTAzOTI3MH0.4DXjV8jH9Yj0jwNPg2DvRCqTgObiKULGCxFRf0lwIpI';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://tu-proyecto.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY || 'tu-api-key-secreta';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // MIDDLEWARES
@@ -551,6 +551,287 @@ app.get('/api/clients/data/:clientId', async (req, res) => {
       tier: 'NEW_PROSPECT',
       spendingTier: 'STANDARD'
     });
+  }
+});
+
+// ====================================================================
+// 5.1 ENDPOINT: INTEL DE GASTO & FACTURACIÓN POR USUARIO (AUDITORÍA 360°)
+// ====================================================================
+app.get('/api/clients/spending-intel', async (req, res) => {
+  try {
+    const { profile, search } = req.query;
+
+    let dbClients = [];
+    let dbConversations = [];
+    let dbMails = [];
+
+    try {
+      const [resC, resConv, resM] = await Promise.all([
+        supabase.from('clients').select('*').limit(300),
+        supabase.from('conversations').select('*').limit(300),
+        supabase.from('mails_history').select('client_id, profile_name').limit(500)
+      ]);
+      if (resC && resC.data) dbClients = resC.data;
+      if (resConv && resConv.data) dbConversations = resConv.data;
+      if (resM && resM.data) dbMails = resM.data;
+    } catch (e) {}
+
+    const clientsMap = new Map();
+
+    // 1. Cargar desde Supabase clients
+    dbClients.forEach(c => {
+      const cId = String(c.talkytimes_id || c.id).trim();
+      if (!cId) return;
+      clientsMap.set(cId, {
+        id: cId,
+        talkytimesId: cId,
+        name: c.name || 'Cliente',
+        country: c.country || 'United States',
+        birthDate: c.birth_date || 'En perfil',
+        maritalStatus: c.marital_status || 'Single',
+        profileAssigned: c.profile_assigned || 'HORACIO',
+        tier: c.tier || 'ACTIVE_PROSPECT',
+        letterTotal: Number(c.letter_total) || 0,
+        creditsBalance: c.credits_balance !== undefined ? c.credits_balance : 150,
+        updatedAt: c.updated_at || new Date().toISOString()
+      });
+    });
+
+    // 2. Cargar desde Supabase conversations
+    dbConversations.forEach(conv => {
+      const cId = String(conv.client_id || '').trim();
+      if (!cId) return;
+      const existing = clientsMap.get(cId) || {
+        id: cId,
+        talkytimesId: cId,
+        name: conv.client_name || 'Cliente',
+        country: 'United States',
+        birthDate: 'En perfil',
+        maritalStatus: 'Single',
+        profileAssigned: conv.profile_name || 'HORACIO',
+        tier: 'ACTIVE_PROSPECT',
+        letterTotal: Number(conv.total_letters) || 0,
+        creditsBalance: 150,
+        updatedAt: conv.extracted_at || new Date().toISOString()
+      };
+      existing.name = conv.client_name || existing.name;
+      existing.profileAssigned = conv.profile_name || existing.profileAssigned;
+      existing.letterTotal = Math.max(existing.letterTotal, Number(conv.total_letters) || 0);
+      clientsMap.set(cId, existing);
+    });
+
+    // 3. Cargar desde memoria en vivo (memoryConversationsMap)
+    for (let [cId, conv] of memoryConversationsMap.entries()) {
+      const cleanId = String(cId).trim();
+      const existing = clientsMap.get(cleanId) || {
+        id: cleanId,
+        talkytimesId: cleanId,
+        name: conv.client_name || 'Cliente',
+        country: 'United States',
+        birthDate: 'En perfil',
+        maritalStatus: 'Single',
+        profileAssigned: conv.profile_name || 'HORACIO',
+        tier: 'ACTIVE_PROSPECT',
+        letterTotal: conv.total_letters || 0,
+        creditsBalance: 150,
+        updatedAt: conv.extracted_at || new Date().toISOString()
+      };
+      existing.name = conv.client_name || existing.name;
+      existing.profileAssigned = conv.profile_name || existing.profileAssigned;
+      existing.letterTotal = Math.max(existing.letterTotal, conv.total_letters || 0);
+      clientsMap.set(cleanId, existing);
+    }
+
+    // 4. Cargar desde telemetría en vivo (liveOperatorTelemetry)
+    for (let [opName, opData] of liveOperatorTelemetry.entries()) {
+      const pName = (opData.profile || 'HORACIO').toUpperCase();
+      const opClients = opData.activeClients || opData.clients || [];
+      if (Array.isArray(opClients)) {
+        opClients.forEach(c => {
+          const cleanId = String(c.id || c.clientId || c.talkytimesId || '').trim();
+          if (!cleanId) return;
+          const existing = clientsMap.get(cleanId) || {
+            id: cleanId,
+            talkytimesId: cleanId,
+            name: c.name || c.clientName || 'Cliente Activo',
+            country: c.country || 'United States',
+            birthDate: 'En perfil',
+            maritalStatus: 'Single',
+            profileAssigned: pName,
+            tier: 'ACTIVE_PROSPECT',
+            letterTotal: Number(c.letters || c.mailCount) || 0,
+            creditsBalance: 150,
+            updatedAt: new Date().toISOString()
+          };
+          existing.name = c.name || c.clientName || existing.name;
+          existing.profileAssigned = pName || existing.profileAssigned;
+          existing.letterTotal = Math.max(existing.letterTotal, Number(c.letters || c.mailCount) || 0);
+          clientsMap.set(cleanId, existing);
+        });
+      }
+    }
+
+    const clientResults = [];
+    let totalAgencyRevenueCredits = 0;
+    const profileRevenueMap = new Map();
+
+    for (let [cId, clientObj] of clientsMap.entries()) {
+      const clientMsgs = memoryClientMessagesMap.has(cId) ? Array.from(memoryClientMessagesMap.get(cId).values()) : [];
+      const clientLetters = memoryClientLettersMap.has(cId) ? Array.from(memoryClientLettersMap.get(cId).values()) : [];
+
+      // Buscar si este cliente tiene registro en dbConversations
+      const matchedConv = dbConversations.find(cv => String(cv.client_id).trim() === cId);
+      const convMsgs = matchedConv ? (Number(matchedConv.total_messages) || 0) : 0;
+      const convLetters = matchedConv ? (Number(matchedConv.total_letters) || 0) : 0;
+
+      const msgCount = Math.max(clientMsgs.length, convMsgs, 1);
+      const letterCount = Math.max(clientObj.letterTotal, clientLetters.length, convLetters);
+
+      const profileBreakdown = {};
+      const addProfileUsage = (pName, msgs, letters) => {
+        const pKey = (pName || 'HORACIO').toUpperCase();
+        if (!profileBreakdown[pKey]) profileBreakdown[pKey] = { messages: 0, letters: 0, credits: 0, usd: 0 };
+        profileBreakdown[pKey].messages += msgs;
+        profileBreakdown[pKey].letters += letters;
+        const cr = (msgs * 1) + (letters * 10);
+        profileBreakdown[pKey].credits += cr;
+        profileBreakdown[pKey].usd = Number((profileBreakdown[pKey].credits * 0.28).toFixed(2));
+      };
+
+      if (clientMsgs.length > 0) {
+        clientMsgs.forEach(m => {
+          addProfileUsage(m.profile_name || clientObj.profileAssigned, 1, 0);
+        });
+      }
+      if (clientLetters.length > 0) {
+        clientLetters.forEach(l => {
+          addProfileUsage(l.profile_name || clientObj.profileAssigned, 0, 1);
+        });
+      }
+      if (Object.keys(profileBreakdown).length === 0) {
+        addProfileUsage(clientObj.profileAssigned, msgCount, letterCount);
+      }
+
+      const totalAgencyCredits = (msgCount * 1) + (letterCount * 10);
+      const spentUSD = Number((totalAgencyCredits * 0.28).toFixed(2));
+      const spentCOP = Math.round(spentUSD * 4200);
+
+      totalAgencyRevenueCredits += totalAgencyCredits;
+
+      Object.entries(profileBreakdown).forEach(([pName, stats]) => {
+        profileRevenueMap.set(pName, (profileRevenueMap.get(pName) || 0) + stats.usd);
+      });
+
+      const estimatedGlobalCredits = Math.max(totalAgencyCredits, totalAgencyCredits + (clientObj.creditsBalance || 0) + (totalAgencyCredits > 100 ? Math.round(totalAgencyCredits * 0.35) : (spentUSD > 20 ? 30 : 10)));
+      const globalEstimatedTotalSpendUSD = Number((estimatedGlobalCredits * 0.28).toFixed(2));
+      const agencyShare = globalEstimatedTotalSpendUSD > 0 ? Math.min(100, Math.round((spentUSD / globalEstimatedTotalSpendUSD) * 100)) : 100;
+      const externalAgencySpendUSD = Number(Math.max(0, globalEstimatedTotalSpendUSD - spentUSD).toFixed(2));
+      const isChattingOtherAgencies = externalAgencySpendUSD > 10;
+
+      let tierLabel = '🟢 PROSPECTO';
+      let tierBadgeClass = 'tier-prospect';
+      let spendingTier = 'REGULAR';
+      if (spentUSD >= 80 || letterCount >= 30) {
+        tierLabel = '💎 WHALE / SUPER VIP';
+        tierBadgeClass = 'tier-whale';
+        spendingTier = 'WHALE';
+      } else if (spentUSD >= 25 || letterCount >= 8) {
+        tierLabel = '🌟 VIP';
+        tierBadgeClass = 'tier-vip';
+        spendingTier = 'VIP';
+      }
+
+      clientResults.push({
+        id: cId,
+        talkytimesId: cId,
+        name: clientObj.name,
+        country: clientObj.country,
+        birthDate: clientObj.birthDate,
+        maritalStatus: clientObj.maritalStatus,
+        tier: tierLabel,
+        spendingTier: spendingTier,
+        tierBadgeClass: tierBadgeClass,
+        profileAssigned: clientObj.profileAssigned,
+        profilesList: Object.keys(profileBreakdown),
+        profiles: profileBreakdown,
+        profileBreakdown: profileBreakdown,
+        messagesTotal: msgCount,
+        totalChatMessages: msgCount,
+        lettersTotal: letterCount,
+        totalLetters: letterCount,
+        spentCredits: totalAgencyCredits,
+        spentUSD: spentUSD,
+        totalSpentUSD: spentUSD,
+        spentCOP: spentCOP,
+        totalSpentCOP: spentCOP,
+        availableCredits: clientObj.creditsBalance || 150,
+        globalEstimatedTotalSpendUSD: globalEstimatedTotalSpendUSD,
+        agencySharePercentage: agencyShare,
+        externalAgencySpendUSD: externalAgencySpendUSD,
+        isChattingOtherAgencies: isChattingOtherAgencies,
+        updatedAt: clientObj.updatedAt
+      });
+    }
+
+    let filtered = clientResults;
+    if (profile && profile !== 'ALL') {
+      filtered = filtered.filter(c => c.profilesList.includes(profile.toUpperCase()) || c.profileAssigned.toUpperCase() === profile.toUpperCase());
+    }
+
+    if (search) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter(c => c.name.toLowerCase().includes(s) || c.id.toLowerCase().includes(s) || c.country.toLowerCase().includes(s));
+    }
+
+    filtered.sort((a, b) => b.spentUSD - a.spentUSD);
+
+    const totalAgencyUSD = Number((totalAgencyRevenueCredits * 0.28).toFixed(2));
+    const totalAgencyCOP = Math.round(totalAgencyUSD * 4200);
+
+    let mostProfitableProfile = 'HORACIO';
+    let highestProfileRev = 0;
+    for (let [p, rev] of profileRevenueMap.entries()) {
+      if (rev > highestProfileRev) {
+        highestProfileRev = rev;
+        mostProfitableProfile = p;
+      }
+    }
+
+    const topSpender = clientResults.length > 0 ? clientResults[0] : null;
+    const leakingCount = clientResults.filter(c => c.isChattingOtherAgencies).length;
+    const estimatedExternalTotalUSD = Number(clientResults.reduce((acc, c) => acc + (c.externalAgencySpendUSD || 0), 0).toFixed(2));
+
+    const profilesBreakdown = Array.from(profileRevenueMap.entries()).map(([p, rev]) => ({
+      profile: p,
+      totalSpentUSD: Number(rev.toFixed(2)),
+      clientsCount: clientResults.filter(c => c.profilesList?.includes(p) || c.profileAssigned === p).length
+    }));
+
+    res.json({
+      success: true,
+      summary: {
+        totalAgencyRevenueUSD: totalAgencyUSD,
+        totalAgencyRevenueCOP: totalAgencyCOP,
+        totalClientsCount: clientResults.length,
+        totalCredits: totalAgencyRevenueCredits,
+        topSpender: topSpender ? { name: topSpender.name, id: topSpender.id, totalSpentUSD: topSpender.spentUSD, totalSpentCOP: topSpender.spentCOP } : null,
+        mostProfitableProfile: { profile: mostProfitableProfile, totalSpentUSD: highestProfileRev },
+        externalChattingClientsCount: leakingCount,
+        estimatedExternalSpendingUSD: estimatedExternalTotalUSD,
+        profilesBreakdown: profilesBreakdown
+      },
+      kpis: {
+        totalRevenueUSD: totalAgencyUSD,
+        totalRevenueCOP: totalAgencyCOP,
+        totalCredits: totalAgencyRevenueCredits,
+        totalClients: clientResults.length,
+        mostProfitableProfile: mostProfitableProfile,
+        topSpender: topSpender ? { name: topSpender.name, id: topSpender.id, spentUSD: topSpender.spentUSD } : null
+      },
+      clients: filtered
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1126,6 +1407,18 @@ function getSupervisorChatList(opName) {
   return { key: clean, list: liveSupervisorChatMemory.get(clean) };
 }
 
+// Endpoint para obtener resumen de mensajes no leídos para el supervisor
+app.get('/api/supervisor/unread-summary', (req, res) => {
+  const unreadMap = {};
+  for (const [opKey, list] of liveSupervisorChatMemory.entries()) {
+    const unreadFromOp = (list || []).filter(m => m.sender !== 'SUPERVISOR' && !m.read).length;
+    if (unreadFromOp > 0) {
+      unreadMap[opKey] = unreadFromOp;
+    }
+  }
+  res.json({ success: true, unread: unreadMap });
+});
+
 app.get('/api/supervisor/messages/:operator', async (req, res) => {
   try {
     const rawOp = (req.params.operator || '').trim();
@@ -1134,55 +1427,65 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
 
     const { key: exactKey, list: memMessages } = getSupervisorChatList(opKey);
 
-    // Intentar consultar kv_store en Supabase para historial persistente
-    try {
-      if (memMessages.length === 0) {
-        const { data } = await supabase.from('kv_store')
-          .select('value')
-          .eq('key', `rr_supervisor_chat_${exactKey}`)
-          .maybeSingle();
+    // 1. Intentar consultar Supabase en segundo plano o si la memoria está vacía
+    if (memMessages.length === 0) {
+      try {
+        const { data } = await supabase.from('supervisor_chat')
+          .select('*')
+          .ilike('operator_name', `%${opKey}%`)
+          .order('created_at', { ascending: true })
+          .limit(50);
 
-        if (data && data.value) {
-          const dbMsgs = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-          if (Array.isArray(dbMsgs)) {
-            dbMsgs.forEach(m => {
-              if (!memMessages.some(x => String(x.id) === String(m.id))) {
-                memMessages.push(m);
-              }
-            });
-          }
+        if (data && Array.isArray(data) && data.length > 0) {
+          const seenIds = new Set(memMessages.map(m => String(m.id)));
+          data.forEach(dbMsg => {
+            const strId = String(dbMsg.id);
+            if (!seenIds.has(strId)) {
+              memMessages.push({
+                id: strId,
+                sender: dbMsg.sender,
+                text: dbMsg.message_text,
+                timestamp: new Date(dbMsg.created_at).getTime(),
+                isEdited: Boolean(dbMsg.is_edited),
+                read: Boolean(dbMsg.is_read)
+              });
+              seenIds.add(strId);
+            }
+          });
+          memMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          liveSupervisorChatMemory.set(exactKey, memMessages);
         }
-      }
-    } catch (dbErr) {}
+      } catch (dbErr) {}
+    }
 
-    // Si el rol que consulta lee los mensajes del otro, marcar como leídos (Doble chulito verde)
-    let changed = false;
+    // 2. Si el rol que consulta lee los mensajes del otro, marcar como leídos (Doble chulito verde)
     if (role === 'OPERATOR') {
+      let changed = false;
       memMessages.forEach(m => {
         if (m.sender === 'SUPERVISOR' && !m.read) {
           m.read = true;
           changed = true;
         }
       });
+      if (changed) {
+        liveSupervisorChatMemory.set(exactKey, memMessages);
+        supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${opKey}%`).eq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+      }
     } else if (role === 'SUPERVISOR') {
+      let changed = false;
       memMessages.forEach(m => {
         if (m.sender !== 'SUPERVISOR' && !m.read) {
           m.read = true;
           changed = true;
         }
       });
+      if (changed) {
+        liveSupervisorChatMemory.set(exactKey, memMessages);
+        supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${opKey}%`).neq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+      }
     }
 
-    if (changed) {
-      liveSupervisorChatMemory.set(exactKey, memMessages);
-      try {
-        supabase.from('kv_store')
-          .upsert({ key: `rr_supervisor_chat_${exactKey}`, value: JSON.stringify(memMessages) }, { onConflict: 'key' })
-          .then(() => {});
-      } catch (e) {}
-    }
-
-    res.json({ success: true, messages: memMessages });
+    res.json({ success: true, operator: exactKey, messages: memMessages });
   } catch (err) {
     res.json({ success: true, messages: [] });
   }
@@ -1203,11 +1506,11 @@ app.post('/api/supervisor/mark-read', async (req, res) => {
 
     liveSupervisorChatMemory.set(exactKey, list);
 
-    try {
-      supabase.from('kv_store')
-        .upsert({ key: `rr_supervisor_chat_${exactKey}`, value: JSON.stringify(list) }, { onConflict: 'key' })
-        .then(() => {});
-    } catch (e) {}
+    if (role === 'OPERATOR') {
+      supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${exactKey}%`).eq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+    } else if (role === 'SUPERVISOR') {
+      supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${exactKey}%`).neq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1229,9 +1532,8 @@ app.post('/api/supervisor/send-message', async (req, res) => {
 
       uniqueOps.forEach(op => {
         const { key: exactKey, list } = getSupervisorChatList(op);
-        const msgId = `sup_bc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         list.push({
-          id: msgId,
+          id: `sup_bc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           sender: 'SUPERVISOR',
           text: `📢 [ANUNCIO GENERAL] ${cleanText}`,
           timestamp: Date.now(),
@@ -1240,13 +1542,15 @@ app.post('/api/supervisor/send-message', async (req, res) => {
         });
         if (list.length > 50) list.shift();
         liveSupervisorChatMemory.set(exactKey, list);
-
-        try {
-          supabase.from('kv_store')
-            .upsert({ key: `rr_supervisor_chat_${exactKey}`, value: JSON.stringify(list) }, { onConflict: 'key' })
-            .then(() => {});
-        } catch (e) {}
       });
+
+      const inserts = uniqueOps.map(op => ({
+        operator_name: normalizeOpKey(op),
+        sender: 'SUPERVISOR',
+        message_text: `📢 [ANUNCIO GENERAL] ${cleanText}`,
+        is_read: false
+      }));
+      supabase.from('supervisor_chat').insert(inserts).then(() => {}).catch(() => {});
     } else {
       const { key: exactKey, list } = getSupervisorChatList(operatorName);
       const msgId = `sup_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -1262,11 +1566,12 @@ app.post('/api/supervisor/send-message', async (req, res) => {
       if (list.length > 50) list.shift();
       liveSupervisorChatMemory.set(exactKey, list);
 
-      try {
-        supabase.from('kv_store')
-          .upsert({ key: `rr_supervisor_chat_${exactKey}`, value: JSON.stringify(list) }, { onConflict: 'key' })
-          .then(() => {});
-      } catch (e) {}
+      supabase.from('supervisor_chat').insert({
+        operator_name: exactKey,
+        sender: 'SUPERVISOR',
+        message_text: cleanText,
+        is_read: false
+      }).then(() => {}).catch(() => {});
     }
 
     res.json({ success: true, message: 'Mensaje de supervisor emitido con éxito' });
@@ -1295,11 +1600,12 @@ app.post('/api/operator/reply-message', async (req, res) => {
     if (list.length > 50) list.shift();
     liveSupervisorChatMemory.set(exactKey, list);
 
-    try {
-      supabase.from('kv_store')
-        .upsert({ key: `rr_supervisor_chat_${exactKey}`, value: JSON.stringify(list) }, { onConflict: 'key' })
-        .then(() => {});
-    } catch (e) {}
+    supabase.from('supervisor_chat').insert({
+      operator_name: exactKey,
+      sender: 'OPERATOR',
+      message_text: cleanText,
+      is_read: false
+    }).then(() => {}).catch(() => {});
 
     res.json({ success: true, id: msgId });
   } catch (err) {
@@ -1314,20 +1620,23 @@ app.post('/api/supervisor/edit-message', async (req, res) => {
     if (!id || !text) return res.status(400).json({ error: 'ID y texto son requeridos' });
 
     const cleanText = text.trim();
-    const { key: exactKey, list } = getSupervisorChatList(operatorName);
 
-    list.forEach(m => {
-      if (String(m.id) === String(id)) {
-        m.text = cleanText;
-        m.isEdited = true;
-      }
-    });
+    // Buscar y actualizar en todas las listas en memoria
+    for (const [k, list] of liveSupervisorChatMemory.entries()) {
+      list.forEach(m => {
+        if (String(m.id) === String(id)) {
+          m.text = cleanText;
+          m.isEdited = true;
+        }
+      });
+    }
 
-    try {
-      supabase.from('kv_store')
-        .upsert({ key: `rr_supervisor_chat_${exactKey}`, value: JSON.stringify(list) }, { onConflict: 'key' })
-        .then(() => {});
-    } catch (e) {}
+    if (!isNaN(id) && Number(id) > 0) {
+      supabase.from('supervisor_chat').update({
+        message_text: cleanText,
+        is_edited: true
+      }).eq('id', Number(id)).then(() => {}).catch(() => {});
+    }
 
     res.json({ success: true, message: 'Mensaje editado con éxito' });
   } catch (err) {

@@ -10670,6 +10670,52 @@
       return localDateStr(logical);
     }
 
+    const MANUAL_OPS_KEY = 'rr_manual_operators_v2';
+
+    function getManualOperators() {
+      try {
+        const raw = localStorage.getItem(MANUAL_OPS_KEY);
+        return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      } catch(e) { return []; }
+    }
+
+    function saveManualOperator(op) {
+      if (!op || !op.name) return;
+      const list = getManualOperators();
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
+      const normN = _safeN(op.name);
+      const idx = list.findIndex(o => _safeN(o.name) === normN);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...op };
+      } else {
+        list.push({ ...op });
+      }
+      const jsonVal = JSON.stringify(list);
+      if (typeof _origSetItem === 'function') _origSetItem(MANUAL_OPS_KEY, jsonVal);
+      else localStorage.setItem(MANUAL_OPS_KEY, jsonVal);
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[MANUAL_OPS_KEY] = Date.now();
+      if (typeof _sbMemCache !== 'undefined') _sbMemCache[MANUAL_OPS_KEY] = jsonVal;
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: MANUAL_OPS_KEY, value: jsonVal }, { onConflict: 'key' }).then(()=>{});
+      }
+    }
+
+    function removeManualOperator(name) {
+      if (!name) return;
+      const list = getManualOperators();
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
+      const normN = _safeN(name);
+      const filtered = list.filter(o => _safeN(o.name) !== normN);
+      const jsonVal = JSON.stringify(filtered);
+      if (typeof _origSetItem === 'function') _origSetItem(MANUAL_OPS_KEY, jsonVal);
+      else localStorage.setItem(MANUAL_OPS_KEY, jsonVal);
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[MANUAL_OPS_KEY] = Date.now();
+      if (typeof _sbMemCache !== 'undefined') _sbMemCache[MANUAL_OPS_KEY] = jsonVal;
+      if (typeof _sb !== 'undefined' && _sb) {
+        _sb.from('kv_store').upsert({ key: MANUAL_OPS_KEY, value: jsonVal }, { onConflict: 'key' }).then(()=>{});
+      }
+    }
+
     function getDeletedOperators() {
       try {
         const raw = localStorage.getItem('rr_deleted_operators_v1');
@@ -10740,7 +10786,15 @@
             return { ...srcOp };
           });
 
-          // 2. Añadimos operadores manuales en STORAGE (que no hayan sido eliminados)
+          // 2. Añadimos operadores manuales del registro dedicado y de STORAGE
+          const manualOps = (typeof getManualOperators === 'function') ? getManualOperators().filter(m => m && m.name && !deletedNorms.includes(safeN(m.name))) : [];
+          manualOps.forEach(mOp => {
+            const sn = safeN(mOp.name);
+            if (sn && !mergedList.some(m => safeN(m.name) === sn)) {
+              mergedList.push({ ...mOp });
+            }
+          });
+
           if (Array.isArray(savedArr)) {
              savedArr.forEach(savedOp => {
                const sn = safeN(savedOp.name);
@@ -15217,6 +15271,19 @@
             }
           }
         });
+        // Añadir también operadores manuales del registro permanente
+        if (typeof getManualOperators === 'function') {
+          const manOps = getManualOperators();
+          manOps.forEach(op => {
+            if (op && op.name) {
+              const key = _safeN(op.name);
+              if (!mergedMap[key]) {
+                console.info('[Sync] Preservando operador manual registrado:', op.name);
+                mergedMap[key] = { ...op };
+              }
+            }
+          });
+        }
         
         const mergedArr = Object.values(mergedMap);
         const mergedStr = JSON.stringify(mergedArr);
@@ -15231,7 +15298,8 @@
         if (typeof recalcGrowth === 'function') recalcGrowth();
         
         // Subir la lista fusionada a Supabase para que otros clientes también la reciban
-        if (_sb && mergedArr.length > remoteArr.length) {
+        const shouldUpload = (mergedArr.length > remoteArr.length || Object.keys(mergedMap).length > Object.keys(remoteMap).length);
+        if (_sb && shouldUpload) {
           const newTs = String(Date.now());
           _origSetItem('primeOperatorsData2026_ts', newTs);
           _sbMemCache['primeOperatorsData2026_ts'] = newTs;
@@ -15310,6 +15378,24 @@
             // omitir por ahora, procesar despues de cargar todos los rr_profile_*
           } else if (key === 'primeOperatorsData2026_ts') {
             // Se procesa implícitamente en syncMergeOperatorsData
+          } else if (key === 'rr_manual_operators_v2') {
+            try {
+              const rList = typeof value === 'string' ? JSON.parse(value) : value;
+              if (Array.isArray(rList) && typeof getManualOperators === 'function') {
+                const lList = getManualOperators();
+                const mergedM = [...lList];
+                const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
+                rList.forEach(ro => {
+                  if (ro && ro.name) {
+                    const sn = _safeN(ro.name);
+                    if (!mergedM.some(lo => _safeN(lo.name) === sn)) mergedM.push(ro);
+                  }
+                });
+                const jVal = JSON.stringify(mergedM);
+                _origSetItem('rr_manual_operators_v2', jVal);
+                _sbMemCache['rr_manual_operators_v2'] = jVal;
+              }
+            } catch(e){}
           } else if (key.startsWith('rr_profile_')) {
             const _pVal = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
             _origSetItem(key, _pVal);
@@ -15579,6 +15665,30 @@
                       renderOpDashboard(currentOpName);
                     }
                   });
+              } else if (row.key === 'rr_manual_operators_v2') {
+                const msSinceLocalSave = Date.now() - (_localSaveTs['rr_manual_operators_v2'] || 0);
+                if (msSinceLocalSave < 4000) return;
+                try {
+                  const rList = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+                  if (Array.isArray(rList) && typeof getManualOperators === 'function') {
+                    const lList = getManualOperators();
+                    const mergedM = [...lList];
+                    const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
+                    rList.forEach(ro => {
+                      if (ro && ro.name) {
+                        const sn = _safeN(ro.name);
+                        if (!mergedM.some(lo => _safeN(lo.name) === sn)) mergedM.push(ro);
+                      }
+                    });
+                    const jVal = JSON.stringify(mergedM);
+                    _origSetItem('rr_manual_operators_v2', jVal);
+                    _sbMemCache['rr_manual_operators_v2'] = jVal;
+                    if (typeof loadData === 'function') loadData();
+                    if (typeof asiRender === 'function') asiRender();
+                    if (typeof renderRanking === 'function') renderRanking();
+                    if (typeof renderOperators === 'function') renderOperators();
+                  }
+                } catch(e){}
               } else if (row.key.startsWith('rr_profile_')) {
                 const _msProfile = Date.now() - (_localSaveTs[row.key] || 0);
                 if (_msProfile < 10000) return;
@@ -15785,6 +15895,7 @@
     // para las claves de negocio más importantes
     const _CRITICAL_KEYS = [
       'primeOperatorsData2026',
+      'rr_manual_operators_v2',
       'rr_deleted_operators_v1',
       'rr_prime_cortes',
       'rr_prime_asistencia',
@@ -15822,12 +15933,8 @@
             const remoteTs = parseInt(remoteTsVal || '0');
 
             if (remoteTs > localTs) {
-              const strVal = typeof value === 'string' ? value : JSON.stringify(value);
-              if (_sbMemCache['primeOperatorsData2026'] !== strVal) {
-                _origSetItem('primeOperatorsData2026', strVal);
-                _sbMemCache['primeOperatorsData2026'] = strVal;
-                _origSetItem('primeOperatorsData2026_ts', String(remoteTs));
-                _sbMemCache['primeOperatorsData2026_ts'] = String(remoteTs);
+              if (typeof syncMergeOperatorsData === 'function') {
+                syncMergeOperatorsData(value, remoteTsVal);
                 changed = true;
               }
             } else if (localTs > remoteTs) {
@@ -17190,10 +17297,14 @@
       const op = operatorsData[idx];
       if (!confirm(`¿Eliminar permanentemente a "${op.name}"?\nEsta acción no se puede deshacer.`)) return;
 
-      // 1. Agregar a la lista negra permanente de eliminados en localStorage y Supabase
+      // 1. Agregar a la lista negra permanente de eliminados y remover de operadores manuales
       if (typeof addDeletedOperator === 'function') {
         addDeletedOperator(op.name);
         addDeletedOperator(name);
+      }
+      if (typeof removeManualOperator === 'function') {
+        removeManualOperator(op.name);
+        removeManualOperator(name);
       }
 
       // 2. Eliminar del array global
@@ -17213,7 +17324,8 @@
           await Promise.all([
             _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' }),
             _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }),
-            _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: deletedListJson }, { onConflict: 'key' })
+            _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: deletedListJson }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'rr_manual_operators_v2', value: JSON.stringify(typeof getManualOperators === 'function' ? getManualOperators() : []) }, { onConflict: 'key' })
           ]);
           console.info('✅ [BORRADO BD] Operador eliminado correctamente de la base de datos Supabase:', op.name);
         } catch(e) { console.warn('⚠️ Error al eliminar operador en Supabase:', e.message); }
@@ -21399,6 +21511,11 @@ function exportarDatos() {
         cuenta: ''
       };
 
+      // 1b. Guardar en registro manual permanente incondicional
+      if (typeof saveManualOperator === 'function') {
+        saveManualOperator(newOp);
+      }
+
       // 2. Inyectar en operatorsData global
       operatorsData.push(newOp);
 
@@ -21423,9 +21540,11 @@ function exportarDatos() {
       // 5. Sincronizar directo en Supabase kv_store
       if (typeof _sb !== 'undefined' && _sb) {
         const normKey = (typeof _normName === 'function' ? _normName(name) : name.replace(/[^A-Z0-9]/g, ''));
+        const manualListJson = JSON.stringify(typeof getManualOperators === 'function' ? getManualOperators() : [newOp]);
         Promise.all([
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'rr_manual_operators_v2', value: manualListJson }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'rr_profile_' + normKey, value: '[]' }, { onConflict: 'key' })
         ]).then(() => {
           console.info('✅ [NUEVO OPERADOR BD] Guardado y sincronizado correctamente en Supabase.');
@@ -33991,6 +34110,7 @@ PT._logKey = function (opName) {
       if (nueva === actual) return;
       
       op.plataforma = nueva;
+      if (typeof saveManualOperator === 'function') saveManualOperator(op);
       saveData();
       
       // Marcar timestamp y forzar subida a Supabase para consistencia Realtime
@@ -34534,9 +34654,12 @@ PT._logKey = function (opName) {
 
       if (typeof _sb !== 'undefined' && _sb) {
         const hoyStr = date || localDateStr();
+        const nowTs = String(Date.now());
         const promises = [
           _sb.from('kv_store').upsert({ key: ASI_KEY, value: JSON.stringify(all) }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' })
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'rr_manual_operators_v2', value: JSON.stringify(typeof getManualOperators === 'function' ? getManualOperators() : []) }, { onConflict: 'key' })
         ];
 
         const targetShifts = asiShift === 'todos' ? ['manana', 'tarde', 'noche'] : [asiShift.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")];

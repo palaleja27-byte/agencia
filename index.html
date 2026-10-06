@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20261006_1438 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v19.0 [CHARTS-29PROFILES-LIVE]</title>
+  <!-- build:20261006_1508 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v19.1 [FULL-DIAGNOSTICO-SIMULATOR-PIE]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22121,6 +22121,42 @@ function exportarDatos() {
       }).sort((a, b) => b.ptsMes - a.ptsMes);
 
       // --- 4. DIAGNÓSTICO CAUSAL Y FACTORES DE CRECIMIENTO ---
+      // --- AGRUPACIÓN DE LOS 29 PERFILES PARA GRÁFICAS DE PASTEL & SIMULADOR ---
+      const titanesIdsSet = new Set(['91733663', '120720195', '103289167', '108018336', '139247498', '139245989', '156881990', '138130329', '98540781', '187684981', '130422416', '120275229']);
+      const rescateIdsSet = new Set(['88243516']);
+
+      let ptsCatTitanes = 0;
+      let ptsCatRegulares = 0;
+      let ptsCatRescate = 0;
+
+      perfilesFiltrados.forEach(p => {
+        const val = Number(p.ptsMes) || 0;
+        const pidStr = String(p.id).trim();
+        if (titanesIdsSet.has(pidStr)) {
+          ptsCatTitanes += val;
+        } else if (rescateIdsSet.has(pidStr)) {
+          ptsCatRescate += val;
+        } else {
+          ptsCatRegulares += val;
+        }
+      });
+
+      // Guardar datos reales en window._simRealData para reactividad del simulador
+      window._simRealData = {
+        ptsMes: ptsMes || 0,
+        ptsHoy: ptsHoy || 0,
+        proyeccionMes: proyeccionMes || 0,
+        diasRestantes: Math.max(1, new Date(new Date(hoy+'T12:00:00').getFullYear(), new Date(hoy+'T12:00:00').getMonth()+1, 0).getDate() - new Date(hoy + 'T12:00:00').getDate()),
+        diasEnMes: new Date(new Date(hoy+'T12:00:00').getFullYear(), new Date(hoy+'T12:00:00').getMonth()+1, 0).getDate(),
+        diaDelMes: new Date(hoy + 'T12:00:00').getDate(),
+        paceHourly: paceHourly || 0,
+        numOperadores: (operatorsData || []).filter(op => belongsToCompany(op)).length || 15,
+        ptsPorJornada: ptsPorJornada || { 'Manana': 0, 'Tarde': 0, 'Noche': 0 },
+        ptsCatTitanes: ptsCatTitanes || 0,
+        ptsCatRegulares: ptsCatRegulares || 0,
+        ptsCatRescate: ptsCatRescate || 0
+      };
+
       const top5Perfiles = perfilesFiltrados.slice(0, 5);
       const totalPtsTop5 = top5Perfiles.reduce((acc, p) => acc + p.ptsMes, 0);
       const pctContribucionTop5 = ptsMes > 0 ? ((totalPtsTop5 / ptsMes) * 100).toFixed(1) : '0.0';
@@ -22747,38 +22783,39 @@ function exportarDatos() {
           </div> <!-- closes rep-perfiles -->
 
           <!-- ═══ SUB-TAB 5: 🕵️ OTRAS AGENCIAS & RADAR DE BALLENAS (INGENIERÍA INVERSA) ═══ -->
-          <!-- ═══ SUB-TAB 3: DIAGNÓSTICO CAUSAL, PROYECCIONES & ANÁLISIS IA ═══ -->
-          <div id="rep-diagnostico" class="rep-tab-content" style="display:none; max-width:1150px; margin:0 auto; padding:0 8px;">
+          <!-- ═══ SUB-TAB 3: DIAGNÓSTICO CAUSAL, PROYECCIONES & ANÁLISIS IA (FULL-WIDTH RESPONSIVE) ═══ -->
+          <div id="rep-diagnostico" class="rep-tab-content" style="display:none; width:100%; max-width:100%; margin:0; padding:0 4px; box-sizing:border-box;">
             
-            <!-- HEADER DE CONTROL & RE-EVALUACIÓN REALTIME -->
-            <div style="background:linear-gradient(135deg, rgba(30,27,75,0.95), rgba(15,23,42,0.98)); border:1.5px solid rgba(129,140,248,0.4); border-radius:16px; padding:20px 24px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; box-shadow:0 12px 35px rgba(0,0,0,0.6), 0 0 20px rgba(99,102,241,0.15);">
+            <!-- HEADER DE CONTROL & RE-EVALUACIÓN REALTIME (100% ANCHO) -->
+            <div style="background:linear-gradient(135deg, rgba(30,27,75,0.95), rgba(15,23,42,0.98)); border:1.5px solid rgba(129,140,248,0.4); border-radius:16px; padding:20px 24px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; box-shadow:0 12px 35px rgba(0,0,0,0.6), 0 0 20px rgba(99,102,241,0.15); width:100%; box-sizing:border-box;">
               <div style="display:flex; align-items:center; gap:14px; min-width:280px;">
                 <div style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, #6366f1, #38bdf8); display:flex; align-items:center; justify-content:center; font-size:1.6rem; box-shadow:0 0 20px rgba(56,189,248,0.4);">🔬</div>
                 <div>
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <h3 style="margin:0; color:#fff; font-size:1.25rem; font-weight:900; letter-spacing:0.5px;">Centro de Diagnóstico Causal & IA Predictiva</h3>
-                    <span style="font-size:0.6rem; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid #34d399; padding:2px 7px; border-radius:6px; font-weight:bold;">PERFILES LIVE DATA</span>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <h3 style="margin:0; color:#fff; font-size:1.25rem; font-weight:900; letter-spacing:0.5px;">Centro de Diagnóstico Causal, Rentabilidad & IA Predictiva</h3>
+                    <span style="font-size:0.6rem; background:rgba(52,211,153,0.15); color:#34d399; border:1px solid #34d399; padding:2px 7px; border-radius:6px; font-weight:bold;">DATAME LIVE TELEMETRY</span>
+                    <span style="font-size:0.6rem; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid #38bdf8; padding:2px 7px; border-radius:6px; font-weight:bold;">29 PERFILES OFICIALES</span>
                   </div>
-                  <div style="color:#94a3b8; font-size:0.75rem; margin-top:3px;">Auditoría cuantitativa basada en los 76 perfiles extraídos de Datame, simulador financiero dinámico y playbook operativo en tiempo real.</div>
+                  <div style="color:#94a3b8; font-size:0.75rem; margin-top:3px;">Auditoría cuantitativa basada en los 29 perfiles oficiales de Agencia RR, simulador interactivo de rentabilidad empresarial y análisis visual con gráficas de pastel.</div>
                 </div>
               </div>
               <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <button onclick="renderOperators()" style="background:linear-gradient(135deg, #6366f1, #38bdf8); color:#fff; border:none; padding:10px 18px; border-radius:10px; font-size:0.78rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:8px; box-shadow:0 0 20px rgba(56,189,248,0.4); transition:all 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
-                  <span>⚡</span> Recalcular Diagnóstico IA
+                  <span>⚡</span> Recalcular Diagnóstico & Datame
                 </button>
                 <button onclick="abrirInfoTarjeta('diag-causal')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#cbd5e1; padding:10px 14px; border-radius:10px; font-size:0.75rem; font-weight:bold; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">&#9432; Fórmulas & Metodología</button>
               </div>
             </div>
 
-            <!-- GRID RESPONSIVE DE MÓDULOS INTELIGENTES -->
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-bottom:24px;">
+            <!-- FILA 1: GRID RESPONSIVE DE CARDS DE DIAGNÓSTICO -->
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-bottom:24px; width:100%; box-sizing:border-box;">
 
-              <!-- CARD 1: DIAGNÓSTICO PARETO (TOP 5 PERFILES DATAME) -->
+              <!-- CARD 1: DIAGNÓSTICO PARETO (TOP 5 PERFILES TITANES) -->
               <div style="background:linear-gradient(145deg, rgba(15,23,42,0.92), rgba(30,41,59,0.92)); border:1px solid rgba(251,191,36,0.35); border-radius:16px; padding:20px; box-shadow:0 8px 25px rgba(0,0,0,0.4); display:flex; flex-direction:column; justify-content:space-between;">
                 <div>
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                     <div style="font-weight:900; color:#fbbf24; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
-                      <span>🚀</span> 1. Concentración Pareto (Perfiles Titanes)
+                      <span>🚀</span> 1. Concentración Pareto (Top Titanes)
                     </div>
                     <span style="font-size:0.75rem; font-weight:900; color:#fbbf24; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.3); padding:3px 8px; border-radius:6px;">${pctContribucionTop5}% del Total</span>
                   </div>
@@ -22803,17 +22840,12 @@ function exportarDatos() {
                           </div>
                         </div>
                       `;
-
-      // ══════════════════════════════════════════════════════════════════════
-      
-
-
                     }).join('')}
                   </div>
                 </div>
 
                 <div style="background:rgba(251,191,36,0.08); border-left:3px solid #fbbf24; padding:10px 12px; border-radius:0 8px 8px 0; font-size:0.72rem; color:#fde68a; line-height:1.4;">
-                  🎯 <strong>Prescripción IA:</strong> Blindar estos 5 avatares con los operadores más veloces del turno para evitar caídas en el ranking global.
+                  🎯 <strong>Prescripción IA:</strong> Blindar estos avatares clave con operadores de digitación rápida para mantener su posición en el ranking de la plataforma.
                 </div>
               </div>
 
@@ -22869,7 +22901,7 @@ function exportarDatos() {
                 <div>
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                     <div style="font-weight:900; color:#f43f5e; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
-                      <span>⚠️</span> 3. Detección de Fricciones & Cuentas Frías
+                      <span>⚠️</span> 3. Detección de Fricciones & Rescate
                     </div>
                     <span style="font-size:0.75rem; font-weight:900; color:#f43f5e; background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.3); padding:3px 8px; border-radius:6px;">Acción Inmediata</span>
                   </div>
@@ -22881,16 +22913,16 @@ function exportarDatos() {
                   <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
                     <div style="background:rgba(244,63,94,0.06); border:1px solid rgba(244,63,94,0.2); padding:8px 12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
                       <div>
-                        <div style="color:#fff; font-size:0.75rem; font-weight:bold;">📸 Rotación de Fotos en Cuentas Frías</div>
-                        <div style="color:#94a3b8; font-size:0.65rem;">Cambiar foto principal por formato selfie casual.</div>
+                        <div style="color:#fff; font-size:0.75rem; font-weight:bold;">🚨 Perfil en Rescate: RICARDO (88243516)</div>
+                        <div style="color:#94a3b8; font-size:0.65rem;">Actualizar fotos y enviar cartas directas a donadores históricos.</div>
                       </div>
                       <span style="color:#f43f5e; font-size:0.7rem; font-weight:bold;">Prioridad 1</span>
                     </div>
 
                     <div style="background:rgba(244,63,94,0.06); border:1px solid rgba(244,63,94,0.2); padding:8px 12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
                       <div>
-                        <div style="color:#fff; font-size:0.75rem; font-weight:bold;">⚡ Regla de Respuesta < 45s</div>
-                        <div style="color:#94a3b8; font-size:0.65rem;">Evitar abandono de clientes en streaming y chat.</div>
+                        <div style="color:#fff; font-size:0.75rem; font-weight:bold;">⚡ Regla de Respuesta &lt; 45s</div>
+                        <div style="color:#94a3b8; font-size:0.65rem;">Evitar abandono de clientes en streaming y chat en vivo.</div>
                       </div>
                       <span style="color:#f43f5e; font-size:0.7rem; font-weight:bold;">Prioridad 2</span>
                     </div>
@@ -22904,83 +22936,280 @@ function exportarDatos() {
 
             </div>
 
-            <!-- MÓDULO 2: SIMULADOR FINANCIERO DINÁMICO DE PROYECCIONES ($1,400 COP / pt) -->
-            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,41,59,0.95)); border:1.5px solid rgba(52,211,153,0.4); border-radius:18px; padding:24px; margin-bottom:24px; box-shadow:0 12px 35px rgba(0,0,0,0.5), 0 0 25px rgba(52,211,153,0.15);">
+            <!-- ══════════════════════════════════════════════════════════════════════ -->
+            <!-- 🎯 MÓDULO 2: SIMULADOR FINANCIERO DINÁMICO & METAS DE RENTABILIDAD     -->
+            <!-- (INTERACTIVO, CONFIGURABLE POR OPERADOR, GRUPO Y OPERACIÓN COMPLETA)   -->
+            <!-- ══════════════════════════════════════════════════════════════════════ -->
+            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,41,59,0.95)); border:1.5px solid rgba(52,211,153,0.4); border-radius:18px; padding:24px; margin-bottom:24px; box-shadow:0 12px 35px rgba(0,0,0,0.5), 0 0 25px rgba(52,211,153,0.15); width:100%; box-sizing:border-box;">
               
+              <!-- ENCABEZADO DEL SIMULADOR -->
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                  <span style="font-size:1.5rem;">🎯</span>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg, #10b981, #06b6d4); display:flex; align-items:center; justify-content:center; font-size:1.5rem; box-shadow:0 0 15px rgba(16,185,129,0.4);">🎯</div>
                   <div>
-                    <h4 style="margin:0; color:#34d399; font-size:1.15rem; font-weight:900;">Simulador Financiero & Metas Operativas</h4>
-                    <div style="color:#94a3b8; font-size:0.72rem; margin-top:2px;">Proyecciones dinámicas calculadas a tasa oficial de <strong>$1,400 COP por punto</strong> (Día ${diaDelMes} de ${diasEnMes})</div>
+                    <h4 style="margin:0; color:#34d399; font-size:1.2rem; font-weight:900; letter-spacing:0.5px;">Simulador Financiero & Metas de Rentabilidad Empresarial</h4>
+                    <div style="color:#94a3b8; font-size:0.75rem; margin-top:2px;">Calcula metas por operador, grupo de turno y operación total a tasa oficial de <strong>$1,400 COP por punto</strong> con razonamiento IA en vivo.</div>
                   </div>
                 </div>
-                <div style="background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.3); padding:4px 12px; border-radius:8px; color:#34d399; font-size:0.75rem; font-weight:900;">
-                  ⏳ ${diasRestantes} Días Restantes
+                
+                <!-- PRESETS RÁPIDOS -->
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <button type="button" onclick="aplicarPresetSimulador('datame_real')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:6px 12px; border-radius:8px; font-size:0.72rem; font-weight:bold; cursor:pointer; transition:all 0.2s;">⚡ Ritmo Datame Actual</button>
+                  <button type="button" onclick="aplicarPresetSimulador('breakeven')" style="background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#fbbf24; padding:6px 12px; border-radius:8px; font-size:0.72rem; font-weight:bold; cursor:pointer; transition:all 0.2s;">🛡️ Punto de Equilibrio</button>
+                  <button type="button" onclick="aplicarPresetSimulador('rentable')" style="background:rgba(52,211,153,0.15); border:1px solid rgba(52,211,153,0.4); color:#34d399; padding:6px 12px; border-radius:8px; font-size:0.72rem; font-weight:bold; cursor:pointer; transition:all 0.2s;">🚀 Alta Rentabilidad (+25M COP)</button>
                 </div>
               </div>
 
-              <!-- METRIC CARDS DEL SIMULADOR -->
+              <!-- PANEL DE CONTROLES INTERACTIVOS (INPUTS Y SLIDERS) -->
+              <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.06); border-radius:14px; padding:18px; margin-bottom:20px; display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:18px;">
+                
+                <!-- CONTROL 1: META POR OPERADOR -->
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:0.78rem; font-weight:bold; color:#cbd5e1;">👤 Meta Diaria por Operador:</label>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                      <input type="number" id="sim-meta-operador-num" value="120" min="20" max="500" step="5" oninput="sincronizarControlSimulador('num', 'sim-meta-operador', this.value)" style="width:65px; background:rgba(15,23,42,0.9); border:1px solid #38bdf8; border-radius:6px; color:#38bdf8; font-weight:900; font-size:0.85rem; text-align:center; padding:2px 4px;">
+                      <span style="font-size:0.7rem; color:#94a3b8;">pts/día</span>
+                    </div>
+                  </div>
+                  <input type="range" id="sim-meta-operador" min="20" max="500" step="5" value="120" oninput="sincronizarControlSimulador('range', 'sim-meta-operador-num', this.value)" style="width:100%; accent-color:#38bdf8; cursor:pointer;">
+                  <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#64748b; margin-top:3px;">
+                    <span>20 pts (~$28k COP)</span>
+                    <span id="sim-meta-op-cop-preview" style="color:#38bdf8; font-weight:bold;">~$168,000 COP/día</span>
+                    <span>500 pts (~$700k COP)</span>
+                  </div>
+                </div>
+
+                <!-- CONTROL 2: NÚMERO DE OPERADORES ACTIVOS -->
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:0.78rem; font-weight:bold; color:#cbd5e1;">👥 Operadores Activos en Sala:</label>
+                    <div style="display:flex; align-items:center; gap:4px;">
+                      <input type="number" id="sim-num-operadores-num" value="${operadoresStats.length || 15}" min="1" max="40" step="1" oninput="sincronizarControlSimulador('num', 'sim-num-operadores', this.value)" style="width:55px; background:rgba(15,23,42,0.9); border:1px solid #34d399; border-radius:6px; color:#34d399; font-weight:900; font-size:0.85rem; text-align:center; padding:2px 4px;">
+                      <span style="font-size:0.7rem; color:#94a3b8;">ops</span>
+                    </div>
+                  </div>
+                  <input type="range" id="sim-num-operadores" min="1" max="40" step="1" value="${operadoresStats.length || 15}" oninput="sincronizarControlSimulador('range', 'sim-num-operadores-num', this.value)" style="width:100%; accent-color:#34d399; cursor:pointer;">
+                  <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#64748b; margin-top:3px;">
+                    <span>1 op</span>
+                    <span style="color:#34d399;">Detectados: ${operadoresStats.length || 15} en plantilla</span>
+                    <span>40 ops</span>
+                  </div>
+                </div>
+
+                <!-- CONTROL 3: COSTOS FIJOS OPERATIVOS -->
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:0.78rem; font-weight:bold; color:#cbd5e1;">🏢 Costos Fijos Mensuales (COP):</label>
+                    <span style="font-size:0.65rem; color:#f87171; background:rgba(248,113,113,0.15); padding:2px 6px; border-radius:4px;">Nómina + Sala + Luz + Net</span>
+                  </div>
+                  <div style="position:relative;">
+                    <span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8; font-weight:bold;">$</span>
+                    <input type="number" id="sim-costos-fijos" value="12000000" step="500000" min="0" oninput="window.recalcularSimuladorFinanciero()" style="width:100%; background:rgba(15,23,42,0.9); border:1px solid rgba(248,113,113,0.4); border-radius:8px; color:#f87171; font-weight:bold; font-size:0.9rem; padding:8px 10px 8px 24px; box-sizing:border-box;">
+                  </div>
+                  <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:#64748b; margin-top:4px;">
+                    <span>Referencia: $12.000.000 COP</span>
+                    <span>Punto de Equilibrio Base</span>
+                  </div>
+                </div>
+
+                <!-- CONTROL 4: PARÁMETROS OPERATIVOS FIJOS -->
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="font-size:0.78rem; font-weight:bold; color:#cbd5e1;">⚙️ Parámetros del Mes:</label>
+                    <span style="font-size:0.65rem; color:#34d399; background:rgba(52,211,153,0.15); padding:2px 6px; border-radius:4px;">Tasa Oficial</span>
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:6px 10px; text-align:center;">
+                      <div style="font-size:0.6rem; color:#94a3b8;">VALOR POR PUNTO</div>
+                      <div style="font-size:0.95rem; font-weight:900; color:#34d399;">$1,400 COP</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:6px 10px; text-align:center;">
+                      <div style="font-size:0.6rem; color:#94a3b8;">DÍAS DEL MES</div>
+                      <div style="font-size:0.95rem; font-weight:900; color:#38bdf8;">${diasEnMes} días</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- RESULTADOS EN TIEMPO REAL: 4 TARJETAS EJECUTIVAS -->
               <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap:16px; margin-bottom:20px;">
                 
-                <!-- ESCENARIO BASE -->
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:18px; text-align:center; transition:all 0.2s;" onmouseover="this.style.borderColor='#94a3b8'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
-                  <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase; font-weight:bold; letter-spacing:0.5px;">🛡️ Proyección Base (Lineal)</div>
-                  <div style="font-size:1.8rem; font-weight:900; color:#fff; margin:6px 0; letter-spacing:-0.5px;">${proyeccionMes.toFixed(0)} pts</div>
-                  <div style="font-size:0.85rem; color:#34d399; font-weight:900;">~$${Math.round(proyeccionMes * COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
-                  <div style="font-size:0.65rem; color:#64748b; margin-top:6px;">Ritmo histórico actual ponderado</div>
+                <!-- CARD R1: META TOTAL OPERACIÓN -->
+                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(56,189,248,0.3); border-radius:12px; padding:16px; text-align:center;">
+                  <div style="font-size:0.68rem; color:#38bdf8; text-transform:uppercase; font-weight:bold;">📊 Meta Mensual Toda la Operación</div>
+                  <div id="sim-res-pts-mes" style="font-size:1.75rem; font-weight:900; color:#fff; margin:6px 0;">-- pts</div>
+                  <div id="sim-res-cop-bruto" style="font-size:0.85rem; color:#38bdf8; font-weight:900;">$0 COP</div>
+                  <div id="sim-res-pts-dia" style="font-size:0.65rem; color:#64748b; margin-top:4px;">Meta diaria sala: -- pts/día</div>
                 </div>
 
-                <!-- ESCENARIO ACELERADO -->
-                <div style="background:rgba(0,0,0,0.4); border:1.5px solid rgba(52,211,153,0.4); border-radius:12px; padding:18px; text-align:center; box-shadow:0 0 25px rgba(52,211,153,0.12); transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                  <div style="font-size:0.68rem; color:#34d399; text-transform:uppercase; font-weight:bold; letter-spacing:0.5px;">🚀 Proyección Acelerada (+15%)</div>
-                  <div style="font-size:1.8rem; font-weight:900; color:#34d399; margin:6px 0; letter-spacing:-0.5px;">${(proyeccionMes * 1.15).toFixed(0)} pts</div>
-                  <div style="font-size:0.85rem; color:#2dd4bf; font-weight:900;">~$${Math.round(proyeccionMes * 1.15 * COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
-                  <div style="font-size:0.65rem; color:#10b981; margin-top:6px;">Con optimización de streaming & donadores VIP</div>
+                <!-- CARD R2: PUNTO DE EQUILIBRIO (BREAK-EVEN) -->
+                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(251,191,36,0.3); border-radius:12px; padding:16px; text-align:center;">
+                  <div style="font-size:0.68rem; color:#fbbf24; text-transform:uppercase; font-weight:bold;">⚖️ Punto de Equilibrio (Break-Even)</div>
+                  <div id="sim-res-breakeven-pts" style="font-size:1.75rem; font-weight:900; color:#fbbf24; margin:6px 0;">-- pts</div>
+                  <div id="sim-res-breakeven-op" style="font-size:0.85rem; color:#fde68a; font-weight:bold;">-- pts/día por operador</div>
+                  <div style="font-size:0.65rem; color:#64748b; margin-top:4px;">Mínimo para no tener pérdidas</div>
                 </div>
 
-                <!-- PACE REQUERIDO -->
-                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(251,191,36,0.35); border-radius:12px; padding:18px; text-align:center; transition:all 0.2s;" onmouseover="this.style.borderColor='#fbbf24'" onmouseout="this.style.borderColor='rgba(251,191,36,0.35)'">
-                  <div style="font-size:0.68rem; color:#fbbf24; text-transform:uppercase; font-weight:bold; letter-spacing:0.5px;">⚡ Pace Diario Requerido</div>
-                  <div style="font-size:1.8rem; font-weight:900; color:#fbbf24; margin:6px 0; letter-spacing:-0.5px;">${paceDiarioRequerido.toFixed(0)} pts/día</div>
-                  <div style="font-size:0.85rem; color:#fde68a; font-weight:900;">~$${Math.round(paceDiarioRequerido * COP_POR_PUNTO).toLocaleString('es-CO')} COP/día</div>
-                  <div style="font-size:0.65rem; color:#94a3b8; margin-top:6px;">Meta por turno: ~${(paceDiarioRequerido / 3).toFixed(0)} pts</div>
+                <!-- CARD R3: RENTABILIDAD NETA PROYECTADA -->
+                <div id="sim-card-rentabilidad" style="background:rgba(0,0,0,0.4); border:1.5px solid rgba(52,211,153,0.4); border-radius:12px; padding:16px; text-align:center; box-shadow:0 0 20px rgba(52,211,153,0.1);">
+                  <div style="font-size:0.68rem; color:#34d399; text-transform:uppercase; font-weight:bold;">💎 Ganancia Neta Mensual</div>
+                  <div id="sim-res-ganancia-neta" style="font-size:1.75rem; font-weight:900; color:#34d399; margin:6px 0;">$0 COP</div>
+                  <div id="sim-res-margen-neto" style="font-size:0.85rem; color:#2dd4bf; font-weight:900;">Margen: --%</div>
+                  <div id="sim-badge-estado" style="display:inline-block; margin-top:4px; font-size:0.65rem; font-weight:bold; padding:2px 8px; border-radius:6px; background:rgba(52,211,153,0.15); color:#34d399;">🟢 RENTABLE</div>
+                </div>
+
+                <!-- CARD R4: BRECHA & RITMO RESTANTE VS DATAME -->
+                <div style="background:rgba(0,0,0,0.4); border:1px solid rgba(167,139,250,0.3); border-radius:12px; padding:16px; text-align:center;">
+                  <div style="font-size:0.68rem; color:#c084fc; text-transform:uppercase; font-weight:bold;">⏳ Brecha vs Real Datame</div>
+                  <div id="sim-res-brecha-pts" style="font-size:1.75rem; font-weight:900; color:#c084fc; margin:6px 0;">-- pts</div>
+                  <div id="sim-res-ritmo-restante" style="font-size:0.85rem; color:#e9d5ff; font-weight:bold;">-- pts/día requeridos</div>
+                  <div style="font-size:0.65rem; color:#64748b; margin-top:4px;">Quedan ${diasRestantes} días en el mes actual</div>
                 </div>
 
               </div>
 
-              <!-- BARRA DE AVANCE MENSUAL CON HITOS -->
-              <div style="background:rgba(0,0,0,0.35); border-radius:10px; padding:14px; border:1px solid rgba(255,255,255,0.06);">
-                <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#cbd5e1; margin-bottom:8px;">
-                  <span><strong>Progreso del Mes:</strong> ${ptsMes.toFixed(0)} pts acumulados</span>
-                  <span style="font-weight:900; color:#38bdf8;">${Math.min(100, (ptsMes / (proyeccionMes || 1) * 100)).toFixed(1)}% de la Meta Base</span>
-                </div>
-                <div style="height:10px; background:rgba(255,255,255,0.08); border-radius:5px; overflow:hidden; position:relative;">
-                  <div style="height:100%; width:${Math.min(100, (ptsMes / (proyeccionMes || 1) * 100)).toFixed(1)}%; background:linear-gradient(90deg, #6366f1, #38bdf8, #34d399); border-radius:5px; box-shadow:0 0 12px rgba(56,189,248,0.6);"></div>
-                </div>
-                <div style="display:flex; justify-content:space-between; font-size:0.62rem; color:#64748b; margin-top:6px;">
-                  <span>0 pts</span>
-                  <span>25%</span>
-                  <span>50%</span>
-                  <span>75%</span>
-                  <span>Meta: ${proyeccionMes.toFixed(0)} pts</span>
-                </div>
+              <!-- CAJA DE RAZONAMIENTO IA EN VIVO DEL SIMULADOR -->
+              <div id="sim-ai-reasoning" style="background:rgba(15,23,42,0.85); border-left:4px solid #34d399; border:1px solid rgba(52,211,153,0.25); border-left-width:4px; border-radius:0 12px 12px 0; padding:14px 18px; font-size:0.78rem; color:#e2e8f0; line-height:1.5;">
+                <!-- Se llena dinámicamente por window.recalcularSimuladorFinanciero() -->
+                Cargando análisis y razonamiento IA de rentabilidad...
               </div>
 
             </div>
 
-            <!-- MÓDULO 3: ANÁLISIS INTELIGENTE & PLAYBOOK OPERACIONAL DE CONSEJOS IA -->
-            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,41,59,0.95)); border:1.5px solid rgba(168,85,247,0.4); border-radius:18px; padding:24px; box-shadow:0 12px 35px rgba(0,0,0,0.5), 0 0 25px rgba(168,85,247,0.15);">
+            <!-- ══════════════════════════════════════════════════════════════════════ -->
+            <!-- 🤖 MÓDULO 3: ANÁLISIS INTELIGENTE, CONSEJOS IA & 3 GRÁFICAS DE PASTEL  -->
+            <!-- (GRÁFICAS DE PASTEL CON PORCIONES, CONTEXTO VISUAL Y RECOMENDACIONES)   -->
+            <!-- ══════════════════════════════════════════════════════════════════════ -->
+            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.95), rgba(30,41,59,0.95)); border:1.5px solid rgba(168,85,247,0.4); border-radius:18px; padding:24px; box-shadow:0 12px 35px rgba(0,0,0,0.5), 0 0 25px rgba(168,85,247,0.15); width:100%; box-sizing:border-box;">
               
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                  <span style="font-size:1.5rem;">🤖</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <div style="width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg, #a855f7, #6366f1); display:flex; align-items:center; justify-content:center; font-size:1.5rem; box-shadow:0 0 15px rgba(168,85,247,0.4);">🤖</div>
                   <div>
-                    <h4 style="margin:0; color:#c084fc; font-size:1.15rem; font-weight:900;">Análisis Inteligente & Consejos Operacionales IA</h4>
-                    <div style="color:#94a3b8; font-size:0.72rem; margin-top:2px;">Prescripciones tácticas deducidas del comportamiento de los 76 perfiles en tiempo real.</div>
+                    <h4 style="margin:0; color:#c084fc; font-size:1.2rem; font-weight:900; letter-spacing:0.5px;">Análisis Inteligente & Consejos Operacionales IA</h4>
+                    <div style="color:#94a3b8; font-size:0.75rem; margin-top:2px;">Prescripciones tácticas deducidas del comportamiento de nuestros 29 perfiles en tiempo real con visualización en gráficas de pastel.</div>
                   </div>
                 </div>
-                <span style="font-size:0.62rem; color:#c084fc; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.3); padding:3px 10px; border-radius:6px; font-weight:bold;">MOTOR NEURAL OPERATIVO</span>
+                <span style="font-size:0.65rem; color:#c084fc; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); padding:4px 12px; border-radius:8px; font-weight:bold; letter-spacing:0.5px;">MOTOR NEURAL OPERATIVO</span>
+              </div>
+
+              <!-- 🥧 SECCIÓN DE 3 GRÁFICAS DE PASTEL / DONUT INTERACTIVAS -->
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:20px; margin-bottom:24px; width:100%; box-sizing:border-box;">
+
+                <!-- PASTEL 1: DISTRIBUCIÓN POR TURNOS (JORNADAS) -->
+                <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(56,189,248,0.25); border-radius:14px; padding:18px; display:flex; flex-direction:column; justify-content:space-between;">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                      <div style="font-size:0.85rem; font-weight:bold; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+                        <span>🌅</span> Distribución por Turnos
+                      </div>
+                      <span style="font-size:0.65rem; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:6px; font-weight:bold;">JORNADAS</span>
+                    </div>
+                    
+                    <div style="position:relative; height:180px; width:100%; margin-bottom:12px;">
+                      <canvas id="chart-pie-turnos"></canvas>
+                    </div>
+
+                    <!-- DESGLOSE DE PORCIONES -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">
+                      <div style="background:rgba(56,189,248,0.06); padding:6px 2px; border-radius:6px; border:1px solid rgba(56,189,248,0.2);">
+                        <div style="font-size:0.6rem; color:#38bdf8;">Mañana</div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#fff;">${(ptsPorJornada['Manana']||0).toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#94a3b8;">${pctManana}%</div>
+                      </div>
+                      <div style="background:rgba(129,140,248,0.06); padding:6px 2px; border-radius:6px; border:1px solid rgba(129,140,248,0.2);">
+                        <div style="font-size:0.6rem; color:#818cf8;">Tarde</div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#fff;">${(ptsPorJornada['Tarde']||0).toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#94a3b8;">${pctTarde}%</div>
+                      </div>
+                      <div style="background:rgba(192,132,252,0.06); padding:6px 2px; border-radius:6px; border:1px solid rgba(192,132,252,0.2);">
+                        <div style="font-size:0.6rem; color:#c084fc;">Noche</div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#fff;">${(ptsPorJornada['Noche']||0).toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#94a3b8;">${pctNoche}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="font-size:0.7rem; color:#cbd5e1; line-height:1.4; background:rgba(255,255,255,0.02); padding:8px 10px; border-radius:8px; border-left:3px solid #38bdf8;">
+                    <strong style="color:#38bdf8;">🔍 Diagnóstico Turnos:</strong> El turno con mayor volumen aporta la base de estabilidad. Extender los ganchos emocionales hacia los turnos más rezagados.
+                  </div>
+                </div>
+
+                <!-- PASTEL 2: DISTRIBUCIÓN POR CATEGORÍA DE PERFIL -->
+                <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(52,211,153,0.25); border-radius:14px; padding:18px; display:flex; flex-direction:column; justify-content:space-between;">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                      <div style="font-size:0.85rem; font-weight:bold; color:#34d399; display:flex; align-items:center; gap:6px;">
+                        <span>⭐</span> Facturación por Categoría
+                      </div>
+                      <span style="font-size:0.65rem; background:rgba(52,211,153,0.15); color:#34d399; padding:2px 6px; border-radius:6px; font-weight:bold;">29 PERFILES</span>
+                    </div>
+
+                    <div style="position:relative; height:180px; width:100%; margin-bottom:12px;">
+                      <canvas id="chart-pie-categorias"></canvas>
+                    </div>
+
+                    <!-- DESGLOSE DE PORCIONES -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center; margin-bottom:10px;">
+                      <div style="background:rgba(52,211,153,0.06); padding:6px 2px; border-radius:6px; border:1px solid rgba(52,211,153,0.2);">
+                        <div style="font-size:0.6rem; color:#34d399;">12 Titanes</div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#fff;">${ptsCatTitanes.toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#94a3b8;">${(ptsMes > 0 ? (ptsCatTitanes/ptsMes*100).toFixed(0) : 0)}%</div>
+                      </div>
+                      <div style="background:rgba(56,189,248,0.06); padding:6px 2px; border-radius:6px; border:1px solid rgba(56,189,248,0.2);">
+                        <div style="font-size:0.6rem; color:#38bdf8;">16 Regulares</div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#fff;">${ptsCatRegulares.toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#94a3b8;">${(ptsMes > 0 ? (ptsCatRegulares/ptsMes*100).toFixed(0) : 0)}%</div>
+                      </div>
+                      <div style="background:rgba(249,115,22,0.06); padding:6px 2px; border-radius:6px; border:1px solid rgba(249,115,22,0.2);">
+                        <div style="font-size:0.6rem; color:#f97316;">1 Rescate</div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#fff;">${ptsCatRescate.toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#94a3b8;">${(ptsMes > 0 ? (ptsCatRescate/ptsMes*100).toFixed(0) : 0)}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="font-size:0.7rem; color:#cbd5e1; line-height:1.4; background:rgba(255,255,255,0.02); padding:8px 10px; border-radius:8px; border-left:3px solid #34d399;">
+                    <strong style="color:#34d399;">🔍 Diagnóstico Tiers:</strong> Los 12 Titanes sostienen la mayor parte de la facturación. Apalancar los 16 Regulares mediante cartas activas para diversificar el ingreso.
+                  </div>
+                </div>
+
+                <!-- PASTEL 3: META DE RENTABILIDAD VS FACTURADO DATAME -->
+                <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(168,85,247,0.25); border-radius:14px; padding:18px; display:flex; flex-direction:column; justify-content:space-between;">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                      <div style="font-size:0.85rem; font-weight:bold; color:#c084fc; display:flex; align-items:center; gap:6px;">
+                        <span>🎯</span> Cumplimiento Meta Mensual
+                      </div>
+                      <span id="sim-pie-avance-badge" style="font-size:0.65rem; background:rgba(168,85,247,0.15); color:#c084fc; padding:2px 6px; border-radius:6px; font-weight:bold;">PROGRESO</span>
+                    </div>
+
+                    <div style="position:relative; height:180px; width:100%; margin-bottom:12px;">
+                      <canvas id="chart-pie-rentabilidad"></canvas>
+                    </div>
+
+                    <!-- DESGLOSE DE PORCIONES -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; text-align:center; margin-bottom:10px;">
+                      <div style="background:rgba(16,185,129,0.06); padding:6px; border-radius:6px; border:1px solid rgba(16,185,129,0.2);">
+                        <div style="font-size:0.6rem; color:#10b981;">Facturado Real Datame</div>
+                        <div id="sim-pie-pts-real" style="font-size:0.85rem; font-weight:bold; color:#fff;">${ptsMes.toFixed(0)} pts</div>
+                        <div style="font-size:0.55rem; color:#34d399;">~$${Math.round(ptsMes * COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
+                      </div>
+                      <div style="background:rgba(255,255,255,0.03); padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.08);">
+                        <div style="font-size:0.6rem; color:#94a3b8;">Brecha Faltante (Gap)</div>
+                        <div id="sim-pie-pts-gap" style="font-size:0.85rem; font-weight:bold; color:#cbd5e1;">-- pts</div>
+                        <div id="sim-pie-cop-gap" style="font-size:0.55rem; color:#94a3b8;">$0 COP</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="font-size:0.7rem; color:#cbd5e1; line-height:1.4; background:rgba(255,255,255,0.02); padding:8px 10px; border-radius:8px; border-left:3px solid #c084fc;">
+                    <strong style="color:#c084fc;">🔍 Diagnóstico Meta:</strong> El donut refleja la brecha matemática exacta para alcanzar la meta del simulador en los ${diasRestantes} días restantes.
+                  </div>
+                </div>
+
               </div>
 
               <!-- LÍNEAS DE ANÁLISIS AUTOMATIZADO -->
@@ -23192,12 +23421,294 @@ function exportarDatos() {
             });
           }
 
+          
+          // ══════════════════════════════════════════════════════════════════════
+          // 🥧 RENDERIZAR LAS 3 GRÁFICAS DE PASTEL / DONUT EN TIEMPO REAL
+          // ══════════════════════════════════════════════════════════════════════
+          ['chart-pie-turnos', 'chart-pie-categorias', 'chart-pie-rentabilidad'].forEach(id => {
+            if (window._execCharts[id]) {
+              try { window._execCharts[id].destroy(); } catch(e){}
+              window._execCharts[id] = null;
+            }
+          });
+
+          const commonPiePlugins = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { color: '#cbd5e1', font: { size: 10 }, boxWidth: 10, padding: 8 }
+              },
+              tooltip: {
+                backgroundColor: 'rgba(15,23,42,0.95)',
+                titleColor: '#38bdf8',
+                bodyColor: '#fff',
+                borderColor: 'rgba(56,189,248,0.3)',
+                borderWidth: 1,
+                padding: 10
+              }
+            },
+            cutout: '62%'
+          };
+
+          // 1. Pastel de Turnos
+          const cPieTurnos = document.getElementById('chart-pie-turnos');
+          if (cPieTurnos) {
+            window._execCharts['chart-pie-turnos'] = new Chart(cPieTurnos, {
+              type: 'doughnut',
+              data: {
+                labels: ['🌅 Mañana', '🌇 Tarde', '🌙 Noche'],
+                datasets: [{
+                  data: [
+                    Number((ptsPorJornada['Manana'] || 0).toFixed(1)),
+                    Number((ptsPorJornada['Tarde'] || 0).toFixed(1)),
+                    Number((ptsPorJornada['Noche'] || 0).toFixed(1))
+                  ],
+                  backgroundColor: ['#38bdf8', '#818cf8', '#c084fc'],
+                  borderColor: '#0f172a',
+                  borderWidth: 2
+                }]
+              },
+              options: commonPiePlugins
+            });
+          }
+
+          // 2. Pastel de Categorías de Perfil (12 Titanes, 16 Regulares, 1 Rescate)
+          const cPieCat = document.getElementById('chart-pie-categorias');
+          if (cPieCat) {
+            window._execCharts['chart-pie-categorias'] = new Chart(cPieCat, {
+              type: 'doughnut',
+              data: {
+                labels: ['⭐ 12 Titanes', '⚡ 16 Regulares', '⚠️ 1 Rescate'],
+                datasets: [{
+                  data: [
+                    Number(ptsCatTitanes.toFixed(1)),
+                    Number(ptsCatRegulares.toFixed(1)),
+                    Number(ptsCatRescate.toFixed(1))
+                  ],
+                  backgroundColor: ['#34d399', '#38bdf8', '#f97316'],
+                  borderColor: '#0f172a',
+                  borderWidth: 2
+                }]
+              },
+              options: commonPiePlugins
+            });
+          }
+
+          // 3. Pastel de Rentabilidad y Meta Mensual
+          const cPieRent = document.getElementById('chart-pie-rentabilidad');
+          if (cPieRent) {
+            const metaSimulada = (window._simUltimaMeta || (proyeccionMes * 1.15) || 50000);
+            const gapFaltante = Math.max(0, metaSimulada - ptsMes);
+            window._execCharts['chart-pie-rentabilidad'] = new Chart(cPieRent, {
+              type: 'doughnut',
+              data: {
+                labels: ['💰 Facturado Datame', '🎯 Brecha a la Meta'],
+                datasets: [{
+                  data: [
+                    Number(ptsMes.toFixed(1)),
+                    Number(gapFaltante.toFixed(1))
+                  ],
+                  backgroundColor: ['#10b981', 'rgba(255,255,255,0.12)'],
+                  borderColor: '#0f172a',
+                  borderWidth: 2
+                }]
+              },
+              options: commonPiePlugins
+            });
+          }
+
+          // Inicializar cálculos del simulador interactivo
+          if (typeof window.recalcularSimuladorFinanciero === 'function') {
+            window.recalcularSimuladorFinanciero();
+          }
+
           console.log('[CHARTS] ✅ 4 Gráficos ejecutivos reales renderizados con éxito.');
         } catch(errC) {
           console.warn('[CHARTS] Error al dibujar gráficos:', errC);
         }
       }, 80);
     }
+
+
+// ══════════════════════════════════════════════════════════════════════
+// 🎯 MOTOR DEL SIMULADOR FINANCIERO DINÁMICO & RAZONAMIENTO IA
+// ══════════════════════════════════════════════════════════════════════
+window.sincronizarControlSimulador = function(origen, targetId, valor) {
+  const target = document.getElementById(targetId);
+  if (target) target.value = valor;
+  window.recalcularSimuladorFinanciero();
+};
+
+window.aplicarPresetSimulador = function(preset) {
+  const d = window._simRealData || {};
+  const elMetaOp = document.getElementById('sim-meta-operador');
+  const elMetaOpNum = document.getElementById('sim-meta-operador-num');
+  const elOps = document.getElementById('sim-num-operadores');
+  const elOpsNum = document.getElementById('sim-num-operadores-num');
+  const elCostos = document.getElementById('sim-costos-fijos');
+
+  if (preset === 'datame_real') {
+    // Ajustar a lo que la agencia realmente promedia hoy
+    const numOps = Math.max(1, d.numOperadores || 15);
+    const promOp = Math.max(30, Math.round((d.ptsMes / Math.max(1, d.diaDelMes)) / numOps));
+    if (elMetaOp) elMetaOp.value = promOp;
+    if (elMetaOpNum) elMetaOpNum.value = promOp;
+    if (elOps) elOps.value = numOps;
+    if (elOpsNum) elOpsNum.value = numOps;
+  } else if (preset === 'breakeven') {
+    // Ajustar exactamente al punto de equilibrio para no tener pérdida
+    const costos = parseFloat(elCostos?.value) || 12000000;
+    const ptsReqMes = Math.ceil(costos / 1400);
+    const numOps = parseInt(elOps?.value) || 15;
+    const diasMes = d.diasEnMes || 30;
+    const metaOpBe = Math.ceil(ptsReqMes / (numOps * diasMes));
+    if (elMetaOp) elMetaOp.value = metaOpBe;
+    if (elMetaOpNum) elMetaOpNum.value = metaOpBe;
+  } else if (preset === 'rentable') {
+    // Meta de alta rentabilidad: +25M COP de ganancia neta
+    const costos = parseFloat(elCostos?.value) || 12000000;
+    const objBruto = costos + 25000000;
+    const ptsObj = Math.ceil(objBruto / 1400);
+    const numOps = parseInt(elOps?.value) || 15;
+    const diasMes = d.diasEnMes || 30;
+    const metaOpRent = Math.ceil(ptsObj / (numOps * diasMes));
+    if (elMetaOp) elMetaOp.value = Math.min(500, metaOpRent);
+    if (elMetaOpNum) elMetaOpNum.value = Math.min(500, metaOpRent);
+  }
+
+  window.recalcularSimuladorFinanciero();
+};
+
+window.recalcularSimuladorFinanciero = function() {
+  const d = window._simRealData || {};
+  const diasMes = d.diasEnMes || 30;
+  const diasRestantes = Math.max(1, d.diasRestantes || 15);
+  const tasaCOP = 1400;
+
+  const metaOperador = parseFloat(document.getElementById('sim-meta-operador')?.value) || 120;
+  const numOperadores = parseInt(document.getElementById('sim-num-operadores')?.value) || 15;
+  const costosFijos = parseFloat(document.getElementById('sim-costos-fijos')?.value) || 12000000;
+
+  // Cálculos matemáticos
+  const totalPtsDia = metaOperador * numOperadores;
+  const totalPtsMes = totalPtsDia * diasMes;
+  const ingresoBrutoCOP = totalPtsMes * tasaCOP;
+  
+  const ptsBreakEven = Math.ceil(costosFijos / tasaCOP);
+  const ptsBreakEvenDia = Math.ceil(ptsBreakEven / diasMes);
+  const ptsBreakEvenOp = (ptsBreakEvenDia / Math.max(1, numOperadores)).toFixed(1);
+
+  const gananciaNetaCOP = ingresoBrutoCOP - costosFijos;
+  const margenNeto = ingresoBrutoCOP > 0 ? ((gananciaNetaCOP / ingresoBrutoCOP) * 100).toFixed(1) : 0;
+  
+  const realPtsMes = d.ptsMes || 0;
+  const brechaPts = Math.max(0, totalPtsMes - realPtsMes);
+  const ritmoRestanteDia = Math.round(brechaPts / diasRestantes);
+  const metaPorTurno = Math.round(totalPtsDia / 3);
+
+  window._simUltimaMeta = totalPtsMes;
+
+  // Actualizar elementos DOM
+  const elCopPreview = document.getElementById('sim-meta-op-cop-preview');
+  if (elCopPreview) elCopPreview.innerText = '~$' + Math.round(metaOperador * tasaCOP).toLocaleString('es-CO') + ' COP/día';
+
+  const elPtsMes = document.getElementById('sim-res-pts-mes');
+  if (elPtsMes) elPtsMes.innerText = totalPtsMes.toLocaleString('es-CO') + ' pts';
+
+  const elCopBruto = document.getElementById('sim-res-cop-bruto');
+  if (elCopBruto) elCopBruto.innerText = '$' + Math.round(ingresoBrutoCOP).toLocaleString('es-CO') + ' COP';
+
+  const elPtsDia = document.getElementById('sim-res-pts-dia');
+  if (elPtsDia) elPtsDia.innerText = 'Meta diaria sala: ' + totalPtsDia.toLocaleString('es-CO') + ' pts/día';
+
+  const elBePts = document.getElementById('sim-res-breakeven-pts');
+  if (elBePts) elBePts.innerText = ptsBreakEven.toLocaleString('es-CO') + ' pts';
+
+  const elBeOp = document.getElementById('sim-res-breakeven-op');
+  if (elBeOp) elBeOp.innerText = ptsBreakEvenOp + ' pts/día por operador';
+
+  const elGanNeta = document.getElementById('sim-res-ganancia-neta');
+  if (elGanNeta) {
+    elGanNeta.innerText = (gananciaNetaCOP >= 0 ? '+$' : '-$') + Math.abs(Math.round(gananciaNetaCOP)).toLocaleString('es-CO') + ' COP';
+    elGanNeta.style.color = gananciaNetaCOP >= 0 ? '#34d399' : '#f87171';
+  }
+
+  const elMargen = document.getElementById('sim-res-margen-neto');
+  if (elMargen) elMargen.innerText = 'Margen Neto: ' + margenNeto + '%';
+
+  const elBadgeEstado = document.getElementById('sim-badge-estado');
+  if (elBadgeEstado) {
+    if (gananciaNetaCOP > costosFijos * 0.4) {
+      elBadgeEstado.innerText = '🟢 ALTA RENTABILIDAD';
+      elBadgeEstado.style.background = 'rgba(52,211,153,0.15)';
+      elBadgeEstado.style.color = '#34d399';
+    } else if (gananciaNetaCOP >= 0) {
+      elBadgeEstado.innerText = '🟡 RENTABILIDAD AJUSTADA';
+      elBadgeEstado.style.background = 'rgba(251,191,36,0.15)';
+      elBadgeEstado.style.color = '#fbbf24';
+    } else {
+      elBadgeEstado.innerText = '🔴 DÉFICIT OPERATIVO';
+      elBadgeEstado.style.background = 'rgba(248,113,113,0.15)';
+      elBadgeEstado.style.color = '#f87171';
+    }
+  }
+
+  const elBrechaPts = document.getElementById('sim-res-brecha-pts');
+  if (elBrechaPts) elBrechaPts.innerText = brechaPts.toLocaleString('es-CO') + ' pts';
+
+  const elRitmoRest = document.getElementById('sim-res-ritmo-restante');
+  if (elRitmoRest) elRitmoRest.innerText = ritmoRestanteDia.toLocaleString('es-CO') + ' pts/día requeridos';
+
+  // Actualizar Donut de Rentabilidad
+  const pieRent = window._execCharts && window._execCharts['chart-pie-rentabilidad'];
+  if (pieRent) {
+    pieRent.data.datasets[0].data = [Number(realPtsMes.toFixed(1)), Number(brechaPts.toFixed(1))];
+    pieRent.update();
+  }
+
+  const elPieGap = document.getElementById('sim-pie-pts-gap');
+  if (elPieGap) elPieGap.innerText = brechaPts.toLocaleString('es-CO') + ' pts';
+
+  const elPieCopGap = document.getElementById('sim-pie-cop-gap');
+  if (elPieCopGap) elPieCopGap.innerText = '~$' + Math.round(brechaPts * tasaCOP).toLocaleString('es-CO') + ' COP';
+
+  const pctAvanceMeta = totalPtsMes > 0 ? Math.min(100, (realPtsMes / totalPtsMes * 100)).toFixed(1) : 0;
+  const elPieAvance = document.getElementById('sim-pie-avance-badge');
+  if (elPieAvance) elPieAvance.innerText = pctAvanceMeta + '% DE LA META';
+
+  // RAZONAMIENTO IA EN VIVO BASADO EN LA DATA REAL DE LA AGENCIA
+  const elReasoning = document.getElementById('sim-ai-reasoning');
+  if (elReasoning) {
+    const paceH = d.paceHourly || 0;
+    const projMes = d.proyeccionMes || 0;
+    const titanesShare = (totalPtsDia * 0.62) / 12; // Carga sugerida en los 12 Titanes
+    const regShare = (totalPtsDia * 0.38) / 16;     // Carga sugerida en los 16 Regulares
+
+    let veredictoTexto = '';
+    if (metaOperador > 180) {
+      veredictoTexto = '<span style="color:#fbbf24; font-weight:bold;">⚠️ Exigencia Alta:</span> Exige a cada operador un ritmo superior a 180 pts/día. Para lograrlo sin fatiga de personal, se recomienda concentrar a los operadores más experimentados en el Turno Noche (00:00 - 08:00 EST) y apalancar donadores de videollamadas privadas.';
+    } else if (gananciaNetaCOP < 0) {
+      veredictoTexto = '<span style="color:#f87171; font-weight:bold;">🚨 Alerta de Rentabilidad:</span> Con esta configuración la operación no cubre los costos fijos de $' + Math.round(costosFijos).toLocaleString('es-CO') + ' COP. Debes elevar la meta a mínimo <strong>' + ptsBreakEvenOp + ' pts/op/día</strong> o sumar operadores a la sala.';
+    } else {
+      veredictoTexto = '<span style="color:#34d399; font-weight:bold;">🟢 Estructura Sólida:</span> La operación proyecta una utilidad neta de <strong>$' + Math.round(gananciaNetaCOP).toLocaleString('es-CO') + ' COP</strong> con un margen del <strong>' + margenNeto + '%</strong>. El punto de equilibrio se cubre con solo ' + ptsBreakEvenOp + ' pts/op/día.';
+    }
+
+    elReasoning.innerHTML = `
+      <div style="margin-bottom:8px; font-weight:bold; color:#38bdf8; display:flex; align-items:center; gap:6px;">
+        <span>🧠</span> Razonamiento Operativo IA (Agencia RR):
+      </div>
+      <div style="margin-bottom:6px;">${veredictoTexto}</div>
+      <div style="font-size:0.73rem; color:#cbd5e1; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-top:10px; background:rgba(0,0,0,0.25); padding:10px; border-radius:8px;">
+        <div><strong>🌅 Meta por Turno:</strong> ~${metaPorTurno.toLocaleString('es-CO')} pts en cada uno de los 3 turnos.</div>
+        <div><strong>⭐ Carga en 12 Titanes:</strong> ~${Math.round(titanesShare)} pts/día por Titán (62% del total).</div>
+        <div><strong>⚡ Carga en 16 Regulares:</strong> ~${Math.round(regShare)} pts/día por Regular (38% del total).</div>
+        <div><strong>📈 Ritmo Datame Actual:</strong> ${paceH.toFixed(1)} pts/hora en sala &bull; Cierre proyectado: ~${projMes.toFixed(0)} pts.</div>
+      </div>
+    `;
+  }
+};
 
 // ======= EXPORTAR INFORME =======
     window.exportarInformeDirectivo = function() {

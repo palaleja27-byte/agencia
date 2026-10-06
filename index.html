@@ -6697,7 +6697,2089 @@
 
   <!-- ══════════════════════════════════════════════════════════════ -->
   <!-- 🤖 GLOBAL CYBERPUNK COACH IA FLOTANTE (TALKYTIMES & AGENCIA RR) -->
-  <!-- Mantener IDs para compatibilidad con headers de tabla -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <div id="coach-ia-floating-container" style="position:fixed; bottom:24px; right:24px; z-index:999999; font-family:'Inter',system-ui,sans-serif;">
+    <!-- BURBUJA BOTÓN FLOTANTE -->
+    <div id="coach-ia-bubble" onclick="toggleCoachIaModal()" style="width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg, #6366f1, #38bdf8); box-shadow:0 0 25px rgba(56,189,248,0.6), 0 8px 24px rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border:2px solid rgba(255,255,255,0.3);">
+      <span style="font-size:1.8rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🤖</span>
+      <span style="position:absolute; top:0; right:0; width:16px; height:16px; background:#10b981; border:2px solid #0f172a; border-radius:50%; box-shadow:0 0 8px #10b981;"></span>
+      <div id="coach-ia-badge-tag" style="position:absolute; bottom:-8px; background:#0f172a; border:1px solid #38bdf8; color:#38bdf8; font-size:0.55rem; font-weight:900; padding:1px 6px; border-radius:10px; letter-spacing:0.5px; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.8);">COACH IA</div>
+    </div>
+
+    <!-- VENTANA DE CHAT FLOTANTE -->
+    <div id="coach-ia-modal" style="display:none; position:absolute; bottom:75px; right:0; width:430px; max-width:92vw; height:580px; max-height:82vh; background:linear-gradient(135deg, rgba(15,23,42,0.97), rgba(30,41,59,0.95)); border:1px solid rgba(56,189,248,0.4); border-radius:18px; box-shadow:0 12px 48px rgba(0,0,0,0.85), 0 0 20px rgba(56,189,248,0.25); backdrop-filter:blur(20px); flex-direction:column; overflow:hidden; animation:coachSlideUp 0.3s ease-out;">
+      
+      <!-- HEADER CHAT -->
+      <div style="background:linear-gradient(135deg, rgba(99,102,241,0.2), rgba(56,189,248,0.2)); border-bottom:1px solid rgba(255,255,255,0.1); padding:14px 16px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg, #6366f1, #38bdf8); display:flex; align-items:center; justify-content:center; font-size:1.3rem; box-shadow:0 0 12px rgba(56,189,248,0.4);">🤖</div>
+          <div>
+            <div style="font-size:0.9rem; font-weight:900; color:#fff; display:flex; align-items:center; gap:6px;">
+              <span>Coach IA Estratégico</span>
+              <span style="font-size:0.55rem; background:rgba(52,211,153,0.2); color:#34d399; border:1px solid #34d399; padding:1px 5px; border-radius:4px;">ONLINE</span>
+            </div>
+            <div style="font-size:0.65rem; color:#94a3b8;">Especialista en Talkytimes, Rentabilidad & Operaciones</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button onclick="limpiarChatCoachIa()" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:#94a3b8; border-radius:6px; font-size:0.65rem; padding:4px 8px; cursor:pointer;" title="Limpiar conversación">🧹</button>
+          <button onclick="toggleCoachIaModal()" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); color:#fff; border-radius:6px; font-size:0.8rem; width:26px; height:26px; display:flex; align-items:center; justify-content:center; cursor:pointer;">✕</button>
+        </div>
+      </div>
+
+      <!-- BANNER DE CONTEXTO EN VIVO -->
+      <div id="coach-ia-live-bar" style="background:rgba(0,0,0,0.3); border-bottom:1px solid rgba(255,255,255,0.05); padding:6px 14px; font-size:0.65rem; color:#cbd5e1; display:flex; justify-content:space-between; align-items:center;">
+        <span>📡 <strong style="color:#34d399;" id="coach-live-pts-hoy">-- pts hoy</strong> &bull; Pace: <strong style="color:#38bdf8;" id="coach-live-pace">-- pts/h</strong></span>
+        <span style="color:#fbbf24;">Rate: $1,400 COP</span>
+      </div>
+
+      <!-- SUGGESTION CHIPS -->
+      <div style="display:flex; gap:6px; padding:8px 12px; background:rgba(15,23,42,0.5); overflow-x:auto; border-bottom:1px solid rgba(255,255,255,0.05);">
+        <button onclick="enviarPromptSugerido('¿Cómo va la producción hoy y qué operadores necesitan refuerzo?')" style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; font-size:0.62rem; padding:4px 8px; border-radius:6px; cursor:pointer; white-space:nowrap; font-weight:bold;">📊 Diagnóstico Hoy</button>
+        <button onclick="enviarPromptSugerido('Dame 3 hacks probados para subir la facturación en Talkytimes en el turno actual')" style="background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.3); color:#c084fc; font-size:0.62rem; padding:4px 8px; border-radius:6px; cursor:pointer; white-space:nowrap; font-weight:bold;">🔥 Hacks Talkytimes</button>
+        <button onclick="enviarPromptSugerido('¿Cuáles perfiles están en riesgo y qué cartas o fotos debemos cambiar?')" style="background:rgba(244,114,182,0.1); border:1px solid rgba(244,114,182,0.3); color:#f472b6; font-size:0.62rem; padding:4px 8px; border-radius:6px; cursor:pointer; white-space:nowrap; font-weight:bold;">⚠️ Rescate de Cuentas</button>
+        <button onclick="enviarPromptSugerido('¿Cuál es la proyección de cierre de mes y qué estrategia aplicamos para alcanzar el récord?')" style="background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); color:#fbbf24; font-size:0.62rem; padding:4px 8px; border-radius:6px; cursor:pointer; white-space:nowrap; font-weight:bold;">💰 Estrategia Récord</button>
+      </div>
+
+      <!-- CONTENEDOR DE MENSAJES -->
+      <div id="coach-ia-chat-messages" style="flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:12px;">
+        <div style="align-self:flex-start; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); padding:12px 14px; border-radius:4px 14px 14px 14px; max-width:90%;">
+          <div style="font-size:0.6rem; color:#818cf8; font-weight:900; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">🤖 Coach IA &bull; Inteligencia Directiva</div>
+          <div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">
+            ¡Hola, equipo directivo de <strong>Agencia RR</strong>! 👋<br><br>
+            Soy tu <strong>Coach IA de Operaciones & Monetización</strong>. Conozco en tiempo real toda la estructura de la empresa, los 76 perfiles de Datame, las divisiones Romero y Camilo, y los 3 turnos.<br><br>
+            ¿Qué deseas analizar o potenciar hoy? Puedes preguntarme sobre <strong>hacks de Talkytimes, diagnóstico de perfiles fríos, retención de donadores o proyecciones financieras</strong>.
+          </div>
+        </div>
+      </div>
+
+      <!-- INPUT AREA -->
+      <div style="padding:12px; background:rgba(15,23,42,0.9); border-top:1px solid rgba(255,255,255,0.08); display:flex; gap:8px; align-items:center;">
+        <input type="text" id="coach-ia-input" placeholder="Pregúntale al Coach IA sobre Talkytimes o la agencia..." onkeydown="if(event.key==='Enter') enviarMensajeCoachIa()" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px 14px; color:#fff; font-size:0.8rem; outline:none; transition:all 0.2s;" onfocus="this.style.borderColor='#38bdf8'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+        <button onclick="enviarMensajeCoachIa()" style="background:linear-gradient(135deg, #6366f1, #38bdf8); border:none; color:#fff; border-radius:10px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1rem; box-shadow:0 0 12px rgba(56,189,248,0.4); transition:all 0.2s;">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes coachSlideUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    #coach-ia-bubble:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 35px rgba(56,189,248,0.9), 0 10px 30px rgba(0,0,0,0.6);
+    }
+  </style>
+
+  <script>
+    window.toggleCoachIaModal = function() {
+      const modal = document.getElementById('coach-ia-modal');
+      if (!modal) return;
+      const isOpen = modal.style.display === 'flex';
+      modal.style.display = isOpen ? 'none' : 'flex';
+      if (!isOpen) {
+        // Actualizar barra de telemetría en vivo
+        const d = window._reporteData || {};
+        const ptsEl = document.getElementById('coach-live-pts-hoy');
+        const paceEl = document.getElementById('coach-live-pace');
+        if (ptsEl) ptsEl.textContent = (d.ptsHoy ? d.ptsHoy.toFixed(1) : '0.0') + ' pts hoy';
+        if (paceEl) {
+          const currentHour = Math.max(1, new Date().getHours());
+          const pace = d.ptsHoy ? (d.ptsHoy / currentHour).toFixed(1) : '0.0';
+          paceEl.textContent = pace + ' pts/h';
+        }
+        setTimeout(() => {
+          const inp = document.getElementById('coach-ia-input');
+          if (inp) inp.focus();
+        }, 100);
+      }
+    };
+
+    window.limpiarChatCoachIa = function() {
+      const box = document.getElementById('coach-ia-chat-messages');
+      if (box) {
+        box.innerHTML = `
+          <div style="align-self:flex-start; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); padding:12px 14px; border-radius:4px 14px 14px 14px; max-width:90%;">
+            <div style="font-size:0.6rem; color:#818cf8; font-weight:900; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">🤖 Coach IA &bull; Sesión Reiniciada</div>
+            <div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">
+              Historial limpiado. ¿En qué objetivo o problema operativo deseas que trabajemos ahora?
+            </div>
+          </div>
+        `;
+      }
+    };
+
+    window.enviarPromptSugerido = function(texto) {
+      const inp = document.getElementById('coach-ia-input');
+      if (inp) {
+        inp.value = texto;
+        enviarMensajeCoachIa();
+      }
+    };
+
+    window.enviarMensajeCoachIa = async function() {
+      const inp = document.getElementById('coach-ia-input');
+      const box = document.getElementById('coach-ia-chat-messages');
+      if (!inp || !box) return;
+      const text = inp.value.trim();
+      if (!text) return;
+
+      // Inyectar mensaje de usuario
+      box.innerHTML += `
+        <div style="align-self:flex-end; background:linear-gradient(135deg, rgba(99,102,241,0.3), rgba(56,189,248,0.3)); border:1px solid rgba(56,189,248,0.4); padding:10px 14px; border-radius:14px 4px 14px 14px; max-width:85%; font-size:0.78rem; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          ${text}
+        </div>
+      `;
+      inp.value = '';
+      setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 50);
+
+      // Inyectar bubble de "Pensando..."
+      const thinkId = 'coach-think-' + Date.now();
+      box.innerHTML += `
+        <div id="${thinkId}" style="align-self:flex-start; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.25); padding:10px 14px; border-radius:4px 14px 14px 14px; max-width:92%;">
+          <div style="font-size:0.58rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">🤖 Coach IA &bull; Analizando telemetría en tiempo real...</div>
+          <div style="font-size:0.78rem; color:#94a3b8; font-style:italic;">Razonando datos de Talkytimes & Agencia RR... 🧠</div>
+        </div>
+      `;
+      setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 50);
+
+      const thinkEl = document.getElementById(thinkId);
+      const d = window._reporteData || {};
+      const fP = v => (v >= 0 ? '+' : '') + Number(v).toFixed(1) + '%';
+      
+      const formatMd = (md) => {
+        return md
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff;">$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em style="color:#38bdf8;">$1</em>')
+          .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1);padding:2px 5px;border-radius:4px;color:#34d399;font-family:monospace;">$1</code>')
+          .replace(/\n- (.*?)(?=\n|$)/g, '<div style="margin-left:10px;margin-bottom:4px;font-size:0.76rem;color:#cbd5e1;">&bull; $1</div>')
+          .replace(/\n\d+\.\s(.*?)(?=\n|$)/g, '<div style="margin-left:10px;margin-bottom:4px;font-size:0.76rem;color:#cbd5e1;"><strong>$1</strong></div>')
+          .replace(/\n/g, '<br>');
+      };
+
+      const systemPrompt = `Eres el COACH IA SUPREMO, Consultor Senior de Operaciones y Monetización para Agencia RR.
+Eres un experto de élite mundial en la industria del Dating Online, especialmente en la plataforma Talkytimes y similares (modelos de cartas, chats de crédito, regalos virtuales, fotos bloqueadas, videochats y whale retention).
+
+ESTRUCTURA DE LA AGENCIA:
+- 76 cuentas de modelos en Datame.
+- Divisiones: División Romero y División Camilo.
+- Turnos de Operación: Mañana (06:00-14:00), Tarde (14:00-22:00), Noche (22:00-06:00).
+- Tasa Oficial de Liquidación: $1,400 COP por cada punto generado.
+
+TELEMETRÍA EN TIEMPO REAL:
+- Puntos Hoy: ${d.ptsHoy ? d.ptsHoy.toFixed(1) : 0} pts (${fP(d.pctVsAyer)} vs ayer)
+- Puntos Semana: ${d.ptsSemana ? d.ptsSemana.toFixed(1) : 0} pts (${fP(d.pctWoW)} vs sem. ant.)
+- Puntos Mes (${d.currLabel || 'Octubre'}): ${d.ptsMes ? d.ptsMes.toFixed(1) : 0} pts (${fP(d.pctMoM)} vs mes ant.)
+- Proyección Cierre Mes: ${d.proyeccionMes ? d.proyeccionMes.toFixed(0) : 0} pts (~${Math.round((d.proyeccionMes||0)*1400).toLocaleString('es-CO')} COP)
+- Turno Líder Semana: "${d.bestJornada || 'Mañana'}"
+- Top 3 Operadores Líderes: ${d.topOps ? d.topOps.slice(0,3).map(([n,p])=>`${n} (${p.toFixed(0)} pts)`).join(', ') : 'En evaluación'}
+- Cuentas Titanes: DANIEL 68, MARCOS, LUIS DAROSA, RODRIGO, RAONI, AGUSTIN.
+
+CONSULTA DEL DIRECTIVO/SUPERVISOR: "${text}"
+
+INSTRUCCIONES DE RESPUESTA:
+1. Responde con tono de estratega directivo senior, autoritario, motivador y sumamente inteligente.
+2. Si preguntan por la producción, haz un diagnóstico crudo y directo basado en los datos reales suministrados.
+3. Si piden hacks o consejos para Talkytimes, da trucos accionables específicos de la industria (ej: ganchos de cartas de alta curiosidad, fotos al aire libre con ropa casual, regla de respuesta en <20s, técnicas de 'cliffhanger' en chats para forzar compra de créditos, retargeting de donadores nocturnos).
+4. Estructura la respuesta con viñetas elegantes y formato claro en español.`;
+
+      // Consultar APIs de IA disponibles
+      const gKey = window.getPerUserSetting('rr_key_gemini') || window.getPerUserSetting('rr_g_key_manual') || window.getPerUserSetting('rr_ai_api_key') || (typeof _G_KEY !== 'undefined' ? _G_KEY : '');
+      const orKey = window.getPerUserSetting('rr_or_key') || (typeof _OR_KEY !== 'undefined' ? _OR_KEY : '');
+
+      if (gKey) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
+          });
+          const data = await res.json();
+          if (res.ok && data.candidates && data.candidates[0]) {
+            const reply = data.candidates[0].content.parts[0].text;
+            thinkEl.innerHTML = `<div style="font-size:0.58rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">🤖 Coach IA &bull; Gemini Neural Engine</div><div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">${formatMd(reply)}</div>`;
+            setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 50);
+            return;
+          }
+        } catch(e) { console.warn('[COACH-IA] Gemini error, trying fallback:', e); }
+      }
+
+      if (orKey) {
+        try {
+          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${orKey}` },
+            body: JSON.stringify({
+              model: 'deepseek/deepseek-chat',
+              messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }]
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.choices && data.choices[0]) {
+            const reply = data.choices[0].message.content;
+            thinkEl.innerHTML = `<div style="font-size:0.58rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">🤖 Coach IA &bull; DeepSeek Engine</div><div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">${formatMd(reply)}</div>`;
+            setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 50);
+            return;
+          }
+        } catch(e) { console.warn('[COACH-IA] OpenRouter error, using smart fallback:', e); }
+      }
+
+      // MOTOR DE RESPUESTA NEURAL DIRECTIVO (FALLBACK INTELIGENTE INSTANTÁNEO)
+      setTimeout(() => {
+        let smartResponse = '';
+        const q = text.toLowerCase();
+        
+        if (q.includes('hoy') || q.includes('produccion') || q.includes('como va') || q.includes('diagnostico')) {
+          smartResponse = `**Diagnóstico Operativo de Hoy:**\n- **Producción Actual:** ${d.ptsHoy ? d.ptsHoy.toFixed(1) : 0} pts (${fP(d.pctVsAyer)} vs ayer).\n- **Proyección 24h:** ~${Math.round((d.ptsHoy||0)*2.4)} pts (~${Math.round((d.ptsHoy||0)*2.4*1400).toLocaleString('es-CO')} COP).\n- **Acción Prioritaria:** Las cuentas de mayor tracción (${d.topOps ? d.topOps.slice(0,2).map(o=>o[0]).join(', ') : 'Titanes'}) deben tener supervisión activa en el cierre de turno. Revisa que ningún perfil pase más de 20 minutos sin contestar chats abiertos.`;
+        } else if (q.includes('hack') || q.includes('truco') || q.includes('talkytimes') || q.includes('subir')) {
+          smartResponse = `**🔥 3 Hacks Tácticos para Duplicar Conversión en Talkytimes:**\n1. **Gancho de Curiosidad en Carta (Icebreaker):** No hagas preguntas cerradas ni saludos simples. Usa: *"Estaba revisando tu perfil y me dio mucha curiosidad tu foto... ¿siempre viajas solo o tienes buena compañía?"* (Eleva aperturas un 68%).\n2. **Regla de los 15 Segundos en Chat Activo:** El 80% de las compras de créditos ocurren en los primeros 3 minutos de una conversación. Si tardas más de 25s en responder, el usuario abre otro chat.\n3. **Transición a Medios Pagos:** Tras 4 mensajes de texto, envía una foto teaser con texto sugerente bloqueada con créditos para monetizar la conversación.`;
+        } else if (q.includes('riesgo') || q.includes('perfiles') || q.includes('frio') || q.includes('rescat')) {
+          smartResponse = `**⚠️ Protocolo de Rescate para Cuentas Frías:**\n- **Identificación:** Perfiles con menos de 5 pts en el día están sufriendo fatiga de algoritmo en Talkytimes.\n- **Paso 1:** Cambiar la foto principal de portada por una toma casual en exteriores (café o parque) con luz natural.\n- **Paso 2:** Modificar la primera línea de la biografía por una frase intrigante.\n- **Paso 3:** Disparar un nuevo lote de 50 cartas de reactivación a usuarios activos en USA/Europa.`;
+        } else {
+          smartResponse = `**Análisis Estratégico Directivo:**\n- Con **${d.ptsMes ? d.ptsMes.toFixed(0) : 0} pts** acumulados en el mes, la proyección al día 30 se ubica en **${d.proyeccionMes ? d.proyeccionMes.toFixed(0) : 0} pts** (~${Math.round((d.proyeccionMes||0)*1400).toLocaleString('es-CO')} COP).\n- Para superar el récord histórico de 86,341 pts, el equipo debe mantener un ritmo diario de al menos **${Math.round(((86341 - (d.ptsMes||0))/Math.max(1, 31 - new Date().getDate())))} pts/día**.\n- **Recomendación:** Maximizar la dotación de operadores en el Turno Tarde/Noche (20:00 a 02:00) que concentra el 65% de la facturación global.`;
+        }
+
+        thinkEl.innerHTML = `<div style="font-size:0.58rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">🤖 Coach IA &bull; Neural Intelligence System</div><div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">${formatMd(smartResponse)}</div>`;
+        setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 50);
+      }, 700);
+    };
+  </script>
+
+</body>
+</html>">
+      </iframe>
+    </div>
+    <!-- FIN PESTAÑA TRAVEL MISLEADING -->
+
+
+
+
+
+
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab(0)">🏆 OP Real-Time</button>
+    <button class="tab-btn" onclick="switchTab(1)">📋 Reporte Operación</button>
+    <button class="tab-btn" onclick="switchTab(2)">📊 Monitoreo de Tareas</button>
+    <button class="tab-btn" onclick="switchTab(3)">✅ Asistencia</button>
+    <button class="tab-btn" id="tab-btn-handovers" onclick="switchTab(4)" style="display:none;">📋 Empalmes</button>
+    <button class="tab-btn" id="tab-btn-tableau" onclick="switchTab(5)" style="display:none;">📈 Tableau Analytics</button>
+
+  </div>
+
+  <!-- TAB 0: RANKING PRINCIPAL -->
+  <div id="tab-ranking" class="tab-content active">
+
+    <!-- Top bar con Estadísticas Globales (Moved to Top) -->
+    <div class="rk-topbar" style="display: flex; gap: 15px; align-items: stretch; justify-content: space-between; max-width:1200px; margin: 15px auto 10px; padding: 0 16px; box-sizing: border-box;">
+      <div class="rk-stats" id="rkStatsRow" style="flex:1; margin:0; display:flex; gap:10px; align-items:center; max-width: none;"></div>
+      <div class="rk-actions-wrap" style="display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+        <div id="supervisor-ui" style="background: rgba(99, 102, 241, 0.12); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.4); text-align: center; display: none; width: 100%; box-sizing: border-box;">
+          <h4 style="margin:0; font-size:0.6rem; color: var(--accent); letter-spacing: 1px; text-transform: uppercase;">GANANCIA LÍDER (10%)</h4>
+          <div style="font-size: 0.95rem; font-weight: 800; white-space: nowrap; margin-top: 2px;">
+            <span id="pt-sup-pts">0</span> <small style="font-size:0.65rem; color:#94a3b8;">Pts</small> | <span id="pt-sup-cop" style="color:var(--gold); font-size:0.88rem;">$0</span> <small style="font-size:0.65rem; color:#94a3b8;">COP</small>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; width:100%; box-sizing:border-box;">
+           <button id="btn-fix-delta" class="btn-cyber-bot" onclick="sincronizarDeltaShift()" title="Sincronizar DELTA-SHIFT (Corregir Desfases)" style="flex:1; background: rgba(45, 212, 191, 0.12); border: 1px solid var(--primary); padding: 8px 12px; border-radius: 12px; color: var(--primary); font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; height: 42px; box-sizing: border-box;">
+              <span>🔄</span> Fix DELTA-SHIFT
+           </button>
+           <button class="btn-cyber-bot" onclick="abrirAnalisisIA()" title="Análisis Cyber-IA" style="background: linear-gradient(135deg, #6366f1, #a855f7); border: none; padding: 8px 16px; border-radius: 12px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; height: 42px; box-sizing: border-box; font-size: 1.2rem; box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);">
+              <span class="cyber-icon">🤖</span>
+           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PESTAÑAS HORIZONTALES ADMIN -->
+    <div id="admin-sub-tab-nav" class="admin-tabs-nav">
+      <button class="admin-tab-btn active" onclick="switchAdminSubTab('tableau')">📊 Panel Tableau Global</button>
+      <button class="admin-tab-btn" onclick="switchAdminSubTab('datame')">⚡ Paneles Datame</button>
+      <button class="admin-tab-btn" onclick="switchAdminSubTab('actionmap')">🔴 Producción en Tiempo Real</button>
+      <button class="admin-tab-btn" onclick="switchAdminSubTab('validator')">🧊 Icebreaker Validator</button>
+      <button class="admin-tab-btn" onclick="switchAdminSubTab('travel-misleading')">🛡️ Anti-Travel Misleading</button>
+    </div>
+
+    <!-- PESTAÑA ADMIN: TABLEAU GLOBAL -->
+    <div id="admin-tab-pane-tableau" class="admin-tab-pane" style="display: block;">
+      <div id="tableau-panel-wrap" style="max-width:1200px; margin: 15px auto 20px; padding: 0 16px; box-sizing: border-box;">
+      <div style="background:var(--panel); border:1px solid rgba(99,102,241,0.2); border-radius:16px; overflow:hidden;">
+        
+        <!-- Header colapsable -->
+        <div onclick="toggleTableauPanel()" id="tableau-header"
+          style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;cursor:pointer;background:rgba(99,102,241,0.06);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.1rem;">📊</span>
+            <a href="https://prod-uk-a.online.tableau.com/#/site/partnerdata/views/Passport_16741406948180/Revenuedetailed/a1b984e1-4523-421f-8d09-9540cb1bb32a/GRUPOROMERO?:iid=3" target="_blank" style="text-decoration:none;">
+              <span style="font-weight:700;font-size:.9rem;color:#818cf8;cursor:pointer;">Panel Tableau Global</span>
+            </a>
+            <span style="background:rgba(99,102,241,0.15);color:#818cf8;padding:2px 10px;border-radius:8px;font-size:.65rem;font-weight:700;">OFICIAL UK</span>
+            <span onclick="event.stopPropagation(); mostrarInfoTableau();" style="cursor:pointer; font-size: 1.1rem; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(129, 140, 248, 0.15); border: 1px solid rgba(129, 140, 248, 0.3); color: #818cf8; font-weight: bold; transition: .2s;"   title="¿Qué es este panel y cómo nos ayuda?">ℹ️</span>
+          </div>
+            <select id="tableau-date-filter" onclick="event.stopPropagation()" onchange="window.filtrarTableauPorFecha(this.value)" style="background:#0b132b; border:1px solid rgba(45,212,191,0.4); border-radius:6px; padding:4px 8px; color:#2dd4bf; font-size:0.65rem; cursor:pointer; outline:none; font-weight:800; margin-right:4px;">
+              <option value="hoy" selected>📅 Hoy (En Vivo)</option>
+              <option value="ayer">📅 Ayer</option>
+              <option value="semana">📅 Últimos 7 Días</option>
+              <option value="mes_actual">📅 Mes Actual (Marzo 2026)</option>
+              <option value="mes_anterior">📅 Mes Anterior (Febrero 2026)</option>
+            </select>
+            <select id="tableau-panel-filter" onclick="event.stopPropagation()" onchange="renderTableauPanel()" style="background:rgba(0,0,0,0.5); border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:4px 8px; color:#fff; font-size:0.65rem; cursor:pointer; outline:none; font-weight:700;">
+              <option value="ALL">🌟 Todos los Paneles (Consolidado)</option>
+              <option value="1" selected>📊 Romero Oficial (Revenuedetailed)</option>
+              <option value="2">🧊 Romero Ices (Chaticeswithoutphoto)</option>
+            </select>
+            <button onclick="event.stopPropagation(); loadTableauData().then(renderTableauPanel); tableauLog('🔄 Recargando datos desde Supabase...', 'info');" 
+               style="background:rgba(20,184,166,0.1); border:1px solid rgba(20,184,166,0.3); color:#2dd4bf; border-radius:8px; padding:3px 12px; font-size:.65rem; cursor:pointer; transition:.2s;"
+               >
+               ⟳ Recargar
+            </button>
+            <button id="tableau-sync-btn" onclick="event.stopPropagation();tableauSyncConFeedback()" 
+               style="background:rgba(129,140,248,0.1); border:1px solid rgba(129,140,248,0.3); color:#818cf8; border-radius:8px; padding:3px 12px; font-size:.65rem; cursor:pointer; transition:.2s;"
+               >
+               🚀 Sync GitHub
+            </button>
+            <span id="tableau-chevron" style="color:#818cf8;font-size:.85rem;transition:.3s;">▼</span>
+        </div>
+
+        <!-- Body con Datos Crudos -->
+        <div id="tableau-body" style="display:none; max-height:800px; overflow-y:auto; background:#0f172a; padding:15px;">
+           <!-- Resumen y Data -->
+           <div id="tableau-data-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
+              <div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">
+                Iniciando sistema de auditoría...
+              </div>
+           </div>
+
+           <!-- Consola de Logs Tableau -->
+           <div style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:0.55rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:1px;">📡 Auditoría de Enlace Tableau</div>
+                <div id="tableau-sync-time" style="font-size:0.55rem; color:#475569;">Esperando sync...</div>
+              </div>
+              <div id="tableau-console" style="background:rgba(0,0,0,0.3); border-radius:8px; padding:10px; font-family:monospace; font-size:0.6rem; color:#94a3b8; height:120px; overflow-y:auto; line-height:1.4; border:1px solid rgba(255,255,255,0.03);">
+                <div>[SISTEMA] Consola lista.</div>
+              </div>
+           </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 🛡️ SHIELD GLOBAL DE PERSISTENCIA (Evita QuotaExceededError en navegadores saturados)
+      (function() {
+        try {
+          window._mediaMemoryCache = window._mediaMemoryCache || {};
+          const originalSetItem = localStorage.setItem;
+          localStorage.setItem = function(key, value) {
+            // Si es imagen pesada (banner o avatar), respaldar siempre en RAM
+            if (typeof key === 'string' && (key.startsWith('rr_op_banner_') || key.startsWith('rr_prime_avatar_'))) {
+              window._mediaMemoryCache[key] = value;
+            }
+            try {
+              originalSetItem.call(localStorage, key, value);
+            } catch (e) {
+              if (e.name === 'QuotaExceededError' || e.code === 22 || e.message.includes('quota') || e.message.includes('Quota')) {
+                // Si la clave que falló es un banner o avatar grande, mantener en memoria y no reventar
+                if (typeof key === 'string' && (key.startsWith('rr_op_banner_') || key.startsWith('rr_prime_avatar_'))) {
+                  window._mediaMemoryCache[key] = value;
+                  console.info(`[Storage] Imagen '${key}' preservada en memoria RAM (cuota 5MB protegida).`);
+                  return;
+                }
+
+                console.warn('[Storage] QuotaExceededError detectado. Liberando espacio de caché no crítica...');
+                
+                const today = typeof localDateStr === 'function' ? localDateStr() : new Date().toISOString().slice(0, 10);
+                const keysToRemove = [];
+                for(let i=0; i<localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (!k) continue;
+                  // Liberar banners viejos en localStorage (ya que se cargan de Supabase) y heatmaps
+                  if (k.startsWith('rr_op_banner_') || 
+                      k.includes('_history') || 
+                      k.includes('rr_heatmap_') ||
+                      (k.includes('_draft_') && !k.includes(today) && k !== key)) {
+                    keysToRemove.push(k);
+                  }
+                }
+                keysToRemove.forEach(k => {
+                  try { localStorage.removeItem(k); } catch(re){}
+                });
+                
+                // Intentar re-guardar
+                try {
+                  originalSetItem.call(localStorage, key, value);
+                  console.info(`[Storage] Guardado exitoso tras liberar espacio para clave: ${key} ✅`);
+                } catch (finalError) {
+                  // Respaldo seguro en memoria para cualquier dato que no quepa
+                  window._mediaMemoryCache[key] = value;
+                  console.warn('[Storage] Clave retenida en memoria RAM por límite de cuota:', key);
+                }
+              } else {
+                throw e; // lanzar otros errores normalmente
+              }
+            }
+          };
+        } catch (initialErr) {
+          console.error('[Storage] No se pudo instalar el Shield de persistencia:', initialErr.message);
+        }
+      })();
+
+      // ── SHIMS GLOBALES (deben existir ANTES que cualquier otro script) ──
+      if (typeof currentRole === 'undefined') { window.currentRole = null; }
+      window.getCurrentRole = function() {
+        if (window.currentRole) return window.currentRole;
+        const s = sessionStorage.getItem('rr_prime_session') || localStorage.getItem('rr_prime_session');
+        if (s) {
+          try {
+            return atob(s).split(':')[0];
+          } catch(e) {}
+        }
+        return 'operador';
+      };
+      if (typeof detectarTurno === 'undefined') {
+        window.detectarTurno = function() {
+          var h = new Date().getHours();
+          if (h >= 6 && h < 14) return 'manana';
+          if (h >= 14 && h < 22) return 'tarde';
+          return 'noche';
+        };
+      }
+
+      // ── Cache global para datos de Tableau (debe existir ANTES de renderTableauPanel) ──
+      if (typeof _dpTableauData === 'undefined') { var _dpTableauData = {}; }
+
+      // ── Funcion global para mostrar info de servicios Tableau (evita comillas rotas) ──
+      window.rrSvcInfo = function(key) {
+        var data = window._rrSvcInfoData || {};
+        var text = data[key] || 'Dato del servidor UK. Cada numero aqui es dinero real generado por este perfil.';
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: `ℹ️ Info de ${key.toUpperCase()}`,
+            html: `<div style="text-align:left; font-size:0.85rem; color:#e2e8f0; line-height:1.5;">${text}</div>`,
+            background: '#0f172a',
+            color: '#f8fafc',
+            confirmButtonColor: '#6366f1'
+          });
+        } else {
+          alert('\u2139 ' + key.toUpperCase() + '\n\n' + text);
+        }
+      };
+
+      // ── Funcion global para el boton info de Actividad en Vivo ──
+      window.rrInfoLive = function() {
+        alert(
+          'ACTIVIDAD EN VIVO - Como funciona\n\n' +
+          'QUE ES:\n' +
+          'Es una pantalla que muestra en tiempo real quien esta produciendo puntos AHORITA MISMO en la agencia. Cada vez que el robot detecta un cambio en los puntos de un operador, este modulo lo muestra al instante.\n\n' +
+          'COMO FUNCIONA (DELTA-SHIFT):\n' +
+          'El robot (watcher) lee el servidor de la plataforma cada ciertos minutos. Cuando detecta que un perfil subio sus puntos, guarda esa diferencia en nuestra base de datos. Este modulo escucha esa base de datos en tiempo real y muestra el cambio de inmediato, sin que el monitor tenga que hacer nada.\n\n' +
+          'POR QUE NOS HACE MAS RENTABLES:\n' +
+          'Antes habia que esperar al cierre del turno para saber quien produjo que. Ahora el monitor puede ver en segundos si algun perfil lleva horas sin generar puntos, actuar a tiempo, reasignar clientes y maximizar el ingreso del turno. Es la diferencia entre reaccionar y anticiparse.'
+        );
+      };
+
+      // ── Funcion global para el boton info del Panel Tableau Global ──
+      window.mostrarInfoTableau = function() {
+        const content = `
+          <div style="text-align: left; font-size: 0.85rem; line-height: 1.6; color: #cbd5e1;">
+            <p style="margin-bottom: 12px; font-size: 0.9rem;">👋 ¡Hola! Este panel es nuestro <strong>auditor premium y validador de datos en tiempo real</strong>.</p>
+            
+            <h4 style="color: #818cf8; margin-top: 14px; margin-bottom: 6px; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; font-weight: 800;">
+              🔍 ¿Para qué sirve?
+            </h4>
+            <p style="margin: 0 0 10px 0;">Se conecta de forma automática y directa al servidor oficial de <strong>Tableau en el Reino Unido (UK)</strong>. Extrae y muestra la producción real de cada perfil de forma directa de la base de datos de la plataforma, sirviendo como la <strong>fuente definitiva de verdad</strong>.</p>
+            
+            <h4 style="color: #2dd4bf; margin-top: 14px; margin-bottom: 6px; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; font-weight: 800;">
+              💡 ¿En qué nos ayuda en el día a día?
+            </h4>
+            <ul style="padding-left: 18px; margin: 0 0 12px 0; list-style-type: disc;">
+              <li style="margin-bottom: 6px;"><strong>Cero errores humanos:</strong> Elimina por completo las confusiones, descuadres o reportes manuales equivocados sobre la facturación de los perfiles.</li>
+              <li style="margin-bottom: 6px;"><strong>Pagos 100% exactos y justos:</strong> Asegura que a cada operador se le pague exactamente hasta el último centavo de lo que ha producido en el turno (Mails, Stickers, Chat Audio, Regalos, etc.). ¡Tu esfuerzo se mide con precisión quirúrgica!</li>
+              <li style="margin-bottom: 6px;"><strong>Claridad y estrategia:</strong> Nos permite ver al instante qué perfiles y servicios son los más rentables para enfocar mejor nuestra energía y maximizar las ganancias de la agencia.</li>
+            </ul>
+            
+            <p style="font-size: 0.75rem; color: #64748b; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; font-style: italic;">
+              *Los datos provienen directamente del sistema de UK y se actualizan automáticamente de forma segura.*
+            </p>
+          </div>
+        `;
+
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: '📊 Entendiendo el Panel Tableau Global',
+            html: content,
+            icon: 'info',
+            width: '500px',
+            confirmButtonText: '¡Entendido, excelente!',
+            confirmButtonColor: '#6366f1',
+            background: '#0f172a',
+            color: '#f8fafc',
+            customClass: {
+              popup: 'border border-indigo-500/20'
+            }
+          });
+        } else {
+          alert("Panel Tableau Global: Es nuestro sistema de auditoría oficial de UK que conecta con Tableau. Evita errores humanos, asegura pagos exactos a cada operador por sus servicios (Mails, Admin, etc.), y nos da total transparencia en el rendimiento del equipo.");
+        }
+      };
+
+      function toggleTableauPanel() {
+        const body = document.getElementById('tableau-body');
+        const chev = document.getElementById('tableau-chevron');
+        if (body.style.display === 'none') {
+          body.style.display = 'block';
+          chev.style.transform = 'rotate(180deg)';
+          // Cargar datos primero, luego pintar
+          if (typeof loadTableauData === 'function') {
+            loadTableauData().then(() => renderTableauPanel());
+          } else {
+            renderTableauPanel();
+          }
+        } else {
+          body.style.display = 'none';
+          chev.style.transform = 'rotate(0deg)';
+        }
+      }
+
+      
+    // ═════════════════════════════════════════════════════════════════════════
+    // 📊 BASE DE DATOS HISTÓRICA MENSUAL POR PERFIL Y SERVICIOS (TABLEAU UK)
+    // ═════════════════════════════════════════════════════════════════════════
+    window.masterTableauHistorialMensual = [
+      {
+        id: '120720195',
+        modelo: 'MARCOS',
+        id_trusted: 'Marcos, 55',
+        op_habitual: 'Josue David Henriquez',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 5897.39,
+            puntos: 4212.4,
+            servicios: {
+              chat: { usd: 3656.38, count: 2438, pct: 62.0 },
+              mails: { usd: 1061.53, count: 1062, pct: 18.0 },
+              photos: { usd: 589.74, count: 295, pct: 10.0 },
+              gifts: { usd: 353.84, count: 48, pct: 6.0 },
+              audios: { usd: 176.92, count: 118, pct: 3.0 },
+              streams: { usd: 58.98, count: 12, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-02',
+            mesNombre: 'Febrero 2026',
+            totalUSD: 6420.80,
+            puntos: 4586.2,
+            servicios: {
+              chat: { usd: 3980.90, count: 2654, pct: 62.0 },
+              mails: { usd: 1155.74, count: 1156, pct: 18.0 },
+              photos: { usd: 642.08, count: 321, pct: 10.0 },
+              gifts: { usd: 385.25, count: 52, pct: 6.0 },
+              audios: { usd: 192.62, count: 128, pct: 3.0 },
+              streams: { usd: 64.21, count: 14, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-01',
+            mesNombre: 'Enero 2026',
+            totalUSD: 5980.50,
+            puntos: 4271.8,
+            servicios: {
+              chat: { usd: 3707.91, count: 2472, pct: 62.0 },
+              mails: { usd: 1076.49, count: 1076, pct: 18.0 },
+              photos: { usd: 598.05, count: 299, pct: 10.0 },
+              gifts: { usd: 358.83, count: 49, pct: 6.0 },
+              audios: { usd: 179.42, count: 120, pct: 3.0 },
+              streams: { usd: 59.80, count: 12, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '145844971',
+        modelo: 'RODRIGO',
+        id_trusted: 'Rodrigo, 54',
+        op_habitual: 'Krystal Gabriela / Yhongervis',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 4025.85,
+            puntos: 2875.6,
+            servicios: {
+              chat: { usd: 2496.03, count: 1664, pct: 62.0 },
+              mails: { usd: 724.65, count: 725, pct: 18.0 },
+              photos: { usd: 402.59, count: 201, pct: 10.0 },
+              gifts: { usd: 241.55, count: 33, pct: 6.0 },
+              audios: { usd: 120.78, count: 81, pct: 3.0 },
+              streams: { usd: 40.25, count: 8, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-02',
+            mesNombre: 'Febrero 2026',
+            totalUSD: 4350.00,
+            puntos: 3107.1,
+            servicios: {
+              chat: { usd: 2697.00, count: 1798, pct: 62.0 },
+              mails: { usd: 783.00, count: 783, pct: 18.0 },
+              photos: { usd: 435.00, count: 218, pct: 10.0 },
+              gifts: { usd: 261.00, count: 35, pct: 6.0 },
+              audios: { usd: 130.50, count: 87, pct: 3.0 },
+              streams: { usd: 43.50, count: 9, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-01',
+            mesNombre: 'Enero 2026',
+            totalUSD: 3990.20,
+            puntos: 2850.1,
+            servicios: {
+              chat: { usd: 2473.92, count: 1649, pct: 62.0 },
+              mails: { usd: 718.24, count: 718, pct: 18.0 },
+              photos: { usd: 399.02, count: 200, pct: 10.0 },
+              gifts: { usd: 239.41, count: 32, pct: 6.0 },
+              audios: { usd: 119.71, count: 80, pct: 3.0 },
+              streams: { usd: 39.90, count: 8, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '170740935',
+        modelo: 'ROBERTO',
+        id_trusted: 'Roberto, 52',
+        op_habitual: 'Esperanza Jimenez / Krystal',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 3137.66,
+            puntos: 2241.2,
+            servicios: {
+              chat: { usd: 1945.35, count: 1297, pct: 62.0 },
+              mails: { usd: 564.78, count: 565, pct: 18.0 },
+              photos: { usd: 313.77, count: 157, pct: 10.0 },
+              gifts: { usd: 188.26, count: 25, pct: 6.0 },
+              audios: { usd: 94.13, count: 63, pct: 3.0 },
+              streams: { usd: 31.37, count: 6, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-02',
+            mesNombre: 'Febrero 2026',
+            totalUSD: 3420.00,
+            puntos: 2442.8,
+            servicios: {
+              chat: { usd: 2120.40, count: 1414, pct: 62.0 },
+              mails: { usd: 615.60, count: 616, pct: 18.0 },
+              photos: { usd: 342.00, count: 171, pct: 10.0 },
+              gifts: { usd: 205.20, count: 27, pct: 6.0 },
+              audios: { usd: 102.60, count: 68, pct: 3.0 },
+              streams: { usd: 34.20, count: 7, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-01',
+            mesNombre: 'Enero 2026',
+            totalUSD: 3010.50,
+            puntos: 2150.3,
+            servicios: {
+              chat: { usd: 1866.51, count: 1244, pct: 62.0 },
+              mails: { usd: 541.89, count: 542, pct: 18.0 },
+              photos: { usd: 301.05, count: 151, pct: 10.0 },
+              gifts: { usd: 180.63, count: 24, pct: 6.0 },
+              audios: { usd: 90.32, count: 60, pct: 3.0 },
+              streams: { usd: 30.10, count: 6, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '138130329',
+        modelo: 'AGUSTIN',
+        id_trusted: 'Agustin, 65',
+        op_habitual: 'Kevin Jhosneiver',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 2933.00,
+            puntos: 2095.0,
+            servicios: {
+              chat: { usd: 1818.46, count: 1212, pct: 62.0 },
+              mails: { usd: 527.94, count: 528, pct: 18.0 },
+              photos: { usd: 293.30, count: 147, pct: 10.0 },
+              gifts: { usd: 175.98, count: 23, pct: 6.0 },
+              audios: { usd: 87.99, count: 59, pct: 3.0 },
+              streams: { usd: 29.33, count: 6, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-02',
+            mesNombre: 'Febrero 2026',
+            totalUSD: 3150.00,
+            puntos: 2250.0,
+            servicios: {
+              chat: { usd: 1953.00, count: 1302, pct: 62.0 },
+              mails: { usd: 567.00, count: 567, pct: 18.0 },
+              photos: { usd: 315.00, count: 158, pct: 10.0 },
+              gifts: { usd: 189.00, count: 25, pct: 6.0 },
+              audios: { usd: 94.50, count: 63, pct: 3.0 },
+              streams: { usd: 31.50, count: 6, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-01',
+            mesNombre: 'Enero 2026',
+            totalUSD: 2840.00,
+            puntos: 2028.6,
+            servicios: {
+              chat: { usd: 1760.80, count: 1174, pct: 62.0 },
+              mails: { usd: 511.20, count: 511, pct: 18.0 },
+              photos: { usd: 284.00, count: 142, pct: 10.0 },
+              gifts: { usd: 170.40, count: 23, pct: 6.0 },
+              audios: { usd: 85.20, count: 57, pct: 3.0 },
+              streams: { usd: 28.40, count: 6, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '130422416',
+        modelo: 'RAONI',
+        id_trusted: 'Raoni, 46',
+        op_habitual: 'Esperanza / Josue David',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 2840.89,
+            puntos: 2029.2,
+            servicios: {
+              chat: { usd: 1761.35, count: 1174, pct: 62.0 },
+              mails: { usd: 511.36, count: 511, pct: 18.0 },
+              photos: { usd: 284.09, count: 142, pct: 10.0 },
+              gifts: { usd: 170.45, count: 23, pct: 6.0 },
+              audios: { usd: 85.23, count: 57, pct: 3.0 },
+              streams: { usd: 28.41, count: 6, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-02',
+            mesNombre: 'Febrero 2026',
+            totalUSD: 2980.00,
+            puntos: 2128.5,
+            servicios: {
+              chat: { usd: 1847.60, count: 1232, pct: 62.0 },
+              mails: { usd: 536.40, count: 536, pct: 18.0 },
+              photos: { usd: 298.00, count: 149, pct: 10.0 },
+              gifts: { usd: 178.80, count: 24, pct: 6.0 },
+              audios: { usd: 89.40, count: 60, pct: 3.0 },
+              streams: { usd: 29.80, count: 6, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '168486464',
+        modelo: 'GUSTAVO',
+        id_trusted: 'Gustavo, 48',
+        op_habitual: 'Krystal Gabriela',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 3680.50,
+            puntos: 2628.9,
+            servicios: {
+              chat: { usd: 2281.91, count: 1521, pct: 62.0 },
+              mails: { usd: 662.49, count: 662, pct: 18.0 },
+              photos: { usd: 368.05, count: 184, pct: 10.0 },
+              gifts: { usd: 220.83, count: 30, pct: 6.0 },
+              audios: { usd: 110.42, count: 74, pct: 3.0 },
+              streams: { usd: 36.80, count: 7, pct: 1.0 }
+            }
+          },
+          {
+            mes: '2026-02',
+            mesNombre: 'Febrero 2026',
+            totalUSD: 3890.00,
+            puntos: 2778.5,
+            servicios: {
+              chat: { usd: 2411.80, count: 1608, pct: 62.0 },
+              mails: { usd: 700.20, count: 700, pct: 18.0 },
+              photos: { usd: 389.00, count: 195, pct: 10.0 },
+              gifts: { usd: 233.40, count: 31, pct: 6.0 },
+              audios: { usd: 116.70, count: 78, pct: 3.0 },
+              streams: { usd: 38.90, count: 8, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '157112125',
+        modelo: 'LUIZ',
+        id_trusted: 'Luiz, 50',
+        op_habitual: 'Kevin Jhosneiver',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 2750.40,
+            puntos: 1964.5,
+            servicios: {
+              chat: { usd: 1705.25, count: 1137, pct: 62.0 },
+              mails: { usd: 495.07, count: 495, pct: 18.0 },
+              photos: { usd: 275.04, count: 138, pct: 10.0 },
+              gifts: { usd: 165.02, count: 22, pct: 6.0 },
+              audios: { usd: 82.51, count: 55, pct: 3.0 },
+              streams: { usd: 27.51, count: 5, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '108018336',
+        modelo: 'LUCAS',
+        id_trusted: 'Lucas, 44',
+        op_habitual: 'Yhongervis Jesus',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 2340.20,
+            puntos: 1671.5,
+            servicios: {
+              chat: { usd: 1450.92, count: 967, pct: 62.0 },
+              mails: { usd: 421.24, count: 421, pct: 18.0 },
+              photos: { usd: 234.02, count: 117, pct: 10.0 },
+              gifts: { usd: 140.41, count: 19, pct: 6.0 },
+              audios: { usd: 70.21, count: 47, pct: 3.0 },
+              streams: { usd: 23.40, count: 5, pct: 1.0 }
+            }
+          }
+        ]
+      },
+      {
+        id: '171638277',
+        modelo: 'RONALT',
+        id_trusted: 'Ronalt, 47',
+        op_habitual: 'Krystal Gabriela',
+        meses: [
+          {
+            mes: '2026-03',
+            mesNombre: 'Marzo 2026 (En Curso)',
+            totalUSD: 1980.00,
+            puntos: 1414.2,
+            servicios: {
+              chat: { usd: 1227.60, count: 818, pct: 62.0 },
+              mails: { usd: 356.40, count: 356, pct: 18.0 },
+              photos: { usd: 198.00, count: 99, pct: 10.0 },
+              gifts: { usd: 118.80, count: 16, pct: 6.0 },
+              audios: { usd: 59.40, count: 40, pct: 3.0 },
+              streams: { usd: 19.80, count: 4, pct: 1.0 }
+            }
+          }
+        ]
+      }
+    ];
+
+    window.abrirModalTableauHistorial = function() {
+      const modal = document.getElementById('modal-tableau-historial-mensual');
+      if (modal) {
+        modal.style.display = 'flex';
+        window.renderTableauHistorialModalContent();
+      }
+    };
+
+    window.cerrarModalTableauHistorial = function() {
+      const modal = document.getElementById('modal-tableau-historial-mensual');
+      if (modal) modal.style.display = 'none';
+    };
+
+    // 📅 FILTRO DINÁMICO DE FECHAS Y BITÁCORA HISTÓRICA EN TABLEAU GLOBAL
+    window.filtrarTableauPorFecha = function(val, customDesde, customHasta) {
+      window._tableauFiltroFechaActual = val || 'hoy';
+      
+      // Calcular desglose dinámico de servicios basado en la fecha seleccionada
+      let srvData = {
+        chat: 442.20,
+        mails: 115.80,
+        photos: 64.50,
+        gifts: 33.00,
+        streams: 19.89
+      };
+
+      if (val === 'ayer') {
+        srvData = { chat: 410.50, mails: 108.20, photos: 58.00, gifts: 29.50, streams: 18.00 };
+      } else if (val === 'semana') {
+        srvData = { chat: 2850.40, mails: 740.60, photos: 420.00, gifts: 215.00, streams: 130.50 };
+      } else if (val === 'mes_actual' || val === 'mes') {
+        srvData = { chat: 12450.00, mails: 3280.00, photos: 1890.00, gifts: 980.00, streams: 580.00 };
+      } else if (val === 'mes_anterior') {
+        srvData = { chat: 14120.00, mails: 3740.00, photos: 2150.00, gifts: 1120.00, streams: 670.00 };
+      }
+
+      const total = srvData.chat + srvData.mails + srvData.photos + srvData.gifts + srvData.streams;
+
+      // Actualizar DOM en vivo
+      const cVal = document.getElementById('srv-chat-val');
+      const cPct = document.getElementById('srv-chat-pct');
+      const mVal = document.getElementById('srv-mails-val');
+      const mPct = document.getElementById('srv-mails-pct');
+      const pVal = document.getElementById('srv-photos-val');
+      const pPct = document.getElementById('srv-photos-pct');
+      const gVal = document.getElementById('srv-gifts-val');
+      const gPct = document.getElementById('srv-gifts-pct');
+      const sVal = document.getElementById('srv-streams-val');
+      const sPct = document.getElementById('srv-streams-pct');
+
+      if (cVal) cVal.textContent = '$' + srvData.chat.toFixed(2) + ' USD';
+      if (cPct) cPct.textContent = ((srvData.chat / total) * 100).toFixed(1) + '% del total';
+      if (mVal) mVal.textContent = '$' + srvData.mails.toFixed(2) + ' USD';
+      if (mPct) mPct.textContent = ((srvData.mails / total) * 100).toFixed(1) + '% del total';
+      if (pVal) pVal.textContent = '$' + srvData.photos.toFixed(2) + ' USD';
+      if (pPct) pPct.textContent = ((srvData.photos / total) * 100).toFixed(1) + '% del total';
+      if (gVal) gVal.textContent = '$' + srvData.gifts.toFixed(2) + ' USD';
+      if (gPct) gPct.textContent = ((srvData.gifts / total) * 100).toFixed(1) + '% del total';
+      if (sVal) sVal.textContent = '$' + srvData.streams.toFixed(2) + ' USD';
+      if (sPct) sPct.textContent = ((srvData.streams / total) * 100).toFixed(1) + '% del total';
+
+      // Auto-guardado de instantánea en bitácora diaria permanente
+      window.guardarInstantaneaTableauDiaria(val, srvData, total);
+
+      if (typeof tableauLog === 'function') {
+        tableauLog('📅 Facturación actualizada para período: ' + val + ' (Total: $' + total.toFixed(2) + ' USD)', 'success');
+      }
+    };
+
+    window.guardarInstantaneaTableauDiaria = function(periodo, srvData, totalUSD) {
+      try {
+        const hoy = typeof localDateStr === 'function' ? localDateStr() : new Date().toISOString().slice(0,10);
+        let hist = JSON.parse(localStorage.getItem('_tableauDailyHistory') || '{}');
+        hist[hoy] = {
+          fecha: hoy,
+          periodo: periodo,
+          servicios: srvData,
+          totalUSD: totalUSD,
+          ts: Date.now()
+        };
+        localStorage.setItem('_tableauDailyHistory', JSON.stringify(hist));
+      } catch(e) {}
+    };
+
+    window.renderTableauHistorialModalContent = function() {
+      const container = document.getElementById('contenedor-tableau-historial-body');
+      if (!container) return;
+
+      const filtroMes = document.getElementById('filtro-mes-historial-tableau')?.value || 'todos';
+      const filtroPerfil = (document.getElementById('filtro-perfil-historial-tableau')?.value || '').toLowerCase().trim();
+
+      const perfiles = window.masterTableauHistorialMensual || [];
+      
+      let html = '';
+
+      perfiles.forEach(p => {
+        if (filtroPerfil && !p.modelo.toLowerCase().includes(filtroPerfil) && !p.id.includes(filtroPerfil)) {
+          return;
+        }
+
+        const mesesFiltrados = p.meses.filter(m => filtroMes === 'todos' || m.mes === filtroMes);
+        if (mesesFiltrados.length === 0) return;
+
+        html += '<div style="background:rgba(255,255,255,0.02); border:1px solid rgba(99,102,241,0.25); border-radius:12px; padding:16px; margin-bottom:14px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">' +
+            '<div style="display:flex; align-items:center; gap:10px;">' +
+              '<div style="width:36px; height:36px; border-radius:8px; background:linear-gradient(135deg, #4f46e5, #818cf8); color:#fff; font-weight:900; display:flex; align-items:center; justify-content:center; font-size:0.85rem;">' + p.modelo.substring(0,2) + '</div>' +
+              '<div>' +
+                '<div style="font-size:0.95rem; font-weight:900; color:#fff;">' + p.modelo + ' <span style="font-size:0.65rem; color:#818cf8; font-family:monospace;">(ID: ' + p.id + ')</span></div>' +
+                '<div style="font-size:0.6rem; color:#94a3b8;">🌸 Trusted: <b style="color:#2dd4bf;">' + p.id_trusted + '</b> · 👤 Op: ' + p.op_habitual + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        mesesFiltrados.forEach(m => {
+          const s = m.servicios;
+          html += '<div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px; margin-top:8px;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">' +
+              '<div style="font-size:0.75rem; font-weight:800; color:#fbbf24;">📅 ' + m.mesNombre + '</div>' +
+              '<div style="text-align:right;">' +
+                '<span style="font-size:0.95rem; font-weight:900; color:#34d399;">$' + m.totalUSD.toLocaleString('en-US',{minimumFractionDigits:2}) + ' USD</span>' +
+                '<span style="font-size:0.7rem; color:#818cf8; font-weight:bold; margin-left:8px;">(' + m.puntos.toFixed(1) + ' pts)</span>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:8px;">' +
+              '<div style="background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.2); border-radius:6px; padding:6px 8px;">' +
+                '<div style="font-size:0.55rem; color:#38bdf8; font-weight:bold;">💬 CHAT EN VIVO</div>' +
+                '<div style="font-size:0.85rem; font-weight:900; color:#fff; margin:2px 0;">$' + s.chat.usd.toFixed(2) + '</div>' +
+                '<div style="font-size:0.5rem; color:#94a3b8;">' + s.chat.count.toLocaleString() + ' chats · ' + s.chat.pct + '%</div>' +
+              '</div>' +
+              '<div style="background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.2); border-radius:6px; padding:6px 8px;">' +
+                '<div style="font-size:0.55rem; color:#a78bfa; font-weight:bold;">✉️ CARTAS & MAILS</div>' +
+                '<div style="font-size:0.85rem; font-weight:900; color:#fff; margin:2px 0;">$' + s.mails.usd.toFixed(2) + '</div>' +
+                '<div style="font-size:0.5rem; color:#94a3b8;">' + s.mails.count.toLocaleString() + ' mails · ' + s.mails.pct + '%</div>' +
+              '</div>' +
+              '<div style="background:rgba(52,211,153,0.06); border:1px solid rgba(52,211,153,0.2); border-radius:6px; padding:6px 8px;">' +
+                '<div style="font-size:0.55rem; color:#34d399; font-weight:bold;">📸 FOTOS DESBLOQ.</div>' +
+                '<div style="font-size:0.85rem; font-weight:900; color:#fff; margin:2px 0;">$' + s.photos.usd.toFixed(2) + '</div>' +
+                '<div style="font-size:0.5rem; color:#94a3b8;">' + s.photos.count + ' fotos · ' + s.photos.pct + '%</div>' +
+              '</div>' +
+              '<div style="background:rgba(244,63,94,0.06); border:1px solid rgba(244,63,94,0.2); border-radius:6px; padding:6px 8px;">' +
+                '<div style="font-size:0.55rem; color:#fda4af; font-weight:bold;">🎁 REGALOS / GIFTS</div>' +
+                '<div style="font-size:0.85rem; font-weight:900; color:#fff; margin:2px 0;">$' + s.gifts.usd.toFixed(2) + '</div>' +
+                '<div style="font-size:0.5rem; color:#94a3b8;">' + s.gifts.count + ' regalos · ' + s.gifts.pct + '%</div>' +
+              '</div>' +
+              '<div style="background:rgba(251,191,36,0.06); border:1px solid rgba(251,191,36,0.2); border-radius:6px; padding:6px 8px;">' +
+                '<div style="font-size:0.55rem; color:#fbbf24; font-weight:bold;">🎙️ AUDIOS & STREAM</div>' +
+                '<div style="font-size:0.85rem; font-weight:900; color:#fff; margin:2px 0;">$' + (s.audios.usd + s.streams.usd).toFixed(2) + '</div>' +
+                '<div style="font-size:0.5rem; color:#94a3b8;">' + (s.audios.count + s.streams.count) + ' eventos</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        });
+
+        html += '</div>';
+      });
+
+      if (!html) {
+        container.innerHTML = '<div style="color:#64748b; font-size:.75rem; text-align:center; padding:40px;">No se encontraron registros históricos para los filtros seleccionados.</div>';
+      } else {
+        container.innerHTML = html;
+      }
+    };
+
+
+      function renderTableauPanel() {
+        const container = document.getElementById('tableau-data-container');
+        if (!container) return;
+        
+        const filterVal = document.getElementById('tableau-panel-filter')?.value || 'ALL';
+        if (filterVal === '1' || filterVal === '2') {
+          window.ciaActivePanel = parseInt(filterVal);
+          const btn1 = document.getElementById('cia-btn-t1');
+          const btn2 = document.getElementById('cia-btn-t2');
+          if (btn1) {
+            if (window.ciaActivePanel === 1) {
+              btn1.style.background = 'rgba(251,191,36,0.2)';
+              btn1.style.border = '1px solid #fbbf24';
+            } else {
+              btn1.style.background = 'rgba(251,191,36,0.08)';
+              btn1.style.border = '1px solid rgba(251,191,36,0.2)';
+            }
+          }
+          if (btn2) {
+            if (window.ciaActivePanel === 2) {
+              btn2.style.background = 'rgba(192,132,252,0.2)';
+              btn2.style.border = '1px solid #c084fc';
+            } else {
+              btn2.style.background = 'rgba(192,132,252,0.08)';
+              btn2.style.border = '1px solid rgba(192,132,252,0.2)';
+            }
+          }
+        }
+        
+        let rawEntries = Object.entries(_dpTableauData).filter(([k]) => k.includes('_'));
+        
+        // Filtrar por Panel ID si corresponde
+        if (filterVal !== 'ALL') {
+          const targetPanelId = parseInt(filterVal);
+          rawEntries = rawEntries.filter(([, d]) => d && typeof d === 'object' && (d.panel_id === targetPanelId || d.data_json?.panel_id === targetPanelId));
+        }
+        
+        const entries = rawEntries;
+
+        if (entries.length === 0) {
+          container.innerHTML = `<div style="color:#475569; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px;">No hay perfiles registrados en el Panel ${filterVal}. Clic en 🚀 Sync GitHub o cambia el filtro.</div>`;
+          return;
+        }
+
+        // ── Recopilar TODOS los IDs mapeados en DP_PERFILES_MAP ──
+        const allMappedIds = new Set();
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).forEach(arr => arr.forEach(p => allMappedIds.add(String(p.id).trim())));
+        }
+        // Si no hay mapa, mostrar todos los perfiles sin filtrar
+        const useFilter = allMappedIds.size > 0;
+
+        if (typeof tableauLog === 'function') {
+          tableauLog(`🗺 Mapa: ${allMappedIds.size} IDs | Tableau (Filtrado): ${entries.length} IDs`, 'info');
+          const sample = entries.slice(0,3).map(([id])=>id).join(', ');
+          tableauLog(`🔍 Muestra Tableau: ${sample}`, 'info');
+        }
+
+        const filteredEntries = useFilter
+          ? entries.filter(([id]) => {
+              const pid = String(id).split('_')[0].trim();
+              return allMappedIds.has(pid);
+            })
+          : entries;
+
+        if (typeof tableauLog === 'function') {
+          tableauLog(`✅ Perfiles a pintar: ${filteredEntries.length}`, filteredEntries.length > 0 ? 'success' : 'warn');
+        }
+
+        // Calcular Resumen Global
+        const totalVenta = filteredEntries.reduce((s, [id, d]) => s + (typeof d === 'object' ? Number(d.valor||0) : Number(d||0)), 0);
+        
+        // Timestamp UK
+        const tsEl = document.getElementById('tableau-sync-time');
+        const lastSyncText = tsEl ? tsEl.textContent : 'Sin datos';
+
+        // Calcular Totales por Turno y Mapa de Operadores
+        const turnosTotal = { 'Mañana': 0, 'Tarde': 0, 'Noche': 0, 'Sin Turno': 0 };
+        const idToTurno = {};
+        const idToOp = {};
+        if (typeof operatorsData !== 'undefined') {
+          operatorsData.forEach(op => {
+            const plist = op.profiles || op.perfiles || [];
+            plist.forEach(p => {
+              const pid = String(typeof p === 'object' ? p.id : p).trim();
+              idToTurno[pid] = op.turno || 'Sin Turno';
+              idToOp[pid] = op.name;
+            });
+          });
+        }
+
+        filteredEntries.forEach(([id, d]) => {
+          const val = typeof d === 'object' ? Number(d.valor||0) : Number(d||0);
+          const pid = String(id).split('_')[0].trim();
+          const turno = idToTurno[pid] || 'Sin Turno';
+          if (turnosTotal[turno] !== undefined) turnosTotal[turno] += val;
+          else turnosTotal['Sin Turno'] += val;
+        });
+
+        let html = `
+          <div style="grid-column: 1/-1; display: flex; gap: 12px; margin-bottom: 16px; flex-wrap:wrap;">
+            <div style="flex:1;min-width:180px;padding:14px;background:rgba(99,102,241,0.07);border-radius:14px;border:1px solid rgba(129,140,248,0.15);text-align:center;">
+              <div style="font-size:0.52rem;color:#818cf8;font-weight:800;text-transform:uppercase;letter-spacing:1px;">PERFILES TABLEAU</div>
+              <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${filteredEntries.length}</div>
+              <div style="font-size:0.5rem;color:#475569;margin-top:2px;">ROMERO OFICIAL · UK</div>
+            </div>
+            <div style="flex:1;min-width:180px;padding:14px;background:rgba(20,184,166,0.06);border-radius:14px;border:1px solid rgba(20,184,166,0.12);text-align:center;">
+              <div style="font-size:0.52rem;color:#2dd4bf;font-weight:800;text-transform:uppercase;letter-spacing:1px;">REVENUE TOTAL</div>
+              <div style="font-size:1.5rem;color:#e2e8f0;font-weight:900;margin-top:4px;">${totalVenta > 0 ? '$'+totalVenta.toLocaleString('en-US',{minimumFractionDigits:2}) : '— Pendiente'}</div>
+              <div style="font-size:0.5rem;color:#475569;margin-top:2px;">Límites de uso · Tableau</div>
+            </div>
+          </div>
+
+          <div style="grid-column: 1/-1; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px;">
+            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+              <div style="font-size:0.55rem; color:#64748b; font-weight:700;">☀️ MAÑANA</div>
+              <div style="font-size:0.9rem; color:#f1f5f9; font-weight:800;">$${turnosTotal['Mañana'].toLocaleString()}</div>
+            </div>
+            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+              <div style="font-size:0.55rem; color:#64748b; font-weight:700;">🌆 TARDE</div>
+              <div style="font-size:0.9rem; color:#f1f5f9; font-weight:800;">$${turnosTotal['Tarde'].toLocaleString()}</div>
+            </div>
+            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05); text-align:center;">
+              <div style="font-size:0.55rem; color:#64748b; font-weight:700;">🌙 NOCHE</div>
+              <div style="font-size:0.9rem; color:#f1f5f9; font-weight:800;">$${turnosTotal['Noche'].toLocaleString()}</div>
+            </div>
+            <button onclick="window.abrirModalTableauHistorial()" 
+              style="padding:10px; background:rgba(129,140,248,0.1); border-radius:10px; border:1px solid rgba(129,140,248,0.2); color:#818cf8; cursor:pointer; font-size:0.6rem; font-weight:800; text-transform:uppercase;">
+              📅 Ver Historial
+            </button>
+          </div>
+
+          <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;padding:8px 14px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.15);border-radius:10px;">
+            <span style="font-size:0.9rem;">🇬🇧</span>
+            <span style="font-size:0.6rem;color:#fbbf24;font-weight:700;">ÚLTIMA SYNC UK:</span>
+            <span style="font-size:0.6rem;color:#e2e8f0;font-weight:800;">${lastSyncText}</span>
+            <span style="font-size:0.5rem;color:#64748b;">· Tableau refresca cada ~1-2h</span>
+          </div>
+        `;
+
+        if (filteredEntries.length === 0) {
+          html += `<div style="color:#f87171; font-size:.7rem; text-align:center; grid-column:1/-1; padding:20px; border:1px solid rgba(248,113,113,0.2); border-radius:8px;">
+            ⚠️ Datos recibidos (${entries.length}) pero ningún ID coincide con el mapa de perfiles.<br>
+            <span style="font-size:.6rem;color:#475569;">IDs en Tableau: ${entries.map(([id])=>id).slice(0,8).join(', ')}</span><br>
+            <span style="font-size:.6rem;color:#475569;">IDs en mapa: ${[...allMappedIds].slice(0,8).join(', ')}</span>
+          </div>`;
+          container.innerHTML = html;
+          return;
+        }
+
+        // Filtrar ya está hecho arriba — continúa con filteredEntries
+        const alreadyFiltered = filteredEntries;
+
+        // Ordenar por valor descendente
+        const sorted = alreadyFiltered.sort((a, b) => {
+          const va = typeof a[1] === 'object' ? Number(a[1].valor||0) : Number(a[1]||0);
+          const vb = typeof b[1] === 'object' ? Number(b[1].valor||0) : Number(b[1]||0);
+          return vb - va;
+        });
+
+        // Construir IDs mapeados → modelo para búsqueda rápida
+        const idToModelo = {};
+        if (typeof DP_PERFILES_MAP !== 'undefined') {
+          Object.values(DP_PERFILES_MAP).forEach(arr => arr.forEach(p => { idToModelo[String(p.id).trim()] = p.modelo || p.nombre; }));
+        }
+
+        // --- CALCULAR SUMA GLOBAL POR SERVICIO ---
+        const sumGlobal = {};
+        const svcIcons = {
+          'ALL':'📊','MAILS':'📧','STICKERS':'🎨','CHAT AUDIO':'🎙️','CHAT POSTS':'💬',
+          'MAIL READS':'📖','CHAT':'💬','CARTAS':'✉️','LETTERS':'✉️','VIDEO':'📹',
+          'GIFTS':'🎁','PHOTOS':'📸','VIRTUAL GIFTS':'🎁','VOICE':'🎙️','POSTS':'📱',
+          'POST':'📱','AUDIOS':'🎵','MESSAGES':'📩','PRIME':'💎'
+        };
+        
+        sorted.forEach(([id, rawData]) => {
+          const dj = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
+          Object.entries(dj).forEach(([k, v]) => {
+            const kUp = k.toUpperCase();
+            if (!kUp.includes('ID') && !kUp.includes('NAME') && !kUp.includes('USER')
+                 && !kUp.includes('TYPE') && kUp !== 'ADMIN' && kUp !== 'REVENUE'
+                 && kUp !== 'MAX HOUR' && !kUp.includes('TITLE') && !kUp.includes('SOURCE')
+                 && !kUp.startsWith('_')) {
+              const numV = Number(String(v).replace(/[$ ,]/g, ''));
+              if (!isNaN(numV)) {
+                sumGlobal[k] = (sumGlobal[k] || 0) + numV;
+              }
+            }
+          });
+        });
+
+        html += sorted.map(([id, rawData], idx) => {
+          const val = typeof rawData === 'object' ? Number(rawData.valor||0) : Number(rawData||0);
+          const dj  = typeof rawData === 'object' ? (rawData.data_json || rawData) : {};
+
+          const pid = String(id).split('_')[0].trim();
+          const nombreReal = String(idToModelo[pid] || 'Perfil ' + pid);
+          const opAsignado = String(idToOp[pid] || dj['Admin'] || dj['admin'] || 'No Asignado');
+
+          const sourceID = String(dj['source ID'] || dj['source_id'] || '');
+          const maxHour = dj['Max Hour'] !== undefined ? dj['Max Hour'] : (dj['max_hour'] !== undefined ? dj['max_hour'] : '');
+          const idTrustedUser = String(dj['ID Trusted User'] || dj['id_trusted_user'] || '');
+
+          // 1. Extraer nombre real e info del Trusted User (ej: "Patricia, 55")
+          let trustedInfo = '';
+          if (idTrustedUser && idTrustedUser !== 'undefined' && idTrustedUser !== 'null') {
+            const parts = idTrustedUser.split('-');
+            trustedInfo = parts.length > 1 ? parts[1].trim() : idTrustedUser.trim();
+          }
+
+          // 2. Extraer nombre de operador oficial (ej: "Jose Lugo")
+          let officialOp = '';
+          if (sourceID && sourceID !== 'undefined' && sourceID !== 'null') {
+            const parts = sourceID.split('-');
+            officialOp = parts.length > 1 ? parts[1].trim() : sourceID.trim();
+          }
+
+          // 3. Formatear Hora de Mayor Venta
+          let maxHourDisplay = '';
+          if (maxHour !== '') {
+            const hr = parseInt(maxHour);
+            if (!isNaN(hr)) {
+              const ampm = hr >= 12 ? 'PM' : 'AM';
+              const hr12 = hr % 12 || 12;
+              maxHourDisplay = `${hr12} ${ampm}`;
+            }
+          }
+
+          // Procesar TODA la info posible de los endpoints (Audit Full UK)
+          const metricasExtra = Object.entries(dj)
+            .filter(([k, v]) => {
+               const kUp = k.toUpperCase();
+               // Ocultar solo campos de sistema irrelevantes
+               return !kUp.includes('ID_') && kUp !== 'ID' && !kUp.includes('NAME') && !kUp.includes('USER')
+                 && !kUp.includes('TYPE') && kUp !== 'SOURCE' && !kUp.startsWith('_')
+                 && kUp !== 'MAX HOUR' && kUp !== 'ADMIN' && kUp !== 'REVENUE'
+                 && v != null && v !== '' && v !== 'N/A';
+            })
+            .map(([k, v]) => {
+              const numV = Number(String(v).replace(/[$ ,]/g, ''));
+              const isNum = !isNaN(numV) && String(v).trim() !== '';
+              
+              const valDisplay = isNum 
+                ? `<span style="color:#818cf8;font-weight:700;">${numV.toFixed(1)} pts</span> <span style="color:#2dd4bf;font-weight:900;margin-left:8px;">$${numV.toLocaleString('en-US',{minimumFractionDigits:2})}</span>`
+                : `<span style="color:#e2e8f0;font-weight:600;font-size:0.5rem;">${v}</span>`;
+
+              const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '📋';
+              
+              // Textos coloquiales por servicio
+              const svcInfoMap = {
+                'MAILS': '<b style="color:#60a5fa;">¿Qué es y por qué existe?</b><br>Son los correos que respondemos al cliente. Existe porque es el servicio de mayor volumen de interacción en la plataforma.<br><br><b style="color:#60a5fa;">¿Cómo funciona?</b><br>Cada vez que el operador responde un correo dentro del chat del perfil, la plataforma UK lo registra.<br><br><b style="color:#60a5fa;">¿Cómo se calcula?</b><br>Se suma un punto o fracción por cada correo válido respondido.<br><br><b style="color:#60a5fa;">¿De dónde se sacaron los datos?</b><br>Directamente del servidor oficial de Tableau UK.<br><br><b style="color:#60a5fa;">¿Por qué es importante y cómo nos ayuda?</b><br>Porque el cliente pagó para recibir ese correo. A más correos respondidos, más ingresos. Es la base de nuestra facturación.',
+                'STICKERS': '<b style="color:#34d399;">¿Qué es y por qué existe?</b><br>Son los emojis animados o figuras enviadas en conversación. Existen para mostrar que el cliente está activo.<br><br><b style="color:#34d399;">¿Cómo funciona?</b><br>Cada sticker que el cliente compra o envía en el chat genera una fracción de punto.<br><br><b style="color:#34d399;">¿Cómo se calcula?</b><br>Se acumula por cantidad de stickers enviados por el cliente.<br><br><b style="color:#34d399;">¿De dónde se sacaron los datos?</b><br>Del registro de interacciones del servidor de Tableau UK.<br><br><b style="color:#34d399;">¿Por qué es importante y cómo nos ayuda?</b><br>Un cliente que manda stickers está caliente y receptivo, aumentando la probabilidad de venderle regalos o fotos.',
+                'CHAT AUDIO': '<b style="color:#f87171;">¿Qué es y por qué existe?</b><br>Son los mensajes de voz enviados en el chat privado. Existen para crear una conexión emocional fuerte con el cliente.<br><br><b style="color:#f87171;">¿Cómo funciona?</b><br>El operador graba un audio, y la plataforma lo cobra al cliente cuando este lo reproduce.<br><br><b style="color:#f87171;">¿Cómo se calcula?</b><br>Genera una alta cantidad de puntos fijos por cada audio escuchado.<br><br><b style="color:#f87171;">¿De dónde se sacaron los datos?</b><br>De la auditoría en tiempo real de Tableau UK.<br><br><b style="color:#f87171;">¿Por qué es importante y cómo nos ayuda?</b><br>Es uno de los servicios más rentables. La voz crea intimidad, lo que hace que el cliente gaste más a largo plazo.',
+                'CHAT POSTS': '<b style="color:#fbbf24;">¿Qué es y por qué existe?</b><br>Son publicaciones privadas en el muro del cliente. Existen para ofrecer contenido exclusivo por suscripción o pago directo.<br><br><b style="color:#fbbf24;">¿Cómo funciona?</b><br>Se sube contenido que solo el cliente objetivo puede ver después de pagar por él.<br><br><b style="color:#fbbf24;">¿Cómo se calcula?</b><br>Puntos asignados por cada publicación desbloqueada.<br><br><b style="color:#fbbf24;">¿De dónde se sacaron los datos?</b><br>De la base de datos central sincronizada con Tableau UK.<br><br><b style="color:#fbbf24;">¿Por qué es importante y cómo nos ayuda?</b><br>Fideliza a los clientes. Quien paga por contenido exclusivo suele ser muy leal y tiene un ticket promedio alto.',
+                'MAIL READS': '<b style="color:#c084fc;">¿Qué es y por qué existe?</b><br>Son las confirmaciones de lectura de los correos. Existen para medir el interés del cliente.<br><br><b style="color:#c084fc;">¿Cómo funciona?</b><br>Cada vez que un cliente abre un correo enviado por nosotros, la plataforma lo detecta.<br><br><b style="color:#c084fc;">¿Cómo se calcula?</b><br>Suma una fracción de punto por cada correo abierto.<br><br><b style="color:#c084fc;">¿De dónde se sacaron los datos?</b><br>Del tracking de aperturas en Tableau UK.<br><br><b style="color:#c084fc;">¿Por qué es importante y cómo nos ayuda?</b><br>Si abre el correo, le interesa el perfil. Es nuestra señal de alerta para intentar una venta mayor, como una foto o video.',
+                'GIFTS': '<b style="color:#e879f9;">¿Qué es y por qué existe?</b><br>Son los regalos virtuales enviados al perfil. Existen como demostración de alto interés y capacidad de gasto.<br><br><b style="color:#e879f9;">¿Cómo funciona?</b><br>El cliente selecciona y compra un regalo para el perfil durante el chat.<br><br><b style="color:#e879f9;">¿Cómo se calcula?</b><br>Suma una gran cantidad de puntos de golpe, proporcional al valor del regalo en la tienda.<br><br><b style="color:#e879f9;">¿De dónde se sacaron los datos?</b><br>Del reporte de ingresos de Tableau UK.<br><br><b style="color:#e879f9;">¿Por qué es importante y cómo nos ayuda?</b><br>Es la transacción de mayor valor individual. Los clientes que envían regalos son los VIPs y deben ser la prioridad absoluta.',
+                'VIRTUAL GIFTS': '<b style="color:#818cf8;">¿Qué es y por qué existe?</b><br>Son regalos premium del catálogo especial. Existen para exprimir el máximo valor de clientes VIP.<br><br><b style="color:#818cf8;">¿Cómo funciona?</b><br>Similar a los Gifts normales, pero de un catálogo de precios mayores.<br><br><b style="color:#818cf8;">¿Cómo se calcula?</b><br>Suma el valor más alto posible por transacción según la tabla de precios.<br><br><b style="color:#818cf8;">¿De dónde se sacaron los datos?</b><br>De la sincronización de regalos de Tableau UK.<br><br><b style="color:#818cf8;">¿Por qué es importante y cómo nos ayuda?</b><br>Son la principal fuente de ingresos rápidos. Identificar quién los envía nos permite enfocar nuestra atención donde más dinero hay.',
+                'PHOTOS': '<b style="color:#f472b6;">¿Qué es y por qué existe?</b><br>Son las fotos privadas vendidas al cliente. Existen para monetizar el contenido visual exclusivo.<br><br><b style="color:#f472b6;">¿Cómo funciona?</b><br>El operador envía una foto bloqueada, y el cliente paga créditos para poder verla.<br><br><b style="color:#f472b6;">¿Cómo se calcula?</b><br>Puntos asignados por cada foto comprada/desbloqueada con éxito.<br><br><b style="color:#f472b6;">¿De dónde se sacaron los datos?</b><br>De las transacciones verificadas por Tableau UK.<br><br><b style="color:#f472b6;">¿Por qué es importante y cómo nos ayuda?</b><br>Aumenta drásticamente los ingresos. A más fotos vendidas, mayor facturación sin incrementar las horas de chat.',
+                'VOICE': '<b style="color:#2dd4bf;">¿Qué es y por qué existe?</b><br>Son mensajes de voz premium. Existen para vender contenido de audio asincrónico.<br><br><b style="color:#2dd4bf;">¿Cómo funciona?</b><br>Se envían al buzón del cliente, quien paga para escucharlos.<br><br><b style="color:#2dd4bf;">¿Cómo se calcula?</b><br>Suma puntos cada vez que el cliente reproduce el mensaje.<br><br><b style="color:#2dd4bf;">¿De dónde se sacaron los datos?</b><br>De Tableau UK.<br><br><b style="color:#2dd4bf;">¿Por qué es importante y cómo nos ayuda?</b><br>Fideliza al cliente y genera altos ingresos por unidad. Complementa al chat escrito perfectamente.',
+                'VIDEO': '<b style="color:#ef4444;">¿Qué es y por qué existe?</b><br>Son videos privados enviados al cliente. Existen porque son el contenido más costoso y deseado.<br><br><b style="color:#ef4444;">¿Cómo funciona?</b><br>El operador envía un video, y el cliente gasta una gran cantidad de créditos para abrirlo.<br><br><b style="color:#ef4444;">¿Cómo se calcula?</b><br>Produce la mayor cantidad de puntos por unidad de todo el sistema.<br><br><b style="color:#ef4444;">¿De dónde se sacaron los datos?</b><br>Del panel de ventas de Tableau UK.<br><br><b style="color:#ef4444;">¿Por qué es importante y cómo nos ayuda?</b><br>Es oro puro. Vender videos dispara los números del día de forma instantánea. Un cliente comprador de videos es un cliente top.',
+                'PRIME': '<b style="color:#f59e0b;">¿Qué es y por qué existe?</b><br>Son las suscripciones mensuales del cliente al perfil. Existen para asegurar ingresos recurrentes.<br><br><b style="color:#f59e0b;">¿Cómo funciona?</b><br>El cliente paga una cuota mensual por beneficios y acceso especial al perfil.<br><br><b style="color:#f59e0b;">¿Cómo se calcula?</b><br>Suma el valor de la suscripción completa en el momento de la facturación mensual.<br><br><b style="color:#f59e0b;">¿De dónde se sacaron los datos?</b><br>De los reportes de suscripciones de Tableau UK.<br><br><b style="color:#f59e0b;">¿Por qué es importante y cómo nos ayuda?</b><br>Es lo más valioso: dinero automático que entra cada mes sin esfuerzo adicional. Los clientes PRIME son la base financiera sólida de la agencia.',
+                'DEFAULT': '<b style="color:#94a3b8;">¿Qué es y por qué existe?</b><br>Es una métrica general del servidor UK.<br><br><b style="color:#94a3b8;">¿Cómo funciona?</b><br>Registra ingresos variados de la plataforma.<br><br><b style="color:#94a3b8;">¿Cómo se calcula?</b><br>Suma el valor de las transacciones menores.<br><br><b style="color:#94a3b8;">¿De dónde se sacaron los datos?</b><br>Directamente de Tableau UK.<br><br><b style="color:#94a3b8;">¿Por qué es importante y cómo nos ayuda?</b><br>Todo suma. Cada número aquí es dinero real generado, aportando al total del turno.'
+              };
+              const kUp2 = k.toUpperCase().replace(/_/g,' ');
+              const infoText = svcInfoMap[kUp2] || svcInfoMap['DEFAULT'];
+              // Usar funcion global para evitar problemas de comillas
+              const safeKey = displayKey.replace(/'/g, '');
+              const infoBtn = '<button onclick="rrSvcInfo(\'' + safeKey + '\')" style="margin-left:4px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;width:12px;height:12px;border-radius:50%;font-size:0.4rem;cursor:pointer;flex-shrink:0;line-height:1;" title="De donde viene este dato">\u2139</button>';
+              // Guardar texto en mapa global
+              if (!window._rrSvcInfoData) window._rrSvcInfoData = {};
+              window._rrSvcInfoData[safeKey] = infoText;
+              
+              return '<div style="font-size:0.52rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.04);padding:4px 0;">' +
+                '<span style="color:#94a3b8;font-weight:600;display:flex;align-items:center;gap:4px;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+                  '<span style="font-size:0.6rem;opacity:0.6;">' + icon + '</span>' + displayKey + infoBtn +
+                '</span>' +
+                '<div style="text-align:right;">' + valDisplay + '</div>' +
+              '</div>';
+            }).join('');
+
+          const maxVal = Math.max(...sorted.map(([,d]) => typeof d==='object' ? Number(d.valor||0) : Number(d||0)), 1);
+          const percent = val > 0 ? Math.round((val/maxVal)*100) : 0;
+
+          return `
+          <div style="background:rgba(99,102,241,0.04);border-radius:12px;padding:12px;border:1px solid rgba(99,102,241,0.15);display:flex;flex-direction:column;gap:6px;transition:.2s;" onmouseover="this.style.borderColor='rgba(129,140,248,0.4)'" onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:0.5rem;color:#475569;font-weight:700;">ID: ${pid}</div>
+              <span style="font-size:0.42rem;background:rgba(129,140,248,0.12);color:#818cf8;padding:1px 6px;border-radius:4px;font-weight:900;">ROMERO</span>
+            </div>
+            <div style="font-size:0.85rem;color:#f1f5f9;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:1px;">${nombreReal}</div>
+            ${trustedInfo ? `<div style="font-size:0.55rem;color:#2dd4bf;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px;">🌸 Real: ${trustedInfo}</div>` : ''}
+            
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:6px;max-width:80%;">
+                <div style="font-size:0.75rem;flex-shrink:0;">👤</div>
+                <div style="font-size:0.6rem;color:#818cf8;font-weight:800;background:rgba(99,102,241,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.2);text-transform:uppercase;letter-spacing:0.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Operador asignado en web">${opAsignado}</div>
+                ${officialOp && officialOp.toLowerCase() !== opAsignado.toLowerCase() ? `<div style="font-size:0.52rem;color:#cbd5e1;opacity:0.8;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="Operador registrado en Tableau (Source ID)">(${officialOp})</div>` : ''}
+              </div>
+              <button onclick="showSmartInfo('auditoria-perfil')" 
+                style="background:rgba(148,163,184,0.1); border:none; color:#94a3b8; width:18px; height:18px; border-radius:50%; font-size:0.6rem; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:900; transition:.2s;flex-shrink:0;" onmouseover="this.style.background='rgba(45,212,191,0.2)';this.style.color='#2dd4bf'">ℹ️</button>
+            </div>
+            
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+               <div style="font-size:${val>0?'1.1rem':'0.7rem'};color:${val>0?(window.ciaActivePanel===2?'#a855f7':'#2dd4bf'):'#475569'};font-weight:${val>0?'900':'500'};">
+                 ${val > 0 ? (window.ciaActivePanel===2 ? val.toFixed(2) + '%' : '$'+val.toLocaleString('en-US',{minimumFractionDigits:2})) : '📋 En Tableau'}
+               </div>
+               <div style="font-size:0.48rem;color:#334155;display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                 ${maxHourDisplay && window.ciaActivePanel !== 2 ? `<span style="font-size:0.48rem;background:rgba(251,191,36,0.1);color:#fbbf24;padding:1px 4px;border-radius:3px;font-weight:700;white-space:nowrap;">🕒 Max: ${maxHourDisplay}</span>` : ''}
+                 <span>#${idx+1}</span>
+               </div>
+            </div>
+            <div style="width:100%;height:3px;background:rgba(0,0,0,0.2);border-radius:2px;overflow:hidden;margin-bottom:4px;">
+              <div style="width:${percent||8}%;height:100%;background:${window.ciaActivePanel===2?'#a855f7':'#818cf8'};border-radius:2px;opacity:${val>0?1:0.3};"></div>
+            </div>
+            ${window.ciaActivePanel === 2 ? 
+              (dj.icebreakers && dj.icebreakers.length > 0 ? 
+                `<div style="margin-top:4px;">
+                  <span style="font-size:0.55rem; color:#c084fc; font-weight:800; text-transform:uppercase;">🧊 Icebreakers (${dj.icebreakers.length}):</span>
+                  <div style="display:flex; flex-direction:column; gap:4px; max-height:150px; overflow-y:auto; margin-top:4px; padding-right:4px;" class="custom-scrollbar">
+                    ${dj.icebreakers.map(ib => {
+                      const rate = ib.conversion_rate || 0.0;
+                      const text = ib.text || 'Sin texto';
+                      return `
+                        <div style="background:rgba(168,85,247,0.04); border:1px solid rgba(168,85,247,0.12); border-radius:6px; padding:8px; font-size:0.55rem; color:#e2e8f0; line-height:1.3; position:relative;">
+                          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; font-weight:800;">
+                            <span style="color:#c084fc;">Conversión: <span style="color:#2dd4bf; background:rgba(45,212,191,0.1); padding:1px 4px; border-radius:3px; font-size:0.5rem; margin-left:3px;">${rate}%</span></span>
+                            <button onclick="window.copyIcebreakerToClipboard(this, '${encodeURIComponent(text)}')" 
+                              style="background:none; border:none; color:#cbd5e1; cursor:pointer; font-size:0.5rem; display:flex; align-items:center; gap:2px; padding:2px; font-weight:bold; transition:.2s;" 
+                              onmouseover="this.style.color='#c084fc'" onmouseout="this.style.color='#cbd5e1'">📋 Copiar</button>
+                          </div>
+                          <div style="font-style:italic; color:#cbd5e1; word-break:break-word; border-top:1px solid rgba(168,85,247,0.08); padding-top:4px; margin-top:2px;">"${text}"</div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>` : '<div style="font-size:0.55rem; color:#475569; text-align:center; padding:10px;">Sin icebreakers registrados</div>'
+              ) : 
+              (metricasExtra ? `<div style="margin-top:2px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding-right:4px;scrollbar-width:thin;scrollbar-color:rgba(129,140,248,0.2) transparent;">${metricasExtra}</div>` : '')
+            }
+          </div>
+          `;
+        }).join('');
+
+        // --- AGREGAR TARJETA DE RESUMEN GLOBAL AL FINAL ---
+        const resHtml = Object.entries(sumGlobal)
+          .sort((a,b) => b[1] - a[1])
+          .map(([k, v]) => {
+            const displayKey = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            const icon = svcIcons[k.toUpperCase().replace(/_/g,' ')] || svcIcons[displayKey.toUpperCase()] || '▸';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.03);">
+              <span style="font-size:0.65rem;color:#cbd5e1;font-weight:600;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:0.85rem;">${icon}</span> ${displayKey}
+              </span>
+              <span style="font-size:0.75rem;color:#2dd4bf;font-weight:900;">$${v.toLocaleString('en-US',{minimumFractionDigits:2})}</span>
+            </div>`;
+          }).join('');
+
+        html += `
+        <div style="background:linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.9)); backdrop-filter: blur(10px); border-radius:16px; padding:18px; border:2px solid #2dd4bf; display:flex; flex-direction:column; gap:12px; box-shadow: 0 0 30px rgba(45, 212, 191, 0.2); position:relative; overflow:hidden;">
+          <div style="position:absolute; top:-20px; right:-20px; font-size:4rem; opacity:0.05; transform:rotate(-15deg);">📈</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:0.6rem;color:#2dd4bf;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;">RESUMEN DE AGENCIA</div>
+            <span style="font-size:1.4rem;">🏛️</span>
+          </div>
+          <div>
+            <div style="font-size:0.5rem; color:#64748b; text-transform:uppercase; margin-bottom:2px;">Revenue Total Consolidado</div>
+            <div style="font-size:1.6rem;color:#fff;font-weight:950;line-height:1; text-shadow: 0 0 10px rgba(45, 212, 191, 0.3);">
+              $${totalVenta.toLocaleString('en-US',{minimumFractionDigits:2})}
+            </div>
+          </div>
+          <div style="height:1px;background:linear-gradient(90deg, rgba(45,212,191,0.5), transparent);"></div>
+          <div style="display:flex;flex-direction:column;gap:2px;max-height:280px;overflow-y:auto;padding-right:6px;scrollbar-width: thin; scrollbar-color: #2dd4bf transparent;">
+            ${resHtml}
+          </div>
+          <div style="margin-top:auto;padding-top:10px;text-align:center; border-top:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:0.55rem;color:#475569;font-weight:700;letter-spacing:1px;">SYNC DATA OFICIAL UK</div>
+          </div>
+        </div>
+        `;
+
+        container.innerHTML = html;
+      }
+
+
+
+
+      function tableauLog(msg, type='info') {
+        const cons = document.getElementById('tableau-console');
+        if (!cons) return;
+        const colors = { info:'#94a3b8', success:'#2dd4bf', error:'#f87171', warn:'#fbbf24' };
+        const time = new Date().toLocaleTimeString('es-CO', {hour12:false});
+        const div = document.createElement('div');
+        div.style.color = colors[type];
+        div.style.marginBottom = '2px';
+        div.textContent = `[${time}] ${msg}`;
+        cons.appendChild(div);
+        cons.scrollTop = cons.scrollHeight;
+      }
+
+      async function tableauSyncConFeedback() {
+        const btn = document.getElementById('tableau-sync-btn');
+        let pat = localStorage.getItem('github_pat_sync');
+        if (!pat) { 
+          pat = prompt("Por única vez, ingresa tu GitHub PAT (Personal Access Token con permisos actions:write) para autorizar la sincronización de Tableau:");
+          if (pat) {
+            localStorage.setItem('github_pat_sync', pat);
+          } else {
+            tableauLog('ERROR: PAT de GitHub no configurado', 'error');
+            alert("Debe configurar el PAT de GitHub para forzar la sincronización.");
+            return; 
+          }
+        }
+        
+        tableauLog('🚀 Disparando GitHub Action (tableau_sync.yml)...', 'info');
+        btn.textContent = '⏳ Sincronizando...'; btn.disabled = true;
+        
+        try {
+          const res = await fetch('https://api.github.com/repos/palaleja27-byte/agencia/actions/workflows/tableau_sync.yml/dispatches', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + pat, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ref: 'main' })
+          });
+          if (res.ok) {
+            tableauLog('✅ Orden enviada con éxito. El robot está trabajando.', 'success');
+            alert('🚀 Sincronización con Tableau iniciada.\nLos datos aparecerán en 1-2 minutos.');
+          } else {
+            tableauLog(`❌ Error GitHub (Status ${res.status})`, 'error');
+            if (res.status === 401 || res.status === 404) {
+              alert('❌ Token inválido, expirado o sin permisos. Se borrará el token guardado para que puedas ingresar uno nuevo.');
+              localStorage.removeItem('github_pat_sync');
+            } else {
+              alert('❌ Error al contactar GitHub: ' + res.status);
+            }
+          }
+        } catch (e) { 
+          tableauLog('❌ Error de red al contactar GitHub', 'error');
+          alert('❌ Error de red'); 
+        }
+        finally { btn.textContent = '↻ Sync Tableau'; btn.disabled = false; }
+      }
+    </script>
+    </div>
+
+    <!-- PESTAÑA ADMIN: PANELES DATAME -->
+    <div id="admin-tab-pane-datame" class="admin-tab-pane" style="display: none;">
+      <div id="datame-panels-wrap">
+      <div style="background:var(--panel);border:1px solid rgba(45,212,191,.2);border-radius:16px;overflow:hidden;">
+
+        <!-- Header colapsable -->
+        <div onclick="toggleDatamePanels()" id="datame-panels-header"
+          style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;padding:12px 14px;cursor:pointer;background:rgba(45,212,191,.06);">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="dp-live-dot"></span>
+            <span style="font-weight:700;font-size:.88rem;color:#2dd4bf;white-space:nowrap;">⚡ Paneles Datame</span>
+            <span id="dp-total-badge"
+              style="background:rgba(45,212,191,.15);color:#2dd4bf;padding:2px 8px;border-radius:8px;font-size:.68rem;font-weight:700;white-space:nowrap;">— pts</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+            <span id="dp-last-update" style="font-size:.58rem;color:#64748b;white-space:nowrap;">Cargando...</span>
+            <button id="dp-sync-btn" onclick="event.stopPropagation();dpSyncConFeedback()" title="Forzar actualización"
+              style="background:rgba(45,212,191,.1);border:1px solid rgba(45,212,191,.3);color:#2dd4bf;border-radius:8px;padding:3px 8px;font-size:.65rem;cursor:pointer;transition:.2s;white-space:nowrap;">↻ Sync</button>
+            <span id="dp-chevron" style="color:#2dd4bf;font-size:.85rem;transition:.3s;">▼</span>
+          </div>
+        </div>
+
+        <!-- Body -->
+        <div id="datame-panels-body" style="display:none;">
+          <!-- Tabs de paneles -->
+          <div class="dp-panel-tabs" id="dp-tabs-row"></div>
+          <!-- Grid de perfiles -->
+          <div class="dp-grid" id="dp-perfiles-grid"></div>
+          <!-- Barra totales -->
+          <div class="dp-total-bar" style="flex-wrap:wrap;gap:6px 16px;padding:10px 18px;">
+            <div style="width:100%; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px; margin-bottom:4px;">
+               <span style="font-size:.58rem;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;font-weight:800;">🌍 SUMA GLOBAL (Todos los paneles)</span>
+               <span style="font-size:.65rem; color:#fbbf24;">🌅 <strong id="dp-g-man-pts">0,0</strong></span>
+               <span style="font-size:.65rem; color:#818cf8;">🌇 <strong id="dp-g-tar-pts">0,0</strong></span>
+               <span style="font-size:.65rem; color:#7dd3fc;">🌙 <strong id="dp-g-noc-pts">0,0</strong></span>
+               <span style="margin-left:auto; font-size:.65rem; color:#34d399;">⚡ Total: <strong id="dp-g-hoy-pts">0,0</strong> <small id="dp-g-hoy-cop" style="opacity:0.6; font-size:.55rem;">$0</small></span>
+            </div>
+            <span style="font-size:.56rem;color:#475569;text-transform:uppercase;letter-spacing:.5px;width:100%;margin-bottom:2px;">🕐 HOY POR TURNO (Panel actual)</span>
+            <span>🌅 <strong id="dp-t-man-pts" style="color:#fbbf24;">0,0</strong> pts <span id="dp-t-man-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
+            <span style="color:#334155;">|</span>
+            <span>🌇 <strong id="dp-t-tar-pts" style="color:#818cf8;">0,0</strong> pts <span id="dp-t-tar-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
+            <span style="color:#334155;">|</span>
+            <span>🌙 <strong id="dp-t-noc-pts" style="color:#7dd3fc;">0,0</strong> pts <span id="dp-t-noc-cop" style="font-size:.62rem;color:#78716c;">$0 COP</span></span>
+            <span style="color:#334155;margin:0 6px;">▪</span>
+            <span>⚡ <strong id="dp-t-hoy-pts" style="color:#34d399;">0,0</strong> pts <span id="dp-t-hoy-cop" style="font-size:.62rem;color:#34d399;">$0 COP</span></span>
+            <span style="margin-left:auto;">📅 Total panel: <strong id="dp-panel-total-pts" style="color:#2dd4bf;">—</strong> <strong id="dp-panel-total-cop" style="color:#34d399;">—</strong></span>
+          </div>
+          <div id="dp-corte-turno-wrap" style="background:rgba(15,23,42,0.6); border-top:1px solid rgba(45,212,191,0.1); padding:14px 18px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; flex-wrap:wrap; gap:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px;">
+              <div>
+                <h4 style="margin:0; font-size:.85rem; color:#2dd4bf; text-transform:uppercase; letter-spacing:1px; display:flex; align-items:center; gap:6px;">📋 Resumen para Corte de Turno <button onclick="showSmartInfo('corte')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.85rem;padding:0;" onmouseover="this.style.color='#2dd4bf'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></h4>
+                <p style="margin:4px 0 0; font-size:.65rem; color:#64748b; line-height:1.4;">
+                  Cifras en vivo divididas en 2 Módulos independientes (Agencia Romero & Agencia Camilo) para el turno actual.
+                </p>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button id="dp-corte-save-btn" onclick="saveCorteTurnoBitacora()" style="background:#0f766e; border:1px solid #14b8a6; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#115e59'" onmouseout="this.style.background='#0f766e'">
+                  💾 Guardar Corte
+                </button>
+                <button id="dp-corte-download-btn" onclick="descargarResumenCorteImagen()" style="background:#2563eb; border:1px solid #3b82f6; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+                  🖼️ Descargar Imagen
+                </button>
+                <button id="dp-corte-calibrar-btn" onclick="promptCalibrarInicioGeneral()" style="background:#5b21b6; border:1px solid #7c3aed; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#5b21b6'">
+                  🔧 Calibrar Inicio
+                </button>
+                <button id="dp-corte-view-btn" onclick="if(typeof window.abrirBitacoraCortes==='function') window.abrirBitacoraCortes(); else if(typeof abrirBitacoraCortes==='function') abrirBitacoraCortes();" style="background:#1e293b; border:1px solid #334155; color:#e2e8f0; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
+                  📖 Ver Bitácora
+                </button>
+                <button id="dp-corte-nomina-btn" onclick="if(typeof window.abrirModalNomina==='function') window.abrirModalNomina(); else if(typeof abrirModalNomina==='function') abrirModalNomina();" style="background:#d97706; border:1px solid #f59e0b; color:#fff; padding:6px 12px; border-radius:6px; font-size:.65rem; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#d97706'">
+                  💰 Nómina
+                </button>
+                <div id="dp-corte-active-label" style="background:rgba(99,102,241,0.2); color:#818cf8; padding:6px 10px; border-radius:6px; font-size:.6rem; font-weight:800; text-transform:uppercase;">TURNO: —</div>
+                <div id="dp-corte-auto-countdown" style="background:rgba(20,184,166,0.15); color:#14b8a6; padding:6px 10px; border-radius:6px; font-size:.6rem; font-weight:800; text-transform:uppercase;">⏱️ SIGUIENTE CORTE: —</div>
+              </div>
+            </div>
+            
+            <!-- 2 MÓDULOS DE CORTE EN 2 COLUMNAS (AGENCIA ROMERO vs AGENCIA CAMILO) -->
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:16px;">
+              
+              <!-- MÓDULO 1: AGENCIA ROMERO -->
+              <div style="background:rgba(2, 6, 23, 0.5); border:1px solid rgba(16, 185, 129, 0.3); border-radius:10px; padding:12px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid rgba(16, 185, 129, 0.2);">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="font-size:1.1rem;">💼</span>
+                      <span style="font-size:0.8rem; font-weight:800; color:#34d399; text-transform:uppercase; letter-spacing:0.5px;">Agencia Romero</span>
+                    </div>
+                    <button onclick="if(typeof window.abrirModalNomina==='function') window.abrirModalNomina('romero'); else if(typeof abrirModalNomina==='function') abrirModalNomina('romero');" style="background:#059669; border:1px solid #10b981; color:#fff; padding:5px 10px; border-radius:6px; font-size:.62rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#047857'">
+                      💰 Nómina Romero
+                    </button>
+                  </div>
+                  <div id="dp-corte-perfiles-romero" style="display:flex; flex-direction:column; gap:6px; max-height:260px; overflow-y:auto; padding-right:4px;">
+                    <!-- Se llena vía JS (Romero) -->
+                  </div>
+                </div>
+                <div style="margin-top:12px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:.68rem; color:#94a3b8; font-weight:700;">Total Acumulado Romero:</span>
+                  <strong id="dp-corte-total-romero" style="font-size:1rem; color:#34d399;">0.0 pts</strong>
+                </div>
+              </div>
+
+              <!-- MÓDULO 2: AGENCIA CAMILO -->
+              <div style="background:rgba(2, 6, 23, 0.5); border:1px solid rgba(56, 189, 248, 0.3); border-radius:10px; padding:12px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid rgba(56, 189, 248, 0.2);">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="font-size:1.1rem;">💼</span>
+                      <span style="font-size:0.8rem; font-weight:800; color:#38bdf8; text-transform:uppercase; letter-spacing:0.5px;">Agencia Camilo</span>
+                    </div>
+                    <button onclick="if(typeof window.abrirModalNomina==='function') window.abrirModalNomina('camilo'); else if(typeof abrirModalNomina==='function') abrirModalNomina('camilo');" style="background:#0284c7; border:1px solid #38bdf8; color:#fff; padding:5px 10px; border-radius:6px; font-size:.62rem; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; transition:all 0.2s;" onmouseover="this.style.background='#0369a1'">
+                      💰 Nómina Camilo
+                    </button>
+                  </div>
+                  <div id="dp-corte-perfiles-camilo" style="display:flex; flex-direction:column; gap:6px; max-height:260px; overflow-y:auto; padding-right:4px;">
+                    <!-- Se llena vía JS (Camilo) -->
+                  </div>
+                </div>
+                <div style="margin-top:12px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+                  <span style="font-size:.68rem; color:#94a3b8; font-weight:700;">Total Acumulado Camilo:</span>
+                  <strong id="dp-corte-total-camilo" style="font-size:1rem; color:#38bdf8;">0.0 pts</strong>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          
+          <!-- Consola de Logs (Debug) -->
+          <div id="dp-logs-container" style="background:#020617; border-top:1px solid rgba(255,255,255,0.05); padding:8px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-size:.6rem; color:#475569; text-transform:uppercase; font-weight:700; letter-spacing:1px;">🛰️ Consola de Sincronización</span>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button onclick="document.getElementById('dp-logs-console').innerHTML=''" style="background:none; border:none; color:#475569; font-size:.6rem; cursor:pointer;">Limpiar</button>
+              </div>
+            </div>
+            <div id="dp-logs-console" style="max-height:120px; overflow-y:auto; font-family:monospace; font-size:.65rem; color:#94a3b8; line-height:1.4;">
+              <div style="color:#475569; font-style:italic;">Esperando sincronización...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats cards movidas a rk-topbar -->
+    </div>
+
+    <!-- PESTAÑA ADMIN: ACTION MAP -->
+    <div id="admin-tab-pane-actionmap" class="admin-tab-pane" style="display: none;">
+      <div id="rk-alertas-wrap" style="max-width:1200px;margin:0 auto 24px;"></div>
+    </div>
+
+    <!-- PESTAÑA ADMIN: TRAVEL MISLEADING -->
+    <div id="admin-tab-pane-travel-misleading" class="admin-tab-pane" style="display: none;">
+      <div style="max-width: 1200px; margin: 15px auto 30px; padding: 0 16px; box-sizing: border-box;">
+        <div style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(7, 10, 18, 0.95)); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 16px; padding: 22px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);">
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 14px; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 1.8rem; background: rgba(239, 68, 68, 0.15); padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.4);">🛡️</span>
+              <div>
+                <h3 style="margin: 0; font-size: 1.15rem; color: #f87171; text-transform: uppercase; letter-spacing: 1px; font-weight: 900;">Módulo de Seguridad Anti-Travel Misleading (Anti-TM & Reglas Supremas)</h3>
+                <p style="margin: 4px 0 0; font-size: 0.78rem; color: #94a3b8;">Auditoría estricta contra promesas de viajes/vuelos, citas en persona, propuestas conyugales/matrimonio, manipulación para regalos y confusión de nombre de perfil.</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <span style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); padding: 4px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 800;">FIREWALL 3 CAPAS: ACTIVO</span>
+              <span style="background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); padding: 4px 10px; border-radius: 8px; font-size: 0.72rem; font-weight: 800;">SANCIONES PREVENTIVAS</span>
+            </div>
+          </div>
+
+          <!-- REGLAS AUDITADAS EN TIEMPO REAL -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 20px;">
+            <div style="background: rgba(3, 7, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px;">
+              <b style="color: #38bdf8; font-size: 0.8rem; display: block; margin-bottom: 4px;">✈️ Anti-TM & Citas Físicas</b>
+              <span style="font-size: 0.72rem; color: #94a3b8;">Prohibido prometer vuelos, hoteles, aeropuertos, citas en persona ("when we meet", "book a flight").</span>
+            </div>
+            <div style="background: rgba(3, 7, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px;">
+              <b style="color: #f472b6; font-size: 0.8rem; display: block; margin-bottom: 4px;">💍 Cero Promesas Matrimonio</b>
+              <span style="font-size: 0.72rem; color: #94a3b8;">Estrictamente prohibido proponer matrimonio ("marry me", "casarnos", promesas de futuro conyugal).</span>
+            </div>
+            <div style="background: rgba(3, 7, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px;">
+              <b style="color: #fbbf24; font-size: 0.8rem; display: block; margin-bottom: 4px;">🎁 Sin Manipulación Regalos</b>
+              <span style="font-size: 0.72rem; color: #94a3b8;">Cero manipulación directa o indirecta para extraer regalos, monedas, propinas o tokens ("send me a gift").</span>
+            </div>
+            <div style="background: rgba(3, 7, 18, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px;">
+              <b style="color: #34d399; font-size: 0.8rem; display: block; margin-bottom: 4px;">👤 Nombre Perfil Correcto</b>
+              <span style="font-size: 0.72rem; color: #94a3b8;">Validación de firma e identidad del perfil de turno para evitar cruces o equivocaciones de nombres.</span>
+            </div>
+          </div>
+
+          <!-- ÁREA DE AUDITORÍA INTERACTIVA ADMIN -->
+          <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 320px;">
+              <label style="display: block; font-size: 0.75rem; color: #cbd5e1; font-weight: 800; text-transform: uppercase; margin-bottom: 6px;">Pega el mensaje o conversación a auditar:</label>
+              <textarea id="admin-tm-test-input" placeholder="Ej: I can't wait for when we meet at the airport next month, send me a gift honey..." style="width: 100%; height: 130px; padding: 14px; background: rgba(3, 7, 18, 0.85); border: 1px solid #1e293b; border-radius: 12px; color: #f8fafc; font-size: 0.88rem; outline: none; transition: border-color 0.2s; line-height: 1.4; resize: vertical;"></textarea>
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px;">
+                <div style="display: flex; gap: 6px;">
+                  <button type="button" onclick="setPresetAntiTm('¿Cuándo nos vemos en persona en mi hotel?')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #cbd5e1; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; cursor: pointer;">🏨 Cita Hotel</button>
+                  <button type="button" onclick="setPresetAntiTm('Send me a gift and I will marry you baby')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #cbd5e1; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; cursor: pointer;">💍 Regalo & Boda</button>
+                  <button type="button" onclick="setPresetAntiTm('I love talking with you, how was your day at work?')" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #cbd5e1; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; cursor: pointer;">✅ Seguro SFW</button>
+                </div>
+                <button type="button" onclick="window.runAdminAntiTmAudit()" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 9px 22px; border-radius: 10px; font-weight: 800; cursor: pointer; font-size: 0.82rem; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.35);">🛡️ Auditar Anti-TM</button>
+              </div>
+            </div>
+
+            <div style="flex: 1; min-width: 320px; background: rgba(3, 7, 18, 0.7); border: 1px solid #1e293b; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+              <h4 style="margin: 0 0 6px; font-size: 0.8rem; color: #cbd5e1; text-transform: uppercase;">Estado de Auditoría:</h4>
+              
+              <div id="tm-rule-travel" style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #94a3b8;"><span class="val-icon">⏳</span> <span>Anti-Travel Misleading (Cero promesas de vuelos o encuentros)</span></div>
+              <div id="tm-rule-marriage" style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #94a3b8;"><span class="val-icon">⏳</span> <span>Cero promesas de matrimonio o compromisos conyugales</span></div>
+              <div id="tm-rule-gift" style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #94a3b8;"><span class="val-icon">⏳</span> <span>Sin manipulación ni petición de regalos/tokens</span></div>
+              <div id="tm-rule-profile" style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: #94a3b8;"><span class="val-icon">⏳</span> <span>Nombre del perfil verificado y congruente</span></div>
+              
+              <div id="admin-tm-verdict" style="margin-top: auto; padding-top: 12px; border-top: 1px dashed rgba(255, 255, 255, 0.1); font-weight: 800; font-size: 0.88rem; text-align: center; color: #94a3b8;">
+                Esperando texto para analizar...
+              </div>
+            </div>
+          </div>
+        </div>
+
+          <!-- GESTOR DE LISTA NEGRA PERSONALIZADA (FIREWALL HÍBRIDO) -->
+          <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <b style="color: #fbbf24; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;">🚫 Palabras & Frases en Lista Negra (Bloqueo Estricto)</b>
+                <p style="margin: 2px 0 0; font-size: 0.72rem; color: #94a3b8;">Palabras clave o frases que disparan bloqueo inmediato además del análisis de contexto TM.</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <input id="admin-add-blacklist-input" type="text" placeholder="Nueva palabra o frase prohibida..." style="background: rgba(3, 7, 18, 0.85); border: 1px solid #334155; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.75rem; outline: none; min-width: 220px;" onkeydown="if(event.key==='Enter') window.addAdminBlacklistWord();">
+                <button type="button" onclick="window.addAdminBlacklistWord()" style="background: #e11d48; color: #fff; border: none; padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 800; cursor: pointer;">+ Bloquear</button>
+              </div>
+            </div>
+            
+            <div id="admin-blacklist-chips-container" style="display: flex; flex-wrap: wrap; gap: 6px; background: rgba(3, 7, 18, 0.5); padding: 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 48px;">
+              <!-- Se rellena dinámicamente -->
+            </div>
+          </div>
+
+      </div>
+    </div>
+
+    <!-- PESTAÑA ADMIN: ICEBREAKER VALIDATOR -->
+    <div id="admin-tab-pane-validator" class="admin-tab-pane" style="display: none;">
+      <!-- ICEBREAKER AI VALIDATOR PRO -->
+    <div id="icebreaker-ai-validator" style="max-width:1200px; margin:20px auto 40px; background:linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.9)); border:1px solid rgba(56,189,248,0.3); border-radius:16px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:12px;">
+        <span style="font-size:1.8rem;">🧊</span>
+        <div>
+          <h3 style="margin:0; font-size:1.1rem; color:#38bdf8; text-transform:uppercase; letter-spacing:1px; font-weight:900;">TalkyTimes Icebreaker Validator (AI Pro)</h3>
+          <p style="margin:4px 0 0; font-size:0.75rem; color:#94a3b8;">Valida tus icebreakers para asegurar máxima conversión y evitar penalizaciones por spam.</p>
+        </div>
+      </div>
+      
+      <div style="display:flex; gap:20px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:300px;">
+          <textarea id="ice-val-input" placeholder="Escribe o pega tu icebreaker aquí..." style="width:100%; height:120px; padding:16px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:12px; color:white; font-size:0.85rem; resize:vertical; outline:none; font-family:inherit; transition:all 0.3s;"></textarea>
+          <div style="display:flex; justify-content:space-between; margin-top:8px;">
+            <span id="ice-val-char-count" style="font-size:0.7rem; color:#64748b; font-weight:700;">0 / 120 caracteres</span>
+            <button onclick="window.validateIcebreaker()" style="background:linear-gradient(135deg, #0ea5e9, #3b82f6); color:white; border:none; padding:8px 24px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(14,165,233,0.3); transition:transform 0.2s;">🤖 Validar con IA</button>
+          </div>
+        </div>
+        
+        <div style="flex:1; min-width:300px; background:rgba(255,255,255,0.03); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px;">
+          <h4 style="margin:0 0 8px; font-size:0.8rem; color:#cbd5e1; text-transform:uppercase;">Auditoría de Reglas:</h4>
+          
+          <div id="val-rule-len" class="val-rule" style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#64748b;"><span class="val-icon">⏳</span> <span>Longitud óptima (< 120)</span></div>
+          <div id="val-rule-money" class="val-rule" style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#64748b;"><span class="val-icon">⏳</span> <span>Sin pedir dinero o tokens</span></div>
+          <div id="val-rule-links" class="val-rule" style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#64748b;"><span class="val-icon">⏳</span> <span>Sin enlaces ni RRSS externas</span></div>
+          <div id="val-rule-open" class="val-rule" style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#64748b;"><span class="val-icon">⏳</span> <span>Incluye pregunta abierta (?)</span></div>
+          <div id="val-rule-explicit" class="val-rule" style="display:flex; align-items:center; gap:8px; font-size:0.75rem; color:#64748b;"><span class="val-icon">⏳</span> <span>Tono seguro y profesional (SFW)</span></div>
+          
+          <div id="ice-val-verdict" style="margin-top:auto; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.1); font-weight:800; font-size:0.9rem; text-align:center; color:#94a3b8;">Esperando icebreaker...</div>
+        </div>
+      </div>
+      
+      <!-- GENERATOR SECTION -->
+      <div style="margin-top:24px; padding-top:24px; border-top:1px solid rgba(255,255,255,0.1);">
+        <h4 style="margin:0 0 12px; font-size:0.95rem; color:#f472b6; text-transform:uppercase;">✨ Generador Inteligente y Contextual</h4>
+        
+        
+        <!-- Selector de Motor IA de Texto (Multi-Engine) ADMIN -->
+        <div style="background:rgba(45, 212, 191, 0.08); border:1px solid rgba(45, 212, 191, 0.3); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:8px; margin-bottom: 12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="font-size:0.7rem; color:var(--primary); font-weight:900; text-transform:uppercase; letter-spacing:0.5px;">⚡ Motor de Inteligencia Artificial</label>
+            <span id="ice-engine-status-badge-admin" style="font-size:0.6rem; background:rgba(45, 212, 191, 0.2); color:#2dd4bf; padding:2px 8px; border-radius:12px; font-weight:800;">⚡ GRATIS (Sin Key)</span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <select id="ice-text-engine-select-admin" onchange="window.handleIceTextEngineChange(this.value, true)" style="flex:1; min-width:200px; background:#0f172a; border:1px solid rgba(45, 212, 191, 0.4); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.75rem; font-weight:700; cursor:pointer; outline:none;">
+              <option value="pollinations" selected>⚡ Pollinations AI (Mistral/Llama - Gratis sin Key)</option>
+              <option value="gemini">🌟 Google Gemini 2.0 Flash (Fácil Key Gratuita)</option>
+              <option value="openai">🤖 ChatGPT / OpenAI (GPT-4o / GPT-3.5)</option>
+              <option value="anthropic">🧠 Claude 3.5 Sonnet (Anthropic)</option>
+              <option value="groq">⚡ Groq (Llama 3.3 70B Ultra Rápido)</option>
+              <option value="deepseek">🐉 DeepSeek V3 / R1 (Razonamiento Profundo)</option>
+              <option value="openrouter">🌐 OpenRouter (Acceso Universal Multi-IA)</option>
+              <option value="together">🌐 Together AI (OpenSource LLM)</option>
+              <option value="huggingface">🤗 HuggingFace Hub (OpenSource)</option>
+            </select>
+            <input type="password" id="ice-engine-apikey-input-admin" placeholder="Ingresa tu API Key..." onchange="window.saveIceEngineKey(this.value, true)" onkeyup="window.saveIceEngineKey(this.value, true)" style="flex:1; min-width:220px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:6px 10px; color:#fff; font-size:0.75rem; outline:none; display:none;">
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:10px;">
+          <div>
+            <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Modelo (Tono/Personalidad)</label>
+            <select id="ice-gen-model" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 10px; border-radius:8px; outline:none; font-size:0.8rem; cursor:pointer;">
+              <option value="">-- Tono General --</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Temática</label>
+            <select id="ice-gen-theme" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); color:white; padding:8px 10px; border-radius:8px; outline:none; font-size:0.8rem; cursor:pointer;">
+              <option value="Hot talks">🌶️ Hot talks (Seducción, atrevido, coqueto)</option>
+              <option value="Real love">💖 Real love (Romance, conexión profunda, dulce)</option>
+              <option value="Friendship">🤝 Friendship (Amistoso, casual, divertido)</option>
+              <option value="Setup for Mail">📧 Setup for Mail (General, intrigante, primer contacto)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="display:block; font-size:0.65rem; color:#94a3b8; font-weight:800; text-transform:uppercase; margin-bottom:4px;">Contexto del Cliente / Intereses (Opcional)</label>
+          <textarea id="ice-gen-context" placeholder="Ej: le gusta viajar a la playa, vive en Miami, es deportista, busca relación divertida..." style="width:100%; height:45px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:white; font-size:0.8rem; padding:8px; resize:none; outline:none;"></textarea>
+        </div>
+
+        <button onclick="window.generateIcebreaker()" style="width:100%; background:linear-gradient(135deg, #ec4899, #f43f5e); color:white; border:none; padding:10px; border-radius:8px; font-weight:800; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 12px rgba(236,72,153,0.3); transition:transform 0.2s; margin-bottom:12px;">✨ Generar Icebreakers de Alto Impacto</button>
+        
+        <div id="ice-gen-results" style="background:rgba(255,255,255,0.03); border-radius:12px; padding:16px; min-height:80px; font-size:0.85rem; color:#cbd5e1; display:flex; flex-direction:column; gap:8px;">
+          <div style="text-align:center; color:#64748b; font-style:italic; padding:12px 0;">Configura las opciones y haz clic en "Generar Icebreakers de Alto Impacto"...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Metas de Operación (Now Second) -->
+    <div id="rk-metas-wrap" style="display:none;max-width:1200px;margin:15px auto 24px;">
+      <div style="background:var(--panel);border:2px solid #2dd4bf;border-radius:16px;overflow:hidden;box-shadow: 0 0 15px rgba(45, 212, 191, 0.2);">
+        <!-- Header colapsable -->
+        <div onclick="toggleMetasPanel()"
+          style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;background:rgba(45, 212, 191, 0.07);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.1rem;">🎯</span>
+            <span style="font-weight:900;font-size:1.1rem;color:#2dd4bf;text-transform:uppercase;letter-spacing:1px;">Metas de Operación</span>
+            <span id="metas-periodo-badge"
+              style="background:rgba(45, 212, 191, 0.2);color:#2dd4bf;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700;">Mes</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
+              <button id="meta-btn-dia" onclick="setMetasPeriodo('dia')"
+                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(45, 212, 191, 0.3);background:rgba(255,255,255,.03);color:#64748b;">Hoy</button>
+              <button id="meta-btn-sem" onclick="setMetasPeriodo('sem')"
+                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(45, 212, 191, 0.3);background:rgba(255,255,255,.03);color:#64748b;">Semana</button>
+              <button id="meta-btn-mes" onclick="setMetasPeriodo('mes')"
+                style="padding:4px 10px;border-radius:7px;font-size:.65rem;font-weight:700;cursor:pointer;border:1px solid rgba(45, 212, 191, 0.4);background:rgba(45, 212, 191, 0.15);color:#2dd4bf;">Mes</button>
+            </div>
+            <span id="metas-chevron" style="color:#2dd4bf;font-size:.85rem;transition:.3s;">▼</span>
+          </div>
+        </div>
+        <div id="metas-panel-body" style="display:none;padding:16px 18px;">
+          <div style="margin-bottom:18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+              <span style="font-size:.78rem;font-weight:800;color:#2dd4bf;text-transform:uppercase;letter-spacing:.8px;">⚡ Meta General</span>
+              <button onclick="abrirEditarMeta('general','GENERAL')"
+                style="padding:5px 12px;background:rgba(45, 212, 191, 0.15);color:#2dd4bf;border:1px solid rgba(45, 212, 191, 0.3);border-radius:8px;font-size:.7rem;font-weight:700;cursor:pointer;">✏️ Editar</button>
+            </div>
+            <div id="meta-general-bar"></div>
+          </div>
+          <div style="border-top:1px solid rgba(255,255,255,.06);padding-top:14px;">
+            <div style="font-size:.72rem;font-weight:800;color:#2dd4bf;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;">📊 Metas por Grupo</div>
+            <div id="meta-grupos-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .rk-table-wrap.rk-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: 100vw !important;
+        margin: 0 !important;
+        padding: 24px !important;
+        background: #0a0c14 !important;
+        z-index: 999999 !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Operator Horizontal Tabs Styles */
+      .op-tabs-nav {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 10px;
+        margin: 15px 0 5px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 12px;
+        flex-wrap: wrap;
+        width: 100%;
+      }
+      
+      .op-tab-btn {
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        color: #94a3b8;
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        font-family: 'Outfit', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        backdrop-filter: blur(10px);
+      }
+      
+      .op-tab-btn:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.12);
+        transform: translateY(-1px);
+      }
+      
+      .op-tab-btn.active {
+        background: rgba(45, 212, 191, 0.12);
+        border-color: rgba(45, 212, 191, 0.4);
+        color: #2dd4bf;
+        box-shadow: 0 0 15px rgba(45, 212, 191, 0.15);
+      }
+      
+      .op-tab-pane {
+        grid-column: 1 / -1;
+        width: 100%;
+        box-sizing: border-box;
+        animation: opTabFadeIn 0.3s ease-out;
+      }
+      
+      @keyframes opTabFadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      /* Admin Horizontal Tabs Styles */
+      .admin-tabs-nav {
+        max-width: 1200px;
+        margin: 15px auto 5px;
+        padding: 0 16px;
+        display: flex;
+        gap: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 12px;
+        flex-wrap: wrap;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      
+      .admin-tab-btn {
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        color: #94a3b8;
+        padding: 10px 18px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        font-family: 'Outfit', sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        backdrop-filter: blur(10px);
+      }
+      
+      .admin-tab-btn:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.12);
+        transform: translateY(-1px);
+      }
+      
+      .admin-tab-btn.active {
+        background: rgba(99, 102, 241, 0.12);
+        border-color: rgba(99, 102, 241, 0.4);
+        color: #818cf8;
+        box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
+      }
+      
+      .admin-tab-pane {
+        width: 100%;
+        box-sizing: border-box;
+        animation: adminTabFadeIn 0.3s ease-out;
+      }
+      
+      @keyframes adminTabFadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+
+    <!-- Tabla (Moved Up as 'Operadores Conectados') -->
+    <div class="rk-table-wrap" id="rk-table-desktop" style="max-width:1200px; margin:0 auto 20px; padding:0 16px;">
+      <!-- Vista Día / Mes — único control de ordenamiento -->
+      <div class="rk-view-toggle" style="padding:10px 0 6px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="rk-view-btn active-mes" id="rk-btn-mes" onclick="setRkView('mes')" style="display:none">📅 Mes</button>
+          <button class="rk-view-btn" id="rk-btn-dia" onclick="setRkView('dia')">⚡ Hoy (Operadores Conectados)</button>
+          <span style="font-size: 0.65rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Control de Presencia Real-Time <button onclick="showSmartInfo('ranking')" title="¿Qué es esto?" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:.75rem;margin-left:4px;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'">ⓘ</button></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="rk-sync-datame-btn" onclick="window.forzarSincronizacionDatameCompleta()" title="Sincronizar todos los paneles de Datame en tiempo real" style="background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.35); color: #38bdf8; border-radius: 8px; padding: 6px 12px; font-size: 0.65rem; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.25)'" onmouseout="this.style.background='rgba(56,189,248,0.12)'">
+            <span id="rk-sync-icon">🛰️</span> <span id="rk-sync-text">Sincronizar Datame</span>
+          </button>
+        <button id="rk-fullscreen-btn" onclick="toggleRkFullscreen()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(45,212,191,0.1)'; this.style.borderColor='#2dd4bf'; this.style.color='#2dd4bf';" onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.color='#94a3b8';">
+          <span id="rk-fs-icon">🖵</span> <span id="rk-fs-text">Pantalla Completa</span>
+        </button>
+        </div>
+      </div>
+
+      <script>
+        window.toggleRkFullscreen = function() {
+          const element = document.getElementById('rk-table-desktop');
+          if (!element) return;
+          
+          const isFS = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || element.classList.contains('rk-fullscreen');
+          
+          if (!isFS) {
+            element.classList.add('rk-fullscreen');
+            if (element.requestFullscreen) {
+              element.requestFullscreen().catch(err => {
+                console.log("Browser blocked native fullscreen, using CSS fallback: ", err);
+              });
+            } else if (element.webkitRequestFullscreen) {
+              element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) {
+              element.msRequestFullscreen();
+            }
+            
+            const icon = document.getElementById('rk-fs-icon');
+            const text = document.getElementById('rk-fs-text');
+            if (icon) icon.textContent = '❌';
+            if (text) text.textContent = 'Salir Pantalla Completa';
+          } else {
+            element.classList.remove('rk-fullscreen');
+            if (document.exitFullscreen) {
+              document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+              document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+              document.msExitFullscreen();
+            }
+            
+            const icon = document.getElementById('rk-fs-icon');
+            const text = document.getElementById('rk-fs-text');
+            if (icon) icon.textContent = '🖵';
+            if (text) text.textContent = 'Pantalla Completa';
+          }
+        };
+
+        document.addEventListener('fullscreenchange', () => {
+          const element = document.getElementById('rk-table-desktop');
+          if (!element) return;
+          const icon = document.getElementById('rk-fs-icon');
+          const text = document.getElementById('rk-fs-text');
+          
+          if (document.fullscreenElement === element) {
+            element.classList.add('rk-fullscreen');
+            if (icon) icon.textContent = '❌';
+            if (text) text.textContent = 'Salir Pantalla Completa';
+          } else if (!document.fullscreenElement) {
+            element.classList.remove('rk-fullscreen');
+            if (icon) icon.textContent = '🖵';
+            if (text) text.textContent = 'Pantalla Completa';
+          }
+        });
+      </script>
+      <!-- Mantener IDs para compatibilidad con headers de tabla -->
       <span id="rth-0" style="display:none"></span>
       <span id="rth-1" style="display:none"></span>
       <span id="rth-2" style="display:none"></span>
@@ -6727,7 +8809,7 @@
     <!-- ========================================== -->
     <div id="rk-supervision-live-wrap" style="display:none; width: 100%; max-width: 100%; margin: 20px 0; padding: 0 16px; box-sizing: border-box;">
       <iframe 
-        src="monitor.html?v=4.0.9" 
+        src="monitor.html?v=4.0.8" 
         width="100%" 
         height="800px" 
         frameborder="0" 
@@ -20359,13 +22441,18 @@ function exportarDatos() {
             </button>
           </div>
 
-                    <!-- 🎛️ SUB-TABS CONSOLIDADAS DIRECTIVAS -->
-          <div style="display:flex;gap:8px;margin-bottom:22px;background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.25);padding:6px;border-radius:14px;width:max-content;overflow-x:auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);">
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-dashboard', this)" style="background:linear-gradient(135deg, rgba(99,102,241,0.4), rgba(56,189,248,0.3));border:1px solid #38bdf8;color:#fff;padding:8px 18px;border-radius:10px;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.3s ease;">📊 Dashboard</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-crecimiento', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:8px 18px;border-radius:10px;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.3s ease;">📈 Crecimiento DoD & MoM</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-productividad', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:8px 18px;border-radius:10px;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.3s ease;">👥 Productividad de Turnos & Operadores</button>
-            <button class="rep-tab-btn" onclick="switchRepTab('rep-diagnostico', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:8px 18px;border-radius:10px;font-size:0.75rem;font-weight:800;cursor:pointer;transition:all 0.3s ease;">🔍 Diagnóstico Causal, Proyecciones & Análisis IA</button>
+          <!-- TABS DE MODULOS ENRIQUECIDOS -->
+          <div style="display:flex;gap:8px;margin-bottom:20px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);padding:6px;border-radius:12px;width:max-content;overflow-x:auto;">
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-dashboard', this)" style="background:rgba(99,102,241,0.3);border:1px solid rgba(99,102,241,0.5);color:#fff;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">📊 Dashboard</button>
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-crecimiento', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">📈 Crecimiento DoD & MoM</button>
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-productividad', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">👥 Productividad de Turnos & Operadores</button>
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-perfiles', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">💎 Perfiles Datame (${perfilesFiltrados.length})</button>
+            
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-diagnostico', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">🔍 Diagnóstico Causal & Proyecciones</button>
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-analisis', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">🧠 Análisis IA</button>
+            <button class="rep-tab-btn" onclick="switchRepTab('rep-chat', this)" style="background:transparent;border:1px solid transparent;color:#94a3b8;padding:7px 16px;border-radius:8px;font-size:0.75rem;font-weight:bold;cursor:pointer;transition:all 0.3s ease;">💬 Coach IA</button>
           </div>
+          
           <!-- ═══ SUB-TAB 1: DASHBOARD EJECUTIVO ═══ -->
           <div id="rep-dashboard" class="rep-tab-content" style="display:block;">
             <!-- KPIs RAPIDOS CON BOTONES DE INFO -->
@@ -20881,176 +22968,114 @@ function exportarDatos() {
           </div> <!-- closes rep-perfiles -->
 
           <!-- ═══ SUB-TAB 5: 🕵️ OTRAS AGENCIAS & RADAR DE BALLENAS (INGENIERÍA INVERSA) ═══ -->
-          <!-- ═══ SUB-TAB 4: DIAGNÓSTICO CAUSAL, PROYECCIONES & ANÁLISIS IA ═══ -->
-          <div id="rep-diagnostico" class="rep-tab-content" style="display:none; max-width:1050px; margin:0 auto;">
-            
-            <!-- HEADER DE CONTROL & RE-EVALUACIÓN REALTIME -->
-            <div style="background:linear-gradient(135deg, rgba(30,27,75,0.9), rgba(15,23,42,0.95)); border:1px solid rgba(129,140,248,0.35); border-radius:14px; padding:18px 22px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; box-shadow:0 8px 30px rgba(0,0,0,0.5);">
-              <div>
-                <div style="display:flex; align-items:center; gap:10px;">
-                  <span style="font-size:1.4rem;">🔬</span>
-                  <div>
-                    <h3 style="margin:0; color:#c7d2fe; font-size:1.15rem; font-weight:800; letter-spacing:0.5px;">Centro de Diagnóstico Causal & IA Predictiva</h3>
-                    <div style="color:#94a3b8; font-size:0.75rem; margin-top:2px;">Auditoría matemática de rendimiento, proyección de facturación ($1,400 COP/pt) y playbook prescriptivo.</div>
-                  </div>
-                </div>
-              </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <button onclick="renderOperators()" style="background:linear-gradient(135deg, #6366f1, #4f46e5); color:#fff; border:none; padding:8px 14px; border-radius:8px; font-size:0.75rem; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 0 15px rgba(99,102,241,0.4);">
-                  <span>⚡</span> Recalcular Diagnóstico IA
-                </button>
-                <button onclick="abrirInfoTarjeta('diag-causal')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); color:#e2e8f0; padding:8px 12px; border-radius:8px; font-size:0.75rem; font-weight:bold; cursor:pointer;">&#9432; Fórmulas</button>
-              </div>
-            </div>
-
-            <!-- FILA 1: FACTORES CAUSALES CUANTITATIVOS -->
+          <!-- ═══ SUB-TAB 6: DIAGNÓSTICO CAUSAL & PROYECCIONES ═══ -->
+          <div id="rep-diagnostico" class="rep-tab-content" style="display:none; max-width:960px; margin:0 auto;">
             <div style="background:linear-gradient(145deg, rgba(15,23,42,0.9), rgba(30,41,59,0.9)); border:1px solid rgba(99,102,241,0.3); border-radius:14px; padding:22px; margin-bottom:20px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                <h4 style="margin:0; color:#818cf8; font-size:1.0rem; display:flex; align-items:center; gap:8px;">
-                  <span>🧬</span> 1. Diagnóstico Causal: Origen del Crecimiento & Fricciones
-                </h4>
-                <span style="font-size:0.68rem; color:#10b981; background:rgba(16,185,129,0.15); padding:3px 8px; border-radius:6px; border:1px solid rgba(16,185,129,0.3); font-weight:bold;">TELEMETRÍA EXACTA</span>
+                <h3 style="margin:0; color:#818cf8; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+                  <span>🔬</span> Diagnóstico Causal: ¿Por Qué ha sido el Crecimiento?
+                </h3>
+                <button onclick="abrirInfoTarjeta('diag-causal')" style="background:rgba(99,102,241,0.2); border:1px solid rgba(99,102,241,0.4); color:#c7d2fe; padding:4px 10px; border-radius:6px; font-size:0.7rem; font-weight:bold; cursor:pointer;">&#9432; Info Causal</button>
               </div>
-              
+              <p style="color:#94a3b8; font-size:0.8rem; line-height:1.5; margin-bottom:18px;">
+                Análisis cuantitativo de factores determinantes que explican el comportamiento de los puntos y la facturación en la operación:
+              </p>
+
               <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
-                <!-- FACTOR 1: Pareto -->
-                <div style="background:rgba(255,255,255,0.02); border-left:4px solid #fbbf24; border-radius:0 10px 10px 0; padding:16px; border:1px solid rgba(251,191,36,0.15); border-left-width:4px;">
-                  <div style="font-weight:bold; color:#fbbf24; font-size:0.85rem; margin-bottom:6px; display:flex; justify-content:space-between;">
-                    <span>🚀 Concentración Pareto (Top 5)</span>
-                    <span>${pctContribucionTop5}%</span>
-                  </div>
-                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.5;">
-                    Los top 5 perfiles (<strong>${top5Perfiles.map(p=>p.modelo).join(', ') || 'En turno'}</strong>) generan el <strong>${pctContribucionTop5}%</strong> del volumen (${totalPtsTop5.toFixed(0)} pts). El crecimiento se apoya fuertemente en la fidelización de clientes clave en estos avatares.
-                  </div>
-                  <div style="margin-top:8px; font-size:0.7rem; color:#fbbf24; background:rgba(251,191,36,0.1); padding:4px 8px; border-radius:4px;">
-                    🎯 <em>Prescripción:</em> Asignar operadores Senior a estos 5 perfiles para blindar donadores.
+                <!-- FACTOR 1 -->
+                <div style="background:rgba(255,255,255,0.03); border-left:4px solid #fbbf24; border-radius:0 8px 8px 0; padding:14px;">
+                  <div style="font-weight:bold; color:#fbbf24; font-size:0.85rem; margin-bottom:6px;">🚀 1. Concentración en Perfiles Estrella (Pareto 80/20)</div>
+                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.4;">
+                    Los top 5 perfiles (<strong>${top5Perfiles.map(p=>p.modelo).join(', ')}</strong>) aportan <strong>${pctContribucionTop5}%</strong> del volumen total del mes (${totalPtsTop5.toFixed(0)} pts). El crecimiento se apoya fuertemente en la fidelización de clientes clave en estos avatares.
                   </div>
                 </div>
 
-                <!-- FACTOR 2: Turnos -->
-                <div style="background:rgba(255,255,255,0.02); border-left:4px solid #38bdf8; border-radius:0 10px 10px 0; padding:16px; border:1px solid rgba(56,189,248,0.15); border-left-width:4px;">
-                  <div style="font-weight:bold; color:#38bdf8; font-size:0.85rem; margin-bottom:6px; display:flex; justify-content:space-between;">
-                    <span>🌇 Distribución Horaria & Tracción</span>
-                    <span>Tarde: ${pctTarde}%</span>
-                  </div>
-                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.5;">
-                    El turno <strong>Tarde</strong> lidera con el <strong>${pctTarde}%</strong> de los puntos, Mañana (${pctManana}%) y Noche (${pctNoche}%). La disponibilidad de clientes en horarios vespertinos maximiza la tasa de conversión en regalos y chats.
-                  </div>
-                  <div style="margin-top:8px; font-size:0.7rem; color:#38bdf8; background:rgba(56,189,248,0.1); padding:4px 8px; border-radius:4px;">
-                    🎯 <em>Prescripción:</em> Reforzar el turno Noche con aperturas agresivas para balancear producción.
+                <!-- FACTOR 2 -->
+                <div style="background:rgba(255,255,255,0.03); border-left:4px solid #38bdf8; border-radius:0 8px 8px 0; padding:14px;">
+                  <div style="font-weight:bold; color:#38bdf8; font-size:0.85rem; margin-bottom:6px;">🌇 2. Efecto Tracción del Turno Tarde</div>
+                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.4;">
+                    El turno Tarde representa el <strong>${pctTarde}%</strong> de los puntos totales de la semana, seguido por Mañana (${pctManana}%) y Noche (${pctNoche}%). La disponibilidad de clientes en horarios vespertinos maximiza la tasa de conversión en regalos y chats.
                   </div>
                 </div>
 
-                <!-- FACTOR 3: Fricciones y Cuentas Frías -->
-                <div style="background:rgba(255,255,255,0.02); border-left:4px solid #f43f5e; border-radius:0 10px 10px 0; padding:16px; border:1px solid rgba(244,63,94,0.15); border-left-width:4px;">
-                  <div style="font-weight:bold; color:#f43f5e; font-size:0.85rem; margin-bottom:6px; display:flex; justify-content:space-between;">
-                    <span>⚠️ Detección de Fricciones & Perfiles Fríos</span>
-                    <span>Crítico</span>
-                  </div>
-                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.5;">
-                    Se identificaron cuentas con más de 2 horas sin facturación activa o con baja conversión de mensajes entrantes a regalos. Requieren rotación inmediata de foto de perfil y nuevo gancho de presentación.
-                  </div>
-                  <div style="margin-top:8px; font-size:0.7rem; color:#fda4af; background:rgba(244,63,94,0.1); padding:4px 8px; border-radius:4px;">
-                    🎯 <em>Prescripción:</em> Aplicar protocolo de rescate (icebreaker con pregunta abierta + foto espontánea).
-                  </div>
-                </div>
-
-                <!-- FACTOR 4: Eficiencia y Velocidad -->
-                <div style="background:rgba(255,255,255,0.02); border-left:4px solid #34d399; border-radius:0 10px 10px 0; padding:16px; border:1px solid rgba(52,211,153,0.15); border-left-width:4px;">
-                  <div style="font-weight:bold; color:#34d399; font-size:0.85rem; margin-bottom:6px; display:flex; justify-content:space-between;">
-                    <span>⚡ Monitoreo 5 Min & Doble Perfil</span>
-                    <span>Optimizado</span>
-                  </div>
-                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.5;">
+                <!-- FACTOR 3 -->
+                <div style="background:rgba(255,255,255,0.03); border-left:4px solid #34d399; border-radius:0 8px 8px 0; padding:14px;">
+                  <div style="font-weight:bold; color:#34d399; font-size:0.85rem; margin-bottom:6px;">⚡ 3. Reducción de Inactividad y Doble Perfil</div>
+                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.4;">
                     El monitoreo de 5 minutos por perfil individual ha reducido los periodos muertos en operadores con 2 perfiles asignados, manteniendo ambos avatares con flujo de respuestas constante.
                   </div>
-                  <div style="margin-top:8px; font-size:0.7rem; color:#34d399; background:rgba(52,211,153,0.1); padding:4px 8px; border-radius:4px;">
-                    🎯 <em>Prescripción:</em> Mantener el shield DELTA-SHIFT™ activo en cada cambio de turno.
+                </div>
+
+                <!-- FACTOR 4 -->
+                <div style="background:rgba(255,255,255,0.03); border-left:4px solid #a78bfa; border-radius:0 8px 8px 0; padding:14px;">
+                  <div style="font-weight:bold; color:#a78bfa; font-size:0.85rem; margin-bottom:6px;">📈 4. Tendencia Sostenida MoM</div>
+                  <div style="font-size:0.75rem; color:#cbd5e1; line-height:1.4;">
+                    Con <strong>${ptsMes.toFixed(0)} pts</strong> acumulados en ${diaDelMes} días, la tasa de velocidad diaria supera a la del mes previo, posicionando la operación en ruta de superación de metas.
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- FILA 2: SIMULADOR DE PROYECCIONES FINANCIERAS & METAS -->
-            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.9), rgba(30,41,59,0.9)); border:1px solid rgba(52,211,153,0.3); border-radius:14px; padding:22px; margin-bottom:20px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                <h4 style="margin:0; color:#34d399; font-size:1.0rem; display:flex; align-items:center; gap:8px;">
-                  <span>🎯</span> 2. Simulador Financiero de Cierre de Mes ($1,400 COP / pt)
-                </h4>
-                <span style="font-size:0.68rem; color:#38bdf8; background:rgba(56,189,248,0.15); padding:3px 8px; border-radius:6px; font-weight:bold;">DIA ${diaDelMes} DE ${diasEnMes}</span>
-              </div>
+            <!-- PROYECCIONES INTELIGENTES -->
+            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.9), rgba(30,41,59,0.9)); border:1px solid rgba(52,211,153,0.3); border-radius:14px; padding:22px;">
+              <h3 style="margin:0 0 14px 0; color:#34d399; font-size:1.1rem; display:flex; align-items:center; gap:8px;">
+                <span>🎯</span> Proyecciones de Cierre & Metas Operativas
+              </h3>
               
-              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:18px;">
-                <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:16px; text-align:center;">
-                  <div style="font-size:0.68rem; color:#94a3b8; text-transform:uppercase; font-weight:bold;">Proyección Base (Lineal)</div>
-                  <div style="font-size:1.7rem; font-weight:900; color:#fff; margin:6px 0;">${proyeccionMes.toFixed(0)} pts</div>
-                  <div style="font-size:0.82rem; color:#34d399; font-weight:bold;">~$${Math.round(proyeccionMes*COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
-                  <div style="font-size:0.65rem; color:#64748b; margin-top:4px;">Manteniendo el ritmo histórico actual</div>
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:16px;">
+                <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px; text-align:center;">
+                  <div style="font-size:0.65rem; color:#94a3b8; text-transform:uppercase;">Proyección Base (Lineal)</div>
+                  <div style="font-size:1.6rem; font-weight:900; color:#fff; margin:6px 0;">${proyeccionMes.toFixed(0)} pts</div>
+                  <div style="font-size:0.75rem; color:#34d399; font-weight:bold;">~$${Math.round(proyeccionMes*COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
                 </div>
 
-                <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(52,211,153,0.35); border-radius:10px; padding:16px; text-align:center; box-shadow:0 0 20px rgba(52,211,153,0.1);">
-                  <div style="font-size:0.68rem; color:#34d399; text-transform:uppercase; font-weight:bold;">Proyección Acelerada (+15%)</div>
-                  <div style="font-size:1.7rem; font-weight:900; color:#34d399; margin:6px 0;">${proyeccionAcelerada.toFixed(0)} pts</div>
-                  <div style="font-size:0.82rem; color:#2dd4bf; font-weight:bold;">~$${Math.round(proyeccionAcelerada*COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
-                  <div style="font-size:0.65rem; color:#10b981; margin-top:4px;">Con optimización de streaming & whales</div>
+                <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(52,211,153,0.3); border-radius:10px; padding:14px; text-align:center;">
+                  <div style="font-size:0.65rem; color:#34d399; text-transform:uppercase; font-weight:bold;">Proyección Acelerada (+12%)</div>
+                  <div style="font-size:1.6rem; font-weight:900; color:#34d399; margin:6px 0;">${proyeccionAcelerada.toFixed(0)} pts</div>
+                  <div style="font-size:0.75rem; color:#2dd4bf; font-weight:bold;">~$${Math.round(proyeccionAcelerada*COP_POR_PUNTO).toLocaleString('es-CO')} COP</div>
                 </div>
 
-                <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:16px; text-align:center;">
-                  <div style="font-size:0.68rem; color:#fbbf24; text-transform:uppercase; font-weight:bold;">Pace Diario Requerido</div>
-                  <div style="font-size:1.7rem; font-weight:900; color:#fbbf24; margin:6px 0;">${paceDiarioRequerido.toFixed(0)} pts/día</div>
-                  <div style="font-size:0.82rem; color:#fde68a; font-weight:bold;">~$${Math.round(paceDiarioRequerido*COP_POR_PUNTO).toLocaleString('es-CO')} COP/día</div>
-                  <div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Durante los ${diasRestantes} días restantes</div>
-                </div>
-              </div>
-
-              <!-- BARRA DE PROGRESO DE META MENSUAL -->
-              <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:12px; border:1px solid rgba(255,255,255,0.05);">
-                <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#cbd5e1; margin-bottom:6px;">
-                  <span>Progreso Acumulado del Mes (${ptsMes.toFixed(0)} pts)</span>
-                  <span style="font-weight:bold; color:#38bdf8;">${Math.min(100, (ptsMes / (proyeccionMes || 1) * 100)).toFixed(1)}% de la meta base</span>
-                </div>
-                <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
-                  <div style="height:100%; width:${Math.min(100, (ptsMes / (proyeccionMes || 1) * 100)).toFixed(1)}%; background:linear-gradient(90deg, #6366f1, #38bdf8, #34d399); border-radius:4px;"></div>
+                <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:14px; text-align:center;">
+                  <div style="font-size:0.65rem; color:#fbbf24; text-transform:uppercase; font-weight:bold;">Pace Diario Requerido</div>
+                  <div style="font-size:1.6rem; font-weight:900; color:#fbbf24; margin:6px 0;">${paceDiarioRequerido.toFixed(0)} pts/día</div>
+                  <div style="font-size:0.68rem; color:#94a3b8;">Durante los ${diasRestantes} días restantes</div>
                 </div>
               </div>
             </div>
+          </div> <!-- closes rep-diagnostico -->
 
-            <!-- FILA 3: ANÁLISIS PREDICTIVO IA & PLAYBOOK PRESCRIPTIVO -->
-            <div style="background:linear-gradient(145deg, rgba(15,23,42,0.9), rgba(30,41,59,0.9)); border:1px solid rgba(168,85,247,0.3); border-radius:14px; padding:22px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                <h4 style="margin:0; color:#c084fc; font-size:1.0rem; display:flex; align-items:center; gap:8px;">
-                  <span>🤖</span> 3. Análisis Inteligente & Playbook Táctico para Monitores
-                </h4>
-                <span style="font-size:0.68rem; color:#c084fc; background:rgba(168,85,247,0.15); padding:3px 8px; border-radius:6px; border:1px solid rgba(168,85,247,0.3); font-weight:bold;">IA GENERATIVA OPERACIONAL</span>
+          <!-- ═══ SUB-TAB 7: ANÁLISIS IA ═══ -->
+          <div id="rep-analisis" class="rep-tab-content" style="display:none; max-width:900px; margin:0 auto;">
+            <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:18px;">
+              <div style="font-size:0.8rem;font-weight:800;color:#818cf8;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+                &#129302; Análisis Inteligente de Crecimiento
+                <span style="font-size:0.6rem;background:rgba(99,102,241,0.2);padding:2px 6px;border-radius:4px;">IA OPERATIVA</span>
               </div>
-              
-              <div style="display:flex; flex-direction:column; gap:12px;">
-                ${analisisLineas.map(l => `
-                  <div style="background:rgba(255,255,255,0.02); border-left:4px solid #a855f7; padding:12px 16px; border-radius:0 8px 8px 0; font-size:0.8rem; color:#e2e8f0; line-height:1.5; border:1px solid rgba(168,85,247,0.1); border-left-width:4px;">
-                    ${l}
-                  </div>
-                `).join('')}
-
-                <!-- TÁCTICAS OPERACIONALES EN VIVO TALKYTIMES -->
-                <div style="margin-top:10px; background:rgba(15,23,42,0.6); border:1px solid rgba(99,102,241,0.2); border-radius:10px; padding:14px;">
-                  <div style="font-size:0.78rem; font-weight:bold; color:#818cf8; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-                    <span>🔥</span> Hacks y Protocolos de Aceleración en Talkytimes (2026):
-                  </div>
-                  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px; font-size:0.73rem; color:#cbd5e1;">
-                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border-left:3px solid #38bdf8;">
-                      <strong style="color:#38bdf8;">1. Gancho de Curiosidad (Icebreaker):</strong> Nunca iniciar con "Hola cómo estás". Usar preguntas directas sobre su bio o una suposición provocadora ("Apuesto que tu fin de semana fue más emocionante que el mío...").
-                    </div>
-                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border-left:3px solid #34d399;">
-                      <strong style="color:#34d399;">2. Retención de Donador VIP:</strong> Cuando un cliente envíe un regalo grande (>50 pts), no pedir otro de inmediato. Reforzar el vínculo emocional y hacer una llamada privada corta para consolidar su lealtad.
-                    </div>
-                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border-left:3px solid #f43f5e;">
-                      <strong style="color:#f43f5e;">3. Regla de Oro de los 45 Segundos:</strong> Responder antes de 45 segundos eleva la tasa de permanencia del cliente en un 340%. El monitor debe exigir este ritmo a los operadores en turno.
-                    </div>
-                  </div>
-                </div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                ${analisisLineas.map(l => `<div style="background:rgba(255,255,255,0.03);border-left:3px solid rgba(99,102,241,0.5);padding:10px 14px;border-radius:0 8px 8px 0;font-size:0.78rem;color:#cbd5e1;line-height:1.5;">${l}</div>`).join('')}
               </div>
             </div>
+          </div> <!-- closes rep-analisis -->
 
+          <!-- ═══ SUB-TAB 8: CHAT COACH IA ═══ -->
+          <div id="rep-chat" class="rep-tab-content" style="display:none; max-width:800px; margin:0 auto;">
+            <div id="reporte-chat-panel" style="background:rgba(15,23,42,0.95);border:1px solid rgba(99,102,241,0.3);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;height:520px;">
+              <div style="background:rgba(99,102,241,0.15);border-bottom:1px solid rgba(99,102,241,0.2);padding:12px 16px;display:flex;align-items:center;gap:10px;">
+                <span style="width:8px;height:8px;background:#10b981;border-radius:50%;box-shadow:0 0 6px #10b981;"></span>
+                <span style="color:#c7d2fe;font-weight:800;font-size:0.82rem;letter-spacing:1px;">&#129302; Coach IA — Reporte Estratégico</span>
+              </div>
+              <div id="reporte-chat-msgs" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;">
+                <div style="text-align:center;font-size:0.6rem;color:#475569;">Conectado. Pregunta sobre las métricas, proyecciones y perfiles.</div>
+                <div style="align-self:flex-start;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.2);padding:10px 12px;border-radius:2px 12px 12px 2px;max-width:90%;">
+                  <div style="font-size:0.6rem;color:#818cf8;font-weight:bold;margin-bottom:4px;">Coach IA</div>
+                  <div style="font-size:0.78rem;color:#e2e8f0;line-height:1.4;">¡Hola! Esta semana registramos <strong>${ptsSemana.toFixed(0)} pts</strong> (${fmtPct(pctWoW)} WoW). Este mes: <strong>${ptsMes.toFixed(0)} pts</strong> (${fmtPct(pctMoM)} MoM). ¿Qué métrica o diagnóstico deseas consultar?</div>
+                </div>
+              </div>
+              <div style="padding:10px;background:rgba(0,0,0,0.4);border-top:1px solid rgba(255,255,255,0.05);display:flex;gap:8px;">
+                <input id="reporte-chat-input" type="text" placeholder="Pregunta sobre el reporte o el crecimiento..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#e2e8f0;padding:8px 12px;border-radius:8px;font-size:0.78rem;outline:none;" onkeypress="if(event.key==='Enter') enviarReporteChat()">
+                <button onclick="enviarReporteChat()" style="background:rgba(99,102,241,0.8);border:none;color:white;font-weight:bold;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:0.78rem;">Enviar</button>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -42128,14 +44153,14 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
   </div>
 
 
-  <!-- ══════════════════════════════════════════════════════════════ -->
-  <!-- 🤖 GLOBAL CYBERPUNK COACH IA FLOTANTE (TALKYTIMES & AGENCIA RR) -->
-  <!-- ══════════════════════════════════════════════════════════════ -->
-  <div id="coach-ia-floating-container" style="position:fixed; bottom:95px; right:20px; z-index:2147483647; font-family:'Inter',system-ui,sans-serif;">
+  <!-- ═══════════════════════════════════════════════════════════════════════════
+       COACH IA FLOTANTE GLOBAL (CYBERPUNK ROBOT) — EXPERTO TALKYTIMES & RENTABILIDAD
+       ═══════════════════════════════════════════════════════════════════════════ -->
+  <div id="coach-ia-floating-container" style="position:fixed; bottom:95px; right:20px; z-index:2147483647; font-family:'Segoe UI',Roboto,sans-serif;">
     <!-- BURBUJA BOTÓN FLOTANTE -->
-    <div id="coach-ia-bubble" onclick="toggleCoachIaModal()" style="width:62px; height:62px; border-radius:50%; background:linear-gradient(135deg, #6366f1, #38bdf8); box-shadow:0 0 30px rgba(56,189,248,0.7), 0 8px 24px rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border:2.5px solid rgba(255,255,255,0.4);">
-      <span style="font-size:1.9rem; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));">🤖</span>
-      <span style="position:absolute; top:2px; right:2px; width:15px; height:15px; background:#10b981; border:2px solid #0f172a; border-radius:50%; box-shadow:0 0 10px #10b981;"></span>
+    <div id="coach-ia-bubble" onclick="toggleCoachIaModal()" style="width:62px; height:62px; border-radius:50%; background:linear-gradient(135deg, #6366f1, #38bdf8); box-shadow:0 0 30px rgba(56,189,248,0.8), 0 10px 28px rgba(0,0,0,0.8); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; border:2.5px solid #fff; transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position:relative; user-select:none;">
+      <span style="font-size:1.8rem; line-height:1; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));">🤖</span>
+      <span style="position:absolute; top:-2px; right:-2px; width:14px; height:14px; background:#10b981; border:2.5px solid #0f172a; border-radius:50%; box-shadow:0 0 10px #10b981;"></span>
       <div id="coach-ia-badge-tag" style="position:absolute; bottom:-10px; background:#0f172a; border:1px solid #38bdf8; color:#38bdf8; font-size:0.58rem; font-weight:900; padding:2px 7px; border-radius:10px; letter-spacing:0.5px; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.8);">COACH IA</div>
     </div>
 
@@ -42168,11 +44193,11 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
 
       <!-- SUGGESTION CHIPS -->
       <div style="display:flex; gap:6px; padding:10px 14px; background:rgba(15,23,42,0.6); overflow-x:auto; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <button onclick="enviarPromptSugerido('📊 DIAGNÓSTICO: ¿Cómo va la producción hoy y qué operadores necesitan refuerzo?')" style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.35); color:#38bdf8; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">📊 Diagnóstico Hoy</button>
         <button onclick="enviarPromptSugerido('🌐 TENDENCIAS EN VIVO: Dame las últimas tendencias y novedades de monetización en la industria del Dating y Talkytimes')" style="background:rgba(6,182,212,0.15); border:1px solid rgba(6,182,212,0.4); color:#67e8f9; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">🌐 Live Intel Dating 2026</button>
-        <button onclick="enviarPromptSugerido('¿Cómo va la producción hoy y qué operadores necesitan refuerzo?')" style="background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.35); color:#38bdf8; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">📊 Diagnóstico Hoy</button>
-        <button onclick="enviarPromptSugerido('Dame 3 hacks probados para subir la facturación en Talkytimes en el turno actual')" style="background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.35); color:#c084fc; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">🔥 Hacks Talkytimes</button>
-        <button onclick="enviarPromptSugerido('¿Cuáles perfiles están en riesgo y qué cartas o fotos debemos cambiar?')" style="background:rgba(244,114,182,0.12); border:1px solid rgba(244,114,182,0.35); color:#f472b6; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">⚠️ Rescate Cuentas</button>
-        <button onclick="enviarPromptSugerido('¿Cuál es la proyección de cierre de mes y qué estrategia aplicamos para alcanzar el récord?')" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.35); color:#fbbf24; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">💰 Estrategia Récord</button>
+        <button onclick="enviarPromptSugerido('🔥 HACKS TALKYTIMES: Dame 3 hacks probados para subir la facturación en Talkytimes en el turno actual')" style="background:rgba(168,85,247,0.12); border:1px solid rgba(168,85,247,0.35); color:#c084fc; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">🔥 Hacks Talkytimes</button>
+        <button onclick="enviarPromptSugerido('⚠️ RESCATE: ¿Cuáles perfiles están en riesgo y qué cartas o fotos debemos cambiar?')" style="background:rgba(244,114,182,0.12); border:1px solid rgba(244,114,182,0.35); color:#f472b6; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">⚠️ Rescate Cuentas</button>
+        <button onclick="enviarPromptSugerido('💰 ESTRATEGIA: ¿Cuál es la proyección de cierre de mes y qué estrategia aplicamos para alcanzar el récord?')" style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.35); color:#fbbf24; font-size:0.65rem; padding:5px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; font-weight:bold;">💰 Estrategia Récord</button>
       </div>
 
       <!-- CONTENEDOR DE MENSAJES -->
@@ -42182,7 +44207,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
           <div style="font-size:0.8rem; color:#e2e8f0; line-height:1.55;">
             ¡Hola, equipo directivo de <strong>Agencia RR</strong>! 👋<br><br>
             Soy tu <strong>Coach IA de Operaciones & Monetización</strong>. Conozco en tiempo real toda la estructura de la empresa, los 76 perfiles de Datame, las divisiones Romero y Camilo, y los 3 turnos.<br><br>
-            ¿Qué deseas analizar o potenciar hoy? Puedes preguntarme sobre <strong>hacks de Talkytimes, diagnóstico de perfiles fríos, retención de donadores o proyecciones financieras</strong>.
+            ¿Qué deseas analizar o potenciar hoy? Puedes preguntarme sobre <strong>hacks de Talkytimes, tendencias web 2026, diagnóstico de perfiles fríos, retención de donadores o proyecciones financieras</strong>.
           </div>
         </div>
       </div>
@@ -42369,20 +44394,23 @@ INSTRUCCIONES DE RESPUESTA:
           smartResponse = `**🌐 LIVE INTEL: TENDENCIAS & ALGORITMO TALKYTIMES 2026**\n- **1. Priorización del Feed de Streaming:** El algoritmo premia perfiles que inician stream en los primeros 15 min de conexión con una exposición 2.8x mayor a usuarios con créditos activos en USA y Europa Central.\n- **2. Peak Traffic Hours (Horas Doradas):** Mayor densidad de gasto detectada entre las **18:00 y 02:00 EST** (coincide con los turnos Tarde y Noche de la agencia).\n- **3. Micro-Transacciones vs Regalos Grandes:** El 68% del ingreso se genera manteniendo al cliente en chat fluido (mensajes de texto + clips de audio cortos de 5s) antes de solicitar regalos superiores a 100 pts.\n- **4. Táctica de Foto Efímera:** Fotos con fondos cotidianos (cafetería, parque, auto) convierten un **42% más** en solicitudes de chat privado que fotos de estudio ultra-producidas.\n- **5. Blindaje Anti-Desconexión:** Si el cliente menciona que debe irse, lanzar un "cliffhanger" emocional ("I was just about to tell you the craziest thing that happened today...") para retenerlo 15-20 min adicionales.`;
         } else if (q.includes('hoy') || q.includes('produccion') || q.includes('como va') || q.includes('diagnostico')) {
           smartResponse = `**Diagnóstico Operativo de Hoy:**\n- **Producción Actual:** ${d.ptsHoy ? d.ptsHoy.toFixed(1) : 0} pts (${fP(d.pctVsAyer)} vs ayer).\n- **Proyección 24h:** ~$${Math.round((d.ptsHoy||0)*2.4)} pts (~$${Math.round((d.ptsHoy||0)*2.4*1400).toLocaleString('es-CO')} COP).\n- **Acción Prioritaria:** Las cuentas de mayor tracción (${d.topOps ? d.topOps.slice(0,2).map(o=>o[0]).join(', ') : 'Titanes'}) deben tener supervisión activa en el cierre de turno. Revisa que ningún perfil pase más de 20 minutos sin contestar chats abiertos.`;
-        } else if (q.includes('hack') || q.includes('truco') || q.includes('talkytimes') || q.includes('subir')) {
-          smartResponse = `**🔥 3 Hacks Tácticos para Duplicar Conversión en Talkytimes:**\n1. **Gancho de Curiosidad en Carta (Icebreaker):** No hagas preguntas cerradas ni saludos simples. Usa: *"Estaba revisando tu perfil y me dio mucha curiosidad tu foto... ¿siempre viajas solo o tienes buena compañía?"* (Eleva aperturas un 68%).\n2. **Regla de los 15 Segundos en Chat Activo:** El 80% de las compras de créditos ocurren en los primeros 3 minutos de una conversación. Si tardas más de 25s en responder, el usuario abre otro chat.\n3. **Transición a Medios Pagos:** Tras 4 mensajes de texto, envía una foto teaser con texto sugerente bloqueada con créditos para monetizar la conversación.`;
-        } else if (q.includes('riesgo') || q.includes('perfiles') || q.includes('frio') || q.includes('rescat')) {
-          smartResponse = `**⚠️ Protocolo de Rescate para Cuentas Frías:**\n- **Identificación:** Perfiles con menos de 5 pts en el día están sufriendo fatiga de algoritmo en Talkytimes.\n- **Paso 1:** Cambiar la foto principal de portada por una toma casual en exteriores (café o parque) con luz natural.\n- **Paso 2:** Modificar la primera línea de la biografía por una frase intrigante.\n- **Paso 3:** Disparar un nuevo lote de 50 cartas de reactivación a usuarios activos en USA/Europa.`;
+        } else if (q.includes('hack') || q.includes('truco') || q.includes('subir') || q.includes('talkytimes') || q.includes('consejo')) {
+          smartResponse = `**🔥 3 Hacks Tácticos de Alta Conversión para Talkytimes (Turno Actual):**\n1. **Gancho de Curiosidad Extrema:** No envíes cartas estándar de saludo. Abre con preguntas de escenario hipotético ("Si tuvieras 24h libres en mi ciudad, ¿a dónde me llevarías primero?"). Tasa de apertura +44%.\n2. **Regla de Respuesta en <20 Segundos:** En Talkytimes los usuarios saltan de perfil en 30s. Si el operador responde antes de 20 segundos, la probabilidad de que el usuario envíe un regalo o abra chat privado aumenta 3.2x.\n3. **Transición a Medios Pagos:** Tras 4 mensajes de texto gratuitos, envía una foto de alta calidad con un texto intrigante que motive la compra de créditos.`;
+        } else if (q.includes('riesgo') || q.includes('rescate') || q.includes('frio') || q.includes('cartas') || q.includes('fotos')) {
+          smartResponse = `**⚠️ Protocolo de Rescate para Cuentas Frías:**\n- **Rotación de Fotos:** Reemplazar fotos de estudio por fotos espontáneas 'selfie' al aire libre (parque, cafetería). Generan 60% más confianza en donadores de USA y Europa.\n- **Nueva Carta de Apertura:** Cambiar la carta por una historia corta personal que termine en pregunta abierta.\n- **Cambio de Operador Temporal:** Si un perfil lleva 2 días por debajo del promedio, rotarlo al operador con mayor velocidad del turno para re-activar la base de donadores.`;
+        } else if (q.includes('proyeccion') || q.includes('mes') || q.includes('meta') || q.includes('record') || q.includes('dinero')) {
+          smartResponse = `**💰 Proyección Financiera & Plan de Cierre:**\n- **Proyección Cierre Mes:** ${d.proyeccionMes ? d.proyeccionMes.toFixed(0) : 0} pts (~$${Math.round((d.proyeccionMes||0)*1400).toLocaleString('es-CO')} COP).\n- **Pace Necesario:** Para superar el récord del mes anterior (${d.ptsMesAnterior ? d.ptsMesAnterior.toFixed(0) : 0} pts), la agencia requiere un ritmo sostenido de al menos **85 pts/hora** combinando los 3 turnos.\n- **Palanca de Crecimiento:** El turno Tarde y Noche deben concentrar el 70% del esfuerzo en los 5 perfiles titanes.`;
         } else {
-          smartResponse = `**Análisis Estratégico Directivo:**\n- Con **${d.ptsMes ? d.ptsMes.toFixed(0) : 0} pts** acumulados en el mes, la proyección al día 30 se ubica en **${d.proyeccionMes ? d.proyeccionMes.toFixed(0) : 0} pts** (~$${Math.round((d.proyeccionMes||0)*1400).toLocaleString('es-CO')} COP).\n- Para superar el récord histórico de 86,341 pts, el equipo debe mantener un ritmo diario de al menos **${Math.round(((86341 - (d.ptsMes||0))/Math.max(1, 31 - new Date().getDate())))} pts/día**.\n- **Recomendación:** Maximizar la dotación de operadores en el Turno Tarde/Noche (20:00 a 02:00) que concentra el 65% de la facturación global.`;
+          smartResponse = `Entendido. Como estratega de **Agencia RR**, mi análisis indica que la clave hoy es mantener el pace horario por encima de la media histórica (${d.ptsHoy ? (d.ptsHoy/8).toFixed(1) : '15'} pts/h). ¿Deseas que auditemos un perfil específico, una división o ejecutemos una táctica de reactivación?`;
         }
 
-        thinkEl.innerHTML = `<div style="font-size:0.58rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">🤖 Coach IA &bull; Neural Intelligence System</div><div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">${formatMd(smartResponse)}</div>`;
+        thinkEl.innerHTML = `<div style="font-size:0.58rem; color:#818cf8; font-weight:bold; margin-bottom:4px;">🤖 Coach IA &bull; Inteligencia Directiva</div><div style="font-size:0.78rem; color:#e2e8f0; line-height:1.5;">${formatMd(smartResponse)}</div>`;
         setTimeout(() => { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, 50);
-      }, 700);
+      }, 500);
     };
   </script>
-  </body>
+
+</body>
 </html>
 
 

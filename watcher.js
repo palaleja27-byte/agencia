@@ -347,10 +347,17 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   // 🔬 DELTA-SHIFT™ SANITY CHECK (60% Rule):
   // Si el neto representa más del 60% del total (para totales significativos > 10 pts)
   // y el baseline es 0 (o sospechosamente bajo), consideramos que el baseline es corrupto.
-  if (netoTurno > monthlyTotal * 0.60 && monthlyTotal > 100 && diaHoyColombia() > 3) {
-    const baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
-    const netoCorr     = parseFloat((monthlyTotal - baselineCorr).toFixed(2));
-    log(`  🔴 SANITY ${modelo}: baseline corrupto (0.0 pts y neto ${netoTurno.toFixed(1)} > 60% de total ${monthlyTotal.toFixed(1)}) → Estableciendo baseline del 97% (${baselineCorr})`);
+    // 🔬 DELTA-SHIFT™ SANITY CHECK (Universal Proactive Shield):
+  // Si el neto representa más del 50% del total (para totales > 15 pts) o el baseline es corrupto/cero
+  if ((netoTurno > monthlyTotal * 0.50 || !baseline || baseline === 0) && monthlyTotal > 15 && diaHoyColombia() >= 2) {
+    let baselineCorr = 0;
+    if (currentDbRec && currentDbRec.puntos_baseline > 0 && currentDbRec.puntos_baseline >= monthlyTotal * 0.50 && currentDbRec.puntos_baseline <= monthlyTotal) {
+      baselineCorr = Number(currentDbRec.puntos_baseline);
+    } else {
+      baselineCorr = parseFloat((monthlyTotal * 0.97).toFixed(2));
+    }
+    const netoCorr = parseFloat(Math.max(0, monthlyTotal - baselineCorr).toFixed(2));
+    log(`  🔴 SANITY ${modelo}: baseline corrupto/anómalo (neto ${netoTurno.toFixed(1)} > 50% de total ${monthlyTotal.toFixed(1)}) → Reajustando baseline a ${baselineCorr} (neto: ${netoCorr})`);
     shiftBaselines[key] = baselineCorr;
     netoTurno = netoCorr;
   }

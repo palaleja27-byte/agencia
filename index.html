@@ -8556,7 +8556,7 @@
     <!-- ========================================== -->
     <div id="rk-supervision-live-wrap" style="display:none; width: 100%; max-width: 100%; margin: 20px 0; padding: 0 16px; box-sizing: border-box;">
       <iframe 
-        src="monitor.html?v=4.0.3" 
+        src="monitor.html?v=4.0.4" 
         width="100%" 
         height="800px" 
         frameborder="0" 
@@ -36630,47 +36630,32 @@ PT._logKey = function (opName) {
             
             const esNuevoMes = ultimo && ultimo.fecha_dia && (ultimo.fecha_dia.substring(0, 7) !== (rec.fecha_dia || hoy).substring(0, 7));
 
-            // Si el registro ya tiene un baseline fijado válido por Datame que no excede el total, PRESERVARLO
-            if (rec.puntos_baseline > 0 && rec.puntos_baseline <= rec.puntos_total) {
+                        // 🔬 DELTA-SHIFT™ CYBERPUNK SANITY REBUILDER:
+            // Validar si el baseline actual es matemáticamente coherente (no es 0, no excede el total, y el neto no representa un porcentaje anómalo > 50% en acumulados > 20)
+            const isAnomalo = (!rec.puntos_baseline || rec.puntos_baseline <= 0 || (rec.puntos_total > 20 && rec.puntos_baseline < rec.puntos_total * 0.50));
+            
+            if (!isAnomalo && rec.puntos_baseline <= rec.puntos_total) {
               nuevoBase = rec.puntos_baseline;
-              nuevoNeto = rec.puntos_total - nuevoBase;
-            } else if (rec.jornada === 'Mañana' || i === 0) {
+              nuevoNeto = Math.max(0, +(rec.puntos_total - nuevoBase).toFixed(2));
+            } else {
+              // Reconstruir baseline exacto por herencia continua de turnos
               if (esNuevoMes) {
                 nuevoBase = 0;
               } else if (ultimo && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
                 nuevoBase = ultimo.puntos_total;
-              } else {
-                nuevoBase = ultimo ? (ultimo.puntos_total || 0) : 0;
-              }
-              nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-            } else {
-              if (lastTotal !== null && lastTotal <= rec.puntos_total) {
+              } else if (lastTotal !== null && lastTotal <= rec.puntos_total && lastTotal >= rec.puntos_total * 0.40) {
                 nuevoBase = lastTotal;
-              } else if (ultimo && !esNuevoMes && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
-                nuevoBase = ultimo.puntos_total;
               } else {
-                nuevoBase = 0;
+                nuevoBase = rec.puntos_total > 20 ? +(rec.puntos_total * 0.97).toFixed(2) : (ultimo ? ultimo.puntos_total || 0 : 0);
               }
-              nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
+              nuevoNeto = Math.max(0, +(rec.puntos_total - nuevoBase).toFixed(2));
+              console.log(`🔧 [DELTA-SHIFT REBUILD] Perfil ${id} recalibrado: Base ${nuevoBase} | Total ${rec.puntos_total} | Neto ${nuevoNeto}`);
             }
             
             // 🛡️ SANIDAD DE BASELINE: El baseline nunca puede exceder el total actual.
             if (nuevoBase > rec.puntos_total) {
               nuevoBase = rec.puntos_total;
               nuevoNeto = 0;
-            }
-
-            // 🔬 DELTA-SHIFT™ SANITY AUTO-HEAL:
-            // Solo auto-curar si no había baseline previo o el baseline era 0 y el neto es descomunal
-            if ((!rec.puntos_baseline || rec.puntos_baseline === 0) && rec.puntos_total > 50 && nuevoNeto > 300) {
-              if (ultimo && !esNuevoMes && ultimo.puntos_total > 0 && ultimo.puntos_total <= rec.puntos_total) {
-                nuevoBase = ultimo.puntos_total;
-                nuevoNeto = Math.max(0, rec.puntos_total - nuevoBase);
-              } else {
-                nuevoBase = Number((rec.puntos_total * 0.97).toFixed(2));
-                nuevoNeto = Number((rec.puntos_total - nuevoBase).toFixed(2));
-              }
-              console.warn(`[DELTA-SHIFT™ SANITY] Corregido baseline corrupto para perfil ${rec.id_perfil}. Nuevo base: ${nuevoBase}, Neto: ${nuevoNeto}`);
             }
             
             if (Math.abs(rec.puntos_neto - nuevoNeto) > 0.1 || Math.abs(rec.puntos_baseline - nuevoBase) > 0.1) {
@@ -36770,45 +36755,43 @@ PT._logKey = function (opName) {
       // ── Baselines del corte 10:00 AM 14-Mayo-2026 ──
       // "Comienza" = puntos_baseline (fijado al inicio del turno 6am)
       const allData = {
-        '88243516':  {pb:3475.80, agencia:'RICARDO'},
-        '95956014':  {pb:1089.60, agencia:'PABLO'},
-        '91360720':  {pb:736.50,  agencia:'SANDRA MARIA'},
-        '143017065': {pb:289.84,  agencia:'MARIO'},
-        '91733663':  {pb:3882.98, agencia:'DANIEL 68'},
-        '153039388': {pb:161.80,  agencia:'AGUSTIN FERNANDO'},
-        '79679899':  {pb:427.74,  agencia:'NORBERTO'},
-        '109551682': {pb:254.58,  agencia:'RENATO'},
-        '131130713': {pb:1212.00, agencia:'LUIS JOAO'},
-        '101652076': {pb:21.12,   agencia:'CARINA'},
-        '108018336': {pb:1985.52, agencia:'LUCAS'},
-        '103289167': {pb:1807.98, agencia:'LUIS DAROSA'},
-        '118179794': {pb:1092.12, agencia:'HORACIO'},
-        '130338853': {pb:1062.42, agencia:'IVALDO'},
-        '160352260': {pb:256.08,  agencia:'JUVENAL'},
-        '145834230': {pb:114.12,  agencia:'MURILO'},
-        '120720195': {pb:733.44,  agencia:'MARCOS'},
-        '139247498': {pb:1221.24, agencia:'DAMIAN'},
-        '120275229': {pb:140.16,  agencia:'GERMAN'},
-        '157067734': {pb:1501.50, agencia:'VALDEMIR'},
-        '103291980': {pb:313.50,  agencia:'ARMANDO'},
-        '130431310': {pb:566.00,  agencia:'RAFAEL'},
-        '98389135':  {pb:292.26,  agencia:'RAUL'},
-        '139245989': {pb:555.56,  agencia:'ALFREDO'},
-        '98540781':  {pb:190.80,  agencia:'LEANDRO'},
-        '156881990': {pb:631.14,  agencia:'RALPH'},
-        '151070498': {pb:98.64,   agencia:'VALQUIMAR'},
-        '130422416': {pb:1856.52, agencia:'RAONI'},
-        '138130329': {pb:886.50,  agencia:'AGUSTIN'},
-        '133085188': {pb:879.66,  agencia:'MARCOS ANTONIO'},
-        '118692242': {pb:93.82,   agencia:'FRANCISCO'},
-        '143014129': {pb:87.60,   agencia:'RENEE'},
-        '95955130':  {pb:238.98,  agencia:'HECTOR'},
-        '145211163': {pb:107.16,  agencia:'FERAN'},
-        '144863124': {pb:1220.76, agencia:'FERNANDO'},
-        '145844971': {pb:1515.36, agencia:'RODRIGO'},
-        '156716207': {pb:188.94,  agencia:'AGNALDO'},
-        '137163229': {pb:144.54,  agencia:'SEBASTIAN'},
-        '157112125': {pb:1571.04, agencia:'LUIZ'},
+        '91733663':  {pb:1735.19, agencia:'DANIEL 68'},
+        '79679899':  {pb:340.34,  agencia:'NORBERTO'},
+        '99766806':  {pb:223.30,  agencia:'EDUARDO'},
+        '168486464': {pb:40.26,   agencia:'GUSTAVO'},
+        '108018336': {pb:662.97,  agencia:'LUCAS'},
+        '103289167': {pb:576.18,  agencia:'LUIS DAROSA'},
+        '118179794': {pb:402.38,  agencia:'HORACIO'},
+        '98389135':  {pb:183.15,  agencia:'RAUL'},
+        '91360720':  {pb:338.19,  agencia:'SANDRA MARIA'},
+        '120720195': {pb:3007.62, agencia:'MARCOS'},
+        '139247498': {pb:705.98,  agencia:'DAMIAN'},
+        '157112125': {pb:51.31,   agencia:'LUIZ'},
+        '130338853': {pb:195.31,  agencia:'IVALDO'},
+        '130431310': {pb:323.62,  agencia:'RAFAEL'},
+        '139245989': {pb:223.63,  agencia:'ALFREDO'},
+        '188143166': {pb:8.69,    agencia:'ALEX'},
+        '156881990': {pb:38.01,   agencia:'RALPH'},
+        '143017065': {pb:153.45,  agencia:'MARIO'},
+        '138130329': {pb:675.89,  agencia:'AGUSTIN'},
+        '95956014':  {pb:171.93,  agencia:'PABLO'},
+        '98540781':  {pb:66.06,   agencia:'LEANDRO'},
+        '143014129': {pb:26.62,   agencia:'RENEE'},
+        '95955130':  {pb:123.09,  agencia:'HECTOR'},
+        '145844971': {pb:955.40,  agencia:'RODRIGO'},
+        '170740935': {pb:629.86,  agencia:'ROBERTO'},
+        '187684981': {pb:115.22,  agencia:'CARLOS'},
+        '130422416': {pb:811.25,  agencia:'RAONI'},
+        '120275229': {pb:32.34,   agencia:'GERMAN'},
+        '88243516':  {pb:49.88,   agencia:'RICARDO'},
+        '158644203': {pb:42.68,   agencia:'SERGIO'},
+        '128062998': {pb:113.80,  agencia:'MARCO'},
+        '190725336': {pb:117.48,  agencia:'GABRIEL'},
+        '190731277': {pb:1.54,    agencia:'LUCAS'},
+        '174069335': {pb:91.58,   agencia:'FEDERICO'},
+        '145839775': {pb:322.36,  agencia:'BRUNO'},
+        '167493871': {pb:27.83,   agencia:'HUMBERTO'},
+        '153037229': {pb:398.97,  agencia:'HORACIO'}
       };
 
       let ok = 0, fail = 0;

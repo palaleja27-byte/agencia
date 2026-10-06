@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20261006_1508 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v19.1 [FULL-DIAGNOSTICO-SIMULATOR-PIE]</title>
+  <!-- build:20261006_1611 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v19.2 [FIX-ASISTENCIA-ADD-OPS]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -9112,6 +9112,14 @@
         </select>
       </div>
       <div class="pin-change-row">
+        <label>Plataforma *</label>
+        <select class="pin-change-inp" id="addop-plataforma" style="letter-spacing:0;">
+          <option value="Prime" selected>⭐ Prime (Por Defecto)</option>
+          <option value="AmoLatina">💜 AmoLatina</option>
+          <option value="Camilo">🎯 Camilo</option>
+        </select>
+      </div>
+      <div class="pin-change-row">
         <label>Empresa</label>
         <select class="pin-change-inp" id="addop-empresa" style="letter-spacing:0;">
           <option value="">— Seleccionar Empresa —</option>
@@ -10743,6 +10751,14 @@
           }
 
           operatorsData = mergedList;
+          if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
+            operatorsData.forEach(op => {
+              const sn = safeN(op.name);
+              if (sn && !OPERATORS_SOURCE.some(src => safeN(src.name) === sn)) {
+                OPERATORS_SOURCE.push({ ...op });
+              }
+            });
+          }
         } catch (e) {
           console.warn('[loadData] Error al fusionar. Conservando datos de KV_STORE para evitar perdida de operadores manuales:', e.message);
           try {
@@ -10834,7 +10850,8 @@
         if (typeof _sb !== 'undefined' && _sb) {
           Promise.resolve(_sb.from('kv_store').upsert({ key: key, value: val }, { onConflict: 'key' }))
             .then(() => {}, e => console.warn('[forceSaveProfile] Error rr_profile_*:', e));
-          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }))
+          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }),
+          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: String(Date.now()) }, { onConflict: 'key' }))
             .then(() => {}, e => console.warn('[forceSaveProfile] Error primeOperatorsData2026:', e));
           Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }))
             .then(() => {}, e => console.warn('[forceSaveProfile] Error ts:', e));
@@ -21298,6 +21315,7 @@ function exportarDatos() {
       });
       const turno = document.getElementById('addop-turno'); if (turno) turno.value = 'Mañana';
       const emp = document.getElementById('addop-empresa'); if (emp) emp.value = '';
+      const plat = document.getElementById('addop-plataforma'); if (plat) plat.value = 'Prime';
       const modal = document.getElementById('modal-add-op');
       if (modal) {
         modal.classList.add('open');
@@ -21327,7 +21345,10 @@ function exportarDatos() {
         return;
       }
 
-      if (operatorsData.some(o => o && o.name && o.name.toUpperCase().trim() === name)) {
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
+      const targetNorm = _safeN(name);
+
+      if (operatorsData.some(o => o && o.name && _safeN(o.name) === targetNorm)) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({ icon: 'error', title: 'Operador duplicado', text: 'Ya existe un operador registrado con ese nombre.', background: '#1e293b', color: '#fff' });
         } else {
@@ -21336,43 +21357,70 @@ function exportarDatos() {
         return;
       }
 
+      // 1. Limpiar de la lista negra de eliminados si estuvo previamente en ella
+      try {
+        const rawDel = localStorage.getItem('rr_deleted_operators_v1');
+        const listDel = Array.isArray(JSON.parse(rawDel || '[]')) ? JSON.parse(rawDel || '[]') : [];
+        const filteredDel = listDel.filter(d => _safeN(d) !== targetNorm);
+        const delJson = JSON.stringify(filteredDel);
+        localStorage.setItem('rr_deleted_operators_v1', delJson);
+        if (typeof _localSaveTs !== 'undefined') _localSaveTs['rr_deleted_operators_v1'] = Date.now();
+        if (typeof _sb !== 'undefined' && _sb) {
+          _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: delJson }, { onConflict: 'key' }).then(()=>{});
+        }
+      } catch(e) { console.warn('Error limpiando lista de eliminados:', e); }
+
+      const plataforma = document.getElementById('addop-plataforma')?.value || 'Prime';
+      const turno = document.getElementById('addop-turno')?.value || 'Mañana';
+      const grupo = document.getElementById('addop-group')?.value.trim() || '';
+      const empresa = document.getElementById('addop-empresa')?.value.trim() || '';
+
       const newOp = {
         name,
-        group: document.getElementById('addop-group')?.value.trim() || '',
-        ene: 0, feb: 0,
+        group: grupo,
+        plataforma: plataforma,
+        ene: 0, feb: 0, mar: 0, abr: 0, may: 0, jun: 0, jul: 0, ago: 0, sep: 0, oct: 0, nov: 0, dic: 0,
         profiles: [],
         doc_type: document.getElementById('addop-doctype')?.value.trim() || '',
         doc: doc || '',
-        dob: '', phone: document.getElementById('addop-phone')?.value.trim() || '',
+        dob: '', 
+        phone: document.getElementById('addop-phone')?.value.trim() || '',
         email: document.getElementById('addop-email')?.value.trim() || '',
-        address: '', sex: '',
-        empresa: document.getElementById('addop-empresa')?.value.trim() || '',
+        address: '', 
+        sex: '',
+        empresa: empresa,
         contrato: '',
-        turno: document.getElementById('addop-turno')?.value || 'Mañana',
-        cargo: 'Operador', area: 'Operativa',
+        turno: turno,
+        turno_horas: 8,
+        cargo: grupo === 'MONITOR' ? 'Monitor / Líder' : 'Operador', 
+        area: 'Operativa',
         fecha_ingreso: (typeof localDateStr === 'function' ? localDateStr() : new Date().toISOString().slice(0,10)),
-        mensual: '', cuenta: ''
+        mensual: '', 
+        cuenta: ''
       };
 
+      // 2. Inyectar en operatorsData global
       operatorsData.push(newOp);
-      
-      // ── PROTECCIÓN ANTI-BORRADO: Inyectar en OPERATORS_SOURCE para que loadData() nunca lo pierda ──
+
+      // 3. Inyectar en OPERATORS_SOURCE para persistencia incondicional
       if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
-        const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
-        if (!OPERATORS_SOURCE.some(o => o && o.name && _safeN(o.name) === _safeN(newOp.name))) {
-          OPERATORS_SOURCE.push({ ...newOp, profiles: [] });
-          console.info('[NUEVO OP] Inyectado en OPERATORS_SOURCE para persistencia de sesión.');
+        if (!OPERATORS_SOURCE.some(o => o && o.name && _safeN(o.name) === targetNorm)) {
+          OPERATORS_SOURCE.push({ ...newOp });
+          console.info('[NUEVO OP] Inyectado en OPERATORS_SOURCE con éxito.');
         }
       }
-      
-      // 1. Guardar en localStorage de inmediato
-      const newValue = JSON.stringify(operatorsData);
-      localStorage.setItem('primeOperatorsData2026', newValue);
-      const tsVal = String(Date.now());
-      localStorage.setItem('primeOperatorsData2026_ts', tsVal);
-      if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
 
-      // 2. FORZAR inserción directa en Supabase kv_store
+      // 4. Guardar en localStorage de inmediato
+      const newValue = JSON.stringify(operatorsData);
+      const tsVal = String(Date.now());
+      localStorage.setItem('primeOperatorsData2026', newValue);
+      localStorage.setItem('primeOperatorsData2026_ts', tsVal);
+      if (typeof _localSaveTs !== 'undefined') {
+        _localSaveTs['primeOperatorsData2026'] = Date.now();
+        _localSaveTs['primeOperatorsData2026_ts'] = Date.now();
+      }
+
+      // 5. Sincronizar directo en Supabase kv_store
       if (typeof _sb !== 'undefined' && _sb) {
         const normKey = (typeof _normName === 'function' ? _normName(name) : name.replace(/[^A-Z0-9]/g, ''));
         Promise.all([
@@ -21386,16 +21434,19 @@ function exportarDatos() {
 
       cerrarModalAddOp();
 
+      // 6. Actualizar vistas inmediatamente
+      if (typeof saveData === 'function') saveData();
+      if (typeof asiRender === 'function') asiRender();
       if (typeof renderRanking === 'function') renderRanking();
       if (typeof renderOperators === 'function') renderOperators();
-      if (typeof asiRender === 'function') asiRender();
       if (typeof populateImgModels === 'function') populateImgModels();
+      if (typeof _syncGrupoSelects === 'function') _syncGrupoSelects();
 
       if (typeof Swal !== 'undefined') {
         Swal.fire({
           icon: 'success',
           title: '¡Operador Agregado!',
-          text: `El operador "${name}" ha sido agregado correctamente a la plataforma.`,
+          text: `El operador "${name}" ha sido agregado a ${plataforma} y guardado correctamente.`,
           background: '#1e293b',
           color: '#fff',
           timer: 2000,
@@ -34265,7 +34316,11 @@ PT._logKey = function (opName) {
       let html = '';
 
       plataformas.forEach(plat => {
-        const platOps = ops.filter(o => (o.plataforma || '') === plat);
+        const platOps = ops.filter(o => {
+          const p = (o.plataforma || '').trim();
+          if (plat === 'Prime') return p === 'Prime' || !p || !plataformas.includes(p);
+          return p === plat;
+        });
         if (!platOps.length) return;
         const platId = 'asi-plat-' + plat.replace(/\s/g, '');
 

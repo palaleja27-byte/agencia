@@ -18006,7 +18006,7 @@
         copy: 'Sé que sigues despierto trabajando hasta tarde... no me pude dormir sin saludarte. ¿Hablamos un ratico antes de descansar? 🌙✨' 
       },
       { 
-        id: '113579174', 
+        id: '182947192', 
         nombre: 'Richard Sterling', 
         pais: '🇬🇧 UK', 
         recargaUSD: 340.00, 
@@ -18024,7 +18024,7 @@
         copy: 'Preparé 3 fotos que nadie más en la plataforma ha visto... están listas para ti si me respondes ahora mismo 😉' 
       },
       { 
-        id: '145839775', 
+        id: '169482015', 
         nombre: 'Bruno Weber', 
         pais: '🇩🇪 Alemania', 
         recargaUSD: 500.00, 
@@ -19223,9 +19223,64 @@
       return digitsOnly.length >= 5 ? digitsOnly : '';
     };
 
+    // 🛡️ DICCIONARIO OFICIAL DE MODELOS / AVATARES DE LA AGENCIA PARA EVITAR COLISIONES
+    var AGENCY_MODEL_IDS = {
+      '138130329': 'AGUSTIN',
+      '153039388': 'AGUSTIN FERNANDO',
+      '188143166': 'ALEX',
+      '139245989': 'ALFREDO',
+      '167273716': 'ARIEL HERNAN',
+      '103291980': 'ARMANDO',
+      '145839775': 'BRUNO',
+      '187684981': 'CARLOS',
+      '139247498': 'DAMIAN',
+      '91733663':  'DANIEL 68',
+      '99766806':  'EDUARDO',
+      '174069335': 'FEDERICO',
+      '145211163': 'FERMIN',
+      '190725336': 'GABRIEL',
+      '120275229': 'GERMAN',
+      '168486464': 'GUSTAVO',
+      '95955130':  'HECTOR',
+      '118179794': 'HORACIO',
+      '153037229': 'HORACIO',
+      '167493871': 'HUMBERTO',
+      '130338853': 'IVALDO',
+      '167279664': 'JOSE ROBERTO',
+      '160352260': 'JUVENAL',
+      '98540781':  'LEANDRO',
+      '108018336': 'LUCAS',
+      '190731277': 'LUCAS',
+      '103289167': 'LUIS DAROSA',
+      '157112125': 'LUIZ',
+      '128062998': 'MARCO',
+      '120720195': 'MARCOS',
+      '93461947':  'MARIANO',
+      '143017065': 'MARIO',
+      '166575347': 'MAX',
+      '79679899':  'NORBERTO',
+      '95956014':  'PABLO',
+      '130431310': 'RAFAEL',
+      '156881990': 'RALPH',
+      '130422416': 'RAONI',
+      '98389135':  'RAUL',
+      '109551682': 'RENATO',
+      '143014129': 'RENEE',
+      '88243516':  'RICARDO',
+      '170740935': 'ROBERTO',
+      '145844971': 'RODRIGO',
+      '113752797': 'ROMARIO',
+      '113579174': 'RONALDO',
+      '171638277': 'RONALT',
+      '91360720':  'SANDRA MARIA',
+      '137163229': 'SEBASTIAN',
+      '158644203': 'SERGIO',
+      '157067734': 'VALDEMIR'
+    };
+
     // 🚀 LANZADOR INTELIGENTE MULTIRUTA Y COMUNICACIÓN CON EXTENSIÓN RYR-HUD
     // 🚀 APERTURA OFICIAL Y DIRECTA DE PERFIL TALKYTIMES: HTTPS://TALKYTIMES.COM/USER/[ID]
-    window.abrirTalkytimes = function(talkytimesId) {
+    window.abrirTalkytimes = function(talkytimesId, clientName) {
       if (!talkytimesId) {
         if (typeof Swal !== 'undefined') {
           Swal.fire({ icon: 'warning', title: 'ID de Talkytimes Faltante', text: 'Por favor ingresa o selecciona un ID válido.', background: '#0f172a', color: '#fff' });
@@ -19246,17 +19301,52 @@
         return;
       }
 
+      // Validar si es un ID de modelo de la agencia para evitar abrir el modelo en vez del cliente
+      if (AGENCY_MODEL_IDS[cleanId]) {
+        var mName = AGENCY_MODEL_IDS[cleanId];
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            icon: 'warning',
+            title: '⚠️ ID Corresponde al Modelo ' + mName,
+            html: '<div style="text-align:left; font-size:0.8rem; color:#cbd5e1; line-height:1.5;">' +
+              '<p>El ID <b style="color:#f87171;">' + cleanId + '</b> no es de un cliente, sino del avatar de la agencia <b style="color:#38bdf8;">' + mName + '</b>.</p>' +
+              '<p style="color:#fbbf24;">Por eso Talkytimes abría el perfil del avatar en vez del cliente ' + (clientName ? '<b>' + clientName + '</b>' : '') + '.</p>' +
+              '<p>¿Deseas ingresar el ID real de Talkytimes de <b>' + (clientName || 'este cliente') + '</b> ahora mismo?</p>' +
+            '</div>',
+            showCancelButton: true,
+            confirmButtonText: '✏️ Corregir e Ingresar ID Real',
+            cancelButtonText: 'Abrir de todos modos',
+            confirmButtonColor: '#0ea5e9',
+            cancelButtonColor: '#475569',
+            background: '#0f172a',
+            color: '#fff'
+          }).then(function(res) {
+            if (res.isConfirmed) {
+              window.editarIdClienteRadar(cleanId, clientName || 'Cliente');
+            } else if (res.dismiss === Swal.DismissReason.cancel) {
+              window._ejecutarAperturaTalkytimesDirecta(cleanId, clientName);
+            }
+          });
+          return;
+        }
+      }
+
+      window._ejecutarAperturaTalkytimesDirecta(cleanId, clientName);
+    };
+
+    window._ejecutarAperturaTalkytimesDirecta = function(cleanId, clientName) {
       // 1. Copiar ID al portapapeles instantáneamente
       if (navigator.clipboard) {
         navigator.clipboard.writeText(cleanId).catch(function(){});
       }
 
-      // 2. Notificar a la extensión agenteRYR-HUD para auto-búsqueda en Talkytimes
+      // 2. Notificar a la extensión agenteRYR-HUD por BroadcastChannel y postMessage
       try {
-        if (window._ryrHudBC) {
-          window._ryrHudBC.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId });
+        if (!window._ryrHudBC) {
+          window._ryrHudBC = new BroadcastChannel('RYR_HUD_CHANNEL');
         }
-        window.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId }, '*');
+        window._ryrHudBC.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId, name: clientName });
+        window.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId, name: clientName }, '*');
       } catch(e) {}
 
       // 3. RUTA OFICIAL TALKYTIMES: https://talkytimes.com/user/[ID]
@@ -19268,7 +19358,7 @@
           toast: true,
           position: 'top-end',
           icon: 'success',
-          title: '🔑 ID ' + cleanId + ' Copiado',
+          title: '🔑 ID ' + cleanId + ' Copiado' + (clientName ? ' (' + clientName + ')' : ''),
           text: 'Abriendo perfil talkytimes.com/user/' + cleanId + '... ¡Listo para interactuar!',
           showConfirmButton: false,
           timer: 3500,
@@ -19289,8 +19379,91 @@
       }
     };
 
+    // ✏️ EDITOR DE ID TALKYTIMES DIRECTO DESDE EL RADAR
+    window.editarIdClienteRadar = function(currentId, nombreCliente) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: '✏️ ID Talkytimes: ' + (nombreCliente || 'Cliente'),
+          html: '<div style="text-align:left; font-size:0.75rem; color:#94a3b8; margin-bottom:12px;">' +
+            'Pega el ID numérico que aparece en la URL del perfil en Talkytimes (<code>/user/12345678</code>) o la URL completa:' +
+          '</div>',
+          input: 'text',
+          inputValue: currentId,
+          inputPlaceholder: 'Ej: 170699370 o https://talkytimes.com/user/170699370',
+          showCancelButton: true,
+          confirmButtonText: '💾 Guardar y Abrir',
+          cancelButtonText: 'Cancelar',
+          confirmButtonColor: '#0ea5e9',
+          cancelButtonColor: '#475569',
+          background: '#0f172a',
+          color: '#fff',
+          preConfirm: function(val) {
+            var clean = window.extractTalkytimesId(val);
+            if (!clean || clean.length < 5) {
+              Swal.showValidationMessage('Ingresa un ID numérico válido de Talkytimes (5 a 11 dígitos)');
+              return false;
+            }
+            if (AGENCY_MODEL_IDS[clean]) {
+              Swal.showValidationMessage('⚠️ El ID ' + clean + ' pertenece al modelo ' + AGENCY_MODEL_IDS[clean] + '. Ingresa el ID del cliente.');
+              return false;
+            }
+            return clean;
+          }
+        }).then(function(result) {
+          if (result.isConfirmed && result.value) {
+            window.guardarNuevoIdClienteRadar(currentId, result.value, nombreCliente);
+            window.abrirTalkytimes(result.value, nombreCliente);
+          }
+        });
+      } else {
+        var nuevo = prompt('Ingresa el ID Talkytimes real para ' + nombreCliente + ':', currentId);
+        if (nuevo) {
+          var c = window.extractTalkytimesId(nuevo);
+          if (c && c.length >= 5) {
+            window.guardarNuevoIdClienteRadar(currentId, c, nombreCliente);
+            window.abrirTalkytimes(c, nombreCliente);
+          }
+        }
+      }
+    };
+
+    window.guardarNuevoIdClienteRadar = function(oldId, newId, nombreCliente) {
+      try {
+        var customIds = JSON.parse(localStorage.getItem('ryr_radar_custom_ids') || '{}');
+        customIds[nombreCliente] = newId;
+        customIds[oldId] = newId;
+        localStorage.setItem('ryr_radar_custom_ids', JSON.stringify(customIds));
+      } catch(e) {}
+
+      if (Array.isArray(window.masterRadarClientes)) {
+        window.masterRadarClientes.forEach(function(item) {
+          if (item.id === oldId || (item.nombre && item.nombre.toLowerCase() === (nombreCliente || '').toLowerCase())) {
+            item.id = newId;
+          }
+        });
+      }
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: '✅ ID Actualizado a ' + newId,
+          text: 'Cliente: ' + (nombreCliente || 'Cliente'),
+          timer: 2500,
+          showConfirmButton: false,
+          background: 'rgba(15, 23, 42, 0.95)',
+          color: '#34d399'
+        });
+      }
+
+      if (typeof renderProduccionRealtime === 'function') {
+        renderProduccionRealtime();
+      }
+    };
+
     window.lanzarModalOpcionesApertura = function(cleanId, nombreCliente) {
-      window.abrirTalkytimes(cleanId);
+      window.abrirTalkytimes(cleanId, nombreCliente);
     };
 
     window.abrirTalkytimesDirectoInput = function() {
@@ -19623,8 +19796,8 @@
           { id: '99198592', nombre: 'Johnathan Vance', pais: '🇺🇸 USA', recargaUSD: 450.00, saldoUSD: 450.00, creditos: 4500, perfil: 'GUSTAVO', agencia: 'GRUPO ROMERO', antiguedad: '14 meses (Super Whale VIP)', temasInteres: 'Yates, viajes a Miami, fotos exclusivas de noche' },
           { id: '95457347', nombre: 'Marcus Sterling', pais: '🇺🇸 USA', recargaUSD: 850.00, saldoUSD: 850.00, creditos: 8500, perfil: 'GUSTAVO', agencia: 'Andinas Marketing', antiguedad: '22 meses (Mega Ballena)', temasInteres: 'Fitness de alto nivel, negocios en Miami, autos de lujo' },
           { id: '101246949', nombre: 'Arthur Pendelton', pais: '🇦🇺 Australia', recargaUSD: 550.00, saldoUSD: 550.00, creditos: 5500, perfil: 'LUIZ', agencia: 'Date Miranda', antiguedad: '16 meses (Cliente VIP)', temasInteres: 'Playas en Sydney, cócteles al atardecer, llamadas de voz' },
-          { id: '113579174', nombre: 'Richard Sterling', pais: '🇬🇧 UK', recargaUSD: 340.00, saldoUSD: 340.00, creditos: 3400, perfil: 'ROBERTO', agencia: 'Beluga Digital', antiguedad: '9 meses', temasInteres: 'Arquitectura en Londres, galerías de arte, fotos privadas' },
-          { id: '145839775', nombre: 'Bruno Weber', pais: '🇩🇪 Alemania', recargaUSD: 500.00, saldoUSD: 500.00, creditos: 5000, perfil: 'LUCAS', agencia: 'GRUPO CAN', antiguedad: '13 meses (Ballena Tech)', temasInteres: 'Ingeniería en Munich, autos deportivos, regalos y fotos' },
+          { id: '182947192', nombre: 'Richard Sterling', pais: '🇬🇧 UK', recargaUSD: 340.00, saldoUSD: 340.00, creditos: 3400, perfil: 'ROBERTO', agencia: 'Beluga Digital', antiguedad: '9 meses', temasInteres: 'Arquitectura en Londres, galerías de arte, fotos privadas' },
+          { id: '169482015', nombre: 'Bruno Weber', pais: '🇩🇪 Alemania', recargaUSD: 500.00, saldoUSD: 500.00, creditos: 5000, perfil: 'LUCAS', agencia: 'GRUPO CAN', antiguedad: '13 meses (Ballena Tech)', temasInteres: 'Ingeniería en Munich, autos deportivos, regalos y fotos' },
           { id: '177425789', nombre: 'Everett Ross', pais: '🇺🇸 USA', recargaUSD: 720.00, saldoUSD: 720.00, creditos: 7200, perfil: 'LUCAS', agencia: 'GRUPO ROMERO', antiguedad: '19 meses (Super Whale)', temasInteres: 'Negocios en NY, restaurantes de lujo, fotos VIP' },
           { id: '167842319', nombre: 'Roger Whitfield', pais: '🇺🇸 USA', recargaUSD: 780.00, saldoUSD: 780.00, creditos: 7800, perfil: 'GUSTAVO', agencia: 'ACJ Grupo Empresarial', antiguedad: '25 meses (Legendario)', temasInteres: 'Inversiones en Wall Street, vinos de Napa Valley' },
           { id: '154389021', nombre: 'Hans Müller', pais: '🇩🇪 Alemania', recargaUSD: 920.00, saldoUSD: 920.00, creditos: 9200, perfil: 'LUCAS', agencia: 'HORIZON', antiguedad: '30 meses (Ultra Whale)', temasInteres: 'Ingeniería automotriz BMW, viajes alpinos' },
@@ -20001,7 +20174,7 @@
           ultimoPulso: { montoUSD: 3.50, servicio: 'Foto Desbloqueada', haceMin: '4m' },
           clientes: [
             { id: '177425789', nombre: 'Everett Ross', pais: '🇺🇸 USA', saldoUSD: 720.00, creditos: 7200, tiempoRecarga: 'Hace 35 min', antiguedad: '19 meses (Super Whale)', temas: 'Negocios en NY', statusOnline: '🟢 Online en Chat' },
-            { id: '145839775', nombre: 'Bruno Weber', pais: '🇩🇪 Alemania', saldoUSD: 500.00, creditos: 5000, tiempoRecarga: 'Hace 24 min', antiguedad: '13 meses', temas: 'Ingeniería en Munich', statusOnline: '🟢 Online en Espera' }
+            { id: '169482015', nombre: 'Bruno Weber', pais: '🇩🇪 Alemania', saldoUSD: 500.00, creditos: 5000, tiempoRecarga: 'Hace 24 min', antiguedad: '13 meses', temas: 'Ingeniería en Munich', statusOnline: '🟢 Online en Espera' }
           ]
         },
         { 
@@ -20067,6 +20240,65 @@
         var matchQ = !searchQ || r.op.toLowerCase().includes(searchQ) || r.modelo.toLowerCase().includes(searchQ) || r.id.includes(searchQ) || (r.clientes && r.clientes.some(function(c) { return c.nombre.toLowerCase().includes(searchQ) || c.id.includes(searchQ); }));
         return matchT && matchS && matchQ;
       });
+
+      // 1. Cargar IDs personalizados guardados por el operador/supervisor
+      try {
+        var customIds = JSON.parse(localStorage.getItem('ryr_radar_custom_ids') || '{}');
+        if (Array.isArray(window.masterRadarClientes)) {
+          window.masterRadarClientes.forEach(function(item) {
+            if (customIds[item.nombre]) item.id = customIds[item.nombre];
+            else if (customIds[item.id]) item.id = customIds[item.id];
+          });
+        }
+      } catch(e) {}
+
+      // 2. Sincronización asíncrona de clientes reales desde telemetría / Supabase backend
+      if (!window._lastBackendRadarSync || (Date.now() - window._lastBackendRadarSync > 60000)) {
+        window._lastBackendRadarSync = Date.now();
+        var backendUrl = (typeof API_URL !== 'undefined' ? API_URL : 'https://agenciarr-backend.onrender.com') + '/api/clients/spending-intel';
+        fetch(backendUrl)
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (data && data.success && Array.isArray(data.clients) && data.clients.length > 0) {
+              var addedAny = false;
+              data.clients.forEach(function(bc) {
+                var cleanId = String(bc.id || bc.talkytimesId || '').trim();
+                if (!cleanId || cleanId.length < 5 || (typeof AGENCY_MODEL_IDS !== 'undefined' && AGENCY_MODEL_IDS[cleanId])) return;
+                var found = (window.masterRadarClientes || []).find(function(c) {
+                  return c.id === cleanId || (c.nombre && c.nombre.toLowerCase() === (bc.name||'').toLowerCase());
+                });
+                if (found) {
+                  found.id = cleanId;
+                  if (bc.name) found.nombre = bc.name;
+                  if (bc.country) found.pais = bc.country;
+                } else {
+                  window.masterRadarClientes.push({
+                    id: cleanId,
+                    nombre: bc.name || 'Cliente ' + cleanId,
+                    pais: bc.country || '🇺🇸 USA',
+                    recargaUSD: bc.totalSpentUSD || 100,
+                    saldoUSD: bc.totalSpentUSD || 100,
+                    creditos: Math.round((bc.totalSpentUSD || 100) * 10),
+                    tiempoRecarga: 'En Sesión',
+                    antiguedad: 'En plataforma',
+                    arquetipo: bc.spendingTier === 'WHALE' ? '👑 Whale VIP' : '💎 Cliente Activo',
+                    temasInteres: 'Conversaciones activas en vivo',
+                    perfil: bc.profileAssigned || 'HORACIO',
+                    op: 'En Monitoreo',
+                    agencia: 'GRUPO ROMERO',
+                    tipo: 'ballena',
+                    statusOnline: '🟢 Online en Chat'
+                  });
+                  addedAny = true;
+                }
+              });
+              if (addedAny && window.activeRtSubTab === 'clientes') {
+                renderProduccionRealtime();
+              }
+            }
+          })
+          .catch(function(){});
+      }
 
       var allClientsOnline = window.masterRadarClientes || [];
       var filteredClientesOnline = allClientsOnline.filter(function(c) {
@@ -20244,7 +20476,10 @@
             '<div style="font-size:0.56rem; color:#94a3b8; margin-top:1px;">💡 <i>' + (c.temasInteres || '') + '</i></div>' +
           '</td>' +
           '<td style="padding:12px 10px;">' +
-            '<div style="font-family:monospace; font-size:0.92rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</div>' +
+            '<div style="display:flex; align-items:center; gap:6px;">' +
+              '<span style="font-family:monospace; font-size:0.92rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">' + c.id + '</span>' +
+              '<button onclick="event.stopPropagation(); window.editarIdClienteRadar(\'' + c.id + '\', \'' + c.nombre.replace(/'/g, "\\'") + '\')" title="✏️ Editar o corregir ID Talkytimes de este usuario" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:1px 5px; border-radius:4px; font-size:0.55rem; cursor:pointer; font-weight:bold;">✏️</button>' +
+            '</div>' +
             '<div style="font-size:0.55rem; color:#64748b;">ID Talkytimes (RU)</div>' +
           '</td>' +
           '<td style="padding:12px 10px; text-align:right;">' +
@@ -20261,9 +20496,9 @@
           '</td>' +
           '<td style="padding:12px 10px; text-align:center;">' +
             '<div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">' +
-              '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre + '\')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
-              '<button onclick="abrirTalkytimes(\'' + c.id + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer;">🔗 Abrir Perfil</button>' +
-              '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre + '\', ' + montoRecarga + ', ' + creditosRecarga + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6); border:none; color:#fff; padding:5px 12px; border-radius:8px; font-size:0.62rem; font-weight:900; cursor:pointer; box-shadow:0 4px 12px rgba(14,165,233,0.3);">🎯 Atacar</button>' +
+              '<button onclick="copiarTalkytimesID(\'' + c.id + '\', \'' + c.nombre.replace(/'/g, "\\'") + '\')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer;">📋 Copiar ID</button>' +
+              '<button onclick="abrirTalkytimes(\'' + c.id + '\', \'' + c.nombre.replace(/'/g, "\\'") + '\')" style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; padding:5px 10px; border-radius:8px; font-size:0.62rem; font-weight:800; cursor:pointer;">🔗 Abrir Perfil</button>' +
+              '<button onclick="atacarClienteDatame(\'' + c.id + '\', \'' + c.nombre.replace(/'/g, "\\'") + '\', ' + montoRecarga + ', ' + creditosRecarga + ', \'' + (c.copy || '').replace(/'/g, "\\'") + '\')" style="background:linear-gradient(135deg,#0ea5e9,#3b82f6); border:none; color:#fff; padding:5px 12px; border-radius:8px; font-size:0.62rem; font-weight:900; cursor:pointer; box-shadow:0 4px 12px rgba(14,165,233,0.3);">🎯 Atacar</button>' +
             '</div>' +
           '</td>' +
         '</tr>';

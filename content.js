@@ -3952,4 +3952,37 @@
       syncServerKnownChats();
     }
   }, 2500);
+
+  // 15. RECEPTOR DE NAVEGACIÓN DIRECTA DESDE EL RADAR (BROADCASTCHANNEL)
+  try {
+    const ryrNavBC = new BroadcastChannel('RYR_HUD_CHANNEL');
+    ryrNavBC.onmessage = (event) => {
+      const data = event.data;
+      if (!data || data.type !== 'RYR_HUD_NAVIGATE_TO_CLIENT' || !data.id) return;
+      const targetId = String(data.id).trim();
+      const targetName = data.name || '';
+
+      // Banner cyberpunk en la interfaz de Talkytimes
+      showSupervisorDirectBanner(`🎯 [RYR RADAR APEX] Apertura solicitada: ${targetName ? targetName + ' ' : ''}(ID: ${targetId}). Conectando...`, `nav_${Date.now()}`);
+
+      // Intentar buscar en el sidebar de Talkytimes si ya existe el diálogo abierto
+      const sidebarRows = document.querySelectorAll('div[data-test-id*="dialog-item"], div[class*="dialog-item"], a[href*="/chat/"], a[href*="/user/"]');
+      let foundRow = null;
+      for (const row of sidebarRows) {
+        const rowText = (row.innerText || '').toLowerCase();
+        const userLink = row.matches('a[href*="/chat/"], a[href*="/user/"]') ? row : row.querySelector('a[href*="/chat/"], a[href*="/user/"]');
+        const href = userLink?.getAttribute('href') || '';
+        if (href.includes(targetId) || (targetName && targetName.length > 2 && rowText.includes(targetName.toLowerCase()))) {
+          foundRow = row;
+          break;
+        }
+      }
+
+      if (foundRow) {
+        foundRow.click();
+      } else if (window.location.href.includes('talkytimes.com') && !window.location.href.includes(`/user/${targetId}`)) {
+        window.location.href = `https://talkytimes.com/user/${targetId}`;
+      }
+    };
+  } catch(e) {}
 })();

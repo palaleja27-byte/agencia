@@ -2248,6 +2248,32 @@
       await fetchAndRenderSpendingIntel();
     };
 
+    window.copiarTalkytimesID = function(id, name) {
+      const cleanId = String(id || '').replace(/\D/g, '').trim();
+      if (!cleanId) return;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(cleanId).catch(() => {});
+      }
+      const banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed; top:20px; right:20px; background:#0ea5e9; color:#fff; padding:10px 18px; border-radius:8px; font-weight:bold; font-size:12px; z-index:999999999; box-shadow:0 4px 15px rgba(0,0,0,0.5);';
+      banner.innerText = `📋 ID ${cleanId} copiado al portapapeles (${name || 'Cliente'})`;
+      document.body.appendChild(banner);
+      setTimeout(() => banner.remove(), 2500);
+    };
+
+    window.abrirTalkytimes = function(id, name) {
+      const cleanId = String(id || '').replace(/\D/g, '').trim();
+      if (!cleanId) return;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(cleanId).catch(() => {});
+      }
+      try {
+        const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+        bc.postMessage({ type: 'RYR_HUD_NAVIGATE_TO_CLIENT', id: cleanId, name });
+      } catch(e) {}
+      window.open(`https://talkytimes.com/user/${cleanId}`, '_blank');
+    };
+
     window.closeUserSpendingModal = function() {
       const modal = document.getElementById('ryr-user-spending-modal');
       const backdrop = document.getElementById('ryr-spending-modal-backdrop');
@@ -2604,6 +2630,10 @@
                 </div>
                 <div style="font-size:11px; color:#94a3b8; margin-top:2px;">
                   📍 ${c.country} ${c.birthDate ? `• ${c.birthDate}` : ''}
+                </div>
+                <div style="display:flex; gap:6px; margin-top:6px;">
+                  <button onclick="copiarTalkytimesID('${c.id}', '${c.name.replace(/'/g, "\\'")}')" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#cbd5e1; padding:3px 8px; border-radius:4px; font-size:10px; font-weight:bold; cursor:pointer;" title="Copiar ID al portapapeles">📋 Copiar ID</button>
+                  <button onclick="abrirTalkytimes('${c.id}', '${c.name.replace(/'/g, "\\'")}')" style="background:linear-gradient(135deg, rgba(14,165,233,0.35), rgba(59,130,246,0.35)); border:1px solid rgba(56,189,248,0.6); color:#38bdf8; padding:3px 10px; border-radius:4px; font-size:10px; font-weight:900; cursor:pointer;" title="Abrir perfil del cliente en Talkytimes">🔗 Abrir Perfil</button>
                 </div>
               </div>
               <div>${tierBadge}</div>

@@ -134,11 +134,50 @@ app.post('/api/telemetry', async (req, res) => {
   }
 });
 
+// Endpoint dedicado para reportar infracciones en tiempo real desde el HUD
+app.post('/api/fines/report-infraction', (req, res) => {
+  try {
+    const { infraction, profile, operator } = req.body || {};
+    if (!infraction) return res.status(400).json({ error: 'Infracción requerida' });
+    const profKey = (profile || infraction.profile || 'HORACIO').toUpperCase().trim();
+    const existing = liveProfileInfractions.get(profKey) || [];
+    const seenIds = new Set(existing.map(i => String(i.id)));
+    if (!seenIds.has(String(infraction.id))) {
+      existing.unshift(infraction);
+      if (existing.length > 50) existing.length = 50;
+      liveProfileInfractions.set(profKey, existing);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Endpoint para consultar todas las infracciones detalladas de un perfil
 app.get('/api/fines/infractions/:profile', (req, res) => {
   const profKey = (req.params.profile || 'HORACIO').toUpperCase().trim();
-  const infractions = liveProfileInfractions.get(profKey) || [];
-  res.json({ success: true, infractions });
+  const baseInfractions = liveProfileInfractions.get(profKey) || [];
+  const merged = [...baseInfractions];
+  const seenIds = new Set(merged.map(i => String(i.id)));
+
+  // Combinar con telemetría en vivo de operadores que tengan este perfil
+  for (let [opKey, opData] of liveOperatorTelemetry.entries()) {
+    const pUpper = (opData.profile || '').toUpperCase().trim();
+    const oUpper = (opData.operator || '').toUpperCase().trim();
+    if (pUpper === profKey || oUpper === profKey || profKey === 'ALL') {
+      if (Array.isArray(opData.infractionsList)) {
+        opData.infractionsList.forEach(inf => {
+          if (!seenIds.has(String(inf.id))) {
+            merged.push(inf);
+            seenIds.add(String(inf.id));
+          }
+        });
+      }
+    }
+  }
+
+  merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  res.json({ success: true, infractions: merged });
 });
 
 // Endpoint para ajustar el tiempo de respuesta (SLA en minutos) por operador
@@ -1407,80 +1446,6 @@ function getSupervisorChatList(opName) {
   return { key: clean, list: liveSupervisorChatMemory.get(clean) };
 }
 
-// --- PERSISTENCIA REAL EN SUPABASE kv_store (la tabla supervisor_chat NO existe) ---
-// Sobrevive a reinicios / cold starts de Render. Clave: rr_supervisor_chat_<operador>
-const SUP_CHAT_KV_PREFIX = 'rr_supervisor_chat_';
-const supChatHydrated = new Set();
-const supChatPersistTimers = new Map();
-
-function mergeSupervisorMessages(key, storedArr) {
-  if (!Array.isArray(storedArr) || storedArr.length === 0) return;
-  const { list } = getSupervisorChatList(key);
-  const byId = new Map(list.map(m => [String(m.id), m]));
-  storedArr.forEach(m => {
-    if (m && m.id !== undefined && !byId.has(String(m.id))) byId.set(String(m.id), m);
-  });
-  const merged = Array.from(byId.values())
-    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-    .slice(-100);
-  liveSupervisorChatMemory.set(key, merged);
-}
-
-const supChatHydrateFailAt = new Map();
-async function hydrateSupervisorChat(key) {
-  if (supChatHydrated.has(key)) return;
-  const lastFail = supChatHydrateFailAt.get(key) || 0;
-  if (Date.now() - lastFail < 30000) return; // backoff: no bloquear el chat si Supabase falla
-  supChatHydrated.add(key);
-  try {
-    const query = supabase.from('kv_store')
-      .select('value').eq('key', SUP_CHAT_KV_PREFIX + key).maybeSingle();
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 2500));
-    const { data, error } = await Promise.race([query, timeout]);
-    if (error) throw error;
-    if (data && data.value) {
-      mergeSupervisorMessages(key, typeof data.value === 'string' ? JSON.parse(data.value) : data.value);
-    }
-  } catch (e) {
-    supChatHydrated.delete(key); // reintentar tras el backoff
-    supChatHydrateFailAt.set(key, Date.now());
-  }
-}
-
-function persistSupervisorChat(key) {
-  // Si no se pudo leer el historial previo, no sobrescribirlo con una lista parcial
-  if (!supChatHydrated.has(key)) return;
-  if (supChatPersistTimers.has(key)) clearTimeout(supChatPersistTimers.get(key));
-  supChatPersistTimers.set(key, setTimeout(async () => {
-    supChatPersistTimers.delete(key);
-    try {
-      const list = (liveSupervisorChatMemory.get(key) || []).slice(-100);
-      await supabase.from('kv_store').upsert(
-        { key: SUP_CHAT_KV_PREFIX + key, value: JSON.stringify(list) },
-        { onConflict: 'key' }
-      );
-    } catch (e) {
-      console.warn('[SupervisorChat] Error persistiendo en kv_store:', e.message);
-    }
-  }, 250));
-}
-
-// Rehidratar todos los chats al arrancar (para que los contadores "NUEVO" sobrevivan reinicios)
-(async function hydrateAllSupervisorChats() {
-  try {
-    const { data } = await supabase.from('kv_store')
-      .select('key, value').like('key', `${SUP_CHAT_KV_PREFIX}%`);
-    (data || []).forEach(row => {
-      const key = String(row.key).substring(SUP_CHAT_KV_PREFIX.length);
-      try {
-        mergeSupervisorMessages(key, typeof row.value === 'string' ? JSON.parse(row.value) : row.value);
-        supChatHydrated.add(key);
-      } catch (e) {}
-    });
-    if (data && data.length) console.log(`💬 [SupervisorChat] ${data.length} conversaciones rehidratadas desde kv_store`);
-  } catch (e) {}
-})();
-
 // Endpoint para obtener resumen de mensajes no leídos para el supervisor
 app.get('/api/supervisor/unread-summary', (req, res) => {
   const unreadMap = {};
@@ -1499,8 +1464,38 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
     const opKey = normalizeOpKey(rawOp);
     const role = (req.query.role || '').toUpperCase(); // 'OPERATOR' o 'SUPERVISOR'
 
-    await hydrateSupervisorChat(normalizeOpKey(opKey));
     const { key: exactKey, list: memMessages } = getSupervisorChatList(opKey);
+
+    // 1. Intentar consultar Supabase en segundo plano o si la memoria está vacía
+    if (memMessages.length === 0) {
+      try {
+        const { data } = await supabase.from('supervisor_chat')
+          .select('*')
+          .ilike('operator_name', `%${opKey}%`)
+          .order('created_at', { ascending: true })
+          .limit(50);
+
+        if (data && Array.isArray(data) && data.length > 0) {
+          const seenIds = new Set(memMessages.map(m => String(m.id)));
+          data.forEach(dbMsg => {
+            const strId = String(dbMsg.id);
+            if (!seenIds.has(strId)) {
+              memMessages.push({
+                id: strId,
+                sender: dbMsg.sender,
+                text: dbMsg.message_text,
+                timestamp: new Date(dbMsg.created_at).getTime(),
+                isEdited: Boolean(dbMsg.is_edited),
+                read: Boolean(dbMsg.is_read)
+              });
+              seenIds.add(strId);
+            }
+          });
+          memMessages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          liveSupervisorChatMemory.set(exactKey, memMessages);
+        }
+      } catch (dbErr) {}
+    }
 
     // 2. Si el rol que consulta lee los mensajes del otro, marcar como leídos (Doble chulito verde)
     if (role === 'OPERATOR') {
@@ -1511,7 +1506,10 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
           changed = true;
         }
       });
-      if (changed) persistSupervisorChat(exactKey);
+      if (changed) {
+        liveSupervisorChatMemory.set(exactKey, memMessages);
+        supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${opKey}%`).eq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+      }
     } else if (role === 'SUPERVISOR') {
       let changed = false;
       memMessages.forEach(m => {
@@ -1520,7 +1518,10 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
           changed = true;
         }
       });
-      if (changed) persistSupervisorChat(exactKey);
+      if (changed) {
+        liveSupervisorChatMemory.set(exactKey, memMessages);
+        supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${opKey}%`).neq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+      }
     }
 
     res.json({ success: true, operator: exactKey, messages: memMessages });
@@ -1532,7 +1533,6 @@ app.get('/api/supervisor/messages/:operator', async (req, res) => {
 app.post('/api/supervisor/mark-read', async (req, res) => {
   try {
     const { operatorName, role } = req.body;
-    await hydrateSupervisorChat(normalizeOpKey(operatorName));
     const { key: exactKey, list } = getSupervisorChatList(operatorName);
 
     list.forEach(m => {
@@ -1543,7 +1543,13 @@ app.post('/api/supervisor/mark-read', async (req, res) => {
       }
     });
 
-    persistSupervisorChat(exactKey);
+    liveSupervisorChatMemory.set(exactKey, list);
+
+    if (role === 'OPERATOR') {
+      supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${exactKey}%`).eq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+    } else if (role === 'SUPERVISOR') {
+      supabase.from('supervisor_chat').update({ is_read: true }).ilike('operator_name', `%${exactKey}%`).neq('sender', 'SUPERVISOR').then(() => {}).catch(() => {});
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1563,8 +1569,7 @@ app.post('/api/supervisor/send-message', async (req, res) => {
       const uniqueOps = Array.from(new Set(activeOps));
       if (uniqueOps.length === 0) uniqueOps.push('walther', 'bill');
 
-      for (const op of uniqueOps) {
-        await hydrateSupervisorChat(normalizeOpKey(op));
+      uniqueOps.forEach(op => {
         const { key: exactKey, list } = getSupervisorChatList(op);
         list.push({
           id: `sup_bc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1574,11 +1579,18 @@ app.post('/api/supervisor/send-message', async (req, res) => {
           read: false,
           isEdited: false
         });
-        if (list.length > 100) list.shift();
-        persistSupervisorChat(exactKey);
-      }
+        if (list.length > 50) list.shift();
+        liveSupervisorChatMemory.set(exactKey, list);
+      });
+
+      const inserts = uniqueOps.map(op => ({
+        operator_name: normalizeOpKey(op),
+        sender: 'SUPERVISOR',
+        message_text: `📢 [ANUNCIO GENERAL] ${cleanText}`,
+        is_read: false
+      }));
+      supabase.from('supervisor_chat').insert(inserts).then(() => {}).catch(() => {});
     } else {
-      await hydrateSupervisorChat(normalizeOpKey(operatorName));
       const { key: exactKey, list } = getSupervisorChatList(operatorName);
       const msgId = `sup_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
@@ -1590,9 +1602,15 @@ app.post('/api/supervisor/send-message', async (req, res) => {
         read: false,
         isEdited: false
       });
-      if (list.length > 100) list.shift();
-      persistSupervisorChat(exactKey);
-      return res.json({ success: true, id: msgId, message: 'Mensaje de supervisor emitido con éxito' });
+      if (list.length > 50) list.shift();
+      liveSupervisorChatMemory.set(exactKey, list);
+
+      supabase.from('supervisor_chat').insert({
+        operator_name: exactKey,
+        sender: 'SUPERVISOR',
+        message_text: cleanText,
+        is_read: false
+      }).then(() => {}).catch(() => {});
     }
 
     res.json({ success: true, message: 'Mensaje de supervisor emitido con éxito' });
@@ -1606,7 +1624,6 @@ app.post('/api/operator/reply-message', async (req, res) => {
     const { operatorName, text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'Texto requerido' });
 
-    await hydrateSupervisorChat(normalizeOpKey(operatorName));
     const { key: exactKey, list } = getSupervisorChatList(operatorName);
     const cleanText = text.trim();
     const msgId = `op_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
@@ -1619,8 +1636,15 @@ app.post('/api/operator/reply-message', async (req, res) => {
       read: false,
       isEdited: false
     });
-    if (list.length > 100) list.shift();
-    persistSupervisorChat(exactKey);
+    if (list.length > 50) list.shift();
+    liveSupervisorChatMemory.set(exactKey, list);
+
+    supabase.from('supervisor_chat').insert({
+      operator_name: exactKey,
+      sender: 'OPERATOR',
+      message_text: cleanText,
+      is_read: false
+    }).then(() => {}).catch(() => {});
 
     res.json({ success: true, id: msgId });
   } catch (err) {
@@ -1635,19 +1659,22 @@ app.post('/api/supervisor/edit-message', async (req, res) => {
     if (!id || !text) return res.status(400).json({ error: 'ID y texto son requeridos' });
 
     const cleanText = text.trim();
-    if (operatorName) await hydrateSupervisorChat(normalizeOpKey(operatorName));
 
     // Buscar y actualizar en todas las listas en memoria
-    let found = false;
     for (const [k, list] of liveSupervisorChatMemory.entries()) {
       list.forEach(m => {
         if (String(m.id) === String(id)) {
           m.text = cleanText;
           m.isEdited = true;
-          found = true;
-          persistSupervisorChat(k);
         }
       });
+    }
+
+    if (!isNaN(id) && Number(id) > 0) {
+      supabase.from('supervisor_chat').update({
+        message_text: cleanText,
+        is_edited: true
+      }).eq('id', Number(id)).then(() => {}).catch(() => {});
     }
 
     res.json({ success: true, message: 'Mensaje editado con éxito' });

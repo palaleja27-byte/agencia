@@ -1197,9 +1197,48 @@
     });
   }
 
+  let ryrSharedAudioCtx = null;
+  function initRyrAudioGesture() {
+    try {
+      if (!ryrSharedAudioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          ryrSharedAudioCtx = new AudioContextClass();
+        }
+      }
+      if (ryrSharedAudioCtx && ryrSharedAudioCtx.state === 'suspended') {
+        ryrSharedAudioCtx.resume().catch(() => {});
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('pointerdown', initRyrAudioGesture, { capture: true, passive: true });
+  window.addEventListener('keydown', initRyrAudioGesture, { capture: true, passive: true });
+  window.addEventListener('click', initRyrAudioGesture, { capture: true, passive: true });
+
   function playAlertChime() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!ryrSharedAudioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          ryrSharedAudioCtx = new AudioContextClass();
+        }
+      }
+      if (!ryrSharedAudioCtx) return;
+      if (ryrSharedAudioCtx.state === 'suspended') {
+        ryrSharedAudioCtx.resume().then(() => {
+          _soundOscillator(ryrSharedAudioCtx);
+        }).catch(() => {});
+        return;
+      }
+      if (ryrSharedAudioCtx.state === 'running') {
+        _soundOscillator(ryrSharedAudioCtx);
+      }
+    } catch (e) {}
+  }
+
+  function _soundOscillator(ctx) {
+    try {
+      if (!ctx || ctx.state !== 'running') return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';

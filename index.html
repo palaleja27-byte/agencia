@@ -10791,7 +10791,12 @@
           manualOps.forEach(mOp => {
             const sn = safeN(mOp.name);
             if (sn && !mergedList.some(m => safeN(m.name) === sn)) {
-              mergedList.push({ ...mOp });
+              const savedOp = Array.isArray(savedArr) ? savedArr.find(s => safeN(s.name) === sn) : null;
+              const opToAdd = { ...mOp };
+              if (savedOp && Array.isArray(savedOp.profiles) && savedOp.profiles.length > 0 && (!Array.isArray(opToAdd.profiles) || opToAdd.profiles.length === 0)) {
+                opToAdd.profiles = [...savedOp.profiles];
+              }
+              mergedList.push(opToAdd);
             }
           });
 
@@ -10838,25 +10843,63 @@
     }
 
     function _sanitizeAllOperatorProfiles() {
-      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s || '').toUpperCase().trim());
-      if (typeof OPERATORS_SOURCE === 'undefined' || !Array.isArray(OPERATORS_SOURCE)) return;
-      OPERATORS_SOURCE.forEach(srcOp => {
-        if (!srcOp || !srcOp.name || !Array.isArray(srcOp.profiles) || srcOp.profiles.length === 0) return;
-        const normN = _safeN(srcOp.name);
-        const key = 'rr_profile_' + normN;
-        const targetOp = Array.isArray(operatorsData) ? operatorsData.find(o => _safeN(o.name) === normN) : null;
-        if (targetOp) {
-          targetOp.profiles = srcOp.profiles.map(p => ({ ...p }));
-        }
-        localStorage.setItem(key, JSON.stringify(srcOp.profiles));
-      });
-      if (Array.isArray(operatorsData) && operatorsData.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(operatorsData));
-      }
+      _applyManualProfiles();
     }
 
     function _applyManualProfiles() {
-      _sanitizeAllOperatorProfiles();
+      if (!Array.isArray(operatorsData)) return;
+      const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s || '').toUpperCase().trim());
+      operatorsData.forEach(op => {
+        if (!op || !op.name) return;
+        const normN = _safeN(op.name);
+        const key = 'rr_profile_' + normN;
+        const raw = localStorage.getItem(key);
+        let applied = false;
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              op.profiles = parsed;
+              applied = true;
+            }
+          } catch(e) {}
+        }
+        // Si no había en rr_profile_<norm> pero op.profiles ya tiene perfiles válidos, persistirlos a localStorage
+        if (!applied && Array.isArray(op.profiles) && op.profiles.length > 0) {
+          localStorage.setItem(key, JSON.stringify(op.profiles));
+          applied = true;
+        }
+        // Si no tiene perfiles y está en OPERATORS_SOURCE con perfiles por defecto
+        if (!applied && (!Array.isArray(op.profiles) || op.profiles.length === 0)) {
+          if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
+            const srcOp = OPERATORS_SOURCE.find(s => _safeN(s.name) === normN);
+            if (srcOp && Array.isArray(srcOp.profiles) && srcOp.profiles.length > 0) {
+              op.profiles = srcOp.profiles.map(p => ({ ...p }));
+              localStorage.setItem(key, JSON.stringify(op.profiles));
+              applied = true;
+            }
+          }
+        }
+        if (!Array.isArray(op.profiles)) op.profiles = [];
+
+        // Mantener sincronizado OPERATORS_SOURCE
+        if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
+          const srcOp = OPERATORS_SOURCE.find(s => _safeN(s.name) === normN);
+          if (srcOp) {
+            srcOp.profiles = op.profiles.map(p => ({ ...p }));
+          } else {
+            OPERATORS_SOURCE.push({ ...op });
+          }
+        }
+
+        // Mantener sincronizado en registro de operadores manuales
+        if (typeof getManualOperators === 'function' && typeof saveManualOperator === 'function') {
+          const manList = getManualOperators();
+          if (manList.some(m => _safeN(m.name) === normN)) {
+            saveManualOperator(op);
+          }
+        }
+      });
     }
 
     function recalcGrowth() {
@@ -10885,30 +10928,47 @@
         if (!normN) return;
         const op = operatorsData.find(o => _fspSafe(o.name) === normN);
         if (!op) return;
+        if (!Array.isArray(op.profiles)) op.profiles = [];
         
         const key = 'rr_profile_' + normN;
-        const val = JSON.stringify(op.profiles || []);
+        const val = JSON.stringify(op.profiles);
         
         // 1. Guardar en localStorage inmediatamente (sincrónico)
         localStorage.setItem(key, val);
         if (typeof _localSaveTs !== 'undefined') _localSaveTs[key] = Date.now();
+
+        // 2. Sincronizar en OPERATORS_SOURCE
+        if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
+          const srcOp = OPERATORS_SOURCE.find(o => _fspSafe(o.name) === normN);
+          if (srcOp) {
+            srcOp.profiles = op.profiles.map(p => ({ ...p }));
+          } else {
+            OPERATORS_SOURCE.push({ ...op });
+          }
+        }
+
+        // 3. Sincronizar en registro manual permanente
+        if (typeof saveManualOperator === 'function') {
+          saveManualOperator(op);
+        }
         
-        // 2. Actualizar también primeOperatorsData2026 en localStorage con el nuevo perfil
-        //    y un timestamp fresco para que el merge remoto nunca sobreescriba este cambio
+        // 4. Actualizar también primeOperatorsData2026 en localStorage con el nuevo perfil
         const nowTs = String(Date.now());
         localStorage.setItem('primeOperatorsData2026_ts', nowTs);
         localStorage.setItem('primeOperatorsData2026', JSON.stringify(operatorsData));
-        if (typeof _localSaveTs !== 'undefined') _localSaveTs['primeOperatorsData2026'] = Date.now();
+        if (typeof _localSaveTs !== 'undefined') {
+          _localSaveTs['primeOperatorsData2026'] = Date.now();
+          _localSaveTs['primeOperatorsData2026_ts'] = Date.now();
+        }
         
-        // 3. Subir ambas claves a Supabase asincrónicamente
+        // 5. Subir a Supabase kv_store de forma confiable
         if (typeof _sb !== 'undefined' && _sb) {
-          Promise.resolve(_sb.from('kv_store').upsert({ key: key, value: val }, { onConflict: 'key' }))
-            .then(() => {}, e => console.warn('[forceSaveProfile] Error rr_profile_*:', e));
-          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: String(Date.now()) }, { onConflict: 'key' }))
-            .then(() => {}, e => console.warn('[forceSaveProfile] Error primeOperatorsData2026:', e));
-          Promise.resolve(_sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }))
-            .then(() => {}, e => console.warn('[forceSaveProfile] Error ts:', e));
+          Promise.all([
+            _sb.from('kv_store').upsert({ key: key, value: val }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: JSON.stringify(operatorsData) }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: nowTs }, { onConflict: 'key' }),
+            _sb.from('kv_store').upsert({ key: 'rr_manual_operators_v2', value: JSON.stringify(typeof getManualOperators === 'function' ? getManualOperators() : []) }, { onConflict: 'key' })
+          ]).catch(e => console.warn('[forceSaveProfile] Sync error:', e.message));
         }
       } catch(err) {
         console.warn('[forceSaveProfile] Exception caught:', err);
@@ -11843,9 +11903,9 @@
         const _srcOp = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
           ? OPERATORS_SOURCE.find(o => _safeNLocal(o.name) === _opNameNorm)
           : null;
-        let combinedProfiles = (_srcOp && Array.isArray(_srcOp.profiles) && _srcOp.profiles.length > 0)
-          ? _srcOp.profiles.map(p => ({ ...p }))
-          : [...(op.profiles || [])];
+        let combinedProfiles = (op && Array.isArray(op.profiles) && op.profiles.length > 0)
+          ? [...op.profiles]
+          : ((_srcOp && Array.isArray(_srcOp.profiles) && _srcOp.profiles.length > 0) ? _srcOp.profiles.map(p => ({ ...p })) : []);
 
         const _calHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
         const datesToCheck = new Set([_hoy, _calHoy]);
@@ -11979,9 +12039,9 @@
           const _srcOpRt = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
             ? OPERATORS_SOURCE.find(o => _safeNLocalRt(o.name) === _safeNLocalRt(op.name))
             : null;
-          const combinedProfiles = (_srcOpRt && Array.isArray(_srcOpRt.profiles) && _srcOpRt.profiles.length > 0)
-            ? _srcOpRt.profiles.map(p => ({ ...p }))
-            : [...(op.profiles || [])];
+          const combinedProfiles = (op && Array.isArray(op.profiles) && op.profiles.length > 0)
+            ? [...op.profiles]
+            : ((_srcOpRt && Array.isArray(_srcOpRt.profiles) && _srcOpRt.profiles.length > 0) ? _srcOpRt.profiles.map(p => ({ ...p })) : []);
 
           // Calculate historical virtual points for the operator (base from past)
           const pCurrBase = op[curr] != null ? Number(op[curr]) : 0;
@@ -12485,9 +12545,9 @@
         const _srcOpCard = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
           ? OPERATORS_SOURCE.find(o => _safeNCard(o.name) === _safeNCard(op.name))
           : null;
-        let combinedProfiles = (_srcOpCard && Array.isArray(_srcOpCard.profiles) && _srcOpCard.profiles.length > 0)
-          ? _srcOpCard.profiles.map(p => ({ ...p }))
-          : [...(op.profiles || [])];
+        let combinedProfiles = (op && Array.isArray(op.profiles) && op.profiles.length > 0)
+          ? [...op.profiles]
+          : ((_srcOpCard && Array.isArray(_srcOpCard.profiles) && _srcOpCard.profiles.length > 0) ? _srcOpCard.profiles.map(p => ({ ...p })) : []);
 
         // Avatar o medalla
         const savedAvatar = getAvatar(op.name);
@@ -15262,17 +15322,24 @@
         localArr.forEach(op => { if (op && op.name) localMap[_safeN(op.name)] = op; });
         
         // Resultado: Empezar con todos los remotos (son "más nuevos")
+        const deletedOpsList = (typeof getDeletedOperators === 'function') ? getDeletedOperators() : [];
+        const deletedNorms = deletedOpsList.map(d => _safeN(d)).filter(Boolean);
         const mergedMap = {};
-        // Primero, todos los remotos
+        // Primero, todos los remotos válidos
         remoteArr.forEach(op => {
           if (op && op.name) {
             const key = _safeN(op.name);
+            if (deletedNorms.includes(key)) return; // Ignorar operadores eliminados
             mergedMap[key] = { ...op };
             // Si existía localmente, conservar campos locales que el remoto no tenga
             const localOp = localMap[key];
             if (localOp) {
-              // Conservar profiles del local (se manejan vía rr_profile_*)
-              if (localOp.profiles && !op.profiles) mergedMap[key].profiles = localOp.profiles;
+              // Conservar profiles del local si el remoto viene vacío
+              if (Array.isArray(localOp.profiles) && localOp.profiles.length > 0) {
+                if (!Array.isArray(op.profiles) || op.profiles.length === 0) {
+                  mergedMap[key].profiles = [...localOp.profiles];
+                }
+              }
             }
           }
         });
@@ -15280,6 +15347,7 @@
         localArr.forEach(op => {
           if (op && op.name) {
             const key = _safeN(op.name);
+            if (deletedNorms.includes(key)) return; // Ignorar eliminados
             if (!mergedMap[key]) {
               console.info('[Sync] Preservando operador local no encontrado en remoto:', op.name);
               mergedMap[key] = { ...op };
@@ -15292,9 +15360,12 @@
           manOps.forEach(op => {
             if (op && op.name) {
               const key = _safeN(op.name);
+              if (deletedNorms.includes(key)) return; // Ignorar eliminados
               if (!mergedMap[key]) {
                 console.info('[Sync] Preservando operador manual registrado:', op.name);
                 mergedMap[key] = { ...op };
+              } else if (Array.isArray(op.profiles) && op.profiles.length > 0 && (!Array.isArray(mergedMap[key].profiles) || mergedMap[key].profiles.length === 0)) {
+                mergedMap[key].profiles = [...op.profiles];
               }
             }
           });
@@ -15418,8 +15489,16 @@
           } else {
             _origSetItem(key, value);
             _sbMemCache[key] = value;
+            if (key === 'rr_task_alerts_enabled' && typeof window.updateTaskAlertBtnUI === 'function') {
+              window.updateTaskAlertBtnUI();
+            }
+            if (key === 'rr_voice_alerts_enabled' && typeof window.updateVoiceAlertBtnUI === 'function') {
+              window.updateVoiceAlertBtnUI();
+            }
           }
         });
+        if (typeof window.updateTaskAlertBtnUI === 'function') window.updateTaskAlertBtnUI();
+        if (typeof window.updateVoiceAlertBtnUI === 'function') window.updateVoiceAlertBtnUI();
         // Procesar primeOperatorsData2026 DESPUES de haber cargado todos los rr_profile_*
         const opsRow = data.find(d => d.key === 'primeOperatorsData2026');
         if (opsRow) {
@@ -16812,9 +16891,9 @@
          const _srcOp2 = (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE))
            ? OPERATORS_SOURCE.find(o => _safeNLocal2(o.name) === _safeNLocal2(realName))
            : null;
-         let combinedProfiles = (_srcOp2 && Array.isArray(_srcOp2.profiles) && _srcOp2.profiles.length > 0)
-           ? _srcOp2.profiles.map(p => ({ ...p }))
-           : (op ? [...(op.profiles || [])] : []);
+         let combinedProfiles = (op && Array.isArray(op.profiles) && op.profiles.length > 0)
+           ? [...op.profiles]
+           : ((_srcOp2 && Array.isArray(_srcOp2.profiles) && _srcOp2.profiles.length > 0) ? _srcOp2.profiles.map(p => ({ ...p })) : []);
 
          if (combinedProfiles.length > 0) {
             // Determinar jornada del operador (su turno oficial o la actual si está logueado)
@@ -17377,8 +17456,13 @@
         removeManualOperator(name);
       }
 
-      // 2. Eliminar del array global
+      // 2. Eliminar del array global y de OPERATORS_SOURCE
       operatorsData.splice(idx, 1);
+      if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
+        const srcIdx = OPERATORS_SOURCE.findIndex(s => _nFn(s.name) === normTarget);
+        if (srcIdx >= 0) OPERATORS_SOURCE.splice(srcIdx, 1);
+      }
+      localStorage.removeItem('rr_profile_' + normTarget);
       const newValue = JSON.stringify(operatorsData);
       const tsVal = String(Date.now());
 
@@ -17397,6 +17481,7 @@
             _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: deletedListJson }, { onConflict: 'key' }),
             _sb.from('kv_store').upsert({ key: 'rr_manual_operators_v2', value: JSON.stringify(typeof getManualOperators === 'function' ? getManualOperators() : []) }, { onConflict: 'key' })
           ]);
+          _sb.from('kv_store').delete().eq('key', 'rr_profile_' + normTarget).then(()=>{});
           console.info('✅ [BORRADO BD] Operador eliminado correctamente de la base de datos Supabase:', op.name);
         } catch(e) { console.warn('⚠️ Error al eliminar operador en Supabase:', e.message); }
       }
@@ -19094,7 +19179,7 @@
       version: '2.6.0-PRO-SECURITY',
       name: 'RyR_HUD_Bridge_API',
       status: 'ONLINE',
-      channelName: 'RyR_HUD_Channel',
+      channelName: 'RYR_HUD_CHANNEL',
       
       // 🛡️ Validador de Mensajes Híbrido para la Extensión agenteRYR-HUD
       validateMessage: function(text, modelName) {
@@ -19201,20 +19286,47 @@
     // 📡 Canal BroadcastChannel & window.postMessage con Extensión
     try {
       if (typeof BroadcastChannel !== 'undefined') {
-        window._ryrHudBC = new BroadcastChannel('RyR_HUD_Channel');
-        window._ryrHudBC.onmessage = function(ev) {
+        window._ryrHudBC = new BroadcastChannel('RYR_HUD_CHANNEL');
+        const _handleHudMessage = function(ev) {
           var data = ev.data || {};
           if (data.type === 'RYR_HUD_VALIDATE_MESSAGE') {
             var valRes = window.RyR_HUD_Bridge_API.validateMessage(data.text, data.model);
-            window._ryrHudBC.postMessage({ type: 'RYR_HUD_VALIDATE_RESPONSE', payload: valRes, reqId: data.reqId });
+            if (window._ryrHudBC) window._ryrHudBC.postMessage({ type: 'RYR_HUD_VALIDATE_RESPONSE', payload: valRes, reqId: data.reqId });
           } else if (data.type === 'RYR_HUD_GET_CLIENT') {
             var res = window.RyR_HUD_Bridge_API.getClientProfile(data.id);
-            window._ryrHudBC.postMessage({ type: 'RYR_HUD_CLIENT_RESPONSE', payload: res, reqId: data.reqId });
+            if (window._ryrHudBC) window._ryrHudBC.postMessage({ type: 'RYR_HUD_CLIENT_RESPONSE', payload: res, reqId: data.reqId });
           } else if (data.type === 'RYR_HUD_GET_ALL') {
             var list = window.RyR_HUD_Bridge_API.getAllClients();
-            window._ryrHudBC.postMessage({ type: 'RYR_HUD_ALL_CLIENTS_RESPONSE', payload: list, reqId: data.reqId });
+            if (window._ryrHudBC) window._ryrHudBC.postMessage({ type: 'RYR_HUD_ALL_CLIENTS_RESPONSE', payload: list, reqId: data.reqId });
+          } else if (data.type === 'TASK_ALERTS_CONFIG') {
+            console.log('📡 [BC-SYNC] TASK_ALERTS_CONFIG recibido vía BroadcastChannel:', data);
+            if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+              window.aplicarConfiguracionAlertasRemotas('task', data.enabled, data.sender || 'BroadcastChannel', false);
+            }
+          } else if (data.type === 'VOICE_ALERTS_CONFIG') {
+            console.log('📡 [BC-SYNC] VOICE_ALERTS_CONFIG recibido vía BroadcastChannel:', data);
+            if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+              window.aplicarConfiguracionAlertasRemotas('voice', data.enabled, data.sender || 'BroadcastChannel', false);
+            }
+          } else if (data.type === 'GLOBAL_TASK_ALERT') {
+            console.log('📋 [BC-SYNC] GLOBAL_TASK_ALERT recibido vía BroadcastChannel:', data);
+            if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+              window.reproducirAlertaTareaGlobal(data.payload || data);
+            }
+          } else if (data.type === 'GLOBAL_VOICE_ALERT') {
+            console.log('🔊 [BC-SYNC] GLOBAL_VOICE_ALERT recibido vía BroadcastChannel:', data);
+            if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+              window.reproducirAnuncioVozGlobal(data.payload || data);
+            }
           }
         };
+        window._ryrHudBC.onmessage = _handleHudMessage;
+
+        // Soporte retrocompatible con canal legado si existieran pestañas en ejecución previa
+        try {
+          window._ryrHudBCLegacy = new BroadcastChannel('RyR_HUD_Channel');
+          window._ryrHudBCLegacy.onmessage = _handleHudMessage;
+        } catch(eLegacy) {}
       }
     } catch(e) {}
 
@@ -19229,6 +19341,22 @@
       } else if (ev.data.type === 'RYR_HUD_GET_ALL') {
         var all = window.RyR_HUD_Bridge_API.getAllClients();
         window.postMessage({ type: 'RYR_HUD_ALL_CLIENTS_RESPONSE', payload: all, reqId: ev.data.reqId }, '*');
+      } else if (ev.data.type === 'TASK_ALERTS_CONFIG') {
+        if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+          window.aplicarConfiguracionAlertasRemotas('task', ev.data.enabled, ev.data.sender || 'postMessage', false);
+        }
+      } else if (ev.data.type === 'VOICE_ALERTS_CONFIG') {
+        if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+          window.aplicarConfiguracionAlertasRemotas('voice', ev.data.enabled, ev.data.sender || 'postMessage', false);
+        }
+      } else if (ev.data.type === 'GLOBAL_TASK_ALERT') {
+        if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+          window.reproducirAlertaTareaGlobal(ev.data.payload || ev.data);
+        }
+      } else if (ev.data.type === 'GLOBAL_VOICE_ALERT') {
+        if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+          window.reproducirAnuncioVozGlobal(ev.data.payload || ev.data);
+        }
       }
     });
 
@@ -21765,27 +21893,36 @@ function exportarDatos() {
       const _safeN = (s) => (typeof _normName === 'function' ? _normName(s) : String(s||'').toUpperCase().trim());
       const targetNorm = _safeN(name);
 
-      if (operatorsData.some(o => o && o.name && _safeN(o.name) === targetNorm)) {
-        if (typeof Swal !== 'undefined') {
-          Swal.fire({ icon: 'error', title: 'Operador duplicado', text: 'Ya existe un operador registrado con ese nombre.', background: '#1e293b', color: '#fff' });
-        } else {
-          alert('Ya existe un operador con ese nombre.');
-        }
-        return;
-      }
-
       // 1. Limpiar de la lista negra de eliminados si estuvo previamente en ella
+      let wasDeleted = false;
       try {
         const rawDel = localStorage.getItem('rr_deleted_operators_v1');
         const listDel = Array.isArray(JSON.parse(rawDel || '[]')) ? JSON.parse(rawDel || '[]') : [];
-        const filteredDel = listDel.filter(d => _safeN(d) !== targetNorm);
-        const delJson = JSON.stringify(filteredDel);
-        localStorage.setItem('rr_deleted_operators_v1', delJson);
-        if (typeof _localSaveTs !== 'undefined') _localSaveTs['rr_deleted_operators_v1'] = Date.now();
-        if (typeof _sb !== 'undefined' && _sb) {
-          _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: delJson }, { onConflict: 'key' }).then(()=>{});
+        wasDeleted = listDel.some(d => _safeN(d) === targetNorm);
+        if (wasDeleted) {
+          const filteredDel = listDel.filter(d => _safeN(d) !== targetNorm);
+          const delJson = JSON.stringify(filteredDel);
+          localStorage.setItem('rr_deleted_operators_v1', delJson);
+          if (typeof _localSaveTs !== 'undefined') _localSaveTs['rr_deleted_operators_v1'] = Date.now();
+          if (typeof _sb !== 'undefined' && _sb) {
+            _sb.from('kv_store').upsert({ key: 'rr_deleted_operators_v1', value: delJson }, { onConflict: 'key' }).then(()=>{});
+          }
         }
       } catch(e) { console.warn('Error limpiando lista de eliminados:', e); }
+
+      const existingIdx = operatorsData.findIndex(o => o && o.name && _safeN(o.name) === targetNorm);
+      if (existingIdx >= 0) {
+        if (wasDeleted) {
+          operatorsData.splice(existingIdx, 1);
+        } else {
+          if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'error', title: 'Operador duplicado', text: 'Ya existe un operador registrado con ese nombre.', background: '#1e293b', color: '#fff' });
+          } else {
+            alert('Ya existe un operador con ese nombre.');
+          }
+          return;
+        }
+      }
 
       const plataforma = document.getElementById('addop-plataforma')?.value || 'Prime';
       const turno = document.getElementById('addop-turno')?.value || 'Mañana';
@@ -21826,10 +21963,13 @@ function exportarDatos() {
 
       // 3. Inyectar en OPERATORS_SOURCE para persistencia incondicional
       if (typeof OPERATORS_SOURCE !== 'undefined' && Array.isArray(OPERATORS_SOURCE)) {
-        if (!OPERATORS_SOURCE.some(o => o && o.name && _safeN(o.name) === targetNorm)) {
+        const srcIdx = OPERATORS_SOURCE.findIndex(o => o && o.name && _safeN(o.name) === targetNorm);
+        if (srcIdx >= 0) {
+          OPERATORS_SOURCE[srcIdx] = { ...newOp };
+        } else {
           OPERATORS_SOURCE.push({ ...newOp });
-          console.info('[NUEVO OP] Inyectado en OPERATORS_SOURCE con éxito.');
         }
+        console.info('[NUEVO OP] Inyectado en OPERATORS_SOURCE con éxito.');
       }
 
       // 4. Guardar en localStorage de inmediato
@@ -21837,26 +21977,40 @@ function exportarDatos() {
       const tsVal = String(Date.now());
       localStorage.setItem('primeOperatorsData2026', newValue);
       localStorage.setItem('primeOperatorsData2026_ts', tsVal);
+      localStorage.setItem('rr_profile_' + targetNorm, '[]');
       if (typeof _localSaveTs !== 'undefined') {
         _localSaveTs['primeOperatorsData2026'] = Date.now();
         _localSaveTs['primeOperatorsData2026_ts'] = Date.now();
+        _localSaveTs['rr_profile_' + targetNorm] = Date.now();
       }
 
       // 5. Sincronizar directo en Supabase kv_store
       if (typeof _sb !== 'undefined' && _sb) {
-        const normKey = (typeof _normName === 'function' ? _normName(name) : name.replace(/[^A-Z0-9]/g, ''));
         const manualListJson = JSON.stringify(typeof getManualOperators === 'function' ? getManualOperators() : [newOp]);
         Promise.all([
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026', value: newValue }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'primeOperatorsData2026_ts', value: tsVal }, { onConflict: 'key' }),
           _sb.from('kv_store').upsert({ key: 'rr_manual_operators_v2', value: manualListJson }, { onConflict: 'key' }),
-          _sb.from('kv_store').upsert({ key: 'rr_profile_' + normKey, value: '[]' }, { onConflict: 'key' })
+          _sb.from('kv_store').upsert({ key: 'rr_profile_' + targetNorm, value: '[]' }, { onConflict: 'key' })
         ]).then(() => {
           console.info('✅ [NUEVO OPERADOR BD] Guardado y sincronizado correctamente en Supabase.');
         }).catch(e => console.warn('⚠️ Error al subir nuevo operador a Supabase:', e.message));
       }
 
       cerrarModalAddOp();
+
+      // Restablecer filtro visual de turno para garantizar que el nuevo operador sea visible
+      if (typeof _asiTurnoFilter !== 'undefined') {
+        _asiTurnoFilter = 'Todos';
+        ['Todos', 'Mañana', 'Tarde', 'Noche'].forEach(t => {
+          const btn = document.getElementById('asi-turno-' + t);
+          if (btn) {
+            btn.style.background = t === 'Todos' ? 'rgba(94,234,212,.15)' : 'rgba(255,255,255,.04)';
+            btn.style.color = t === 'Todos' ? '#5eead4' : '#64748b';
+            btn.style.borderColor = t === 'Todos' ? 'rgba(94,234,212,.4)' : 'rgba(255,255,255,.1)';
+          }
+        });
+      }
 
       // 6. Actualizar vistas inmediatamente
       if (typeof saveData === 'function') saveData();
@@ -41067,69 +41221,106 @@ PT._logKey = function (opName) {
 
   <script>
     // Audio Synthesis para Sonidos (Web Audio API)
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
+    let audioCtx = null;
+    function getAudioCtx() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          window.audioCtx = audioCtx;
+        } catch(e){}
+      }
+      return audioCtx;
+    }
+    window.getAudioCtx = getAudioCtx;
+
     function playBeep(type) {
       try {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const now = audioCtx.currentTime;
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(()=>{});
+        }
+        const now = ctx.currentTime || 0;
         
-        if (type === 'alarm' || type === 'CRITICAL') {
+        if (type === 'task') {
+          // Melodía armónica brillante de alta atención para Alertas de Tareas (Cyberpunk Gold)
+          [659.25, 880, 1318.51].forEach((freq, idx) => {
+            try {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.type = 'triangle';
+              const tStart = now + (idx * 0.12);
+              osc.frequency.setValueAtTime(freq, tStart);
+              gain.gain.setValueAtTime(0.001, tStart);
+              gain.gain.exponentialRampToValueAtTime(0.35, tStart + 0.02);
+              gain.gain.exponentialRampToValueAtTime(0.0001, tStart + 0.45);
+              osc.start(tStart);
+              osc.stop(tStart + 0.48);
+            } catch(e){}
+          });
+        } else if (type === 'alarm' || type === 'CRITICAL') {
           // Sirena de alerta urgente
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
           osc.connect(gain);
-          gain.connect(audioCtx.destination);
+          gain.connect(ctx.destination);
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(650, now);
           osc.frequency.exponentialRampToValueAtTime(1100, now + 0.35);
-          gain.gain.setValueAtTime(0.22, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
           osc.start(now);
           osc.stop(now + 0.35);
         } else if (type === 'coin' || type === 'msg' || type === 'chat') {
           // Melodía campana doble de nuevo mensaje nítida y audible
-          const osc1 = audioCtx.createOscillator();
-          const gain1 = audioCtx.createGain();
+          const osc1 = ctx.createOscillator();
+          const gain1 = ctx.createGain();
           osc1.connect(gain1);
-          gain1.connect(audioCtx.destination);
+          gain1.connect(ctx.destination);
           osc1.type = 'sine';
           osc1.frequency.setValueAtTime(1046.5, now); // C6
-          gain1.gain.setValueAtTime(0.25, now);
-          gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+          gain1.gain.setValueAtTime(0.001, now);
+          gain1.gain.exponentialRampToValueAtTime(0.30, now + 0.02);
+          gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
           osc1.start(now);
           osc1.stop(now + 0.18);
 
-          const osc2 = audioCtx.createOscillator();
-          const gain2 = audioCtx.createGain();
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
           osc2.connect(gain2);
-          gain2.connect(audioCtx.destination);
+          gain2.connect(ctx.destination);
           osc2.type = 'sine';
           osc2.frequency.setValueAtTime(1567.98, now + 0.12); // G6
-          gain2.gain.setValueAtTime(0.28, now + 0.12);
-          gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+          gain2.gain.setValueAtTime(0.001, now + 0.12);
+          gain2.gain.exponentialRampToValueAtTime(0.32, now + 0.14);
+          gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
           osc2.start(now + 0.12);
           osc2.stop(now + 0.55);
         } else if (type === 'bell') {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
           osc.connect(gain);
-          gain.connect(audioCtx.destination);
+          gain.connect(ctx.destination);
           osc.type = 'sine';
           osc.frequency.setValueAtTime(880, now);
-          gain.gain.setValueAtTime(0.22, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
           osc.start(now);
           osc.stop(now + 0.8);
         } else {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
           osc.connect(gain);
-          gain.connect(audioCtx.destination);
+          gain.connect(ctx.destination);
           osc.type = 'sine';
           osc.frequency.setValueAtTime(520, now);
-          gain.gain.setValueAtTime(0.18, now);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
           osc.start(now);
           osc.stop(now + 0.15);
         }
@@ -41137,6 +41328,7 @@ PT._logKey = function (opName) {
         console.warn("Falla de audio contextual: ", e);
       }
     }
+    window.playBeep = playBeep;
 
     function playTestSound() { playBeep(document.getElementById('chat-sound-sel').value); }
 
@@ -42424,15 +42616,19 @@ CONFIGURACIÓN DE CONTEXTO:
     window.registrarActividadOperadorGlobal = registrarActividadOperadorGlobal;
 
     // 1. Capturar Clicks, Puntero, Teclado y Movimiento de mouse en la interfaz del usuario
-    window.addEventListener('click', () => {
-      registrarActividadOperadorGlobal('click_ui');
+    const _unlockUserAudio = () => {
       if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
+        audioCtx.resume().catch(()=>{});
       }
-    }, { passive: true });
-    window.addEventListener('pointerdown', () => registrarActividadOperadorGlobal('pointerdown'), { passive: true });
-    window.addEventListener('mousedown', () => registrarActividadOperadorGlobal('mousedown'), { passive: true });
-    window.addEventListener('keydown', () => registrarActividadOperadorGlobal('keydown'), { passive: true });
+      if (window.speechSynthesis && window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+    };
+    window.addEventListener('click', () => { registrarActividadOperadorGlobal('click_ui'); _unlockUserAudio(); }, { passive: true });
+    window.addEventListener('pointerdown', () => { registrarActividadOperadorGlobal('pointerdown'); _unlockUserAudio(); }, { passive: true });
+    window.addEventListener('touchstart', () => { registrarActividadOperadorGlobal('touchstart'); _unlockUserAudio(); }, { passive: true });
+    window.addEventListener('mousedown', () => { registrarActividadOperadorGlobal('mousedown'); _unlockUserAudio(); }, { passive: true });
+    window.addEventListener('keydown', () => { registrarActividadOperadorGlobal('keydown'); _unlockUserAudio(); }, { passive: true });
     window.addEventListener('input', () => registrarActividadOperadorGlobal('input'), { passive: true });
     window.addEventListener('change', () => registrarActividadOperadorGlobal('change'), { passive: true });
     window.addEventListener('mousemove', () => registrarActividadOperadorGlobal('mousemove'), { passive: true });
@@ -42508,6 +42704,15 @@ CONFIGURACIÓN DE CONTEXTO:
           window.updateVoiceAlertBtnUI();
         }
 
+        // Notificar por BroadcastChannel a la extensión de Chrome y TV
+        if (isLocal || (sender && !sender.includes('BroadcastChannel'))) {
+          try {
+            const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+            bc.postMessage({ type: 'VOICE_ALERTS_CONFIG', enabled: bEnabled, sender: sender || 'Admin' });
+            setTimeout(() => bc.close(), 1000);
+          } catch(e) {}
+        }
+
         if (!bEnabled) {
           if (window.speechSynthesis) {
             try { window.speechSynthesis.cancel(); } catch(e){}
@@ -42529,7 +42734,6 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       } else if (alertType === 'task') {
         const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
-        if (current === bEnabled && !isLocal) return;
 
         if (typeof _origSetItem === 'function') {
           _origSetItem('rr_task_alerts_enabled', bEnabled ? 'true' : 'false');
@@ -42541,16 +42745,21 @@ CONFIGURACIÓN DE CONTEXTO:
 
         window._enableTaskAlerts = bEnabled;
 
+        // Actualizar visualmente TODOS los botones de tareas en la interfaz
         if (typeof window.updateTaskAlertBtnUI === 'function') {
           window.updateTaskAlertBtnUI();
         }
 
         // Notificar por BroadcastChannel a la extensión de Chrome y TV
-        try {
-          const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
-          bc.postMessage({ type: 'TASK_ALERTS_CONFIG', enabled: bEnabled, sender: sender || 'Admin' });
-          setTimeout(() => bc.close(), 1000);
-        } catch(e) {}
+        if (isLocal || (sender && !sender.includes('BroadcastChannel'))) {
+          try {
+            const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+            bc.postMessage({ type: 'TASK_ALERTS_CONFIG', enabled: bEnabled, sender: sender || 'Admin' });
+            setTimeout(() => bc.close(), 1000);
+          } catch(e) {}
+        }
+
+        if (current === bEnabled && !isLocal) return;
 
         if (!bEnabled) {
           if (!isLocal) {
@@ -42558,14 +42767,14 @@ CONFIGURACIÓN DE CONTEXTO:
               _toastSync('⏸️ Alertas de Tareas pausadas remotamente (' + (sender || 'Admin') + ')', false);
             }
             if (typeof window.speakText === 'function') {
-              window.speakText("Alertas de tareas desactivadas remotamente");
+              window.speakText("Alertas de tareas desactivadas remotamente", { isTaskAlert: true });
             }
           }
         } else {
           window._taskAlertsActivatedTs = Date.now();
           window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000);
           if (typeof playBeep === 'function') {
-            playBeep('coin');
+            playBeep('task');
             setTimeout(() => playBeep('bell'), 150);
           }
           if (!isLocal) {
@@ -42573,7 +42782,7 @@ CONFIGURACIÓN DE CONTEXTO:
               _toastSync('📋 Alertas de Tareas activadas remotamente (' + (sender || 'Admin') + ')', false);
             }
             if (typeof window.speakText === 'function') {
-              window.speakText("Alertas de tareas activadas remotamente");
+              window.speakText("Alertas de tareas activadas remotamente", { isTaskAlert: true });
             }
           }
         }
@@ -42622,12 +42831,10 @@ CONFIGURACIÓN DE CONTEXTO:
       // 2. Todos los botones con clase .rr-task-toggle-btn
       const taskBtns = document.querySelectorAll('.rr-task-toggle-btn');
       taskBtns.forEach(btn => {
-        if (btn !== mainTaskBtn) {
-          btn.innerHTML = enabled ? '📋 Tareas: ON' : '⏸️ Tareas: OFF';
-          btn.style.background = enabled ? 'rgba(56,189,248,0.2)' : 'rgba(239,68,68,0.2)';
-          btn.style.borderColor = enabled ? '#38bdf8' : '#ef4444';
-          btn.style.color = enabled ? '#38bdf8' : '#f87171';
-        }
+        btn.innerHTML = enabled ? '📋 Alertas Tareas: ON' : '⏸️ Alertas Tareas: OFF';
+        btn.style.background = enabled ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)';
+        btn.style.borderColor = enabled ? 'rgba(56,189,248,.3)' : 'rgba(239,68,68,.3)';
+        btn.style.color = enabled ? '#38bdf8' : '#ef4444';
       });
     };
 
@@ -42638,17 +42845,32 @@ CONFIGURACIÓN DE CONTEXTO:
       // 1. Aplicar localmente de inmediato
       window.aplicarConfiguracionAlertasRemotas('voice', next, 'Admin Local', true);
       
-      // 2. Audio de confirmación local
+      // 2. Audio de confirmación local garantizado
       if (next) {
+        if (typeof playBeep === 'function') {
+          playBeep('coin');
+        }
         if (typeof window.speakText === 'function') {
-          window.speakText("Alertas de voz activadas");
+          setTimeout(() => {
+            window.speakText("Alertas de voz activadas", { force: true });
+          }, 200);
+        }
+      } else {
+        if (typeof playBeep === 'function') {
+          playBeep('pulse');
+        }
+        if (typeof window.speakText === 'function') {
+          setTimeout(() => {
+            window.speakText("Alertas de voz desactivadas", { force: true });
+          }, 150);
         }
       }
 
       // 3. Emitir Broadcast en tiempo real ultra-rápido (<50ms) a todas las sesiones (TV, pantalla compartida, etc.)
       try {
-        if (window._masterGlobalChannel && typeof window._masterGlobalChannel.send === 'function') {
-          window._masterGlobalChannel.send({
+        const rtChan = window._masterGlobalChannel || (typeof _sb !== 'undefined' && _sb ? _sb.channel('agencia_global_rt') : null);
+        if (rtChan && typeof rtChan.send === 'function') {
+          rtChan.send({
             type: 'broadcast',
             event: 'admin_alert_config',
             payload: {
@@ -42675,38 +42897,49 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
-    window.toggleTaskAlerts = function() {
-      const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
-      const next = !current;
-      
-      // 1. Aplicar localmente de inmediato
-      window.aplicarConfiguracionAlertasRemotas('task', next, 'Admin Local', true);
+    window.setTaskAlertsEnabled = function(next, sender) {
+      const bNext = (next === true || next === 'true');
 
-      // 2. Audio de confirmación local
-      if (next) {
+      // 1. Aplicar localmente de inmediato
+      window.aplicarConfiguracionAlertasRemotas('task', bNext, sender || 'Admin Local', true);
+
+      // 2. Audio de confirmación local garantizado
+      if (bNext) {
+        if (typeof playBeep === 'function') {
+          playBeep('task');
+          setTimeout(() => playBeep('bell'), 160);
+        }
         if (typeof window.speakText === 'function') {
-          window.speakText("Alertas de tareas activadas");
+          setTimeout(() => {
+            window.speakText("Alertas de tareas activadas", { isTaskAlert: true, force: true });
+          }, 250);
         }
       } else {
+        if (typeof playBeep === 'function') {
+          playBeep('pulse');
+        }
         if (typeof window.speakText === 'function') {
-          window.speakText("Alertas de tareas desactivadas");
+          setTimeout(() => {
+            window.speakText("Alertas de tareas desactivadas", { isTaskAlert: true, force: true });
+          }, 150);
         }
       }
 
       // 3. Emitir Broadcast en tiempo real ultra-rápido (<50ms) a todas las sesiones (TV, pantalla compartida, etc.)
       try {
-        if (window._masterGlobalChannel && typeof window._masterGlobalChannel.send === 'function') {
-          window._masterGlobalChannel.send({
+        const rtChan = window._masterGlobalChannel || (typeof _sb !== 'undefined' && _sb ? _sb.channel('agencia_global_rt') : null);
+        if (rtChan && typeof rtChan.send === 'function') {
+          rtChan.send({
             type: 'broadcast',
             event: 'admin_alert_config',
             payload: {
               alertType: 'task',
-              enabled: next,
+              enabled: bNext,
               ts: Date.now(),
               sender: (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') + (typeof currentOpName !== 'undefined' && currentOpName ? ' (' + currentOpName + ')' : '')
             }
           });
-          console.log('[ALERT-SYNC] 🚀 Broadcast enviado: Alertas de tareas ->', next ? 'ON' : 'OFF');
+          console.log('[ALERT-SYNC] 🚀 Broadcast enviado: Alertas de tareas ->', bNext ? 'ON' : 'OFF');
         }
       } catch(e) {
         console.warn('[ALERT-SYNC] Error en broadcast:', e);
@@ -42716,9 +42949,9 @@ CONFIGURACIÓN DE CONTEXTO:
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').upsert({
           key: 'rr_task_alerts_enabled',
-          value: next ? 'true' : 'false'
+          value: bNext ? 'true' : 'false'
         }, { onConflict: 'key' }).then(() => {
-          console.log('[ALERT-SYNC] ☁️ Persistido en Supabase: rr_task_alerts_enabled =', next);
+          console.log('[ALERT-SYNC] ☁️ Persistido en Supabase: rr_task_alerts_enabled =', bNext);
         }).catch(e => console.warn('[ALERT-SYNC] Error persistiendo en Supabase:', e));
       }
 
@@ -42727,9 +42960,14 @@ CONFIGURACIÓN DE CONTEXTO:
         fetch('https://ryr-titan-backend.onrender.com/api/tasks/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: next })
+          body: JSON.stringify({ enabled: bNext })
         }).catch(() => {});
       } catch(e) {}
+    };
+
+    window.toggleTaskAlerts = function() {
+      const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+      window.setTaskAlertsEnabled(!current, (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN'));
     };
 
     window.reproducirAnuncioVozGlobal = function(val) {
@@ -42739,6 +42977,13 @@ CONFIGURACIÓN DE CONTEXTO:
         ann = typeof val === 'string' ? JSON.parse(val) : val;
       } catch(e) { ann = { text: String(val) }; }
       if (!ann || !ann.text) return;
+
+      // Si es una alerta de tarea o tiene id de tarea, delegar a reproducirAlertaTareaGlobal
+      if (ann.isTask || (ann.id && String(ann.id).startsWith('task_')) || ann.slot || ann.missingOps) {
+        if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+          return window.reproducirAlertaTareaGlobal(ann);
+        }
+      }
 
       const annId = ann.id || ('ann_' + (ann.ts || Date.now()) + '_' + ann.text.substring(0, 10));
       window._playedAnnouncements = window._playedAnnouncements || new Set();
@@ -42909,7 +43154,7 @@ CONFIGURACIÓN DE CONTEXTO:
       } catch(e) { task = { text: String(val) }; }
       if (!task || !task.text) return;
 
-      const taskId = task.id || ('task_' + (task.ts || Date.now()) + '_' + task.text.substring(0, 15));
+      const taskId = task.id || ('task_' + (task.ts || Date.now()) + '_' + String(task.text).substring(0, 15));
       window._playedTaskAlerts = window._playedTaskAlerts || new Set();
       if (window._playedTaskAlerts.has(taskId)) return;
 
@@ -42918,12 +43163,17 @@ CONFIGURACIÓN DE CONTEXTO:
 
       window._playedTaskAlerts.add(taskId);
 
-      // 1. Sonido obligatorio de alta atención (Triple campana + tono vibrante)
+      // Desbloquear audio si estaba suspendido
+      if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(()=>{});
+      }
+
+      // 1. Sonido obligatorio de alta atención (Chime nítido armónico + campanas)
       if (typeof playBeep === 'function') {
-        playBeep('coin');
-        setTimeout(() => playBeep('bell'), 160);
-        setTimeout(() => playBeep('bell'), 360);
-        setTimeout(() => playBeep('coin'), 560);
+        playBeep('task');
+        setTimeout(() => playBeep('bell'), 180);
+        setTimeout(() => playBeep('bell'), 380);
+        setTimeout(() => playBeep('coin'), 600);
       }
 
       // 2. Vibración háptica en dispositivos móviles
@@ -42935,11 +43185,11 @@ CONFIGURACIÓN DE CONTEXTO:
       setTimeout(() => {
         const fullSpeech = task.text.startsWith('⚠️') || task.text.startsWith('Atención') ? task.text : ("Atención equipo: " + task.text);
         if (typeof speakText === 'function') {
-          speakText(fullSpeech);
+          speakText(fullSpeech, { isTaskAlert: true });
         } else if (typeof window.speakText === 'function') {
-          window.speakText(fullSpeech);
+          window.speakText(fullSpeech, { isTaskAlert: true });
         }
-      }, 300);
+      }, 350);
 
       // 4. Modal / Banner Neón específico de Alerta de Tareas (Cyberpunk Gold/Cyan)
       let banner = document.getElementById('rr-global-task-banner');
@@ -43009,7 +43259,6 @@ CONFIGURACIÓN DE CONTEXTO:
           const rtChan = window._masterGlobalChannel || _sb.channel('agencia_global_rt');
           if (rtChan && typeof rtChan.send === 'function') {
             rtChan.send({ type: 'broadcast', event: 'task_alert', payload: taskPayload });
-            rtChan.send({ type: 'broadcast', event: 'voice_alert', payload: taskPayload });
           }
         } catch(e){}
 
@@ -43085,42 +43334,77 @@ CONFIGURACIÓN DE CONTEXTO:
     // 🎙️ SÍNTESIS DE VOZ MASCULINA: Voz Gruesa, Imponente y Líder Operativo Inteligente
     function speakText(text, options = {}) {
       if (!window.speechSynthesis) return;
-      if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
+
+      const isTask = !!options.isTaskAlert;
+      const isForced = !!options.force;
+
+      if (!isForced) {
+        if (isTask) {
+          if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+        } else {
+          if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
+        }
+      }
       
       try {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
         window.speechSynthesis.cancel();
-        window.speechSynthesis.resume();
+
         const utterance = new SpeechSynthesisUtterance(text);
+        // Retener referencia global para evitar que el Garbage Collector de Chrome aborte la voz a mitad de frase
+        window._activeUtterance = utterance;
+        utterance.onend = () => { window._activeUtterance = null; };
+        utterance.onerror = () => { window._activeUtterance = null; };
+
         utterance.lang = 'es-ES';
         utterance.volume = options.volume || 1.0;
         utterance.rate = options.rate || 0.94; // Cadencia pausada, firme y de líder operativo
         utterance.pitch = options.pitch || 0.78; // Tono grave y barítono profundo e imponente
 
         const applyVoiceAndSpeak = () => {
-          const voices = window.speechSynthesis.getVoices();
-          const maleVoice = getMaleSpanishVoice(voices);
-          if (maleVoice) {
-            utterance.voice = maleVoice;
-            const nameLower = (maleVoice.name || '').toLowerCase();
-            const femaleKeywords = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'female', 'mujer', 'victoria'];
-            if (femaleKeywords.some(f => nameLower.includes(f))) {
-              utterance.pitch = 0.65; // Agresivamente masculinizar/gravar si es voz de fallback
-            } else {
-              utterance.pitch = 0.78; // Voz grave imponente masculina
+          try {
+            const voices = window.speechSynthesis.getVoices();
+            const maleVoice = getMaleSpanishVoice(voices);
+            if (maleVoice) {
+              utterance.voice = maleVoice;
+              const nameLower = (maleVoice.name || '').toLowerCase();
+              const femaleKeywords = ['monica', 'helena', 'lucia', 'paulina', 'sabina', 'zira', 'laura', 'sofia', 'maria', 'female', 'mujer', 'victoria'];
+              if (femaleKeywords.some(f => nameLower.includes(f))) {
+                utterance.pitch = 0.65; // Agresivamente masculinizar/gravar si es voz de fallback
+              } else {
+                utterance.pitch = 0.78; // Voz grave imponente masculina
+              }
             }
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+          } catch(e) {
+            console.warn("Error enviando utterance a speak:", e);
           }
-          window.speechSynthesis.speak(utterance);
         };
 
         const currentVoices = window.speechSynthesis.getVoices();
-        if (currentVoices && currentVoices.length > 0) {
-          applyVoiceAndSpeak();
-        } else {
-          window.speechSynthesis.onvoiceschanged = () => {
+        // Breve retraso de 35ms para permitir que cancel() se procese en Chromium sin descartar el nuevo speak
+        setTimeout(() => {
+          if (currentVoices && currentVoices.length > 0) {
             applyVoiceAndSpeak();
-          };
-          window.speechSynthesis.speak(utterance);
-        }
+          } else {
+            let hasSpoken = false;
+            window.speechSynthesis.onvoiceschanged = () => {
+              if (!hasSpoken) {
+                hasSpoken = true;
+                applyVoiceAndSpeak();
+              }
+            };
+            setTimeout(() => {
+              if (!hasSpoken) {
+                hasSpoken = true;
+                applyVoiceAndSpeak();
+              }
+            }, 120);
+          }
+        }, 35);
       } catch (e) {
         console.warn("Falla en reproducción TTS: ", e);
       }
@@ -43156,7 +43440,6 @@ CONFIGURACIÓN DE CONTEXTO:
     };
 
     window.emitirConsejoBajaConversaciones = function(opsSinChat = []) {
-      if (localStorage.getItem('rr_voice_alerts_enabled') === 'false') return;
       if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
 
       const opsSinChatStr = opsSinChat.length > 0
@@ -43182,25 +43465,18 @@ CONFIGURACIÓN DE CONTEXTO:
       window._voiceConsejoIndex = (window._voiceConsejoIndex + 1) % consejos.length;
 
       const payload = {
-        id: 'ann_conv_' + Date.now() + '_' + idx,
+        id: 'task_conv_' + Date.now() + '_' + idx,
         text: textoElegido,
         ts: Date.now(),
         sender: 'monitor_ia'
       };
 
-      if (typeof window.reproducirAnuncioVozGlobal === 'function') {
-        window.reproducirAnuncioVozGlobal(payload);
+      if (typeof window.emitirAlertaTareaGlobal === 'function') {
+        window.emitirAlertaTareaGlobal(payload);
+      } else if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+        window.reproducirAlertaTareaGlobal(payload);
       } else {
-        speakText(textoElegido);
-      }
-
-      if (typeof _sb !== 'undefined' && _sb) {
-        try {
-          const rtChan = window._masterGlobalChannel || _sb.channel('agencia_global_rt');
-          if (rtChan && typeof rtChan.send === 'function') {
-            rtChan.send({ type: 'broadcast', event: 'voice_alert', payload: payload });
-          }
-        } catch(e){}
+        speakText(textoElegido, { isTaskAlert: true });
       }
     };
 
@@ -43257,7 +43533,12 @@ CONFIGURACIÓN DE CONTEXTO:
       if (minIntoShift >= 0 && minIntoShift <= 3 && window._lastShiftStartAlertKey !== shiftStartKey) {
         window._lastShiftStartAlertKey = shiftStartKey;
         const msg = `¡Atención equipo! Iniciamos el turno de ${currentShift}. Recuerden cumplir con sus tareas operativas y mantener todos sus perfiles activos con máxima energía.`;
-        window.reproducirAnuncioVozGlobal({ id: shiftStartKey, text: msg, ts: Date.now() });
+        const shiftPayload = { id: shiftStartKey, text: msg, ts: Date.now(), sender: 'monitor_ia' };
+        if (typeof window.emitirAlertaTareaGlobal === 'function') {
+          window.emitirAlertaTareaGlobal(shiftPayload);
+        } else if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+          window.reproducirAlertaTareaGlobal(shiftPayload);
+        }
       }
 
       // 2. Alerta a los 15 MINUTOS de haber iniciado el turno (15 a 18 minutos)
@@ -43265,7 +43546,12 @@ CONFIGURACIÓN DE CONTEXTO:
       if (minIntoShift >= 15 && minIntoShift <= 18 && window._lastShift15MinAlertKey !== shift15Key) {
         window._lastShift15MinAlertKey = shift15Key;
         const msg = `Saludos turno ${currentShift}, iniciemos con leer el empalme y el barrido de cartas de límites activos. Y hagan el barrido de chat con los 3 mensajes clave: 1 para usuarios nuevos, 2 para usuarios que todos los días les envías mensajes pero nunca contestan, y 3 para usuarios con los que ya hablamos, debemos saludarlos si no se les ha escrito.`;
-        window.reproducirAnuncioVozGlobal({ id: shift15Key, text: msg, ts: Date.now() });
+        const shiftPayload = { id: shift15Key, text: msg, ts: Date.now(), sender: 'monitor_ia' };
+        if (typeof window.emitirAlertaTareaGlobal === 'function') {
+          window.emitirAlertaTareaGlobal(shiftPayload);
+        } else if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+          window.reproducirAlertaTareaGlobal(shiftPayload);
+        }
       }
 
       // 3. Alerta a la 1 HORA Y 40 MINUTOS (100 minutos) de haber iniciado el turno (100 a 103 minutos)
@@ -43273,7 +43559,12 @@ CONFIGURACIÓN DE CONTEXTO:
       if (minIntoShift >= 100 && minIntoShift <= 103 && window._lastShift100MinAlertKey !== shift100Key) {
         window._lastShift100MinAlertKey = shift100Key;
         const msg = `Recuerden que deben hacer los rompehielos, pero antes de subirlos deben enviárselo al monitor para que lo valide.`;
-        window.reproducirAnuncioVozGlobal({ id: shift100Key, text: msg, ts: Date.now() });
+        const shiftPayload = { id: shift100Key, text: msg, ts: Date.now(), sender: 'monitor_ia' };
+        if (typeof window.emitirAlertaTareaGlobal === 'function') {
+          window.emitirAlertaTareaGlobal(shiftPayload);
+        } else if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+          window.reproducirAlertaTareaGlobal(shiftPayload);
+        }
       }
 
       // 4. Verificación de Mensajes / Conversaciones Activas (Cada 1 hora y media [90 min], con inicio 1 hora [60 min] tras activación)
@@ -43662,27 +43953,26 @@ CONFIGURACIÓN DE CONTEXTO:
 
     // Desbloquear audio engine al primer tap (Móviles / TV autoplay policy)
     function unlockAudioEngine() {
+      if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(()=>{});
+      }
       if (window.speechSynthesis) {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
         const silentUtterance = new SpeechSynthesisUtterance('.');
         silentUtterance.volume = 0.01;
         silentUtterance.rate = 10;
         window.speechSynthesis.speak(silentUtterance);
-        
-        // Mantener activo el engine
-        setInterval(() => {
-           if (!window.speechSynthesis.speaking) {
-               const keepAlive = new SpeechSynthesisUtterance(' ');
-               keepAlive.volume = 0.01;
-               window.speechSynthesis.speak(keepAlive);
-           }
-        }, 10000);
-        console.log("Audio engine desbloqueado y keep-alive iniciado");
+        console.log("Audio engine y TTS desbloqueados correctamente");
       }
-      document.removeEventListener('click', unlockAudioEngine);
-      document.removeEventListener('touchstart', unlockAudioEngine);
+      ['click', 'touchstart', 'pointerdown', 'keydown', 'mousedown'].forEach(ev => {
+        document.removeEventListener(ev, unlockAudioEngine);
+      });
     }
-    document.addEventListener('click', unlockAudioEngine);
-    document.addEventListener('touchstart', unlockAudioEngine);
+    ['click', 'touchstart', 'pointerdown', 'keydown', 'mousedown'].forEach(ev => {
+      document.addEventListener(ev, unlockAudioEngine, { passive: true });
+    });
 
     function iniciarMonitoreoGhost() {
       setInterval(() => {
@@ -44633,22 +44923,7 @@ Devuelve ÚNICAMENTE el texto del prompt definitivo en inglés, sin explicacione
       }
     };
 
-    // --- DESBLOQUEO DE AUDIO PARA DISPOSITIVOS MÓVILES Y TV ---
-    // Los navegadores bloquean speechSynthesis si no hay interacción previa del usuario.
-    // --- DESBLOQUEO DE AUDIO PARA DISPOSITIVOS MÓVILES Y TV ---
-    // Los navegadores bloquean speechSynthesis si no hay interacción previa del usuario.
-    function unlockAudioEngine() {
-      if (window.speechSynthesis && !window._audioUnlocked) {
-        const silentUtterance = new SpeechSynthesisUtterance('');
-        silentUtterance.volume = 0;
-        silentUtterance.rate = 10;
-        window.speechSynthesis.speak(silentUtterance);
-        window._audioUnlocked = true;
-        console.log("🔊 Motor de voz desbloqueado por interacción del usuario.");
-        document.removeEventListener('click', unlockAudioEngine);
-        document.removeEventListener('touchstart', unlockAudioEngine);
-      }
-    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // 📸 MÓDULO SISTEMA DE SOLICITUDES DE CONTENIDO (FOTOS/VIDEOS)
     // ════════════════════════════════════════════════════════════════════════════════

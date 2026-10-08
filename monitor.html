@@ -2274,6 +2274,93 @@
       window.open(`https://talkytimes.com/user/${cleanId}`, '_blank');
     };
 
+    // ══════════════════════════════════════════════════════════════
+    // RECEPTOR DE ALERTAS DE TAREAS Y VOZ GLOBAL (TV / MONITOR)
+    // ══════════════════════════════════════════════════════════════
+    try {
+      const _monitorAlertsBC = new BroadcastChannel('RYR_HUD_CHANNEL');
+      _monitorAlertsBC.onmessage = (event) => {
+        const data = event.data;
+        if (!data) return;
+
+        if (data.type === 'GLOBAL_TASK_ALERT' || data.type === 'GLOBAL_VOICE_ALERT') {
+          const payload = data.payload || {};
+          const text = payload.text || 'Atención operadores: Alerta de monitoreo.';
+          
+          // 1. Sonido de atención con Web Audio API
+          try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+              const ctx = new AudioCtx();
+              const playTone = (freq, delay, dur) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + dur);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(ctx.currentTime + delay);
+                osc.stop(ctx.currentTime + delay + dur);
+              };
+              playTone(587.33, 0, 0.25);
+              playTone(880, 0.18, 0.35);
+              playTone(1174.66, 0.38, 0.45);
+            }
+          } catch(e) {}
+
+          // 2. Locución por voz hablada (TTS)
+          try {
+            if (window.speechSynthesis) {
+              window.speechSynthesis.cancel();
+              const utterText = text.startsWith('⚠️') || text.startsWith('Atención') ? text : ("Atención equipo: " + text);
+              const utter = new SpeechSynthesisUtterance(utterText);
+              utter.lang = 'es-ES';
+              utter.rate = 0.94;
+              utter.pitch = 0.8;
+              window.speechSynthesis.speak(utter);
+            }
+          } catch(e) {}
+
+          // 3. Modal / Banner Neón en la pantalla del monitor / TV
+          let oldBanner = document.getElementById('monitor-global-task-banner');
+          if (oldBanner) oldBanner.remove();
+
+          const banner = document.createElement('div');
+          banner.id = 'monitor-global-task-banner';
+          banner.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 92%;
+            max-width: 580px;
+            z-index: 999999999;
+            background: linear-gradient(135deg, #090d16, #1e1338);
+            border: 2px solid #f59e0b;
+            box-shadow: 0 10px 45px rgba(245, 158, 11, 0.8), 0 0 30px rgba(56, 189, 248, 0.6);
+            border-radius: 14px;
+            padding: 16px 20px;
+            color: #ffffff;
+            box-sizing: border-box;
+          `;
+          banner.innerHTML = `
+            <div style="display:flex; align-items:flex-start; gap:12px;">
+              <span style="font-size:1.8rem;">⚠️</span>
+              <div style="flex:1;">
+                <div style="font-size:11px; font-weight:900; color:#fbbf24; text-transform:uppercase; letter-spacing:1px;">🚨 ALERTA DE MONITOREO & TAREAS OPERATIVAS</div>
+                <div style="font-size:14px; font-weight:bold; color:#f8fafc; margin-top:5px; line-height:1.4;">${text}</div>
+              </div>
+            </div>
+            <button onclick="this.parentElement.remove()" style="margin-top:12px; width:100%; background:#f59e0b; border:none; color:#000; padding:8px; border-radius:6px; font-weight:900; cursor:pointer;">✓ ENTENDIDO</button>
+          `;
+          document.body.appendChild(banner);
+          setTimeout(() => { if (banner.parentNode) banner.remove(); }, 18000);
+        }
+      };
+    } catch(e) {}
+
     window.closeUserSpendingModal = function() {
       const modal = document.getElementById('ryr-user-spending-modal');
       const backdrop = document.getElementById('ryr-spending-modal-backdrop');

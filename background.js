@@ -18,10 +18,25 @@ chrome.runtime.onConnect.addListener((port) => {
   console.log("🔌 Canal de comunicación activo.");
 });
 
-// Listener para mensajes si se requiere comunicación entre scripts (Opcional en nuestro modelo de Storage)
+// Listener para mensajes y difusión transversal entre pestañas y scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "checkStatus") {
     sendResponse({ status: "alive" });
+    return true;
   }
+
+  // Enrutar alertas globales y configuraciones a todas las pestañas abiertas de Talkytimes
+  if (request && (request.type === 'GLOBAL_TASK_ALERT' || request.type === 'GLOBAL_VOICE_ALERT' || request.type === 'TASK_ALERTS_CONFIG')) {
+    chrome.tabs.query({ url: "*://*.talkytimes.com/*" }, (tabs) => {
+      if (tabs && tabs.length) {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, request).catch(() => {});
+        });
+      }
+    });
+    sendResponse({ success: true, deliveredToTabs: true });
+    return true;
+  }
+
   return true;
 });

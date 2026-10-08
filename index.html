@@ -11717,6 +11717,13 @@
                 " title="Permite apagar o encender las alertas de voz con tareas y consejos operativos">
                   ${localStorage.getItem('rr_task_alerts_enabled') !== 'false' ? '📋 Alertas Tareas: ON' : '⏸️ Alertas Tareas: OFF'}
                 </button>
+                <button id="btn-test-task-halfhour" class="rr-task-check-btn" onclick="window.forzarVerificacionSeguimientoMediaHora()" style="
+                  display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
+                  font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid rgba(245,158,11,.35);
+                  background:rgba(245,158,11,.15); color:#fbbf24; transition: all 0.3s ease; white-space:nowrap;
+                " title="Evalúa en vivo el barrido de cartas y seguimiento de perfiles nuevos de esta media hora y emite la alerta a todas las sesiones y al TV">
+                  ⚠️ Chequeo Media Hora
+                </button>
               </div>
             </div>
 
@@ -15147,6 +15154,10 @@
          window.dispatchEvent(new CustomEvent('rr_voice_alert', { detail: payload }));
       });
 
+      globalChannel.on('broadcast', { event: 'task_alert' }, (payload) => {
+         window.dispatchEvent(new CustomEvent('rr_task_alert', { detail: payload }));
+      });
+
       globalChannel.on('broadcast', { event: 'admin_alert_config' }, (payload) => {
          window.dispatchEvent(new CustomEvent('rr_admin_alert_config', { detail: payload }));
       });
@@ -15731,6 +15742,15 @@
                 if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
                   window.aplicarConfiguracionAlertasRemotas('task', isEnabled, 'Supabase Realtime', false);
                 }
+              } else if (row.key === 'rr_last_task_alert') {
+                const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
+                if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
+                _sbMemCache[row.key] = finalVal;
+                if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+                  window.reproducirAlertaTareaGlobal(finalVal);
+                } else if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+                  window.reproducirAnuncioVozGlobal(finalVal);
+                }
               } else if (row.key.startsWith('rr_prime_asistencia_draft_')) {
                 const finalVal = (row.value !== null && typeof row.value === 'object') ? JSON.stringify(row.value) : row.value;
                 if (typeof _origSetItem === 'function') _origSetItem(row.key, finalVal);
@@ -15762,13 +15782,28 @@
           }
         });
 
-      // 3. Canal GLOBAL ALERTS (Alertas de voz invasivas para todos los dispositivos)
+      // 3. Canal GLOBAL ALERTS (Alertas de voz invasivas para todos los dispositivos y TV)
       window.addEventListener('rr_voice_alert', (e) => {
           const payload = e.detail;
           console.log("🔊 Alerta de voz global recibida:", payload);
           const annText = (payload && payload.payload && payload.payload.text) ? payload.payload.text : (payload?.text || '');
           if (annText && typeof window.reproducirAnuncioVozGlobal === 'function') {
             window.reproducirAnuncioVozGlobal(payload.payload || { text: annText, ts: Date.now() });
+          }
+        });
+
+      // 3.1 Canal GLOBAL TASK ALERTS (Alertas de tareas operativas simultáneas para todos los dispositivos y TV)
+      window.addEventListener('rr_task_alert', (e) => {
+          const payload = e.detail;
+          console.log("📋 Alerta de tarea global recibida:", payload);
+          const taskData = (payload && payload.payload) ? payload.payload : payload;
+          const annText = (taskData && taskData.text) ? taskData.text : '';
+          if (annText) {
+            if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+              window.reproducirAlertaTareaGlobal(taskData);
+            } else if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+              window.reproducirAnuncioVozGlobal(taskData);
+            }
           }
         });
 
@@ -15935,7 +15970,8 @@
       'rr_prime_v15_noche',
       'rr_shift_handovers',
       'rr_voice_alerts_enabled',
-      'rr_task_alerts_enabled'
+      'rr_task_alerts_enabled',
+      'rr_last_task_alert'
     ];
 
     async function _sbPeriodicResync() {
@@ -41549,12 +41585,18 @@ PT._logKey = function (opName) {
       if (typeof _sb === 'undefined' || !_sb) return;
       const role = (typeof currentRole !== 'undefined') ? currentRole : '';
 
-      // 1. Sincronizar anuncios de voz generales (Megáfono) para todos los usuarios y pantallas
+      // 1. Sincronizar anuncios de voz generales y alertas de tareas para todos los usuarios, monitores y TV
       try {
         const { data: annData } = await _sb.from('kv_store').select('value').eq('key', 'rr_last_voice_announcement').maybeSingle();
         if (annData && annData.value) {
           if (typeof window.reproducirAnuncioVozGlobal === 'function') {
             window.reproducirAnuncioVozGlobal(annData.value);
+          }
+        }
+        const { data: taskData } = await _sb.from('kv_store').select('value').eq('key', 'rr_last_task_alert').maybeSingle();
+        if (taskData && taskData.value) {
+          if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+            window.reproducirAlertaTareaGlobal(taskData.value);
           }
         }
       } catch(e) {}
@@ -42503,13 +42545,29 @@ CONFIGURACIÓN DE CONTEXTO:
           window.updateTaskAlertBtnUI();
         }
 
+        // Notificar por BroadcastChannel a la extensión de Chrome y TV
+        try {
+          const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+          bc.postMessage({ type: 'TASK_ALERTS_CONFIG', enabled: bEnabled, sender: sender || 'Admin' });
+          setTimeout(() => bc.close(), 1000);
+        } catch(e) {}
+
         if (!bEnabled) {
-          if (!isLocal && typeof _toastSync === 'function') {
-            _toastSync('⏸️ Alertas de Tareas pausadas remotamente (' + (sender || 'Admin') + ')', false);
+          if (!isLocal) {
+            if (typeof _toastSync === 'function') {
+              _toastSync('⏸️ Alertas de Tareas pausadas remotamente (' + (sender || 'Admin') + ')', false);
+            }
+            if (typeof window.speakText === 'function') {
+              window.speakText("Alertas de tareas desactivadas remotamente");
+            }
           }
         } else {
           window._taskAlertsActivatedTs = Date.now();
           window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000);
+          if (typeof playBeep === 'function') {
+            playBeep('coin');
+            setTimeout(() => playBeep('bell'), 150);
+          }
           if (!isLocal) {
             if (typeof _toastSync === 'function') {
               _toastSync('📋 Alertas de Tareas activadas remotamente (' + (sender || 'Admin') + ')', false);
@@ -42663,6 +42721,15 @@ CONFIGURACIÓN DE CONTEXTO:
           console.log('[ALERT-SYNC] ☁️ Persistido en Supabase: rr_task_alerts_enabled =', next);
         }).catch(e => console.warn('[ALERT-SYNC] Error persistiendo en Supabase:', e));
       }
+
+      // 5. Sincronizar con backend Node.js para que todas las extensiones lo reciban
+      try {
+        fetch('https://ryr-titan-backend.onrender.com/api/tasks/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: next })
+        }).catch(() => {});
+      } catch(e) {}
     };
 
     window.reproducirAnuncioVozGlobal = function(val) {
@@ -42799,6 +42866,22 @@ CONFIGURACIÓN DE CONTEXTO:
           }, { onConflict: 'key' }).catch(e => console.warn('Sync voice announcement err:', e));
         }
 
+        // 3.1 Emitir por BroadcastChannel a pestañas de extensión (Talkytimes) y monitores
+        try {
+          const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+          bc.postMessage({ type: 'GLOBAL_VOICE_ALERT', payload: annPayload });
+          setTimeout(() => bc.close(), 1000);
+        } catch(e) {}
+
+        // 3.2 Enviar a backend Node.js para entrega garantizada a todas las extensiones activas
+        try {
+          fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isBroadcast: true, text: annPayload.text })
+          }).catch(() => {});
+        } catch(e) {}
+
         // 4. Feedback visual
         if (inputEl) {
           inputEl.value = '';
@@ -42810,6 +42893,153 @@ CONFIGURACIÓN DE CONTEXTO:
       } catch (e) {
         console.warn("Falla al enviar TTS Demo: ", e);
       }
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // SISTEMA MAESTRO DE REPRODUCCIÓN & EMISIÓN DE ALERTAS DE TAREAS
+    // Suena en todas las sesiones, TV de la agencia y extensiones activas
+    // ══════════════════════════════════════════════════════════════
+    window.reproducirAlertaTareaGlobal = function(val) {
+      if (!val) return;
+      if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+
+      let task = null;
+      try {
+        task = typeof val === 'string' ? JSON.parse(val) : val;
+      } catch(e) { task = { text: String(val) }; }
+      if (!task || !task.text) return;
+
+      const taskId = task.id || ('task_' + (task.ts || Date.now()) + '_' + task.text.substring(0, 15));
+      window._playedTaskAlerts = window._playedTaskAlerts || new Set();
+      if (window._playedTaskAlerts.has(taskId)) return;
+
+      const isFresh = task.ts ? (Math.abs(Date.now() - task.ts) < 180000) : true;
+      if (!isFresh) return;
+
+      window._playedTaskAlerts.add(taskId);
+
+      // 1. Sonido obligatorio de alta atención (Triple campana + tono vibrante)
+      if (typeof playBeep === 'function') {
+        playBeep('coin');
+        setTimeout(() => playBeep('bell'), 160);
+        setTimeout(() => playBeep('bell'), 360);
+        setTimeout(() => playBeep('coin'), 560);
+      }
+
+      // 2. Vibración háptica en dispositivos móviles
+      try {
+        if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]);
+      } catch(e) {}
+
+      // 3. Locución por voz hablada OBLIGATORIA (TTS)
+      setTimeout(() => {
+        const fullSpeech = task.text.startsWith('⚠️') || task.text.startsWith('Atención') ? task.text : ("Atención equipo: " + task.text);
+        if (typeof speakText === 'function') {
+          speakText(fullSpeech);
+        } else if (typeof window.speakText === 'function') {
+          window.speakText(fullSpeech);
+        }
+      }, 300);
+
+      // 4. Modal / Banner Neón específico de Alerta de Tareas (Cyberpunk Gold/Cyan)
+      let banner = document.getElementById('rr-global-task-banner');
+      if (banner) banner.remove();
+
+      banner = document.createElement('div');
+      banner.id = 'rr-global-task-banner';
+      banner.style.cssText = `
+        position: fixed;
+        top: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 95%;
+        max-width: 520px;
+        z-index: 999999999;
+        background: linear-gradient(135deg, #090d16, #1e1338);
+        border: 2px solid #f59e0b;
+        box-shadow: 0 10px 45px rgba(245, 158, 11, 0.8), 0 0 30px rgba(56, 189, 248, 0.6);
+        border-radius: 18px;
+        padding: 16px 20px;
+        color: #ffffff;
+        box-sizing: border-box;
+        animation: pulseAlert 1.5s infinite alternate;
+      `;
+
+      const safeText = String(task.text).replace(/"/g, '&quot;');
+      const timeNow = new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+
+      banner.innerHTML = `
+        <div style="display:flex; align-items:flex-start; gap:14px;">
+          <div style="background:rgba(245,158,11,0.25); border:1.5px solid #f59e0b; width:48px; height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.8rem; flex-shrink:0; box-shadow:0 0 16px rgba(245,158,11,0.6);">⚠️</div>
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.75rem; font-weight:900; color:#fbbf24; letter-spacing:0.8px; text-transform:uppercase;">🚨 ALERTA DE TAREAS OPERATIVAS</span>
+              <span style="font-size:0.68rem; color:#94a3b8; font-weight:700;">${timeNow}</span>
+            </div>
+            <div style="font-size:1.02rem; font-weight:900; color:#f8fafc; margin-top:6px; line-height:1.45; word-break:break-word;">${safeText}</div>
+          </div>
+        </div>
+        <div style="display:flex; margin-top:14px; justify-content:flex-end;">
+          <button onclick="document.getElementById('rr-global-task-banner').remove()" style="width:100%; background:linear-gradient(135deg, #f59e0b, #d97706); border:none; color:#000000; padding:11px 18px; border-radius:12px; font-size:0.84rem; font-weight:900; cursor:pointer; box-shadow:0 0 16px rgba(245,158,11,0.5); text-transform:uppercase; letter-spacing:0.5px;">✓ Entendido (Cerrar Alerta)</button>
+        </div>
+      `;
+
+      document.body.appendChild(banner);
+
+      setTimeout(() => {
+        if (banner && banner.parentNode) {
+          banner.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+          banner.style.opacity = '0';
+          banner.style.transform = 'translateX(-50%) translateY(-20px)';
+          setTimeout(() => banner.remove(), 400);
+        }
+      }, 18000);
+    };
+
+    window.emitirAlertaTareaGlobal = function(taskPayload) {
+      if (!taskPayload || !taskPayload.text) return;
+      if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+
+      // 1. Reproducir inmediatamente en este dispositivo local
+      window.reproducirAlertaTareaGlobal(taskPayload);
+
+      // 2. Transmitir por canal de WebSocket broadcast en tiempo real a todas las sesiones (TV, pantallas, etc.)
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          const rtChan = window._masterGlobalChannel || _sb.channel('agencia_global_rt');
+          if (rtChan && typeof rtChan.send === 'function') {
+            rtChan.send({ type: 'broadcast', event: 'task_alert', payload: taskPayload });
+            rtChan.send({ type: 'broadcast', event: 'voice_alert', payload: taskPayload });
+          }
+        } catch(e){}
+
+        // 3. Guardar en Supabase kv_store para persistencia
+        _sb.from('kv_store').upsert({
+          key: 'rr_last_task_alert',
+          value: JSON.stringify(taskPayload)
+        }, { onConflict: 'key' }).catch(() => {});
+      }
+
+      // 4. Emitir por BroadcastChannel a pestañas de extensión (Talkytimes) y monitores
+      try {
+        const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+        bc.postMessage({ type: 'GLOBAL_TASK_ALERT', payload: taskPayload });
+        setTimeout(() => bc.close(), 1000);
+      } catch(e) {}
+
+      // 5. Enviar a backend Node.js para entrega garantizada a todas las extensiones activas
+      try {
+        fetch('https://ryr-titan-backend.onrender.com/api/tasks/alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(taskPayload)
+        }).catch(() => {});
+        fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isBroadcast: true, text: taskPayload.text })
+        }).catch(() => {});
+      } catch(e) {}
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -43128,14 +43358,166 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
+    // ══════════════════════════════════════════════════════════════
+    // DETECCIÓN & ALERTA DE BARRIDO DE CARTAS Y SEGUIMIENTO MEDIA HORA
+    // Suena en los últimos 10 min de la media hora y repite cada 5 min hasta completar
+    // ══════════════════════════════════════════════════════════════
+    window._lastHalfHourAlertTs = 0;
+    window._lastHalfHourAlertSlot = '';
+
+    window.verificarSeguimientoMediaHora = async function(isForced = false) {
+      if (!isForced && localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+
+      const now = new Date();
+      const bogotaTimeStr = now.toLocaleTimeString('en-US', { timeZone: 'America/Bogota', hour12: false });
+      const parts = bogotaTimeStr.split(':');
+      const hour = parseInt(parts[0], 10);
+      const min = parseInt(parts[1], 10);
+      const dateStr = (typeof localDateStr === 'function') ? localDateStr() : now.toISOString().slice(0, 10);
+
+      // Bloques de media hora:
+      // H1: minutos 00 a 29 (el corte de la media hora se cumple al minuto 30)
+      // H2: minutos 30 a 59 (el corte de la media hora se cumple al minuto 00)
+      const isFirstHalf = min < 30;
+      const slotName = isFirstHalf ? 'H1' : 'H2';
+      const slotKey = `${dateStr}_${hour}_${slotName}`;
+
+      // Ventana de alerta "antes de cumplirse la media hora":
+      // Para H1: minutos 20 a 29 (últimos 10 minutos de la primera media hora)
+      // Para H2: minutos 50 a 59 (últimos 10 minutos de la segunda media hora)
+      const inAlertWindow = (isFirstHalf && min >= 20 && min <= 29) || (!isFirstHalf && min >= 50 && min <= 59);
+
+      if (!isForced && !inAlertWindow) {
+        return;
+      }
+
+      const nowTs = Date.now();
+      const timeSinceLastAlert = nowTs - (window._lastHalfHourAlertTs || 0);
+      const isNewSlot = window._lastHalfHourAlertSlot !== slotKey;
+
+      // Alerta cada 5 minutos (300.000 ms) hasta que se completen las tareas
+      if (!isForced && !isNewSlot && timeSinceLastAlert < 300000) {
+        return;
+      }
+
+      // Solo sesiones de supervisión, monitor, admin o TV generan la evaluación/emisión
+      const isSupervisorSession = (typeof currentRole === 'undefined' || currentRole === 'monitor' || currentRole === 'admin' || window._isAgencyTvMode);
+      if (!isForced && !isSupervisorSession) return;
+
+      try {
+        // Obtener telemetría en vivo de operadores conectados
+        let liveOps = window.cachedLiveOperators || [];
+        if (!liveOps || liveOps.length === 0) {
+          const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live-grid', { signal: AbortSignal.timeout(6000) }).catch(() => null);
+          if (telemetryRes && telemetryRes.ok) {
+            const telemetryData = await telemetryRes.json();
+            liveOps = telemetryData.operators || [];
+          }
+        }
+
+        const activeOpsInShift = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : new Set();
+        const connectedOpsMap = new Map();
+
+        (liveOps || []).forEach(op => {
+          const isRecent = op.lastSeen ? (nowTs - op.lastSeen < 240000) : false;
+          const opName = (op.operator || op.operatorName || '').trim();
+          if (opName && isRecent && op.status !== 'OFFLINE') {
+            const opKey = opName.toUpperCase();
+            if (!connectedOpsMap.has(opKey)) {
+              connectedOpsMap.set(opKey, { name: opName, nodes: [] });
+            }
+            connectedOpsMap.get(opKey).nodes.push(op);
+          }
+        });
+
+        const opsFaltantesSet = new Set();
+
+        if (connectedOpsMap.size > 0) {
+          connectedOpsMap.forEach((data, opKey) => {
+            let tieneBarridoPendiente = false;
+            let tieneSeguimientoCumplido = false;
+
+            data.nodes.forEach(node => {
+              // 1. Barrido de cartas por enviar:
+              if ((Number(node.pendingReadLetters) || 0) > 0) {
+                tieneBarridoPendiente = true;
+              }
+
+              // 2. Seguimiento / prospección de perfiles nuevos esta media hora:
+              const prog = node.prospectingProgress;
+              if (prog && (prog.isCompleted || (Number(prog.count) || 0) >= 10)) {
+                tieneSeguimientoCumplido = true;
+              }
+            });
+
+            // Falta si tiene cartas pendientes de enviar O no ha cumplido el seguimiento de perfiles nuevos
+            if (tieneBarridoPendiente || !tieneSeguimientoCumplido) {
+              opsFaltantesSet.add(data.name.split(' ')[0]);
+            }
+          });
+        } else if (activeOpsInShift.size > 0) {
+          // Si no hay telemetría activa en este instante, tomar los operadores registrados en turno
+          activeOpsInShift.forEach(opName => {
+            opsFaltantesSet.add(opName.split(' ')[0]);
+          });
+        }
+
+        const opsFaltantes = Array.from(opsFaltantesSet);
+        const count = opsFaltantes.length;
+
+        if (count === 0 && !isForced) {
+          console.log(`[SEGUIMIENTO-30MIN] ✓ Todos los operadores han cumplido el barrido y seguimiento en el bloque ${slotKey}.`);
+          return;
+        }
+
+        let alertText = '';
+        if (count > 0) {
+          const nombresStr = opsFaltantes.join(', ');
+          const pluralOps = count === 1 ? 'operador' : 'operadores';
+          const verboFalta = count === 1 ? 'falta' : 'faltan';
+          alertText = `⚠️ ¡Atención equipo! ${verboFalta.charAt(0).toUpperCase() + verboFalta.slice(1)} ${count} ${pluralOps} por hacer barrido de cartas por enviar y seguimiento de perfiles nuevos en esta media hora: ${nombresStr}. Ve a hacer la tarea y cuando acabes envía captura de pantalla al monitor, ya que la tarea será validada.`;
+        } else {
+          alertText = `✓ ¡Excelente trabajo equipo! Todos los operadores tienen completado el barrido de cartas y el seguimiento de perfiles nuevos en esta media hora.`;
+        }
+
+        window._lastHalfHourAlertTs = nowTs;
+        window._lastHalfHourAlertSlot = slotKey;
+
+        const payload = {
+          id: `task_half_hour_${slotKey}_${nowTs}`,
+          text: alertText,
+          ts: nowTs,
+          slot: slotKey,
+          missingCount: count,
+          missingOps: opsFaltantes,
+          sender: 'monitor_ia'
+        };
+
+        console.log(`[SEGUIMIENTO-30MIN] 🚨 Emitiendo alerta de tareas (${count} pendientes):`, alertText);
+        window.emitirAlertaTareaGlobal(payload);
+      } catch (e) {
+        console.warn('[SEGUIMIENTO-30MIN] Error al evaluar seguimiento de media hora:', e);
+      }
+    };
+
+    window.forzarVerificacionSeguimientoMediaHora = async function() {
+      window._lastHalfHourAlertTs = 0; // Reset para disparar inmediatamente
+      await window.verificarSeguimientoMediaHora(true);
+    };
+
     // Monitoreo de Alertas de Voz por Inactividad & Conversaciones
     window.iniciarMonitoreoAlertasVoz = function() {
       if (_voiceAlertsInterval) clearInterval(_voiceAlertsInterval);
       
       _voiceAlertsInterval = setInterval(() => {
-        // Ejecutar cron de turnos y conversaciones activas
+        // 1. Ejecutar cron de turnos y conversaciones activas
         if (typeof window._verificarProgresoTurnosYConversaciones === 'function') {
           window._verificarProgresoTurnosYConversaciones();
+        }
+
+        // 2. Ejecutar detección y alerta de barrido de cartas y seguimiento de perfiles nuevos cada media hora
+        if (typeof window.verificarSeguimientoMediaHora === 'function') {
+          window.verificarSeguimientoMediaHora();
         }
 
         if (typeof currentRole === 'undefined' || (currentRole !== 'monitor' && currentRole !== 'admin')) return;

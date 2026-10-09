@@ -43266,9 +43266,9 @@ CONFIGURACIÓN DE CONTEXTO:
       setTimeout(() => {
         const fullSpeech = task.text.startsWith('⚠️') || task.text.startsWith('Atención') ? task.text : ("Atención equipo: " + task.text);
         if (typeof speakText === 'function') {
-          speakText(fullSpeech, { isTaskAlert: true });
+          speakText(fullSpeech, { isTaskAlert: true, force: !!task.isForced });
         } else if (typeof window.speakText === 'function') {
-          window.speakText(fullSpeech, { isTaskAlert: true });
+          window.speakText(fullSpeech, { isTaskAlert: true, force: !!task.isForced });
         }
       }, 350);
 
@@ -43329,7 +43329,7 @@ CONFIGURACIÓN DE CONTEXTO:
 
     window.emitirAlertaTareaGlobal = function(taskPayload) {
       if (!taskPayload || !taskPayload.text) return;
-      if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+      if (!taskPayload.isForced && localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
 
       // 1. Reproducir inmediatamente en este dispositivo local
       window.reproducirAlertaTareaGlobal(taskPayload);
@@ -43827,11 +43827,18 @@ CONFIGURACIÓN DE CONTEXTO:
               opsFaltantesSet.add(data.name.split(' ')[0]);
             }
           });
-        } else if (activeOpsInShift.size > 0) {
-          // Si no hay telemetría activa en este instante, tomar los operadores registrados en turno
-          activeOpsInShift.forEach(opName => {
-            opsFaltantesSet.add(opName.split(' ')[0]);
-          });
+        } else {
+          // Si no hay telemetría activa en este instante, tomar los operadores registrados en turno o conectados
+          const shiftOps = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : (activeOpsInShift || new Set());
+          if (shiftOps && shiftOps.size > 0) {
+            shiftOps.forEach(opName => {
+              opsFaltantesSet.add(opName.split(' ')[0]);
+            });
+          } else if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
+            operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').slice(0, 5).forEach(o => {
+              opsFaltantesSet.add(o.name.split(' ')[0]);
+            });
+          }
         }
 
         const opsFaltantes = Array.from(opsFaltantesSet);
@@ -43862,19 +43869,46 @@ CONFIGURACIÓN DE CONTEXTO:
           slot: slotKey,
           missingCount: count,
           missingOps: opsFaltantes,
-          sender: 'monitor_ia'
+          sender: 'monitor_ia',
+          isForced: !!isForced
         };
 
         console.log(`[SEGUIMIENTO-30MIN] 🚨 Emitiendo alerta de tareas (${count} pendientes):`, alertText);
         window.emitirAlertaTareaGlobal(payload);
+
+        if (isForced && typeof Swal !== 'undefined') {
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'warning',
+            title: '⚠️ Chequeo de Media Hora Emitido',
+            text: `Alerta transmitida a todas las sesiones y al TV (${count} operadores evaluados).`,
+            showConfirmButton: false,
+            timer: 4000,
+            background: '#0f172a',
+            color: '#fff'
+          });
+        }
       } catch (e) {
         console.warn('[SEGUIMIENTO-30MIN] Error al evaluar seguimiento de media hora:', e);
       }
     };
 
     window.forzarVerificacionSeguimientoMediaHora = async function() {
-      window._lastHalfHourAlertTs = 0; // Reset para disparar inmediatamente
-      await window.verificarSeguimientoMediaHora(true);
+      const btn = document.getElementById('btn-test-task-halfhour');
+      if (btn) {
+        btn.textContent = '⏳ Evaluando...';
+        btn.style.opacity = '0.75';
+      }
+      try {
+        window._lastHalfHourAlertTs = 0; // Reset para disparar inmediatamente
+        await window.verificarSeguimientoMediaHora(true);
+      } finally {
+        if (btn) {
+          btn.textContent = '⚠️ Chequeo Media Hora';
+          btn.style.opacity = '1';
+        }
+      }
     };
 
     // Monitoreo de Alertas de Voz por Inactividad & Conversaciones

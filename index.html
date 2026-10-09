@@ -43053,11 +43053,18 @@ CONFIGURACIÓN DE CONTEXTO:
 
     window.reproducirAnuncioVozGlobal = function(val) {
       if (!val) return;
-      let ann = null;
-      try {
-        ann = typeof val === 'string' ? JSON.parse(val) : val;
-      } catch(e) { ann = { text: String(val) }; }
-      if (!ann || !ann.text) return;
+      let ann = val;
+      if (typeof ann === 'string') {
+        try { ann = JSON.parse(ann); } catch(e) {}
+        if (typeof ann === 'string') {
+          try { ann = JSON.parse(ann); } catch(e) {}
+        }
+      }
+      if (!ann) return;
+      if (typeof ann === 'string') {
+        ann = { text: ann, ts: Date.now() };
+      }
+      if (!ann.text) return;
 
       // Si es una alerta de tarea o tiene id de tarea, delegar a reproducirAlertaTareaGlobal
       if (ann.isTask || (ann.id && String(ann.id).startsWith('task_')) || ann.slot || ann.missingOps) {
@@ -43066,14 +43073,26 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       }
 
-      const annId = ann.id || ('ann_' + (ann.ts || Date.now()) + '_' + ann.text.substring(0, 10));
+      const annId = ann.id || ('ann_' + (ann.ts || Date.now()) + '_' + String(ann.text).substring(0, 15));
       window._playedAnnouncements = window._playedAnnouncements || new Set();
       if (window._playedAnnouncements.has(annId)) return;
       
-      const isFresh = ann.ts ? (Math.abs(Date.now() - ann.ts) < 180000) : true;
+      const isFresh = ann.ts ? (Math.abs(Date.now() - ann.ts) < 300000) : true;
       if (!isFresh) return;
 
       window._playedAnnouncements.add(annId);
+      if (window._playedAnnouncements.size > 100) {
+        window._playedAnnouncements.clear();
+        window._playedAnnouncements.add(annId);
+      }
+
+      // Desbloquear audio si estaba suspendido en el TV o navegador
+      try {
+        const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(()=>{});
+        }
+      } catch(e){}
 
       // 1. Sonido obligatorio de alta atención (Doble campana + Tono de alerta)
       if (typeof playBeep === 'function') {
@@ -43087,13 +43106,13 @@ CONFIGURACIÓN DE CONTEXTO:
         if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 600]);
       } catch(e) {}
 
-      // 3. Reproducción por voz hablada OBLIGATORIA e inmediata (TTS)
+      // 3. Reproducción por voz hablada OBLIGATORIA e inmediata (TTS) para TV y todas las pantallas
       setTimeout(() => {
         const fullSpeech = "Atención operadores: " + ann.text;
         if (typeof speakText === 'function') {
-          speakText(fullSpeech);
+          speakText(fullSpeech, { force: true });
         } else if (typeof window.speakText === 'function') {
-          window.speakText(fullSpeech);
+          window.speakText(fullSpeech, { force: true });
         }
       }, 250);
 
@@ -43109,7 +43128,7 @@ CONFIGURACIÓN DE CONTEXTO:
         left: 50%;
         transform: translateX(-50%);
         width: 94%;
-        max-width: 480px;
+        max-width: 520px;
         z-index: 999999999;
         background: linear-gradient(135deg, #0f172a, #1e1b4b);
         border: 2px solid #38bdf8;
@@ -43165,6 +43184,7 @@ CONFIGURACIÓN DE CONTEXTO:
         id: 'ann_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
         text: text,
         ts: Date.now(),
+        isForced: true,
         sender: (typeof currentOpName !== 'undefined' && currentOpName) ? currentOpName : (typeof currentRole !== 'undefined' ? currentRole : 'monitor')
       };
 
@@ -43228,28 +43248,39 @@ CONFIGURACIÓN DE CONTEXTO:
     window.reproducirAlertaTareaGlobal = function(val) {
       if (!val) return;
 
-      let task = null;
-      try {
-        task = typeof val === 'string' ? JSON.parse(val) : val;
-      } catch(e) { task = { text: String(val) }; }
-      if (!task || !task.text) return;
-
-      const isForced = !!task.isForced;
-      if (!isForced && localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+      let task = val;
+      if (typeof task === 'string') {
+        try { task = JSON.parse(task); } catch(e) {}
+        if (typeof task === 'string') {
+          try { task = JSON.parse(task); } catch(e) {}
+        }
+      }
+      if (!task) return;
+      if (typeof task === 'string') {
+        task = { text: task, isForced: true };
+      }
+      if (!task.text) return;
 
       const taskId = task.id || ('task_' + (task.ts || Date.now()) + '_' + String(task.text).substring(0, 15));
       window._playedTaskAlerts = window._playedTaskAlerts || new Set();
-      if (!isForced && window._playedTaskAlerts.has(taskId)) return;
+      if (window._playedTaskAlerts.has(taskId)) return;
 
-      const isFresh = task.ts ? (Math.abs(Date.now() - task.ts) < 180000) : true;
-      if (!isForced && !isFresh) return;
+      const isFresh = task.ts ? (Math.abs(Date.now() - task.ts) < 300000) : true;
+      if (!isFresh) return;
 
       window._playedTaskAlerts.add(taskId);
-
-      // Desbloquear audio si estaba suspendido
-      if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(()=>{});
+      if (window._playedTaskAlerts.size > 100) {
+        window._playedTaskAlerts.clear();
+        window._playedTaskAlerts.add(taskId);
       }
+
+      // Desbloquear audio si estaba suspendido en el TV o navegador
+      try {
+        const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(()=>{});
+        }
+      } catch(e){}
 
       // 1. Sonido obligatorio de alta atención (Chime nítido armónico + campanas)
       if (typeof playBeep === 'function') {
@@ -43264,13 +43295,13 @@ CONFIGURACIÓN DE CONTEXTO:
         if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 700]);
       } catch(e) {}
 
-      // 3. Locución por voz hablada OBLIGATORIA (TTS)
+      // 3. Locución por voz hablada OBLIGATORIA (TTS) para el TV y todas las sesiones
       setTimeout(() => {
         const fullSpeech = task.text.startsWith('⚠️') || task.text.startsWith('Atención') ? task.text : ("Atención equipo: " + task.text);
         if (typeof speakText === 'function') {
-          speakText(fullSpeech, { isTaskAlert: true, force: !!task.isForced });
+          speakText(fullSpeech, { isTaskAlert: true, force: true });
         } else if (typeof window.speakText === 'function') {
-          window.speakText(fullSpeech, { isTaskAlert: true, force: !!task.isForced });
+          window.speakText(fullSpeech, { isTaskAlert: true, force: true });
         }
       }, 350);
 
@@ -43286,7 +43317,7 @@ CONFIGURACIÓN DE CONTEXTO:
         left: 50%;
         transform: translateX(-50%);
         width: 95%;
-        max-width: 520px;
+        max-width: 540px;
         z-index: 999999999;
         background: linear-gradient(135deg, #090d16, #1e1338);
         border: 2px solid #f59e0b;
@@ -43326,12 +43357,12 @@ CONFIGURACIÓN DE CONTEXTO:
           banner.style.transform = 'translateX(-50%) translateY(-20px)';
           setTimeout(() => banner.remove(), 400);
         }
-      }, 18000);
+      }, 20000);
     };
 
     window.emitirAlertaTareaGlobal = function(taskPayload) {
       if (!taskPayload || !taskPayload.text) return;
-      if (!taskPayload.isForced && localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+      taskPayload.isForced = true;
 
       // 1. Reproducir inmediatamente en este dispositivo local
       window.reproducirAlertaTareaGlobal(taskPayload);
@@ -43345,7 +43376,7 @@ CONFIGURACIÓN DE CONTEXTO:
           }
         } catch(e){}
 
-        // 3. Guardar en Supabase kv_store para persistencia
+        // 3. Guardar en Supabase kv_store para persistencia en todas las pestañas y TV
         _sb.from('kv_store').upsert({
           key: 'rr_last_task_alert',
           value: JSON.stringify(taskPayload)

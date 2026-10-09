@@ -42687,7 +42687,9 @@ CONFIGURACIÓN DE CONTEXTO:
       
       if (alertType === 'voice') {
         const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
-        if (current === bEnabled && !isLocal) return; // Ya se encuentra en el estado deseado
+        
+        // 🛡️ DEDUPLICACIÓN ESTRICTA: Si ya estamos en ese estado y no es click local, no hacer nada para evitar loops
+        if (current === bEnabled && !isLocal) return;
 
         if (typeof _origSetItem === 'function') {
           _origSetItem('rr_voice_alerts_enabled', bEnabled ? 'true' : 'false');
@@ -42704,12 +42706,12 @@ CONFIGURACIÓN DE CONTEXTO:
           window.updateVoiceAlertBtnUI();
         }
 
-        // Notificar por BroadcastChannel a la extensión de Chrome y TV
-        if (isLocal || (sender && !sender.includes('BroadcastChannel'))) {
+        // Notificar por BroadcastChannel solo si fue acción local directa
+        if (isLocal) {
           try {
             const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
             bc.postMessage({ type: 'VOICE_ALERTS_CONFIG', enabled: bEnabled, sender: sender || 'Admin' });
-            setTimeout(() => bc.close(), 1000);
+            setTimeout(() => bc.close(), 500);
           } catch(e) {}
         }
 
@@ -42734,6 +42736,9 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       } else if (alertType === 'task') {
         const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+        
+        // 🛡️ DEDUPLICACIÓN ESTRICTA: Si ya estamos en ese estado y no es click local, no hacer nada para evitar loops
+        if (current === bEnabled && !isLocal) return;
 
         if (typeof _origSetItem === 'function') {
           _origSetItem('rr_task_alerts_enabled', bEnabled ? 'true' : 'false');
@@ -42750,16 +42755,14 @@ CONFIGURACIÓN DE CONTEXTO:
           window.updateTaskAlertBtnUI();
         }
 
-        // Notificar por BroadcastChannel a la extensión de Chrome y TV
-        if (isLocal || (sender && !sender.includes('BroadcastChannel'))) {
+        // Notificar por BroadcastChannel solo si fue acción local directa
+        if (isLocal) {
           try {
             const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
             bc.postMessage({ type: 'TASK_ALERTS_CONFIG', enabled: bEnabled, sender: sender || 'Admin' });
-            setTimeout(() => bc.close(), 1000);
+            setTimeout(() => bc.close(), 500);
           } catch(e) {}
         }
-
-        if (current === bEnabled && !isLocal) return;
 
         if (!bEnabled) {
           if (!isLocal) {
@@ -42773,11 +42776,10 @@ CONFIGURACIÓN DE CONTEXTO:
         } else {
           window._taskAlertsActivatedTs = Date.now();
           window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000);
-          if (typeof playBeep === 'function') {
-            playBeep('task');
-            setTimeout(() => playBeep('bell'), 150);
-          }
           if (!isLocal) {
+            if (typeof playBeep === 'function') {
+              playBeep('task');
+            }
             if (typeof _toastSync === 'function') {
               _toastSync('📋 Alertas de Tareas activadas remotamente (' + (sender || 'Admin') + ')', false);
             }
@@ -42842,27 +42844,23 @@ CONFIGURACIÓN DE CONTEXTO:
       const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
       const next = !current;
       
-      // 1. Aplicar localmente de inmediato
+      // 1. Aplicar localmente de inmediato (isLocal = true)
       window.aplicarConfiguracionAlertasRemotas('voice', next, 'Admin Local', true);
       
-      // 2. Audio de confirmación local garantizado
+      // 2. Audio de confirmación local garantizado y limpio
       if (next) {
         if (typeof playBeep === 'function') {
           playBeep('coin');
         }
         if (typeof window.speakText === 'function') {
-          setTimeout(() => {
-            window.speakText("Alertas de voz activadas", { force: true });
-          }, 200);
+          window.speakText("Alertas de voz activadas", { force: true });
         }
       } else {
         if (typeof playBeep === 'function') {
           playBeep('pulse');
         }
         if (typeof window.speakText === 'function') {
-          setTimeout(() => {
-            window.speakText("Alertas de voz desactivadas", { force: true });
-          }, 150);
+          window.speakText("Alertas de voz desactivadas", { force: true });
         }
       }
 
@@ -42899,29 +42897,28 @@ CONFIGURACIÓN DE CONTEXTO:
 
     window.setTaskAlertsEnabled = function(next, sender) {
       const bNext = (next === true || next === 'true');
+      const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
 
-      // 1. Aplicar localmente de inmediato
+      // Si ya está en ese estado exacto, no repetir para evitar dobles llamadas
+      if (current === bNext) return;
+
+      // 1. Aplicar localmente de inmediato (isLocal = true)
       window.aplicarConfiguracionAlertasRemotas('task', bNext, sender || 'Admin Local', true);
 
-      // 2. Audio de confirmación local garantizado
+      // 2. Audio de confirmación local garantizado y limpio
       if (bNext) {
         if (typeof playBeep === 'function') {
           playBeep('task');
-          setTimeout(() => playBeep('bell'), 160);
         }
         if (typeof window.speakText === 'function') {
-          setTimeout(() => {
-            window.speakText("Alertas de tareas activadas", { isTaskAlert: true, force: true });
-          }, 250);
+          window.speakText("Alertas de tareas activadas", { isTaskAlert: true, force: true });
         }
       } else {
         if (typeof playBeep === 'function') {
           playBeep('pulse');
         }
         if (typeof window.speakText === 'function') {
-          setTimeout(() => {
-            window.speakText("Alertas de tareas desactivadas", { isTaskAlert: true, force: true });
-          }, 150);
+          window.speakText("Alertas de tareas desactivadas", { isTaskAlert: true, force: true });
         }
       }
 
@@ -42955,7 +42952,7 @@ CONFIGURACIÓN DE CONTEXTO:
         }).catch(e => console.warn('[ALERT-SYNC] Error persistiendo en Supabase:', e));
       }
 
-      // 5. Sincronizar con backend Node.js para que todas las extensiones lo reciban
+      // 5. Sincronizar con backend Node.js
       try {
         fetch('https://ryr-titan-backend.onrender.com/api/tasks/config', {
           method: 'POST',

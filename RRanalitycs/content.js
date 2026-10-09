@@ -61,6 +61,7 @@
   let lastUserInteraction = Date.now();
   const AFK_THRESHOLD_SECONDS = 300;
 
+  let configuredSlaDurationSeconds = 120; // Tiempo de respuesta por defecto (2 minutos)
   let activeSlaTimers = {};
   let finedTimerKeys = new Set();
   let syncedChatsMemory = new Set();
@@ -69,8 +70,9 @@
   let isSupervisorChatOpen = false;
   let zeroCreditsClientsSet = new Set();
 
-  // CONTADOR DE REINCIDENCIAS DEL FIREWALL
+  // REGISTRO DE ALERTAS E INFRACCIONES DETALLADAS DEL FIREWALL
   let firewallInfractionsCount = 0;
+  let liveInfractionsLog = [];
 
   const PROSPECTING_MIN_QUOTA = 10;
   const PROSPECTING_CYCLE_DURATION = 1800; // 30 min
@@ -85,7 +87,9 @@
     'instagram', 'telegram', 'diner', 'transferenc', 'pay', 'cash', 'paypal',
     'when we meet', 'when i visit you', 'book a flight', 'hotel', 'meet up',
     'airport', 'tickets', 'my flight', 'in person', 'flight to', 'flying to',
-    'visit you', 'come see you', 'ticket to'
+    'visit you', 'come see you', 'ticket to', 'where are you from', 'where do you live',
+    'where r u from', 'where you from', 'de donde eres', 'donde vives', 'what city',
+    'which city', 'what country', 'marry me', 'casarnos', 'matrimonio'
   ];
 
   // 2. REGISTRO DE ACTIVIDAD HUMANA
@@ -182,6 +186,10 @@
       chrome.storage.local.get(null, (data) => {
         if (!isContextValid() || !data) return;
         
+        if (data.configuredSlaDurationSeconds) {
+          configuredSlaDurationSeconds = Number(data.configuredSlaDurationSeconds) || 120;
+        }
+
         if (data.activeSlaTimers && typeof data.activeSlaTimers === 'object') {
           activeSlaTimers = { ...data.activeSlaTimers };
         }
@@ -205,6 +213,9 @@
         }
 
         if (data.firewallInfractionsCount) firewallInfractionsCount = data.firewallInfractionsCount;
+        if (Array.isArray(data.liveInfractionsLog)) {
+          liveInfractionsLog = [...data.liveInfractionsLog];
+        }
 
         sessionData = {
           operator: data.operator || 'walther',
@@ -260,7 +271,10 @@
   function persistFirewallInfractions() {
     if (!isContextValid()) return;
     try {
-      chrome.storage.local.set({ firewallInfractionsCount });
+      chrome.storage.local.set({
+        firewallInfractionsCount,
+        liveInfractionsLog: liveInfractionsLog.slice(0, 50)
+      });
     } catch (e) {}
   }
 
@@ -300,9 +314,9 @@
         const serverMessages = [...data.messages];
         const seenIds = new Set(serverMessages.map(m => String(m.id)));
         
-        // Mantener mensajes locales optimistas no confirmados
+        // Mantener mensajes locales optimistas temporales que aún no están en el servidor
         supervisorMessagesHistory.forEach(localM => {
-          if (!seenIds.has(String(localM.id))) {
+          if (String(localM.id).startsWith('op_tmp_') && !seenIds.has(String(localM.id))) {
             serverMessages.push(localM);
             seenIds.add(String(localM.id));
           }
@@ -317,10 +331,16 @@
         if (supChatBtn) {
           if (unreadSupMessages.length > 0 && !isSupervisorChatOpen) {
             supChatBtn.classList.add('unread');
-            supChatBtn.innerText = `💬 Chat Supervisor (${unreadSupMessages.length})`;
+            supChatBtn.style.setProperty('background', 'linear-gradient(135deg, #dc2626, #b91c1c)', 'important');
+            supChatBtn.style.setProperty('border-color', '#f87171', 'important');
+            supChatBtn.style.setProperty('box-shadow', '0 0 10px rgba(239,68,68,0.7)', 'important');
+            supChatBtn.innerText = `💬 Chat Sup (${unreadSupMessages.length} NUEVO${unreadSupMessages.length > 1 ? 'S' : ''})`;
           } else {
             supChatBtn.classList.remove('unread');
-            supChatBtn.innerText = `💬 Chat Supervisor`;
+            supChatBtn.style.removeProperty('background');
+            supChatBtn.style.removeProperty('border-color');
+            supChatBtn.style.removeProperty('box-shadow');
+            supChatBtn.innerText = `💬 Chat Sup`;
           }
         }
 
@@ -347,34 +367,35 @@
       top: 45px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.95);
+      background: rgba(15, 23, 42, 0.98);
       backdrop-filter: blur(16px);
-      border: 2px solid #6366f1;
+      border: 2px solid #818cf8;
       color: #ffffff;
       padding: 12px 16px;
       border-radius: 10px;
       font-family: system-ui, sans-serif;
       font-size: 12px;
       z-index: 2147483647;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 15px rgba(99, 102, 241, 0.5);
       display: flex;
       flex-direction: column;
       gap: 8px;
-      width: 400px;
+      width: 420px;
       max-width: 92%;
+      animation: ryrToastSlide 0.25s ease-out;
     `;
 
     banner.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-weight:900; color:#a5b4fc; letter-spacing:0.5px;">📢 MENSAJE DEL SUPERVISOR:</span>
+        <span style="font-weight:900; color:#c7d2fe; letter-spacing:0.5px;">📢 MENSAJE DIRECTO DEL SUPERVISOR:</span>
         <span id="btn-close-sup-banner" style="cursor:pointer; font-size:16px; color:#94a3b8; line-height:1;">✕</span>
       </div>
-      <div style="font-size:12px; line-height:1.4; color:#fde68a; font-weight:500;">
+      <div style="font-size:12px; line-height:1.4; color:#fde68a; font-weight:500; background:rgba(30,27,75,0.6); padding:8px 10px; border-radius:6px; border-left:3px solid #818cf8;">
         ${text}
       </div>
       <div style="display:flex; gap:6px;">
-        <input type="text" id="input-reply-sup" placeholder="Responder al supervisor..." style="flex:1; padding:6px 10px; background:rgba(6,9,19,0.8); border:1px solid #3730a3; color:#fff; border-radius:5px; font-size:11px; outline:none;">
-        <button id="btn-reply-sup" style="background:#6366f1; color:#fff; border:none; padding:6px 12px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:11px;">Enviar</button>
+        <input type="text" id="input-reply-sup" placeholder="Responder al supervisor..." style="flex:1; padding:7px 10px; background:rgba(6,9,19,0.9); border:1px solid #4f46e5; color:#fff; border-radius:5px; font-size:11px; outline:none;">
+        <button id="btn-reply-sup" style="background:#6366f1; color:#fff; border:none; padding:7px 14px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:11px;">Enviar</button>
       </div>
     `;
 
@@ -411,7 +432,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            operatorName: sessionData.operator,
+            operatorName: sessionData.operator || 'walther',
             text: replyText
           })
         });
@@ -497,6 +518,7 @@
           const item = supervisorMessagesHistory.find(m => m.id === tempId);
           if (item) item.id = resData.id;
         }
+        checkSupervisorDirectMessages();
       } catch (e) {}
     };
 
@@ -521,7 +543,7 @@
 
     checkSupervisorDirectMessages();
 
-    // Iniciar sondeo en vivo cada 2s mientras esté abierto el modal
+    // Iniciar sondeo en vivo cada 1.5s mientras esté abierto el modal
     if (supervisorChatPollTimer) clearInterval(supervisorChatPollTimer);
     supervisorChatPollTimer = setInterval(() => {
       if (isSupervisorChatOpen) {
@@ -530,7 +552,7 @@
         clearInterval(supervisorChatPollTimer);
         supervisorChatPollTimer = null;
       }
-    }, 2000);
+    }, 1500);
   }
 
   window.editSupervisorMsgFromHud = async (msgId, currentText) => {
@@ -662,52 +684,493 @@
   syncBannedWords();
   setInterval(syncBannedWords, 15000);
 
-  // 9. FIREWALL DE 3 CAPAS & PREVENCIÓN DE TRAVEL MISLEADING (TM)
-  function checkViolationInText(text) {
-    if (!text || text.length < 2) return false;
-    const lower = text.toLowerCase();
-    return bannedRoots.some(root => lower.includes(root.toLowerCase()));
+  // 9. FIREWALL MULTILINGÜE DE 3 CAPAS & PREVENCIÓN DE TRAVEL MISLEADING (TM)
+  
+  // Detección inteligente de si el cliente preguntó explícitamente por países, origen, partidos, juegos o equipos
+  function didClientExplicitlyAskCountryOrContext() {
+    const cleanClientId = getExactNumericClientId() || 'user';
+    const history = persistentClientChatHistoryMap.get(cleanClientId);
+    if (history && history.size > 0) {
+      const list = Array.from(history.values()).slice(-10);
+      for (let i = list.length - 1; i >= 0; i--) {
+        const msg = list[i];
+        if (!msg.isOperator) {
+          const txt = (msg.text || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          
+          // 1. Pregunta explícita de origen o ubicación
+          if (
+            /\b(where\s+(are|r)\s+(you|u)\s+from|where\s+do\s+(you|u)\s+live|where\s+are\s+you\s+located|what\s+country\s+are\s+you\s+from|what\s+country|which\s+country)\b/i.test(txt) ||
+            /\b(de\s+donde\s+eres|de\s+donde\s+vienes|donde\s+vives|de\s+que\s+pais\s+eres|de\s+que\s+ciudad\s+eres|en\s+que\s+pais\s+estas|que\s+pais)\b/i.test(txt) ||
+            /\b(de\s+onde\s+(voce|vc)\s+(e|mora|vive)|qual\s+o\s+seu\s+pais|qual\s+a\s+sua\s+cidade|qual\s+pais)\b/i.test(txt) ||
+            /\b(d\s*ou\s*tu\s*es|d\s*ou\s*viens\s*tu|ou\s+tu\s+habites|quel\s+pays|di\s+dove\s+sei|dove\s+vivi|quale\s+paese|woher\s+kommst\s+du|wo\s+wohnst\s+du|welches\s+land)\b/i.test(txt) ||
+            /\b(откуда\s+ты|где\s+ты\s+живешь|какая\s+страна)\b/i.test(txt)
+          ) {
+            return true;
+          }
+
+          // 2. Pregunta sobre quién juega, partidos, equipos, copa o deportes
+          if (
+            /\b(quien\s+juega|quienes\s+juegan|que\s+paises\s+juegan|que\s+equipos|cuales\s+equipos|que\s+partido|quien\s+va\s+a\s+jugar|con\s+quien\s+juega|quien\s+juega\s+hoy)\b/i.test(txt) ||
+            /\b(who\s+is\s+playing|who\s+plays|which\s+teams|which\s+countries|what\s+match|who\s+is\s+in\s+the\s+game|who\s+vs\s+who|who\s+plays\s+today)\b/i.test(txt) ||
+            /\b(quem\s+joga|quais\s+paises\s+jogam|quais\s+times|qual\s+jogo|quem\s+joga\s+hoje)\b/i.test(txt) ||
+            /\b(qui\s+joue|quelles\s+equipes|chi\s+gioca|quali\s+squadre|wer\s+spielt|welche\s+mannschaften|кто\s+играет)\b/i.test(txt)
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // Búsqueda de respaldo en las burbujas del DOM
+    const bubbles = document.querySelectorAll('div[class*="dialog-content"] div, div[class*="chat-scroll"] div, div[class*="message"]');
+    for (let el of bubbles) {
+      if (el.innerText && el.innerText.length < 140) {
+        const txt = el.innerText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (
+          /\b(where\s+(are|r)\s+(you|u)\s+from|where\s+do\s+(you|u)\s+live|what\s+country|who\s+is\s+playing|who\s+plays|which\s+teams)\b/i.test(txt) ||
+          /\b(de\s+donde\s+eres|de\s+que\s+pais|quien\s+juega|quienes\s+juegan|que\s+partido|que\s+equipos)\b/i.test(txt) ||
+          /\b(de\s+onde\s+voce\s+e|qual\s+pais|quem\s+joga|quais\s+times)\b/i.test(txt)
+        ) {
+          const isOp = el.querySelector('svg[class*="check"]') || el.innerText.includes('You:') || el.className.includes('right');
+          if (!isOp) return true;
+        }
+      }
+    }
+    return false;
   }
+
+  function checkViolationInText(text) {
+    if (!text || text.length < 2) return null;
+    
+    // Normalización universal (remueve tildes, acentos y diacríticos)
+    const rawLower = text.toLowerCase().trim();
+    const normalized = text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\r\n\t]+/g, " ")
+      .trim();
+
+    // 1. PROHIBICIÓN ESTRICTA: PREGUNTAR AL USUARIO SOBRE PAÍS, CIUDAD O UBICACIÓN (SIEMPRE BLOQUEADO)
+    const countryQuestionPatterns = [
+      /\b(de\s+que\s+pais|de\s+que\s+ciudad|de\s+que\s+estado|de\s+que\s+lugar|de\s+donde\s+eres|de\s+donde\s+vienes|donde\s+vives|en\s+que\s+pais|en\s+que\s+ciudad|en\s+que\s+lugar\s+vives|cual\s+es\s+tu\s+pais|cual\s+es\s+tu\s+ciudad|en\s+que\s+parte\s+vives)\b/i,
+      /\b(what\s+country|what\s+city|which\s+country|which\s+city|where\s+are\s+you\s+from|where\s+do\s+you\s+live|where\s+r\s+u\s+from|what\s+state\s+are\s+you\s+in|what\s+place\s+are\s+you\s+from)\b/i,
+      /\b(de\s+qual\s+pais|de\s+qual\s+cidade|de\s+onde\s+voce\s+e|onde\s+voce\s+mora|onde\s+voce\s+vive|qual\s+o\s+seu\s+pais|qual\s+a\s+sua\s+cidade|qual\s+o\s+seu\s+estado)\b/i,
+      /\b(de\s+quel\s+pays|de\s+quelle\s+ville|d\s*ou\s*tu\s*viens|tu\s+es\s+de\s+quel\s+pays|tu\s+habites\s+dans\s+quel\s+pays)\b/i,
+      /\b(di\s+che\s+paese|di\s+quale\s+citta|di\s+dove\s+sei|dove\s+vivi|in\s+quale\s+paese\s+vivi)\b/i,
+      /\b(aus\s+welchem\s+land|aus\s+welcher\s+stadt|woher\s+kommst\s+du|wo\s+wohnst\s+du)\b/i,
+      /\b(из\s+какой\s+ты\s+страны|в\s+какой\s+стране|откуда\s+ты|где\s+ты\s+живешь)\b/i
+    ];
+
+    for (const pat of countryQuestionPatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
+        const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Pregunta de País';
+        return {
+          type: 'COUNTRY_QUESTION_PROHIBITED',
+          title: '✈️ Pregunta de País / Ubicación no Permitida',
+          sample: matchStr,
+          reason: 'Está prohibido preguntar al usuario de qué país o ciudad es. Las preguntas sobre ubicación son consideradas inducción a Travel Misleading por la plataforma.',
+          solution: 'Pregúntale sobre sus gustos, pasatiempos, trabajo o comida favorita sin mencionar países ni ubicaciones geográficas.',
+          safeHooks: [
+            'Cuéntame, ¿qué es lo que más te apasiona hacer en tus tiempos libres?',
+            '¿Cómo ha estado tu día hoy? ¿Hiciste algo divertido o relajante?',
+            'Tengo curiosidad por saber, ¿cuál es tu comida favorita de todos los tiempos?'
+          ]
+        };
+      }
+    }
+
+    // 2. PROHIBICIÓN ESTRICTA: DECIR QUE HIJOS O FAMILIARES VIVEN EN OTROS PAÍSES O CIUDADES
+    const familyAbroadPatterns = [
+      /\b(mis\s+hijos?\s+(viven|estan|residen|se\s+fueron)|mi\s+hijo\s+(vive|esta|reside)|mi\s+hija\s+(vive|esta|reside)|mis\s+padres\s+(viven|estan)|mi\s+familia\s+(vive|esta)|tengo\s+familia\s+en|tengo\s+hijos\s+en|mis\s+hijos\s+en\s+otro\s+pais)\b/i,
+      /\b(my\s+kids?\s+(live|are|stay)|my\s+children\s+(live|are)|my\s+son\s+(lives|is)|my\s+daughter\s+(lives|is)|my\s+parents\s+live|my\s+family\s+lives|kids\s+in\s+another\s+country)\b/i,
+      /\b(meus\s+filhos?\s+(moram|vivem|estao)|minha\s+filha\s+(mora|vive|esta)|meu\s+filho\s+(mora|vive|esta)|minha\s+familia\s+mora)\b/i,
+      /\b(mes\s+enfants\s+(vivent|habitent)|mon\s+fils\s+vit|ma\s+fille\s+vit|i\s+miei\s+figli\s+vivono|meine\s+kinder\s+leben)\b/i
+    ];
+
+    for (const pat of familyAbroadPatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
+        const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Familia en otro país';
+        return {
+          type: 'FAMILY_ABROAD_PROHIBITED',
+          title: '👨‍👩‍👧 Prohibido Mencionar Familia/Hijos en Otros Países',
+          sample: matchStr,
+          reason: 'No se permite mencionar que tus hijos o familiares viven en otros países. Talkytimes sanciona estos relatos como manipulación de contexto geográfico.',
+          solution: 'Comparte momentos agradables en casa (cocinar, escuchar música, pasear mascotas) sin nombrar países ni distancias geográficas.',
+          safeHooks: [
+            'Hoy estuve cocinando algo delicioso en casa. ¿A ti te gusta cocinar o prefieres salir?',
+            'Me encanta pasar tiempo relajándome con buena música. ¿Qué tipo de música te gusta escuchar?'
+          ]
+        };
+      }
+    }
+
+    // 3. MENCIÓN DE PAÍSES O REVELAR ORIGEN ESPONTÁNEAMENTE (SÓLO SE PERMITE SI EL CLIENTE LO PREGUNTÓ)
+    const clientAskedCountryOrContext = didClientExplicitlyAskCountryOrContext();
+    if (!clientAskedCountryOrContext) {
+      const countryListPatterns = [
+        /\b(colombia|venezuela|mexico|estados\s+unidos|ee\.?\s*uu|usa|spain|espana|argentina|chile|peru|ecuador|brasil|brazil|canada|alemania|germany|francia|france|italia|italy|reino\s+unido|uk|inglaterra|england|portugal|rusia|russia|ucrania|ukraine|cuba|republica\s+dominicana|panama|costa\s+rica|guatemala|honduras|bolivia|uruguay|paraguay)\b/i,
+        /\b(soy\s+de|vivo\s+en|radico\s+en|vengo\s+de|naci\s+en|mi\s+pais\s+es|mi\s+ciudad\s+es)\b/i,
+        /\b(i\s+am\s+from|i\s+live\s+in|i\s+come\s+from|born\s+in|my\s+country\s+is|my\s+city\s+is)\b/i,
+        /\b(sou\s+de|moro\s+em|vivo\s+em|nasci\s+em|meu\s+pais\s+e|minha\s+cidade\s+e)\b/i,
+        /\b(je\s+suis\s+de|je\s+vis\s+a|sono\s+di|ich\s+komme\s+aus|ich\s+lebe\s+in)\b/i
+      ];
+
+      for (const pat of countryListPatterns) {
+        if (pat.test(normalized) || pat.test(rawLower)) {
+          const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Mención de país';
+          return {
+            type: 'UNSOLICITED_ORIGIN_MENTION',
+            title: '🗺️ Mención de País no Solicitada',
+            sample: matchStr,
+            reason: 'El usuario NO ha preguntado por países, partidos ni origen. Solo se pueden nombrar países si el usuario lo pide expresamente (por ejemplo si pregunta "¿quién juega?" o "¿de dónde eres?").',
+            solution: 'Háblale del evento o partido en general sin nombrar países (ej: "Hoy hay un gran juego de la copa"). Si él pregunta "¿quién juega?", en ese momento sí podrás nombrarlos.',
+            safeHooks: [
+              'Hoy hay un partidazo increíble en la copa deportiva. ¿A ti te gusta el fútbol o prefieres otros deportes?',
+              'Hoy tuve un día súper activo y me encanta desconectarme charlando contigo. ¿Cómo va tu día?'
+            ]
+          };
+        }
+      }
+    }
+
+    // 4. PROMESAS DE MATRIMONIO Y COMPROMISOS CONYUGALES (SIEMPRE BLOQUEADO)
+    const marriagePatterns = [
+      /\b(casar(se|nos|me|te)?|casemonos|matrimonio|boda|bodas|compromet(erse|ernos|idos?|erme)|prometid[oa]|espos[oa]s?|marido|marido\s+y\s+mujer|esposo\s+y\s+esposa|pedir\s+(tu|la)\s+mano|anillo\s+de\s+compromiso)\b/i,
+      /\b(marry|marry\s*me|getting\s*married|get\s*married|marriage|wedding|fiancee?|engagement|husband|wife|be\s*my\s*(husband|wife)|propose\s*to\s*me|marry\s*you)\b/i,
+      /\b(casar\s+comigo|quando\s+a\s+gente\s+casar|casamento|noivado|noiv[oa]|meu\s+marido|minha\s+esposa)\b/i,
+      /\b(se\s+marier|mariage|fiancailles|mon\s+mari|ma\s+femme)\b/i,
+      /\b(sposar(si|ci)?|matrimonio|fidanzamento|mio\s+marito|mia\s+moglie)\b/i,
+      /\b(heiraten|ehe|verlobung|mein\s+ehemann|meine\s+ehefrau)\b/i,
+      /\b(жениться|выйти\s+замуж|свадьба|помолвка|муж|жена)\b/i
+    ];
+
+    for (const pat of marriagePatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
+        const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Matrimonio';
+        return {
+          type: 'MARRIAGE_PROMISE',
+          title: '💍 Promesa de Matrimonio Prohibida',
+          sample: matchStr,
+          reason: 'Está prohibido hablar de matrimonio, bodas o referirse al usuario como esposo/marido. Genera expectativas sancionables por la plataforma.',
+          solution: 'Enfócate en construir química sincera y una amistad bonita sin promesas de compromiso conyugal ni bodas.',
+          safeHooks: [
+            'Me encanta lo bien que nos entendemos charlando. ¿Qué es lo que más valoras en una bonita amistad?',
+            'Cada charla contigo es muy especial. Cuéntame algo que te haya hecho sonreír hoy.'
+          ]
+        };
+      }
+    }
+
+    // 5. ENCUENTROS EN PERSONA, VUELOS, HOTELES, AEROPUERTOS Y VIAJES (TRAVEL MISLEADING - SIEMPRE BLOQUEADO)
+    const tmMeetingPatterns = [
+      /\b(vernos\s+en\s+persona|conocernos\s+en\s+persona|estar\s+en\s+persona|cuando\s+nos\s+vemos|cuando\s+vienes|ir\s+a\s+verte|venir\s+a\s+verme|visitarte|visitarme|puedes\s+venir)\b/i,
+      /\b(comprar\s+(el\s+)?vuelo|comprar\s+boletos?|comprar\s+pasajes?|boletos?\s+(de\s+)?avion|pasajes?\s+aereos?|mi\s+vuelo|tu\s+vuelo)\b/i,
+      /\b(aeropuerto|hotel|airbnb|motel|resort|viajar\s+juntos|hacer\s+un\s+viaje|nuestro\s+viaje|viajar\s+a\s+verte)\b/i,
+      /\b(meet\s*up|in\s*person|come\s*see\s*(me|you)|come\s*visit\s*(me|you)|when\s*(will|can)\s*you\s*visit|book\s*(a\s*)?flight|flight\s*ticket|airport|hotel|vacation\s*together|travel\s*together)\b/i,
+      /\b(conhecer\s+pessoalmente|se\s+ver\s+pessoalmente|quando\s+voce\s+vem|comprar\s+passagem|passagem\s+aerea|aeroporto|hotel|viajar\s+juntos)\b/i,
+      /\b(se\s+voir\s+en\s+vrai|rencontrer\s+en\s+personne|billet\s+d\s*avion|vol\s+pour|aeroport|hotel)\b/i,
+      /\b(incontrarci\s+di\s+persona|vederci\s+di\s+persona|biglietto\s+aereo|volo\s+per|aeroporto|hotel)\b/i,
+      /\b(personlich\s+treffen|in\s+person\s+treffen|flugticket|flug\s+nach|flughafen|hotel)\b/i,
+      /\b(когда\s+увидимся|когда\s+встретимся|приедешь\s+ко\s+мне|прилетишь\s+ко\s+мне|встретиться\s+вживую|увидеться\s+вживую|билет\s+на\s+самолет|самолет|аэропорт|отель)\b/i
+    ];
+
+    for (const pat of tmMeetingPatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
+        const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Encuentro / Vuelo';
+        return {
+          type: 'TRAVEL_MISLEADING_MEETING',
+          title: '✈️ Encuentro / Vuelos en Persona (Travel Misleading)',
+          sample: matchStr,
+          reason: 'Prohibido proponer encuentros físicos, visitas, compra de vuelos o estadías en hoteles. Infracción grave de Travel Misleading ($10.000 COP de multa y riesgo de baneo).',
+          solution: 'Mantén el vínculo enfocado en el presente virtual. Comparte anécdotas, fotos y pregúntale por sus momentos favoritos del día.',
+          safeHooks: [
+            'Me fascina pasar este rato contigo compartiendo nuestras historias. ¿Qué planes tienes para esta noche?',
+            'Siempre me alegras el día con tus mensajes. ¿Qué tal estuvo tu jornada hoy?'
+          ]
+        };
+      }
+    }
+
+    // 6. FUGA DE CONTACTO / DATOS PRIVADOS MULTILINGÜE
+    const contactPatterns = [
+      /\bwhatsapp\b/i, /\btelegram\b/i, /\binstagram\b/i, /\bskype\b/i, /\bfacebook\b/i, /\btiktok\b/i,
+      /\bemail\b/i, /\bcorreo\b/i, /\bgmail\b/i, /\bhotmail\b/i, /\byahoo\b/i, /\boutlook\b/i,
+      /\b(phone\s*number|numero\s*de\s*telefono|numero\s*de\s*celular|meu\s*numero|mi\s*numero|my\s*number|mon\s*numero|meu\s*zap|meu\s*whats)\b/i,
+      /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/,
+      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
+    ];
+
+    for (const pat of contactPatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
+        const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Contacto externo';
+        return {
+          type: 'CONTACT_LEAK',
+          title: '📱 Fuga de Contacto Externo',
+          sample: matchStr,
+          reason: 'Está prohibido compartir números telefónicos, redes sociales o correos electrónicos fuera de la plataforma.',
+          solution: 'Invítalo a seguir disfrutando y compartiendo anécdotas exclusivas de forma segura dentro de este chat.',
+          safeHooks: [
+            'Me encanta charlar contigo por aquí de forma segura. Cuéntame más sobre lo que hiciste hoy.'
+          ]
+        };
+      }
+    }
+
+    // 7. MANIPULACIÓN DE REGALOS / TOKENS / DINERO MULTILINGÜE
+    const giftPatterns = [
+      /\b(send|buy)\s*me\s*(a\s*)?(gift|present|token|money|credit)\b/i,
+      /\bgift\s*me\b/i,
+      /\b(regalame|comprame|mandame)\s*(un\s*)?(regalo|detalle|token|moneda|dinero)\b/i,
+      /\b(me\s+da\s+um\s+presente|me\s+manda\s+um\s+presente|compra\s+um\s+presente|me\s+manda\s+dinheiro|me\s+manda\s+tokens)\b/i,
+      /\bpaypal\b/i, /\bcash\s*app\b/i, /\bwestern\s*union\b/i, /\btransferenc\b/i, /\bcrypto\b/i, /\bpix\b/i
+    ];
+
+    for (const pat of giftPatterns) {
+      if (pat.test(normalized) || pat.test(rawLower)) {
+        const matchStr = normalized.match(pat)?.[0] || rawLower.match(pat)?.[0] || 'Solicitud de regalo';
+        return {
+          type: 'GIFT_MANIPULATION',
+          title: '🎁 Manipulación de Regalos / Tokens Prohibida',
+          sample: matchStr,
+          reason: 'Está prohibido pedir o manipular al usuario para que envíe regalos, tokens o dinero.',
+          solution: 'Construye valor con fotos y cartas emotivas para que el usuario gaste tokens de forma voluntaria.',
+          safeHooks: [
+            'Me encanta compartir momentos contigo. Cuéntame, ¿qué es lo que más te gusta de nuestras charlas?'
+          ]
+        };
+      }
+    }
+
+    // 8. Raíces dinámicas adicionales desde backend
+    for (const root of bannedRoots) {
+      if (root && root.length > 2 && (normalized.includes(root.toLowerCase()) || rawLower.includes(root.toLowerCase()))) {
+        return {
+          type: 'CUSTOM_BANNED_ROOT',
+          title: `🛡️ Término Restringido ("${root}")`,
+          sample: root,
+          reason: `El término "${root}" está restringido por la administración de la agencia.`,
+          solution: 'Reemplaza la frase por una pregunta sobre intereses generales o experiencias cotidianas.',
+          safeHooks: [
+            'Cuéntame algo curioso o divertido que te haya pasado esta semana.'
+          ]
+        };
+      }
+    }
+
+    return null;
+  }
+
+  // RENDERIZADOR DE LA NUBE DE INFORMACIÓN FLOTANTE (NO INVASIVA / TIPO CLOUD POPOVER)
+  function renderFirewallSolutionCard(violation, targetInput) {
+    let cloud = document.getElementById('ryr-firewall-cloud-popover');
+    
+    if (!violation) {
+      if (cloud) cloud.remove();
+      return;
+    }
+
+    if (!cloud) {
+      cloud = document.createElement('div');
+      cloud.id = 'ryr-firewall-cloud-popover';
+      cloud.style.cssText = `
+        position: fixed;
+        bottom: 85px;
+        right: 24px;
+        width: 390px;
+        max-width: 90vw;
+        background: linear-gradient(135deg, rgba(8, 12, 26, 0.98), rgba(24, 7, 24, 0.98));
+        border: 2px solid #ef4444;
+        border-radius: 14px;
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.95), 0 0 30px rgba(239, 68, 68, 0.4);
+        backdrop-filter: blur(25px);
+        color: #fff;
+        font-family: 'Space Grotesk', system-ui, sans-serif;
+        font-size: 12px;
+        z-index: 2147483640;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px 16px;
+        animation: ryrCloudPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      `;
+      document.body.appendChild(cloud);
+    }
+
+    const safeHooks = Array.isArray(violation.safeHooks) ? violation.safeHooks : [];
+
+    cloud.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(239,68,68,0.3); padding-bottom:8px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.3rem;">☁️</span>
+          <div>
+            <div style="font-weight:900; color:#fca5a5; font-size:12px; letter-spacing:0.5px;">
+              ${violation.title}
+            </div>
+            <div style="font-size:10px; color:#94a3b8;">Nube de Consejo Táctico Anti-TM</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="background:#ef4444; color:#fff; font-size:9.5px; font-weight:bold; padding:2px 7px; border-radius:4px;">
+            🚫 ENVÍO BLOQUEADO
+          </span>
+          <button type="button" id="ryr-cloud-close-btn" style="background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; font-weight:bold; padding:0 4px;" title="Cerrar nube">✕</button>
+        </div>
+      </div>
+
+      <div style="background:rgba(0,0,0,0.55); border-left:3px solid #ef4444; padding:6px 10px; border-radius:4px; font-size:11.5px; color:#fecaca;">
+        <b>Texto detectado:</b> <code style="background:rgba(239,68,68,0.25); color:#fff; padding:2px 6px; border-radius:3px; font-weight:bold;">"${violation.sample}"</code>
+      </div>
+
+      <div style="font-size:11px; color:#cbd5e1; line-height:1.4;">
+        ⚠️ <b>¿Por qué no se puede enviar?:</b> ${violation.reason}
+      </div>
+
+      <div style="background:rgba(16,185,129,0.15); border:1px dashed #10b981; padding:8px 12px; border-radius:6px; font-size:11.5px; color:#6ee7b7; line-height:1.4;">
+        💡 <b>Cómo cambiar la conversación:</b> ${violation.solution}
+      </div>
+
+      <!-- BOTONES DE GANCHOS SEGUROS PARA INSERTAR EN 1 CLIC -->
+      <div style="display:flex; flex-direction:column; gap:5px; margin-top:2px;">
+        <span style="font-size:10px; color:#94a3b8; font-weight:bold;">⚡ Sugerencias seguras (Clic para insertar y desbloquear):</span>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${safeHooks.map(hook => `
+            <button type="button" class="ryr-firewall-safe-hook-btn" data-hook="${encodeURIComponent(hook)}" style="background:#090d1f; color:#38bdf8; border:1px solid #0284c7; padding:6px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; transition:all 0.2s; text-align:left; line-height:1.3;">
+              💬 "${hook}"
+            </button>
+          `).join('')}
+        </div>
+        <button type="button" id="ryr-firewall-clear-btn" style="background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid #ef4444; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; font-weight:bold; margin-top:3px;">
+          🧹 Borrar texto y desbloquear
+        </button>
+      </div>
+    `;
+
+    // Botón cerrar nube
+    const closeBtn = cloud.querySelector('#ryr-cloud-close-btn');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        cloud.remove();
+      };
+    }
+
+    // Vincular clics de ganchos seguros
+    cloud.querySelectorAll('.ryr-firewall-safe-hook-btn').forEach(b => {
+      b.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const hookText = decodeURIComponent(b.getAttribute('data-hook') || '');
+        if (targetInput && hookText) {
+          setInputValueSafely(targetInput, hookText);
+          cloud.remove();
+          showFirewallToast('✨ Sugerencia segura aplicada. ¡Botón de envío desbloqueado!', 'success');
+        }
+      };
+    });
+
+    const clearBtn = cloud.querySelector('#ryr-firewall-clear-btn');
+    if (clearBtn) {
+      clearBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (targetInput) {
+          setInputValueSafely(targetInput, '');
+          cloud.remove();
+          showFirewallToast('🧹 Texto borrado. Bloqueo levantado.', 'success');
+        }
+      };
+    }
+  }
+
+  let lastReportedInfractionText = '';
+  let lastReportedInfractionTime = 0;
 
   function enforceFirewall(e) {
     const inputs = document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]');
     let anyViolation = false;
+    let currentViolationInfo = null;
+    let activeViolatingInput = null;
 
     inputs.forEach(input => {
       if (input.id?.includes('intel') || input.id?.includes('search') || input.id?.includes('reply') || input.id?.includes('sup')) return;
       
       const text = (input.value || input.innerText || '').trim();
-      const hasViolation = checkViolationInText(text);
+      const violation = checkViolationInText(text);
 
-      if (hasViolation) {
+      if (violation) {
         anyViolation = true;
+        currentViolationInfo = violation;
+        activeViolatingInput = input;
         input.style.setProperty('border', '2px solid #ef4444', 'important');
+        input.style.setProperty('box-shadow', '0 0 12px rgba(239, 68, 68, 0.6)', 'important');
+
+        // Registrar infracción en memoria y backend de inmediato (con debounce inteligente)
+        const now = Date.now();
+        if (text !== lastReportedInfractionText || (now - lastReportedInfractionTime > 4000)) {
+          lastReportedInfractionText = text;
+          lastReportedInfractionTime = now;
+
+          const { clientName } = getExactClientProfileData();
+          const infractionRecord = {
+            id: `inf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            timestamp: Date.now(),
+            timeFormatted: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            rule: violation.type,
+            ruleTitle: violation.title,
+            snippet: text.length > 160 ? text.substring(0, 160) + '...' : text,
+            blockedPhrase: violation.sample,
+            reason: violation.reason,
+            solution: violation.solution,
+            clientName: clientName || 'Chat en Vivo',
+            operator: sessionData.operator || 'walther',
+            profile: sessionData.profileName || 'HORACIO'
+          };
+          liveInfractionsLog.unshift(infractionRecord);
+          if (liveInfractionsLog.length > 50) liveInfractionsLog.pop();
+
+          firewallInfractionsCount++;
+          persistFirewallInfractions();
+          sendTelemetry(true);
+
+          // Enviar inmediatamente a endpoint backend
+          try {
+            fetch(`${API_URL}/api/fines/report-infraction`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ infraction: infractionRecord, profile: sessionData.profileName, operator: sessionData.operator })
+            }).catch(() => {});
+          } catch (ePost) {}
+        }
 
         if (e && e.type === 'keydown' && e.key === 'Enter' && e.target === input) {
           e.preventDefault();
           e.stopPropagation();
-          showFirewallToast('🚨 Infracción de Protocolo: Prohibido Travel Misleading o fuga de datos.');
-          firewallInfractionsCount++;
-          persistFirewallInfractions();
-          sendTelemetry(true);
+          showFirewallToast(`🚨 Infracción Bloqueada: ${violation.title}.`);
+          playAlertChime();
         }
       } else {
-        if (input.style.borderColor === 'rgb(239, 68, 68)') {
+        if (input.style.borderColor === 'rgb(239, 68, 68)' || input.style.border.includes('239, 68, 68')) {
           input.style.removeProperty('border');
+          input.style.removeProperty('box-shadow');
         }
       }
     });
 
-    const sendButtons = document.querySelectorAll('button, [role="button"], div[class*="send"]');
+    // Renderizar o remover el banner de solución interactiva
+    renderFirewallSolutionCard(currentViolationInfo, activeViolatingInput);
+
+    // Localizar y bloquear TODOS los botones de envío en el chat y cartas
+    const sendButtons = document.querySelectorAll('button, [role="button"], div[class*="send" i], a[class*="send" i]');
     sendButtons.forEach(btn => {
-      const btnText = btn.innerText.toLowerCase();
-      const isSendBtn = (btnText.includes('send') || btnText.includes('enviar') || btn.querySelector('svg') || (btn.className && btn.className.toLowerCase().includes('send'))) &&
+      const btnText = (btn.innerText || btn.textContent || '').toLowerCase().trim();
+      const isSendBtn = (btnText === 'send' || btnText.startsWith('send') || btnText === 'enviar' || btn.querySelector('svg') || (btn.className && btn.className.toLowerCase().includes('send'))) &&
                         !btn.classList.contains('ryr-row-extract-btn') && 
                         !btn.classList.contains('ryr-btn-logout') &&
                         !btn.classList.contains('ryr-btn-intel') &&
                         !btn.classList.contains('ryr-btn-handover') &&
                         !btn.classList.contains('ryr-chat-hooks-btn') &&
                         !btn.classList.contains('ryr-letter-drafter-btn') &&
+                        !btn.classList.contains('ryr-firewall-safe-hook-btn') &&
                         !btn.classList.contains('ryr-btn-sup-chat');
 
       if (isSendBtn) {
@@ -715,9 +1178,11 @@
           btn.classList.add('ryr-btn-blocked-force');
           btn.disabled = true;
           btn.style.setProperty('pointer-events', 'none', 'important');
-          btn.style.setProperty('filter', 'grayscale(100%)', 'important');
-          btn.style.setProperty('opacity', '0.45', 'important');
-          btn.style.setProperty('background', '#9ca3af', 'important');
+          btn.style.setProperty('filter', 'grayscale(90%)', 'important');
+          btn.style.setProperty('opacity', '0.35', 'important');
+          btn.style.setProperty('background', '#ef4444', 'important');
+          btn.style.setProperty('cursor', 'not-allowed', 'important');
+          btn.setAttribute('title', `🚨 ENVÍO BLOQUEADO: ${currentViolationInfo?.title || 'Travel Misleading detectado'}`);
         } else {
           btn.classList.remove('ryr-btn-blocked-force');
           btn.disabled = false;
@@ -725,14 +1190,55 @@
           btn.style.removeProperty('filter');
           btn.style.removeProperty('opacity');
           btn.style.removeProperty('background');
+          btn.style.removeProperty('cursor');
+          btn.removeAttribute('title');
         }
       }
     });
   }
 
+  let ryrSharedAudioCtx = null;
+  function initRyrAudioGesture() {
+    try {
+      if (!ryrSharedAudioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          ryrSharedAudioCtx = new AudioContextClass();
+        }
+      }
+      if (ryrSharedAudioCtx && ryrSharedAudioCtx.state === 'suspended') {
+        ryrSharedAudioCtx.resume().catch(() => {});
+      }
+    } catch (e) {}
+  }
+  window.addEventListener('pointerdown', initRyrAudioGesture, { capture: true, passive: true });
+  window.addEventListener('keydown', initRyrAudioGesture, { capture: true, passive: true });
+  window.addEventListener('click', initRyrAudioGesture, { capture: true, passive: true });
+
   function playAlertChime() {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!ryrSharedAudioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          ryrSharedAudioCtx = new AudioContextClass();
+        }
+      }
+      if (!ryrSharedAudioCtx) return;
+      if (ryrSharedAudioCtx.state === 'suspended') {
+        ryrSharedAudioCtx.resume().then(() => {
+          _soundOscillator(ryrSharedAudioCtx);
+        }).catch(() => {});
+        return;
+      }
+      if (ryrSharedAudioCtx.state === 'running') {
+        _soundOscillator(ryrSharedAudioCtx);
+      }
+    } catch (e) {}
+  }
+
+  function _soundOscillator(ctx) {
+    try {
+      if (!ctx || ctx.state !== 'running') return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
@@ -806,12 +1312,20 @@
   // 10. EXTRACTOR QUIRÚRGICO DE DATOS DE CLIENTE & INYECCIÓN DE AGENCIA
   function sanitizeClientName(raw) {
     if (!raw) return 'Cliente';
-    const clean = raw
-      .split('\n')[0]
+    const firstLine = raw.split('\n')[0].trim();
+    let clean = firstLine
       .replace(/(\d+\s*(minute|hour|day|week|month)s?\s*ago|\ban hour ago\b|\d+\s*[✉💬]|\bonline\b|\btyping\b|\bSearch\b|\bMessages\b)/gi, '')
       .replace(/\s+/g, ' ')
       .replace(/^,\s*/, '')
       .trim();
+
+    // Descartar si es timestamp, fecha o etiqueta de previsualización
+    if (/^\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)?$/i.test(clean) ||
+        /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{0,2}$/i.test(clean) ||
+        /^(?:today|yesterday|hoy|ayer)$/i.test(clean) ||
+        /^(?:you:|tú:|tu:|você:|photo|sticker|audio|video|gift|seen|media|unread|sent)$/i.test(clean)) {
+      return 'Cliente';
+    }
 
     const noisyWords = ['yes', 'no', 'open', 'search', 'messages', 'mail', 'gifts', 'account', 'titan apex', 'mute', 'listened', 'public photos', 'my content'];
     if (noisyWords.includes(clean.toLowerCase()) || clean.length < 2) {
@@ -1117,16 +1631,7 @@
 
     const { clientName, bioData } = getExactClientProfileData();
 
-    // AVISO DE RECARGA EN VIVO
-    if (liveCredits !== null) {
-      const prevCredit = knownClientCreditsMap.get(clientId);
-      if (prevCredit !== undefined && liveCredits > prevCredit) {
-        showFirewallToast(`⚡ ¡RECARGA EN VIVO DETECTADA! ${clientName} recargó (${prevCredit} cr ➔ ${liveCredits} cr).`);
-      }
-      knownClientCreditsMap.set(clientId, liveCredits);
-    }
-
-    // REGISTRO DE ESTADO INICIAL DEL CLIENTE EN EL TURNO (PARA EVALUAR FIDELIZACIÓN REAL)
+    // REGISTRO DE ESTADO INICIAL DEL CLIENTE EN EL TURNO (PARA EVALUAR FIDELIZACIÓN REAL Y ACTIVIDAD DE TURNO)
     const recentChat = parseCurrentChatMessagesBidirectional(clientName);
     const messagesCountNow = recentChat.length;
 
@@ -1134,24 +1639,37 @@
       const isColdAtStart = messagesCountNow === 0;
       shiftInitialClientPostStatus.set(clientId, {
         wasColdAtStart: isColdAtStart,
+        wasZeroCredits: isChatHeaderZeroMessages(),
         initialUnlocked: hasPostsUnlocked,
-        initialCredits: liveCredits || 0,
         messagesCountAtStart: messagesCountNow,
+        rechargeAlertFired: false,
         firstSeen: Date.now()
       });
     }
 
     const initialStatus = shiftInitialClientPostStatus.get(clientId);
-    const unlockedDuringShift = initialStatus && initialStatus.wasColdAtStart && !initialStatus.initialUnlocked && hasPostsUnlocked;
-    const rechargedDuringShift = initialStatus && initialStatus.wasColdAtStart && liveCredits !== null && liveCredits > (initialStatus.initialCredits || 0);
-    const enoughInteraction = initialStatus && initialStatus.wasColdAtStart && (messagesCountNow - initialStatus.messagesCountAtStart) >= 3;
+    const shiftMsgsCount = initialStatus ? Math.max(0, messagesCountNow - initialStatus.messagesCountAtStart) : 0;
+    const shiftPts = shiftMsgsCount * 1;
+    const shiftUSD = (shiftPts * 0.28).toFixed(2);
 
-    if ((unlockedDuringShift || rechargedDuringShift) && enoughInteraction) {
+    const unlockedDuringShift = initialStatus && initialStatus.wasColdAtStart && !initialStatus.initialUnlocked && hasPostsUnlocked;
+    const enoughInteraction = initialStatus && initialStatus.wasColdAtStart && shiftMsgsCount >= 3;
+
+    // DETECCIÓN DETERMINÍSTICA DE RECARGA EN VIVO (Cuando un cliente inactivo/sin saldo reanuda con mensajes pagados)
+    if (initialStatus && (initialStatus.wasColdAtStart || initialStatus.wasZeroCredits) && shiftMsgsCount > 0 && !initialStatus.rechargeAlertFired) {
+      initialStatus.rechargeAlertFired = true;
+      try {
+        playAlertChime();
+        showFirewallToast(`⚡ ¡RECARGA EN VIVO CONFIRMADA! ${clientName} inyectó saldo y reanudó el chat.`);
+      } catch(e){}
+    }
+
+    if ((unlockedDuringShift || initialStatus.rechargeAlertFired) && enoughInteraction) {
       if (!fidelizedClientsMap.has(String(clientId))) {
         fidelizedClientsMap.set(String(clientId), {
           clientId: String(clientId),
           name: clientName,
-          credits: liveCredits || 150,
+          credits: 150,
           profile: sessionData.profileName || 'HORACIO',
           operator: sessionData.operator || 'walther',
           shift: sessionData.shift || 'Mañana'
@@ -1160,7 +1678,7 @@
       }
     }
 
-    // A. Badge de Puntos / Saldo Disponible y Gasto Histórico en Cabecera
+    // A. Badge de Saldo / Estado en Vivo, Gasto Histórico y Botón de Información en Cabecera
     const headerTitle = document.querySelector('div[data-test-id="dialog-header-title"], div[class*="dialog-header"], div[class*="chat-header"]');
     if (headerTitle) {
       try {
@@ -1171,18 +1689,45 @@
           headerTitle.appendChild(badge);
         }
 
-        // 1. Extraer contadores directos de la cabecera de Talkytimes (ej: 💬 8  ✉ 2)
-        const headerContainerText = (headerTitle.parentElement ? headerTitle.parentElement.innerText : headerTitle.innerText) || '';
+        // 1. Extraer contadores directos de la cabecera de Talkytimes (ej: 💬 6  ✉ 2)
         let headerLetters = null;
         let headerMessages = null;
+        let headerLastSeen = '';
 
-        const letterMatch = headerContainerText.match(/✉\s*(\d+)/i);
+        const headerContainer = headerTitle.parentElement || headerTitle;
+        const headerContainerText = (headerContainer ? headerContainer.innerText : '') || '';
+
+        // Búsqueda de lastSeen ("6 minutes ago", "online", etc.)
+        const seenMatch = headerContainerText.match(/(\d+\s*(?:minutes?|hours?|days?|mins?|hrs?|segundos?|minutos?|horas?)\s*ago|online|en línea|conectad[oa])/i);
+        if (seenMatch) headerLastSeen = seenMatch[0];
+
+        // Match de caracteres Unicode o palabras
+        const letterMatch = headerContainerText.match(/(?:✉|mails?|letters?)\s*(\d+)/i) || headerContainerText.match(/(\d+)\s*(?:mails?|letters?)/i);
         if (letterMatch) headerLetters = parseInt(letterMatch[1], 10);
 
-        const msgMatch = headerContainerText.match(/💬\s*(\d+)/i);
+        const msgMatch = headerContainerText.match(/(?:💬|chats?|msgs?)\s*(\d+)/i) || headerContainerText.match(/(\d+)\s*(?:chats?|msgs?)/i);
         if (msgMatch) headerMessages = parseInt(msgMatch[1], 10);
 
-        // 2. Si no están en la cabecera, buscar en la lista lateral
+        // Si falló por texto plano, buscar directamente en los elementos hijos del header
+        if (headerMessages === null || headerLetters === null) {
+          const candidateBadges = headerContainer.querySelectorAll('span, div, a');
+          candidateBadges.forEach(el => {
+            const rawVal = (el.innerText || '').trim();
+            if (/^\d+$/.test(rawVal)) {
+              const num = parseInt(rawVal, 10);
+              const pEl = el.parentElement || el;
+              const innerHtml = (pEl.innerHTML || '').toLowerCase();
+              const prevHtml = (el.previousElementSibling ? el.previousElementSibling.outerHTML : '').toLowerCase();
+              if (innerHtml.includes('chat') || innerHtml.includes('message') || innerHtml.includes('comment') || prevHtml.includes('chat') || prevHtml.includes('comment')) {
+                if (headerMessages === null) headerMessages = num;
+              } else if (innerHtml.includes('mail') || innerHtml.includes('letter') || innerHtml.includes('envelope') || prevHtml.includes('mail') || prevHtml.includes('letter')) {
+                if (headerLetters === null) headerLetters = num;
+              }
+            }
+          });
+        }
+
+        // 2. Si aún no hay contadores, buscar en la lista lateral
         let letterCount = headerLetters !== null ? headerLetters : 0;
         if (headerLetters === null) {
           const allSidebarRows = document.querySelectorAll('div[data-test-id*="dialog-item"], div[class*="dialog-item"], div[class*="item-wrap"]');
@@ -1199,20 +1744,17 @@
         }
 
         const totalMessages = headerMessages !== null ? headerMessages : messagesCountNow;
-        const realSpentCredits = (letterCount * 10) + (totalMessages * 1);
+        const totalChatCredits = totalMessages * 1;
+        const totalChatUSD = (totalChatCredits * 0.28).toFixed(2);
+        const totalLetterCredits = letterCount * 10;
+        const totalLetterUSD = (totalLetterCredits * 0.28).toFixed(2);
+
+        const realSpentCredits = totalChatCredits + totalLetterCredits;
         const realSpentUSD = (realSpentCredits * 0.28).toFixed(2);
 
         const isZeroCredits = isChatHeaderZeroMessages();
-        let dispPtsText = 'Activo';
-        let dispUSDText = '(Con Saldo)';
-
-        if (isZeroCredits) {
-          dispPtsText = '0 Pts';
-          dispUSDText = '($0.00)';
-        } else if (liveCredits !== null) {
-          dispPtsText = `${liveCredits} Pts`;
-          dispUSDText = `($${(liveCredits * 0.28).toFixed(2)})`;
-        }
+        let dispStatusBadgeText = isZeroCredits ? '🔴 Sin Saldo' : '🟢 Saldo Activo';
+        let dispStatusColor = isZeroCredits ? '#ef4444' : '#34d399';
 
         const isFidelized = fidelizedClientsMap.has(String(clientId)) || fidelizedClientsMap.has(clientName.toLowerCase());
         const isVipTier = realSpentCredits > 300 || letterCount > 25;
@@ -1221,14 +1763,129 @@
           ? `<span style="color:#f472b6; font-weight:900;">💎 FIDELIZADO</span> | ` 
           : (isVipTier ? `<span style="color:#f59e0b; font-weight:900;">💎 VIP</span> | ` : '');
 
-        badge.innerHTML = `
-          <div style="display:flex; align-items:center; gap:3px;">
-            ${fidelTag}🪙 <b>${dispPtsText}</b> <span style="color:#34d399;">${dispUSDText}</span>
-          </div>
-          <div style="display:flex; align-items:center; gap:3px; color:#cbd5e1;">
-            💎 <b>Gasto: $${realSpentUSD}</b> <span style="color:#94a3b8;">(${realSpentCredits} Pts)</span>
-          </div>
-        `;
+        // Calcular duración y tiempo chateando
+        let firstMsgInfo = 'Hoy en turno';
+        let chatDurationStr = 'En curso';
+        if (recentChat && recentChat.length > 0) {
+          const firstMsg = recentChat[0];
+          firstMsgInfo = `${firstMsg.date || 'Hoy'} a las ${firstMsg.time || 'inicio'}`;
+          const lastMsg = recentChat[recentChat.length - 1];
+          chatDurationStr = `${recentChat.length} mensajes en hilo activo (Último: ${lastMsg.time || 'Reciente'})`;
+        }
+
+        const badgeSig = `${fidelTag}_${dispStatusBadgeText}_${realSpentUSD}_${realSpentCredits}`;
+        if (badge.dataset.sig !== badgeSig) {
+          badge.dataset.sig = badgeSig;
+          badge.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+              <div style="display:flex; align-items:center; gap:3px;">
+                ${fidelTag}🪙 <b style="color:${dispStatusColor};">${dispStatusBadgeText}</b>
+              </div>
+              <button class="ryr-credit-info-btn" id="ryr-btn-credit-info" title="Ver auditoría comercial, desglose de gasto y tiempo chateando" type="button">ℹ️</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:3px; color:#cbd5e1; font-size:9.5px;">
+              💎 <b>Gasto Total: $${realSpentUSD}</b> <span style="color:#94a3b8;">(${realSpentCredits} Pts)</span>
+            </div>
+          `;
+        }
+
+        // Acción del Botón de Info: Desplegar Popover Persistente con desglose detallado
+        const infoBtn = badge.querySelector('#ryr-btn-credit-info');
+        if (infoBtn && !infoBtn.dataset.bound) {
+          infoBtn.dataset.bound = 'true';
+          infoBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const existingPop = document.getElementById('ryr-client-intel-popover');
+            if (existingPop) {
+              existingPop.remove();
+              return;
+            }
+            const pop = document.createElement('div');
+            pop.id = 'ryr-client-intel-popover';
+            pop.className = 'ryr-client-intel-popover';
+            pop.innerHTML = `
+              <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(56,189,248,0.3); padding-bottom:6px; margin-bottom:8px;">
+                <span style="font-weight:900; color:#38bdf8; font-size:11px; letter-spacing:0.5px;">📊 AUDITORÍA COMERCIAL: ${clientName.toUpperCase()}</span>
+                <span style="cursor:pointer; color:#94a3b8; font-size:15px; font-weight:bold; line-height:1; padding:2px 6px;" id="ryr-close-intel-popover" title="Cerrar ventana">✕</span>
+              </div>
+              
+              <div style="margin-bottom:8px; background:rgba(56,189,248,0.08); padding:6px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.2);">
+                <div style="font-weight:bold; color:#7dd3fc; margin-bottom:2px; font-size:10px;">🔍 ¿CÓMO SE CALCULAN ESTOS DATOS?</div>
+                <div style="color:#cbd5e1; font-size:9.5px; line-height:1.35;">
+                  Talkytimes registra en su cabecera el historial acumulado de interacción (💬 <b>${totalMessages} chats</b> y ✉ <b>${letterCount} cartas</b>) con este perfil. Aplicamos la tasa oficial de la plataforma: <b>1 crédito ($0.28 USD) por chat</b> y <b>10 créditos ($2.80 USD) por carta</b>.
+                </div>
+              </div>
+
+              <!-- SECCIÓN 1: GASTO HISTÓRICO TOTAL CON ESTE PERFIL -->
+              <div style="margin-bottom:8px; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:6px 8px;">
+                <div style="font-weight:bold; color:#facc15; margin-bottom:3px; font-size:10px;">💎 GASTO HISTÓRICO TOTAL CON ${sessionData.profileName || 'ESTE PERFIL'}:</div>
+                <div style="display:flex; justify-content:space-between; color:#e2e8f0; font-size:10px; margin-bottom:2px;">
+                  <span>• Mensajes de Chat (${totalMessages} total):</span>
+                  <span style="font-weight:bold; color:#34d399;">${totalChatCredits} pts ($${totalChatUSD} USD)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:#e2e8f0; font-size:10px; margin-bottom:2px;">
+                  <span>• Cartas Enviadas (${letterCount} total):</span>
+                  <span style="font-weight:bold; color:#34d399;">${totalLetterCredits} pts ($${totalLetterUSD} USD)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; color:#fff; font-size:10.5px; font-weight:900; border-top:1px solid rgba(255,255,255,0.12); padding-top:4px; margin-top:3px;">
+                  <span>💎 TOTAL COMPLETO INVERTIDO:</span>
+                  <span style="color:#f59e0b; font-size:11px;">${realSpentCredits} Pts ($${realSpentUSD} USD)</span>
+                </div>
+              </div>
+
+              <!-- SECCIÓN 2: ACTIVIDAD EN EL TURNO ACTUAL -->
+              <div style="margin-bottom:8px; background:rgba(15,23,42,0.4); border:1px solid rgba(167,139,250,0.25); border-radius:6px; padding:6px 8px;">
+                <div style="font-weight:bold; color:#a78bfa; margin-bottom:3px; font-size:10px;">⚡ ACTIVIDAD EN EL TURNO ACTUAL (HOY):</div>
+                <div style="display:flex; justify-content:space-between; color:#e2e8f0; font-size:9.5px; margin-bottom:2px;">
+                  <span>• Mensajes en tu turno:</span>
+                  <span style="font-weight:bold; color:#38bdf8;">${shiftMsgsCount} chats (${shiftPts} pts / $${shiftUSD} USD)</span>
+                </div>
+                <div style="color:#cbd5e1; font-size:9.5px; margin-bottom:2px;">• <b>Primer contacto:</b> ${firstMsgInfo}</div>
+                <div style="color:#cbd5e1; font-size:9.5px;">• <b>Última actividad:</b> ${headerLastSeen || 'Activo ahora en chat'}</div>
+              </div>
+
+              <!-- SECCIÓN 3: ESTADO DE SALDO & RECARGAS -->
+              <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25); border-radius:6px; padding:6px 8px;">
+                <div style="font-weight:bold; color:#34d399; margin-bottom:2px; font-size:10px;">🔋 ESTADO DE SALDO & RECARGAS:</div>
+                <div style="color:#cbd5e1; font-size:9.5px; line-height:1.35;">
+                  Estado: <b style="color:${dispStatusColor};">${isZeroCredits ? '🔴 Sin Saldo / Chat Pausado' : '🟢 Saldo Activo (Interactuando con fluidez)'}</b>.<br>
+                  <span style="font-size:9px; color:#94a3b8;">Monitoreo en vivo: Si el cliente agota sus créditos y vuelve a recargar, el Agente emitirá un aviso auditivo y visual en pantalla.</span>
+                </div>
+              </div>
+            `;
+
+            // Posicionamiento fijo seguro y estable en pantalla
+            const rect = infoBtn.getBoundingClientRect();
+            const topPos = Math.min(window.innerHeight - 440, Math.max(10, rect.bottom + 8));
+            const leftPos = Math.max(10, Math.min(window.innerWidth - 345, rect.right - 325));
+            pop.style.top = `${topPos}px`;
+            pop.style.left = `${leftPos}px`;
+
+            // Insertar en document.body para desacoplarlo de cualquier re-render del chat o badge
+            document.body.appendChild(pop);
+
+            const closePop = pop.querySelector('#ryr-close-intel-popover');
+            if (closePop) {
+              closePop.onclick = (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                pop.remove();
+              };
+            }
+
+            // Click fuera para cerrar voluntariamente sin apresurar la lectura
+            const handleOutsideClick = (ev) => {
+              if (pop && !pop.contains(ev.target) && ev.target !== infoBtn && !infoBtn.contains(ev.target)) {
+                pop.remove();
+                document.removeEventListener('click', handleOutsideClick);
+              }
+            };
+            setTimeout(() => {
+              document.addEventListener('click', handleOutsideClick);
+            }, 50);
+          };
+        }
 
         if (isFidelized) {
           badge.className = 'ryr-client-credit-badge ryr-credit-fidelizar';
@@ -1266,8 +1923,11 @@
 
     if (!sendBtn || !sendBtn.parentElement) return;
 
-    // Asegurar posicionamiento relativo en el contenedor padre
-    sendBtn.parentElement.style.position = 'relative';
+    // Asegurar posicionamiento y layout flex sin saltos de línea al cambiar pantalla
+    sendBtn.parentElement.style.setProperty('display', 'flex', 'important');
+    sendBtn.parentElement.style.setProperty('align-items', 'center', 'important');
+    sendBtn.parentElement.style.setProperty('flex-wrap', 'nowrap', 'important');
+    sendBtn.parentElement.style.setProperty('position', 'relative', 'important');
 
     // Inyección de Botones justo al lado DERECHO del botón Send (dentro del mismo nivel)
     let toolsWrapper = sendBtn.parentElement.querySelector('.ryr-chat-tools-wrapper');
@@ -1279,11 +1939,20 @@
       sendBtn.after(toolsWrapper);
     }
 
+    toolsWrapper.style.setProperty('display', 'inline-flex', 'important');
+    toolsWrapper.style.setProperty('flex-direction', 'column', 'important');
+    toolsWrapper.style.setProperty('align-items', 'stretch', 'important');
+    toolsWrapper.style.setProperty('justify-content', 'center', 'important');
+    toolsWrapper.style.setProperty('gap', '3px', 'important');
+    toolsWrapper.style.setProperty('flex-shrink', '0', 'important');
+    toolsWrapper.style.setProperty('white-space', 'nowrap', 'important');
+    toolsWrapper.style.setProperty('margin-left', '6px', 'important');
+
     // Limpiar badge residual de idioma si existía
     const oldLangBadge = toolsWrapper.querySelector('.ryr-lang-badge');
     if (oldLangBadge) oldLangBadge.remove();
 
-    // 1. Botón de Continuar Chat / Responder Chat
+    // 1. Botón de Responder Chat (ARRIBA)
     let hookBtn = toolsWrapper.querySelector('.ryr-chat-hooks-btn');
     if (!hookBtn) {
       hookBtn = document.createElement('button');
@@ -1294,7 +1963,7 @@
     hookBtn.innerHTML = '✨ Responder Chat';
     hookBtn.title = 'Generar 3 respuestas inteligentes y humanizadas con contexto de la conversación';
 
-    // 2. Botón de Traducir Mensaje (Inteligente y Bidireccional)
+    // 2. Botón de Traducir Mensaje (ABAJO)
     const targetLabel = detectedLang.code.toUpperCase();
     let transBtn = toolsWrapper.querySelector('.ryr-translate-btn');
     if (!transBtn) {
@@ -1305,6 +1974,11 @@
     }
     transBtn.innerHTML = `🌐 Traducir a ${targetLabel}`;
     transBtn.title = `Traducir texto al idioma del cliente (${detectedLang.name})`;
+
+    // Asegurar estricto orden vertical: Responder Chat ARRIBA, Traducir ABAJO
+    if (hookBtn.nextElementSibling !== transBtn) {
+      hookBtn.after(transBtn);
+    }
 
     // Acción de Traducir Auto-Detectada
     transBtn.onclick = async (e) => {
@@ -1340,7 +2014,7 @@
       }
     };
 
-    // Acción de Responder Chat (Modo Contextual con 3 Opciones Compactas en Tiempo Real)
+    // Acción de Responder Chat (Modo Contextual Ultra-Humanizado con Razonamiento IA en Tiempo Real)
     hookBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1364,8 +2038,6 @@
         liveDetectedLang = { code: 'en', name: 'English 🇺🇸', flag: '🇺🇸' };
       }
 
-      const liveHasHistory = liveClientMessages.length > 0;
-      const liveLastClientMsg = liveClientMessages.length > 0 ? liveClientMessages[liveClientMessages.length - 1].text : '';
       const isSyncedInDb = syncedChatsMemory.has(String(liveClientId).toLowerCase()) || (liveClientName && syncedChatsMemory.has(liveClientName.toLowerCase()));
       const showMissingHistoryWarning = !isSyncedInDb && liveClientMessages.length <= 2 && (!liveLetters || liveLetters.length === 0);
 
@@ -1373,369 +2045,68 @@
       dropdown.className = 'ryr-chat-hooks-dropdown';
       toolsWrapper.appendChild(dropdown);
 
-      const generateSmartContextualHooks = () => {
-        const fullChatString = liveClientMessages.map(m => m.text).join(' ').toLowerCase();
-        const lastMsgLower = (liveLastClientMsg || '').toLowerCase();
+      const headerTitleText = `🔄 RESPONDER CHAT A ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
 
-        // 1. Detectar si habla de dolor de cabeza, enfermedad, lluvia, frío, autobús, analgésico o reposo
-        const hasSicknessOrHeadache = liveHasHistory && (
-          /\b(headache|analgesic|fever|flu)\b|head is aching|\b(sick|ill|medicine|pill|cold rain|resting)\b|\b(dolor de cabeza|analg[eé]sico|fiebre|enferm[oa]|medicamento|pastilla)\b/i.test(fullChatString) ||
-          /\b(headache|analgesic|fever|flu|sick|ill|medicine|pill|resting|dolor|cabeza|fiebre)\b|head is aching/i.test(lastMsgLower)
-        );
-
-        // 2. Detectar si habla de café, comida, bebida o foto de café
-        const hasCoffeeOrFood = liveHasHistory && (
-          /\b(coffee|caf[eé]|tea|drink|drinking|cup|breakfast|dinner|lunch|taza)\b/i.test(fullChatString) ||
-          /\b(coffee|caf[eé]|tea|cup|drink)\b/i.test(lastMsgLower)
-        );
-
-        // 3. Detectar si pregunta si nos vamos o si estamos ocupados
-        const hasLeavingOrBusy = liveHasHistory && (
-          /\b(leaving|leaving already|have something to do|going away|say goodbye|busy|ocupad[oa]|te vas|te tienes que ir)\b/i.test(lastMsgLower) ||
-          /\b(leaving|have something to do)\b/i.test(fullChatString)
-        );
-
-        // 4. Detectar si hubo reacción a Newsfeed / Post
-        const hasNewsfeedLiked = liveHasHistory && (
-          lastMsgLower.includes('newsfeed') || lastMsgLower.includes('post') || lastMsgLower.includes('liked your')
-        );
-
-        // 5. Detectar piropos, elogios o nombres cariñosos
-        const isCompliment = liveHasHistory && (
-          /\b(love|blonde|beautiful|gorgeous|sexy|angel|queen|honey|darling|sweetheart|mahal|linda|hermosa|rubia|amor|cielo|coraz[oó]n|princesa|preciosa)\b/i.test(lastMsgLower)
-        );
-
-        // 6. Detectar saludo o pregunta de cómo está
-        const isGreeting = liveHasHistory && (
-          /(how are you|how is your day|how are things|what are you up to|hello|hi\b|hey\b|good morning|good afternoon|good evening|c[oó]mo est[aá]s|qu[eé] tal|hola)/i.test(lastMsgLower)
-        );
-
-        let options = [];
-
-        if (hasSicknessOrHeadache) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Quiero quedarme aquí haciéndote compañía hasta que te sientas mucho mejor ❤️ Cierra tus ojitos y dime, ¿qué es lo que más te reconforta cuando estás descansando?`,
-                es: `Acompañamiento íntimo y pregunta reconfortante para que siga chateando.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Por favor descansa, tómate tu analgésico y abrígate mucho del frío y la lluvia... Me encantaría abrazarte muy fuerte justo ahora para que duermas en paz ❤️`,
-                es: `Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazo.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `Estás en mis pensamientos, cariño. Cuando despiertes, envíame una foto tuya descansando para saber que estás bien 😉 Yo te mandaré una especial también.`,
-                es: `Petición de foto de descanso con reciprocidad protectora.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I want to stay right here keeping you company until you feel all better ❤️ Close your eyes and tell me, what makes you feel the most comforted when you're resting?`,
-                es: `Acompañamiento íntimo y pregunta reconfortante para que siga chateando sin esfuerzo.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Please rest, take your medicine, and stay warm away from that rain... I wish I could wrap my arms around you and hold you tight right now so you can sleep peacefully ❤️`,
-                es: `Empatía directa con su dolor de cabeza, el frío/lluvia y respuesta cariñosa a su deseo de abrazarte.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `You are in my thoughts, sweetheart. When you wake up, send me a little picture of you resting so I know you're feeling better 😉 I'll send you an exclusive photo too!`,
-                es: `Petición de foto de descanso con reciprocidad protectora.`
-              }
-            ];
-          }
-        } else if (hasCoffeeOrFood || (hasLeavingOrBusy && hasCoffeeOrFood)) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `¡Ver tu café me dio antojo a mí también! 😉 Cuéntame, ¿cuál es tu postre o antojo favorito para acompañar una buena charla?`,
-                es: `Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `¡Ese café se ve delicioso! ❤️ Jamás me iría sin antes tomarme un lindo momento para hablar contigo... ¿Cómo va tu tarde?`,
-                es: `Aseguras tu atención exclusiva y elogias su café/comida.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `La próxima vez que tomes café, envíame una foto de tu sonrisa disfrutándolo para sentir que lo compartimos 😉 ¿Trato?`,
-                es: `Petición magnética de foto cotidiana vinculada a su café.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Seeing your coffee actually made me crave one too 😉 Tell me, what's your favorite sweet treat or guilty pleasure when taking a break?`,
-                es: `Pregunta pícara y divertida para profundizar en sus gustos favoritos.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `That coffee looks so delicious! ❤️ I could never just leave without taking a sweet moment to chat with you... How is your day going?`,
-                es: `Respuesta directa sobre su café/comida asegurando tu tiempo exclusivo.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `Next time you have coffee, send me a picture of your smile enjoying it so we can share the moment together 😉 Deal?`,
-                es: `Petición magnética de foto cotidiana vinculada a su café.`
-              }
-            ];
-          }
-        } else if (hasLeavingOrBusy) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Siempre tengo un momento especial reservado solo para ti ❤️ Dime, ¿qué es algo curioso o divertido que te haya pasado hoy?`,
-                es: `Despierta curiosidad y anima el diálogo.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `¡Para nada! Nunca estoy demasiado ocupada para alguien que me hace sonreír tanto 😉 ¿Cómo te estás sintiendo hoy?`,
-                es: `Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Estaba sonriendo pensando en nuestras charlas ✨ Dime, ¿qué es algo que siempre te alegra el día sin falta?`,
-                es: `Validación emocional y anclaje a sensaciones positivas.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I always have a special moment reserved just for you ❤️ Tell me, what's one secret dream or fun thought you've had today?`,
-                es: `Despierta misterio y curiosidad para mantener el chat activo.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Not at all, sweetie! I'm never too busy for someone who brings such a genuine smile to my face 😉 How are you feeling today?`,
-                es: `Respuesta directa desmintiendo que te vas y reafirmando tu afecto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `I was just smiling looking at our messages ✨ Tell me, what is something that always brightens up your mood without fail?`,
-                es: `Validación emocional y anclaje a sensaciones positivas.`
-              }
-            ];
-          }
-        } else if (hasNewsfeedLiked) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Me encanta saber que estás tan atento a mis publicaciones 😉 ¿Qué fue lo primero que sentiste o pensaste al verla?`,
-                es: `Pregunta intrigante sobre su reacción inmediata al post.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Vi que te gustó mi publicación... Me alegra muchísimo que hayas conectado con ese pensamiento ❤️ ¿Qué momentos te dan más paz?`,
-                es: `Agradecimiento por su reacción y conexión íntima de tranquilidad.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `Esa foto guarda un recuerdo muy lindo para mí ✨ Envíame una foto de lo que estás haciendo hoy para conocer más tu mundo 😉`,
-                es: `Petición de foto de su entorno con reciprocidad.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I love knowing you are paying close attention to my world and my thoughts 😉 What was the first thing that crossed your mind when you saw it?`,
-                es: `Pregunta intrigante sobre su reacción inmediata al post.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `I saw you liked my post... It truly warms my heart that you connected with that thought ❤️ What kind of quiet moments bring you the most peace?`,
-                es: `Agradecimiento por su like en el post y conexión íntima de tranquilidad.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `That picture holds a very special memory for me ✨ Send me a picture of what you're doing right now so I can see your world too 😉`,
-                es: `Petición de foto de su entorno a cambio de la foto del post.`
-              }
-            ];
-          }
-        } else if (isCompliment) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Siempre sabes cómo hacerme suspirar con tus palabras tan dulces 😉 Dime, ¿cuál ha sido el detalle más romántico de tu vida?`,
-                es: `Indagación romántica profunda para mantenerlo emocionado.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Saber de ti siempre es la parte más linda y especial de mi día ❤️ ¿Cómo te ha tratado la vida hoy, cariño?`,
-                es: `Devolución cariñosa y agradecida a su halago.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `¡Estaba sonriendo pensando en ti! Envíame una foto de tu sonrisa ahora mismo y yo te enviaré una exclusiva a cambio 😉 ¿Trato?`,
-                es: `Gancho de alto impacto para intercambio recíproco de fotos.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `You always know how to make my heart flutter with your sweet words 😉 Tell me, what is the most romantic thing someone has ever done for you?`,
-                es: `Indagación romántica profunda para mantenerlo soñando despierto.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Hearing from you is honestly the sweetest part of my day ❤️ How has your day been treating you so far, my dear?`,
-                es: `Devolución cariñosa y agradecida a su halago.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención (Foto)',
-                target: `I was just blushing thinking about you! Send me a picture of your smile right now, and I'll send you an exclusive photo in return 😉 Deal?`,
-                es: `Desafío de intercambio de fotos con reciprocidad irresistible.`
-              }
-            ];
-          }
-        } else if (isGreeting || liveHasHistory) {
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `Estaba tomándome un pequeño descanso y deseando saber de ti 😉 ¿Qué es algo que te haya sacado una gran sonrisa hoy?`,
-                es: `Pregunta positiva y curiosa para dinamizar la conversación.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `Estoy teniendo un día muy tranquilo, y ver tu mensaje lo hizo mucho más especial ❤️ ¿Cómo empezó tu día hoy?`,
-                es: `Saludo dulce y apertura de diálogo sobre su rutina.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Cada vez que veo un mensaje tuyo me alegro mucho ✨ Dime, ¿qué estás haciendo justo en este momento?`,
-                es: `Validación coqueta para provocar respuesta inmediata.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho para Avivarlo',
-                target: `I was just taking a little break and hoping to hear from you 😉 What is one thing that has been keeping you smiling lately?`,
-                es: `Pregunta positiva y curiosa para dinamizar la conversación.`
-              },
-              {
-                title: '💬 Opción 2: Contestar Conversación',
-                target: `I'm having a calm day, and seeing your message just made it so much brighter ❤️ How did your morning start off?`,
-                es: `Saludo dulce y apertura de diálogo sobre su rutina.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Every time your name pops up on my screen, my day gets a little sweeter ✨ What are you up to right at this moment?`,
-                es: `Validación coqueta para provocar respuesta inmediata.`
-              }
-            ];
-          }
-        } else {
-          // Apertura para usuario nuevo (Atracción pura - Cero ubicaciones / Cero TM)
-          if (liveDetectedLang.code === 'es') {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho de Atracción',
-                target: `Tienes una energía muy dulce y una mirada muy serena en tus fotos ❤️ Dime, ¿qué es algo que te apasione profundamente en la vida?`,
-                es: `Pregunta de atracción sobre pasiones personales.`
-              },
-              {
-                title: '💬 Opción 2: Contestar / Saludo Inicial',
-                target: `Tuve una hermosa corazonada de saludarte el día de hoy 😉 ¿Cómo te ha estado tratando tu semana?`,
-                es: `Saludo espontáneo y abierto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Tu sonrisa de verdad me llamó mucho la atención ✨ Cuéntame un pequeño sueño o secreto tuyo que pocos conozcan...`,
-                es: `Gancho intrigante y de misterio que despierta curiosidad.`
-              }
-            ];
-          } else {
-            options = [
-              {
-                title: '🪝 Opción 1: Gancho de Atracción',
-                target: `You have such a warm and gentle energy in your photos ❤️ Tell me, what is something you are truly passionate about in your everyday life?`,
-                es: `Pregunta de alto impacto sobre sus pasiones personales.`
-              },
-              {
-                title: '💬 Opción 2: Contestar / Saludo Inicial',
-                target: `I had a sudden lovely feeling that I should say hello to you today 😉 How is your day treating you so far?`,
-                es: `Saludo espontáneo y abierto.`
-              },
-              {
-                title: '✨ Opción 3: Llamar la Atención',
-                target: `Your smile genuinely caught my attention ✨ Tell me a small dream or secret of yours that few people know about...`,
-                es: `Gancho intrigante y de misterio que despierta curiosidad.`
-              }
-            ];
-          }
-        }
-
-        return options;
-      };
-
-      const renderHooks = (hooksList) => {
-        const headerTitleText = `🔄 RESPONDER CHAT A ${liveClientName.toUpperCase()} (${liveDetectedLang.name}):`;
-
-        let warningHtml = '';
-        if (showMissingHistoryWarning) {
-          warningHtml = `
-            <div class="ryr-no-info-warning">
-              <span style="font-size:10px; line-height:1.2;">⚠️ <b>Sin historial previo en BD:</b> Sube las conversaciones para contexto 360°.</span>
-              <button class="ryr-no-info-btn" id="ryr-quick-sync-btn">⚡ Subir Ahora</button>
-            </div>
-          `;
-        }
-
-        dropdown.innerHTML = `
-          <div style="font-weight:bold; color:#a5b4fc; font-size:11px; margin-bottom:4px; display:flex; justify-content:space-between; align-items:center;">
-            <span>${headerTitleText}</span>
-            <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-hooks-dropdown">✕</span>
+      let warningHtml = '';
+      if (showMissingHistoryWarning) {
+        warningHtml = `
+          <div class="ryr-no-info-warning">
+            <span style="font-size:10px; line-height:1.2;">⚠️ <b>Sin historial previo en BD:</b> Sube las conversaciones para contexto 360°.</span>
+            <button class="ryr-no-info-btn" id="ryr-quick-sync-btn">⚡ Subir Ahora</button>
           </div>
-          ${warningHtml}
-          <div id="ryr-hooks-options-container" style="display:flex; flex-direction:column; gap:5px;"></div>
         `;
+      }
 
-        const closeBtn = dropdown.querySelector('#ryr-close-hooks-dropdown');
-        if (closeBtn) closeBtn.onclick = () => dropdown.remove();
+      dropdown.innerHTML = `
+        <div style="font-weight:bold; color:#a5b4fc; font-size:11px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+          <span>${headerTitleText}</span>
+          <span style="cursor:pointer; color:#94a3b8; font-size:14px;" id="ryr-close-hooks-dropdown">✕</span>
+        </div>
+        ${warningHtml}
+        <div id="ryr-hooks-loading" style="text-align:center; padding:18px 10px; color:#38bdf8; font-size:11px; font-weight:bold;">
+          🧠 Razonando contexto y analizando conversación con IA...
+        </div>
+        <div id="ryr-hooks-options-container" style="display:none; flex-direction:column; gap:6px;"></div>
+      `;
 
-        const syncNowBtn = dropdown.querySelector('#ryr-quick-sync-btn');
-        if (syncNowBtn) {
-          syncNowBtn.onclick = async (ev) => {
-            ev.stopPropagation();
-            syncNowBtn.innerText = '⏳ Subiendo...';
-            syncNowBtn.disabled = true;
-            await syncCurrentChatToDatabase();
-            syncNowBtn.innerText = '✅ Subido';
-          };
-        }
+      const closeBtn = dropdown.querySelector('#ryr-close-hooks-dropdown');
+      if (closeBtn) closeBtn.onclick = () => dropdown.remove();
 
-        const container = dropdown.querySelector('#ryr-hooks-options-container');
+      const syncNowBtn = dropdown.querySelector('#ryr-quick-sync-btn');
+      if (syncNowBtn) {
+        syncNowBtn.onclick = async (ev) => {
+          ev.stopPropagation();
+          syncNowBtn.innerText = '⏳ Subiendo...';
+          syncNowBtn.disabled = true;
+          await syncCurrentChatToDatabase();
+          syncNowBtn.innerText = '✅ Subido';
+        };
+      }
+
+      const container = dropdown.querySelector('#ryr-hooks-options-container');
+      const loadingEl = dropdown.querySelector('#ryr-hooks-loading');
+
+      const renderOptionsList = (hooksList) => {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (!container) return;
+        container.style.display = 'flex';
+        container.innerHTML = '';
 
         hooksList.forEach((item, idx) => {
           const targetText = typeof item === 'object' ? item.target : item;
-          const esText = typeof item === 'object' ? item.es : 'Respuesta contextual generada.';
+          const esText = typeof item === 'object' ? item.es : 'Respuesta contextual razonada.';
           const optTitle = typeof item === 'object' && item.title ? item.title : `Opción ${idx + 1}`;
 
           const option = document.createElement('div');
           option.className = 'ryr-hook-option';
+          option.style.cssText = 'box-sizing:border-box !important; width:100% !important; white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important; overflow:hidden !important;';
           option.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; width:100%;">
               <span style="font-weight:bold; color:#a5b4fc; font-size:10px;">${optTitle.toUpperCase()}</span>
-              <span style="font-size:9.5px; color:#38bdf8; font-weight:bold;">⚡ Clic para Enviar</span>
+              <span style="font-size:9.5px; color:#38bdf8; font-weight:bold; white-space:nowrap;">⚡ Clic para Enviar</span>
             </div>
-            <div class="ryr-hook-target-text">"${targetText}"</div>
-            <div class="ryr-hook-es-text">💡 <b>Explicación en Español:</b> <i>${esText}</i></div>
+            <div class="ryr-hook-target-text" style="white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important; width:100% !important; box-sizing:border-box !important; line-height:1.4 !important;">"${targetText}"</div>
+            <div class="ryr-hook-es-text" style="white-space:normal !important; word-break:break-word !important; overflow-wrap:anywhere !important; width:100% !important; box-sizing:border-box !important; line-height:1.35 !important;">💡 <b>Explicación en Español:</b> <i>${esText}</i></div>
           `;
 
           // Clic directo: Inserción inmediata 1-Click
@@ -1753,101 +2124,441 @@
         });
       };
 
-      // Generación instantánea en 0ms con razonamiento contextual de 3 opciones compactas
-      renderHooks(generateSmartContextualHooks());
+      // 2. Función de Razonamiento Semántico Ultra-Contextual en Tiempo Real
+      const synthesizeDynamicChatOptions = (clientText, langCode, clientNameStr) => {
+        const textLower = (clientText || '').toLowerCase().trim();
+        const clientShort = (clientNameStr || 'friend').split(' ')[0];
+
+        // 1. Conflicto personal, falsa amistad, empacar, mudanza, storage, límites, drama
+        const isConflictOrMoving = /\b(friend|pack|packing|storage|move on|moving|limit|messing|drama|toxic|betray|fight|argument|lie|leaving|bag|boxes|house|apartment|move)\b/i.test(textLower);
+        // 2. Agobio, agotamiento, estrés extremo
+        const isExhaustedOrStressed = /\b(tired|exhausted|burnout|burned out|overwhelmed|too much|stress|stressful|pressure|heavy|can't take|drained|cansad|estres)\b/i.test(textLower);
+        // 3. Tristeza, soledad, desamor
+        const isSadOrLonely = /\b(sad|crying|cry|tears|lonely|alone|miss|depressed|heartbroken|empty|down|hurt|broken|triste|soled|chora)\b/i.test(textLower);
+        // 4. Enfermedad, dolor, salud
+        const isSickOrPain = /\b(sick|headache|migraine|fever|flu|hospital|doctor|medicine|pill|pain|hurt|ill|surgery|stomach|enferm|dolor|malestar|doente)\b/i.test(textLower);
+        // 5. Trabajo, oficina, turno, clientes
+        const isWorkBusy = /\b(work|job|boss|office|shift|meeting|busy|deadline|project|overtime|coworker|client|trabajo|oficina|trabalho)\b/i.test(textLower);
+        // 6. Hora de dormir, noche, descanso
+        const isBedtime = /\b(bed|sleep|sleeping|asleep|night|goodnight|sweet dreams|dormir|cama|sueño|descanso|deitar)\b/i.test(textLower);
+        // 7. Películas, series, cine, televisión
+        const isEntertainment = /\b(movie|film|watching|cinema|netflix|series|actor|actress|popcorn|game|playing|read|book|pelicula|película|filme)\b/i.test(textLower);
+        // 8. Clima, lluvia, frío
+        const isWeatherCold = /\b(rain|raining|cold|snow|storm|weather|freezing|chilly|lluvia|fr[ií]o|chuva)\b/i.test(textLower);
+        // 9. Comida, café, restaurante, cena
+        const isFoodOrDrink = /\b(coffee|tea|lunch|dinner|breakfast|cooking|eat|food|wine|beer|restaurant|caf[eé]|comida|almoço|jantar)\b/i.test(textLower);
+        // 10. Pregunta directa del cliente al operador
+        const isClientQuestion = /\?|what (are|do|about)|how (are|do)|where|when|why|who|are you|do you|can you|como|que|donde|cuando|vc|você/i.test(textLower);
+        // 11. Halagos, romance, piropos, fotos
+        const isRomanceOrCompliment = /\b(beautiful|gorgeous|handsome|cute|love|kiss|heart|sweet|angel|special|darling|smile|eyes|linda|hermosa|amor|foto|photo|pic)\b/i.test(textLower);
+
+        if (isConflictOrMoving) {
+          if (langCode === 'pt') {
+            return [
+              { title: '🛡️ Opção 1: Apoio & Elogio à Coragem', target: `Lidar com pessoas falsas cansa muito, mas fico orgulhosa de você se afastar. Como está a mudança? ❤️`, es: `Valida a traição da amiga e apoia sua decisão de se afastar e empacar.` },
+              { title: '✨ Opção 2: Paz Mental & Acolhimento', target: `Você não precisa carregar todo esse estresse sozinha. Respira fundo... você escolheu sua paz ✨`, es: `Oferece refúgio emocional para aliviar a tensão do conflito.` },
+              { title: '💪 Opção 3: Força & Alívio Futuro', target: `Você é muito forte por dar esse basta. Assim que guardar tudo no storage, vai sentir um alívio enorme 😉`, es: `Projeta leveza futura ao terminar de encaixotar tudo.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '🛡️ Opción 1: Apoyo & Elogio a tu Valor', target: `Lidiar con gente falsa agota mucho, pero me alegra que te alejes. ¿Cómo vas empacando tus cosas? ❤️`, es: `Valida la traición de la amiga y apoya su decisión de empacar y poner límites.` },
+              { title: '✨ Opción 2: Paz Mental & Contención', target: `No tienes que cargar con todo este estrés sola. Respira... estás eligiendo tu paz mental ✨`, es: `Ofrece contención emocional para aliviar el agobio de la mudanza y el conflicto.` },
+              { title: '💪 Opción 3: Fuerza & Alivio Inmediato', target: `Eres muy valiente por poner límites. En cuanto guardes todo en el storage sentirás un gran alivio 😉`, es: `Proyecta alivio futuro y le da ánimos para terminar de empacar.` }
+            ];
+          } else {
+            return [
+              { title: '🛡️ Option 1: Support & Proud of Boundaries', target: `Dealing with fake friends is so draining, but I'm proud of you for walking away. How is packing going? ❤️`, es: `Valida la traición de la amiga y apoya su decisión de empacar y poner límites.` },
+              { title: '✨ Option 2: Safe Space & Inner Peace', target: `You don't have to carry all this stress alone. Take a deep breath... you're doing what's best for your peace ✨`, es: `Ofrece contención emocional para aliviar el agobio de la mudanza y el conflicto.` },
+              { title: '💪 Option 3: Inner Strength & Fresh Start', target: `You are so strong for putting your foot down. Once everything is in storage, you'll feel so much lighter 😉`, es: `Proyecta alivio futuro y le da ánimos para terminar de empacar.` }
+            ];
+          }
+        }
+
+        if (isExhaustedOrStressed) {
+          if (langCode === 'pt') {
+            return [
+              { title: '🌸 Opção 1: Cuidado & Respiro', target: `Sinto muito que esteja tão sobrecarregado ❤️ Por favor, tira um tempinho só para você respirar hoje.`, es: `Valida o cansaço e aconselha desacelerar.` },
+              { title: '❤️ Opção 2: Abraço & Carinho', target: `O dia parece ter sido pesado... queria tanto estar perto para te dar um abraço bem quentinho ✨`, es: `Aproximação afetiva e carinho reconfortante.` },
+              { title: '✨ Opção 3: Presença & Calma', target: `Não se cobre tanto hoje, tá bom? Sua paz vem em primeiro lugar. Estou aqui com você 😉`, es: `Lembrete suave de priorizar a tranquilidade.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '🌸 Opción 1: Cuidado & Pausa', target: `Lamento mucho que te sientas tan abrumado ❤️ Por favor tómate un respiro y suelta la presión hoy.`, es: `Valida el agotamiento y aconseja soltar la carga.` },
+              { title: '❤️ Opción 2: Abrazo & Cercanía', target: `Parece que tu día ha sido pesado... me encantaría poder estar ahí para darte un abrazo cálido ✨`, es: `Afecto reconfortante ante el estrés acumulado.` },
+              { title: '✨ Opción 3: Compañía & Calma', target: `No te exijas de más hoy, por favor. Tu bienestar es primero. Aquí me tienes para lo que necesites 😉`, es: `Presencia empática que no demanda energía.` }
+            ];
+          } else {
+            return [
+              { title: '🌸 Option 1: Gentle Care & Breather', target: `I'm so sorry you're feeling so overwhelmed ❤️ Please take a moment just to breathe and let go of the pressure.`, es: `Valida el agotamiento y aconseja soltar la carga.` },
+              { title: '❤️ Option 2: Warm Comforting Hug', target: `It sounds like things have been so heavy... I honestly wish I were there to give you a warm comforting hug ✨`, es: `Afecto reconfortante ante el estrés acumulado.` },
+              { title: '✨ Option 3: Calming Presence', target: `Don't be too hard on yourself today. Your peace comes first. I'm right here keeping you company 😉`, es: `Presencia empática que no demanda energía.` }
+            ];
+          }
+        }
+
+        if (isSadOrLonely) {
+          if (langCode === 'pt') {
+            return [
+              { title: '❤️ Opção 1: Apoio Genuíno', target: `Dói no coração te ver assim... Você nunca está sozinho, eu estou bem aqui com você ❤️`, es: `Conexão empática imediata contra a solidão.` },
+              { title: '✨ Opção 2: Espaço Seguro', target: `Pode desabafar comigo se quiser. Seu carinho é muito especial para mim ✨`, es: `Convite aberto para expressar sentimentos.` },
+              { title: '🌸 Opção 3: Carinho & Conforto', target: `Queria poder segurar sua mão agora e te fazer sorrir... Me conta, o que você mais precisa hoje? 😉`, es: `Presença carinhosa para alegrar o momento.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '❤️ Opción 1: Apoyo Genuino', target: `Me duele en el alma verte así... Recuerda que no estás solo, aquí estoy para ti ❤️`, es: `Conexión empática inmediata contra la soledad.` },
+              { title: '✨ Opción 2: Espacio Seguro', target: `Puedes desahogarte conmigo con toda confianza. Tu presencia es muy valiosa para mí ✨`, es: `Invitación abierta para desahogar sus emociones.` },
+              { title: '🌸 Opción 3: Cariño & Aliento', target: `Ojalá pudiera tomar tu mano ahora mismo y sacarte una sonrisa... ¿Qué te daría paz hoy? 😉`, es: `Presencia cariñosa para acompañarlo en la tristeza.` }
+            ];
+          } else {
+            return [
+              { title: '❤️ Option 1: Genuine Comfort', target: `It breaks my heart to hear you feeling this way... You're never alone, I'm right here with you ❤️`, es: `Conexión empática inmediata contra la soledad.` },
+              { title: '✨ Option 2: Safe Haven to Vent', target: `You can vent to me anytime you need. Your heart is so precious to me ✨`, es: `Invitación abierta para desahogar sus emociones.` },
+              { title: '🌸 Option 3: Tender Affection', target: `I wish I could hold your hand right now and make you smile... Tell me, what would bring you peace today? 😉`, es: `Presencia cariñosa para acompañarlo en la tristeza.` }
+            ];
+          }
+        }
+
+        if (isSickOrPain) {
+          if (langCode === 'pt') {
+            return [
+              { title: '🩹 Opção 1: Cuidado Maternal', target: `Poxa, sinto tanto que esteja doente! ❤️ Por favor, toma seu remédio, bebe água e descansa bastante.`, es: `Aconselhamento cuidadoso de saúde e remédio.` },
+              { title: '❤️ Opção 2: Desejo de Cuidar', target: `Queria tanto estar perto para cuidar de você e te mimar um pouco ❤️ Como você está se sentindo agora?`, es: `Expressão íntima de afeto e cuidado.` },
+              { title: '✨ Opção 3: Torcida por Melhoras', target: `Não se esforça nada hoje, tá bom? Estou aqui torcendo para você se recuperar logo 😉`, es: `Acompanhamento doce da recuperação.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '🩹 Opción 1: Cuidado Maternal', target: `¡Lamento mucho que estés enfermo! ❤️ Por favor tómate tu medicina, abrígate y descansa mucho.`, es: `Aconseja descanso, medicina y cuidado.` },
+              { title: '❤️ Opción 2: Ganas de Cuidarte', target: `Ojalá pudiera estar ahí para consentirte y cuidarte un poquito ❤️ ¿Cómo te vas sintiendo ahora?`, es: `Expresión íntima de cariño y atención.` },
+              { title: '✨ Opción 3: Deseo de Mejoría', target: `No hagas ningún esfuerzo hoy, por favor. Aquí estaré pendiente de tu recuperación 😉`, es: `Acompañamiento dulce durante el reposo.` }
+            ];
+          } else {
+            return [
+              { title: '🩹 Option 1: Gentle Recovery Care', target: `Oh no, I'm so sorry you're sick! ❤️ Please take your medicine, stay warm and get plenty of rest.`, es: `Aconseja descanso, medicina y cuidado.` },
+              { title: '❤️ Option 2: Pampering Wish', target: `I wish I could be there to look after you and pamper you a little ❤️ How are you feeling right now?`, es: `Expresión íntima de cariño y atención.` },
+              { title: '✨ Option 3: Healing Thoughts', target: `Don't push yourself at all today. I'm right here wishing you a quick and smooth recovery 😉`, es: `Acompañamiento dulce durante el reposo.` }
+            ];
+          }
+        }
+
+        if (isWorkBusy) {
+          if (langCode === 'pt') {
+            return [
+              { title: '💼 Opção 1: Alívio na Rotina', target: `Imagino que o trabalho esteja bem puxado hoje! 😉 Não esquece de fazer uma pausa e respirar fundo.`, es: `Reconhecimento da carga de trabalho.` },
+              { title: '✨ Opção 2: Respiro Doce', target: `Espero que minha mensagem seja um respiro gostoso no meio dos seus compromissos ✨ Como vai seu dia?`, es: `Pausa agradável no meio do expediente.` },
+              { title: '☕ Opção 3: Café & Pós-Turno', target: `Já tomou um café bem quentinho? 😉 O que você mais quer fazer assim que terminar o expediente?`, es: `Pergunta aberta sobre planos após o trabalho.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '💼 Opción 1: Alivio de Jornada', target: `¡Imagino que el trabajo está intenso hoy! 😉 Recuerda tomarte una pausa y respirar hondo.`, es: `Reconocimiento del esfuerzo laboral con empatía.` },
+              { title: '✨ Opción 2: Respiro Agradable', target: `Espero que mi mensaje te dé un respiro agradable en medio de tus pendientes ✨ ¿Cómo va tu día?`, es: `Momento de frescura en medio de sus ocupaciones.` },
+              { title: '☕ Opción 3: Café & Desconexión', target: `¿Ya te tomaste un cafecito? 😉 ¿Qué es lo primero que tienes ganas de hacer al salir del turno?`, es: `Pregunta sobre planes después del trabajo.` }
+            ];
+          } else {
+            return [
+              { title: '💼 Option 1: Workday Breath', target: `I can imagine how hectic work is today! 😉 Don't forget to take a breather and grab some water.`, es: `Reconocimiento del esfuerzo laboral con empatía.` },
+              { title: '✨ Option 2: Pleasant Breather', target: `I hope seeing my message gives you a nice little breather in the middle of work ✨ How is your day going?`, es: `Momento de frescura en medio de sus ocupaciones.` },
+              { title: '☕ Option 3: Coffee & Evening Plans', target: `Have you taken a coffee break yet? 😉 What are you looking forward to doing most once you're off the clock?`, es: `Pregunta sobre planes después del trabajo.` }
+            ];
+          }
+        }
+
+        if (isBedtime) {
+          if (langCode === 'pt') {
+            return [
+              { title: '🌙 Opção 1: Boa Noite Doce', target: `Descansa bem e tenha os sonhos mais lindos, meu bem! ❤️ Dorme com os anjinhos 🤗💋`, es: `Despedida carinhosa e doce para fechar o dia.` },
+              { title: '💬 Opção 2: Até Amanhã', target: `Vai descansar seu corpinho ✨ Vou ficar pensando em você. Me escreve amanhã assim que acordar? 😉`, es: `Compromisso para retomar o chat pela manhã.` },
+              { title: '✨ Opção 3: Noite Confortável', target: `Adoro falar com você antes de dormir ✨ Uma noite tranquila e maravilhosa para você, meu amor!`, es: `Afeto recíproco antes de pegar no sono.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '🌙 Opción 1: Dulces Sueños', target: `¡Descansa mucho y que tengas los sueños más lindos! ❤️ Duerme calientito 🤗💋`, es: `Despedida cariñosa y tierna para cerrar el día.` },
+              { title: '💬 Opción 2: Cita Matutina', target: `Ve a recargar energías ✨ Me quedo pensando en ti. ¿Me escribes mañana al despertar? 😉`, es: `Gancho cariñoso para retomar el chat por la mañana.` },
+              { title: '✨ Opción 3: Noche Cálida', target: `Me encanta hablar contigo antes de dormir ✨ ¡Que descanses riquísimo, mi amor!`, es: `Afecto recíproco antes de cerrar los ojos.` }
+            ];
+          } else {
+            return [
+              { title: '🌙 Option 1: Sweet Dreams', target: `Rest well and have the sweetest dreams, my dear! ❤️ Sleep warm and peaceful 🤗💋`, es: `Despedida cariñosa y tierna para cerrar el día.` },
+              { title: '💬 Option 2: Morning Continuity', target: `Go get some rest, sweetheart ✨ I'll be thinking of you. Text me tomorrow morning? 😉`, es: `Gancho cariñoso para retomar el chat por la mañana.` },
+              { title: '✨ Option 3: Cozy Goodnight', target: `I love talking to you before bed ✨ Have a truly wonderful night, my love!`, es: `Afecto recíproco antes de cerrar los ojos.` }
+            ];
+          }
+        }
+
+        if (isEntertainment) {
+          if (langCode === 'pt') {
+            return [
+              { title: '🎬 Opção 1: Curiosidade da Cena', target: `Adoro saber o que você está assistindo! 🍿 Depois me conta qual foi sua parte favorita 😉`, es: `Validação do filme com pergunta aberta.` },
+              { title: '✨ Opção 2: Noite de Sofá', target: `Parece uma ótima escolha para relaxar 😉 Queria estar aí no sofá dividindo a pipoca com você ❤️`, es: `Fantasia aconchegante de assistir juntos.` },
+              { title: '🍿 Opção 3: Foto do Cantinho', target: `Nada melhor do que um bom filme ✨ Me manda uma foto de onde você está assistindo? 😉`, es: `Incentivo a foto espontânea no sofá/cama.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '🎬 Opción 1: Curiosidad Cinéfila', target: `¡Me encanta saber qué estás viendo! 🍿 Luego me cuentas cuál fue tu parte favorita 😉`, es: `Validación de la película con pregunta abierta.` },
+              { title: '✨ Opción 2: Noche de Sofá', target: `Suena perfecta para relajarse 😉 Me encantaría estar ahí en el sofá compartiendo palomitas ❤️`, es: `Fantasía cálida de ver películas juntos.` },
+              { title: '🍿 Opción 3: Foto Cómoda', target: `¡Qué buen plan de descanso! ✨ ¿Me mandas una foto de cómo estás disfrutando la peli? 😉`, es: `Petición de foto de relax para intimar más.` }
+            ];
+          } else {
+            return [
+              { title: '🎬 Option 1: Movie Curiosity', target: `I love that you're watching that! 🍿 You definitely have to tell me your favorite scene later 😉`, es: `Validación de la película con pregunta abierta.` },
+              { title: '✨ Option 2: Cozy Couch Thought', target: `Sounds like a great movie to unwind to 😉 Wish I were there sharing the snacks with you ❤️`, es: `Fantasía cálida de ver películas juntos.` },
+              { title: '🍿 Option 3: Cozy Photo Request', target: `Nothing beats a good movie night ✨ Send me a quick pic of how cozy you are watching it 😉`, es: `Petición de foto de relax para intimar más.` }
+            ];
+          }
+        }
+
+        if (isWeatherCold) {
+          if (langCode === 'pt') {
+            return [
+              { title: '🌧️ Opção 1: Conexão no Frio', target: `Tempo perfeito para ficar debaixo das cobertas quentinhas! 😉 Você está se cuidando do frio?`, es: `Empatia com o clima chuvoso/frio.` },
+              { title: '❤️ Opção 2: Vontade de Abraço', target: `Adoro dias assim... me dá uma vontade enorme de estar juntinho com você no quentinho ❤️`, es: `Insinuação romântica aconchegante.` },
+              { title: '☕ Opção 3: Foto do Clima', target: `Não vai pegar chuva por aí, hein! ✨ Me manda uma foto de como está seu dia hoje? 😉`, es: `Cuidado carinhoso e pedido de foto.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '🌧️ Opción 1: Clima Acogedor', target: `¡Clima perfecto para quedarse calientito bajo las cobijas! 😉 ¿Te estás cuidando del frío?`, es: `Empatía con el frío y su comodidad.` },
+              { title: '❤️ Opción 2: Ganas de Acurrucarse', target: `Me encantan estos días... me dan unas ganas enormes de estar juntitos en el calor de casa ❤️`, es: `Insinuación romántica y tierna.` },
+              { title: '☕ Opción 3: Foto del Momento', target: `¡No te vayas a mojar con la lluvia! ✨ ¿Me mandas una foto de cómo está tu día hoy? 😉`, es: `Cuidado afectuoso y gancho de foto.` }
+            ];
+          } else {
+            return [
+              { title: '🌧️ Option 1: Cozy Weather Connection', target: `Perfect weather to bundle up in a warm cozy blanket! 😉 Are you staying warm inside?`, es: `Empatía con el frío y su comodidad.` },
+              { title: '❤️ Option 2: Cuddly Thought', target: `I love days like this... makes me really wish I were cuddled up warm with you right now ❤️`, es: `Insinuación romántica y tierna.` },
+              { title: '☕ Option 3: Weather Photo Ask', target: `Don't get caught out in the storm! ✨ Send me a picture of what you're up to today 😉`, es: `Cuidado afectuoso y gancho de foto.` }
+            ];
+          }
+        }
+
+        if (isFoodOrDrink) {
+          if (langCode === 'pt') {
+            return [
+              { title: '☕ Opção 1: Curiosidade Culinária', target: `Que delícia! 😉 Você mesmo que preparou ou foi comer fora? Me deixou curiosa!`, es: `Pergunta aberta sobre a comida/café.` },
+              { title: '❤️ Opção 2: Companhia à Mesa', target: `Adoraria estar aí dividindo essa refeição com você... O que você mais gosta de saborear? ❤️`, es: `Imagem mental de comer juntos.` },
+              { title: '✨ Opção 3: Foto da Refeição', target: `Me manda uma foto do seu prato ou café para me dar água na boca? 😉`, es: `Pedido de foto do momento cotidiano.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '☕ Opción 1: Curiosidad Gastronómica', target: `¡Qué delicia! 😉 ¿Lo preparaste tú mismo o saliste a comer? ¡Me dio curiosidad!`, es: `Pregunta abierta sobre la comida/café.` },
+              { title: '❤️ Opción 2: Compañía en la Mesa', target: `Me encantaría estar ahí compartiendo ese momento contigo... ¿Qué es lo que más te gusta comer? ❤️`, es: `Imagen mental de compartir la mesa.` },
+              { title: '✨ Opción 3: Foto Provocativa', target: `¿Me mandas una foto de tu café o tu comida para antojame un poquito? 😉`, es: `Petición de foto de su comida o café.` }
+            ];
+          } else {
+            return [
+              { title: '☕ Option 1: Food Curiosity', target: `That sounds delicious! 😉 Did you cook it yourself or are you treating yourself out?`, es: `Pregunta abierta sobre la comida/café.` },
+              { title: '❤️ Option 2: Dining Together', target: `I would love to be right there sharing that meal with you... What's your absolute favorite food? ❤️`, es: `Imagen mental de compartir la mesa.` },
+              { title: '✨ Option 3: Food Photo Share', target: `Send me a picture of your coffee or food right now to tempt me a little? 😉`, es: `Petición de foto de su comida o café.` }
+            ];
+          }
+        }
+
+        if (isClientQuestion) {
+          if (langCode === 'pt') {
+            return [
+              { title: '💬 Opção 1: Resposta Doce & Reciprocidade', target: `Adoro quando você me pergunta essas coisas 😉 Eu estava aqui pensando em você e relaxando um pouco ❤️`, es: `Responde com carinho e devolve a atenção.` },
+              { title: '✨ Opção 2: Entusiasmo Natural', target: `Estou ótima, especialmente agora conversando com você ✨ E você, como está se sentindo nesse momento?`, es: `Validação positiva da pergunta dele.` },
+              { title: '😉 Opção 3: Charme & Curiosidade', target: `Você sempre sabe como me fazer sorrir 😉 Me conta, o que te deu essa curiosidade agora?`, es: `Charme suave incentivando continuidade.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '💬 Opción 1: Respuesta Dulce & Reciprocidad', target: `Me encanta cuando me preguntas esas cosas 😉 Estaba justo aquí pensando en ti y descansando ❤️`, es: `Responde con ternura y devuelve la atención.` },
+              { title: '✨ Opción 2: Entusiasmo Natural', target: `Estoy muy bien, y más ahora que leo tu mensaje ✨ Y tú, ¿cómo te estás sintiendo en este instante?`, es: `Validación positiva de su pregunta.` },
+              { title: '😉 Opción 3: Coqueteo & Curiosidad', target: `Siempre sabes cómo sacarme una sonrisa 😉 Dime, ¿qué fue lo que te dio esa curiosidad hoy?`, es: `Coqueteo sutil incentivando continuidad.` }
+            ];
+          } else {
+            return [
+              { title: '💬 Option 1: Sweet Direct Answer', target: `I love when you ask me things like that 😉 I was just right here thinking of you and taking a break ❤️`, es: `Responde con ternura y devuelve la atención.` },
+              { title: '✨ Option 2: Warm Return Question', target: `I'm doing so well, especially now that I'm talking with you ✨ How are you feeling right at this moment?`, es: `Validación positiva de su pregunta.` },
+              { title: '😉 Option 3: Playful Curiosity', target: `You always know how to make me smile 😉 Tell me, what brought that sweet thought to your mind?`, es: `Coqueteo sutil incentivando continuidad.` }
+            ];
+          }
+        }
+
+        if (isRomanceOrCompliment) {
+          if (langCode === 'pt') {
+            return [
+              { title: '❤️ Opção 1: Doçura & Agradecimento', target: `Você tem um jeito tão doce de falar que me deixa toda boba ❤️ Obrigado pelo carinho!`, es: `Agradecimento tímido e encantador ao elogio.` },
+              { title: '✨ Opção 2: Romantismo & Charme', target: `Cada palavra sua me faz sentir tão pertinho de você ✨ Você sempre foi romântico assim? 😉`, es: `Devolve o romantismo com pergunta sedutora.` },
+              { title: '📸 Opção 3: Troca de Fotos', target: `Você me faz sorrir de verdade ✨ Me manda uma foto sua agora e eu te mando uma exclusiva de volta? 😉`, es: `Gera monetização com troca de fotos.` }
+            ];
+          } else if (langCode === 'es') {
+            return [
+              { title: '❤️ Opción 1: Dulzura & Agradecimiento', target: `Tienes una forma tan dulce de hablarme que me derrites por completo ❤️ ¡Gracias por ser tan lindo!`, es: `Agradecimiento tierno y seductor al halago.` },
+              { title: '✨ Opción 2: Romanticismo & Encanto', target: `Cada palabra tuya me hace sentirte muy cerquita ✨ ¿Siempre has sido tan caballeroso y detallista? 😉`, es: `Devuelve el galanteo con picardía.` },
+              { title: '📸 Opción 3: Intercambio de Fotos', target: `De verdad me haces sonreír ✨ ¿Me mandas una foto tuya de hoy y te mando una exclusiva de vuelta? 😉`, es: `Gancho de alta conversión para fotos recíprocas.` }
+            ];
+          } else {
+            return [
+              { title: '❤️ Option 1: Heartfelt Gratitude', target: `You have such a sweet way of talking to me that truly melts my heart ❤️ Thank you for being so kind!`, es: `Agradecimiento tierno y seductor al halago.` },
+              { title: '✨ Option 2: Romantic Chemistry', target: `Your words make me feel so close to you ✨ Have you always been this much of a romantic charmer? 😉`, es: `Devuelve el galanteo con picardía.` },
+              { title: '📸 Option 3: Reciprocal Photo Trade', target: `You genuinely make me smile ✨ Send me a picture of that handsome smile and I'll send one right back? 😉`, es: `Gancho de alta conversión para fotos recíprocas.` }
+            ];
+          }
+        }
+
+        // 12. SÍNTESIS CONTEXTUAL DINÁMICA (Si no cae en patrones anteriores, ECO DIRECTO Y PREGUNTA TAILORED)
+        if (langCode === 'pt') {
+          return [
+            { title: '💬 Opção 1: Validação dos Seus Pensamentos', target: `Gostei de você me contar isso 😉 Me fala mais sobre o que está passando pela sua cabeça agora?`, es: `Reflexão direta e incentivo a aprofundar o assunto.` },
+            { title: '❤️ Opção 2: Conexão Afetuosa do Momento', target: `É tão bom quando a gente compartilha nossos pensamentos ❤️ Como está sendo o resto do seu dia?`, es: `Cumplicidade genuína respondendo à presença dele.` },
+            { title: '✨ Opção 3: Troca de Afeto e Foto', target: `Você sempre me faz pensar em coisas boas ✨ Me manda uma foto de onde você está agora? 😉`, es: `Proposta de foto cotidiana conectada à conversa.` }
+          ];
+        } else if (langCode === 'es') {
+          return [
+            { title: '💬 Opción 1: Validación de tus Palabras', target: `Me gusta mucho que me cuentes esto 😉 Dime más sobre lo que está pasando por tu mente ahora.`, es: `Reflexión directa y apertura para que profundice en el tema.` },
+            { title: '❤️ Opción 2: Conexión Afectuosa del Día', target: `Es tan lindo cuando compartimos lo que pensamos ❤️ ¿Cómo va el resto de tu día?`, es: `Complicidad genuina respondiendo a su mensaje.` },
+            { title: '✨ Opción 3: Vínculo Cotidiano & Foto', target: `Siempre logras sacarme pensamientos bonitos ✨ ¿Me mandas una foto tuya de este momento? 😉`, es: `Propuesta de intercambio fotográfico cotidiano.` }
+          ];
+        } else {
+          return [
+            { title: '💬 Option 1: Genuine Thought Reflection', target: `I really like that you shared that with me 😉 Tell me more about what's on your mind right now.`, es: `Reflexión directa y apertura para que profundice en el tema.` },
+            { title: '❤️ Option 2: Warm Emotional Resonance', target: `It's so wonderful when we can share genuine thoughts like this ❤️ How is the rest of your day going?`, es: `Complicidad genuina respondiendo a su mensaje.` },
+            { title: '✨ Option 3: Sweet Check-in & Photo', target: `You always bring such a nice energy to my day ✨ Send me a quick picture of yourself right now? 😉`, es: `Propuesta de intercambio fotográfico cotidiano.` }
+          ];
+        }
+      };
+
+      // 3. Consultar backend, PERO rechazar si devuelve plantillas obsoletas/genéricas
+      const lastMsg = liveClientMessages.length > 0 ? liveClientMessages[liveClientMessages.length - 1].text : '';
+      let chosenOptions = null;
+
+      try {
+        const res = await fetch(`${API_URL}/api/intelligence/generate-chat-reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: liveClientName,
+            clientId: liveClientId,
+            profileName: sessionData.profileName,
+            targetLang: liveDetectedLang.code,
+            bioData: liveBioData,
+            recentMessages: liveMessages,
+            recentLetters: liveLetters
+          })
+        });
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.options) && data.options.length > 0) {
+          // Detectar y descartar plantillas viejas que no razonan sobre el mensaje actual
+          const isObsoleteTemplate = data.options.some(o => 
+            (o.title && /Engaging Curiosity Hook|Warm & Direct Reply|Intimate Mystery Spark/i.test(o.title)) ||
+            (o.target && /I was just taking a little breather|tell me what was one fun or unexpected thing/i.test(o.target))
+          );
+          if (!isObsoleteTemplate) {
+            chosenOptions = data.options;
+          }
+        }
+      } catch (err) {
+        console.warn('[AgenteRYR] Fallback a motor neuronal contextual local:', err);
+      }
+
+      // Si el servidor no devolvió o devolvió plantillas viejas, usar el motor de síntesis contextual ultra-preciso
+      if (!chosenOptions) {
+        chosenOptions = synthesizeDynamicChatOptions(lastMsg, liveDetectedLang.code, liveClientName);
+      }
+
+      renderOptionsList(chosenOptions);
     };
   }
 
-  // 12. RECOLECTOR 360° BIDIRECCIONAL (CHAT + CARTAS)
-  function parseCurrentChatMessagesBidirectional(realClientName) {
-    const messages = [];
-    const seenSignatures = new Set();
+  // 12. RECOLECTOR 360° BIDIRECCIONAL & ACUMULATIVO (CHAT + CARTAS)
+  const persistentClientChatHistoryMap = new Map(); // clientId -> Map(msgHash -> msgObj)
+  const persistentClientLettersMap = new Map(); // clientId -> Map(letterHash -> letterObj)
 
-    // Buscar exclusivamente el contenedor de mensajes del chat ACTIVO
+  function parseCurrentChatMessagesBidirectional(realClientName) {
+    const cleanClientId = getExactNumericClientId() || 'user';
+    if (!persistentClientChatHistoryMap.has(cleanClientId)) {
+      persistentClientChatHistoryMap.set(cleanClientId, new Map());
+    }
+    const clientHistory = persistentClientChatHistoryMap.get(cleanClientId);
+
+    // Buscar el contenedor de mensajes del chat ACTIVO
     const chatView = document.querySelector(
       'div[data-test-id*="dialog-content"], div[data-test-id*="chat-messages"], div[class*="dialog-content"], div[class*="chat-scroll"], div[class*="chat-body"], div[class*="main-chat"]'
     );
 
-    if (!chatView) return messages;
-
-    const allLeafElements = chatView.querySelectorAll('div, p');
-
-    allLeafElements.forEach(node => {
-      // Ignorar si el nodo está dentro de la barra lateral, lista de chats, herramientas o HUD
-      if (
-        node.closest('div[data-test-id*="dialog-item"]') ||
-        node.closest('div[class*="dialog-item"]') ||
-        node.closest('div[class*="item-wrap"]') ||
-        node.closest('div[class*="dialogs"]') ||
-        node.closest('div[class*="sidebar"]') ||
-        node.closest('#ryr-titan-bar') ||
-        node.closest('#ryr-intel-panel') ||
-        node.closest('.ryr-chat-tools-wrapper') ||
-        node.closest('.ryr-chat-hooks-dropdown')
-      ) {
-        return;
+    if (chatView) {
+      // Intentar disparar carga de mensajes anteriores si estamos scrolleando
+      const scrollEl = chatView.closest('[class*="scroll"], [class*="dialog-content"], [class*="messages"]') || chatView;
+      if (scrollEl && scrollEl.scrollTop > 100) {
+        // Puede haber más mensajes arriba
       }
 
-      if (node.querySelectorAll('div, p').length > 2) return;
+      const allLeafElements = chatView.querySelectorAll('div, p');
+      allLeafElements.forEach(node => {
+        // Ignorar si el nodo está dentro de la barra lateral, lista de chats, herramientas o HUD
+        if (
+          node.closest('div[data-test-id*="dialog-item"]') ||
+          node.closest('div[class*="dialog-item"]') ||
+          node.closest('div[class*="item-wrap"]') ||
+          node.closest('div[class*="dialogs"]') ||
+          node.closest('div[class*="sidebar"]') ||
+          node.closest('#ryr-titan-bar') ||
+          node.closest('#ryr-intel-panel') ||
+          node.closest('.ryr-chat-tools-wrapper') ||
+          node.closest('.ryr-chat-hooks-dropdown')
+        ) {
+          return;
+        }
 
-      const raw = node.innerText || '';
-      if (raw.includes('TITAN APEX') || raw.includes('Search') || (raw.includes('seen') && raw.length < 10) || raw.includes('View post') || raw.includes('CONTINUAR CHAT') || raw.includes('GANCHOS DE')) return;
+        if (node.querySelectorAll('div, p').length > 2) return;
 
-      if (/^(today|yesterday|january|february|march|april|may|june|july|august|september|october|november|december)\s*\d{0,2}$/i.test(raw.trim())) {
-        return;
-      }
+        const raw = node.innerText || '';
+        if (raw.includes('TITAN APEX') || raw.includes('Search') || (raw.includes('seen') && raw.length < 10) || raw.includes('View post') || raw.includes('CONTINUAR CHAT') || raw.includes('GANCHOS DE')) return;
 
-      const timeMatch = raw.match(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/i);
-      const timeText = timeMatch ? timeMatch[0] : '';
+        if (/^(today|yesterday|january|february|march|april|may|june|july|august|september|october|november|december)\s*\d{0,2}$/i.test(raw.trim())) {
+          return;
+        }
 
-      let cleanText = raw
-        .replace(/(?:You:|Tú:|Tu:|Você:)/gi, '')
-        .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/gi, '')
-        .replace(/\bseen\b/gi, '')
-        .replace(/\bView post\b/gi, '')
-        .replace(/\bShow original\b/gi, '')
-        .trim();
+        const timeMatch = raw.match(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/i);
+        const timeText = timeMatch ? timeMatch[0] : '';
 
-      if (!cleanText || cleanText.length < 1) return;
+        let cleanText = raw
+          .replace(/(?:You:|Tú:|Tu:|Você:)/gi, '')
+          .replace(/\b\d{1,2}:\d{2}\s*(?:am|pm|a\.?\s*m\.?|p\.?\s*m\.?)\b/gi, '')
+          .replace(/\bseen\b/gi, '')
+          .replace(/\bView post\b/gi, '')
+          .replace(/\bShow original\b/gi, '')
+          .trim();
 
-      const hasCheck = node.querySelector('svg[class*="check"], [class*="status-sent"]') !== null || 
-                       node.innerHTML.includes('polyline') || 
-                       node.innerHTML.includes('check') || 
-                       raw.includes('✔');
+        if (!cleanText || cleanText.length < 1) return;
 
-      const hasOperatorPrefix = /(?:you:|tú:|tu:|você:)/i.test(raw);
-      
-      const bgColor = window.getComputedStyle(node).backgroundColor;
-      const isCreamBubble = bgColor.includes('254, 249') || bgColor.includes('254, 240') || bgColor.includes('255, 251') || bgColor.includes('224, 231');
-      const isRight = window.getComputedStyle(node).justifyContent === 'flex-end' || 
-                      window.getComputedStyle(node.parentElement || node).justifyContent === 'flex-end' ||
-                      node.className.includes('right') || 
-                      node.className.includes('out');
+        const hasCheck = node.querySelector('svg[class*="check"], [class*="status-sent"]') !== null || 
+                         node.innerHTML.includes('polyline') || 
+                         node.innerHTML.includes('check') || 
+                         raw.includes('✔');
 
-      const isOperator = hasCheck || hasOperatorPrefix || isCreamBubble || isRight;
-      const cleanClientId = getExactNumericClientId() || 'user';
-      const msgHash = `msg_${cleanClientId}_${isOperator ? 'OP' : 'RU'}_${cleanText.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${(timeText || 'now').replace(/[^a-z0-9]/gi, '')}`;
+        const hasOperatorPrefix = /(?:you:|tú:|tu:|você:)/i.test(raw);
+        
+        const bgColor = window.getComputedStyle(node).backgroundColor;
+        const isCreamBubble = bgColor.includes('254, 249') || bgColor.includes('254, 240') || bgColor.includes('255, 251') || bgColor.includes('224, 231');
+        const isRight = window.getComputedStyle(node).justifyContent === 'flex-end' || 
+                        window.getComputedStyle(node.parentElement || node).justifyContent === 'flex-end' ||
+                        node.className.includes('right') || 
+                        node.className.includes('out');
 
-      if (!seenSignatures.has(msgHash)) {
-        seenSignatures.add(msgHash);
-        messages.push({
-          id: msgHash,
-          isOperator: Boolean(isOperator),
-          senderName: isOperator ? (sessionData.profileName || 'HORACIO') : realClientName,
-          time: timeText || 'Reciente',
-          date: new Date().toLocaleDateString(),
-          text: cleanText
-        });
-      }
-    });
+        const isOperator = hasCheck || hasOperatorPrefix || isCreamBubble || isRight;
+        const msgHash = `msg_${cleanClientId}_${isOperator ? 'OP' : 'RU'}_${cleanText.substring(0, 30).replace(/[^a-z0-9]/gi, '_')}_${(timeText || 'now').replace(/[^a-z0-9]/gi, '')}`;
 
-    return messages;
+        if (!clientHistory.has(msgHash)) {
+          clientHistory.set(msgHash, {
+            id: msgHash,
+            isOperator: Boolean(isOperator),
+            senderName: isOperator ? (sessionData.profileName || 'HORACIO') : realClientName,
+            time: timeText || 'Reciente',
+            date: new Date().toLocaleDateString(),
+            text: cleanText
+          });
+        }
+      });
+    }
+
+    return Array.from(clientHistory.values());
   }
 
   function extractMailThreadContext() {
-    const letters = [];
     const currentClientId = getExactNumericClientId() || 'user';
-    const seenLetterSignatures = new Set();
+    if (!persistentClientLettersMap.has(currentClientId)) {
+      persistentClientLettersMap.set(currentClientId, new Map());
+    }
+    const clientLettersHistory = persistentClientLettersMap.get(currentClientId);
 
     // 1. Buscar tarjetas y elementos de carta en Talkytimes
     const mailCards = document.querySelectorAll(
@@ -1885,9 +2596,8 @@
 
       const letterHash = `mail_${cleanBody.substring(0, 40).replace(/[^a-z0-9]/gi, '_')}`;
 
-      if (!seenLetterSignatures.has(letterHash)) {
-        seenLetterSignatures.add(letterHash);
-        letters.push({
+      if (!clientLettersHistory.has(letterHash)) {
+        clientLettersHistory.set(letterHash, {
           id: letterHash,
           clientId: currentClientId,
           isOutgoing: Boolean(isMe),
@@ -1899,7 +2609,7 @@
     });
 
     // 2. Fallback: Capturar cualquier párrafo de carta visible en la página de hilos
-    if (letters.length === 0 && window.location.href.includes('/mails/')) {
+    if (clientLettersHistory.size === 0 && window.location.href.includes('/mails/')) {
       const allParagraphs = document.querySelectorAll('p, div');
       allParagraphs.forEach(p => {
         if (p.children.length > 1) return;
@@ -1907,9 +2617,8 @@
         const txt = (p.innerText || '').trim();
         if (txt.length >= 35 && !txt.includes('Send your letter') && !txt.includes('File size limit') && !txt.includes('Up to 10 photos')) {
           const letterHash = `mail_p_${txt.substring(0, 40).replace(/[^a-z0-9]/gi, '_')}`;
-          if (!seenLetterSignatures.has(letterHash)) {
-            seenLetterSignatures.add(letterHash);
-            letters.push({
+          if (!clientLettersHistory.has(letterHash)) {
+            clientLettersHistory.set(letterHash, {
               id: letterHash,
               clientId: currentClientId,
               isOutgoing: false,
@@ -1922,7 +2631,7 @@
       });
     }
 
-    return letters;
+    return Array.from(clientLettersHistory.values());
   }
 
   function buildCurrentMarkdownTranscript(clientName, clientId, bioData, letters = []) {
@@ -2189,7 +2898,7 @@
     };
 
     // Acción: Desplegar 3 Opciones de Respuesta / Apertura de Carta con Razonamiento Táctico y ~250 caracteres
-    genLetterBtn.onclick = (e) => {
+    genLetterBtn.onclick = async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -2210,109 +2919,6 @@
       dropdown.className = 'ryr-letter-hooks-dropdown';
       drafterBox.appendChild(dropdown);
 
-      const generateReasonedLetterOptions = () => {
-        const fullLetterCorpus = letters.map(l => l.preview).join(' ').toLowerCase();
-        const fullChatCorpus = messages.map(m => m.text).join(' ').toLowerCase();
-        const combinedCorpus = `${fullLetterCorpus} ${fullChatCorpus}`;
-        const lastIncomingText = (lastIncomingLetter ? lastIncomingLetter.preview : '').toLowerCase();
-
-        // Detección profunda de tópicos en cartas previas
-        const hasEmbraceOrHeart = /\b(embrace|heart|virtue|dreams|path together|respect|patience|bond|look each other|journey|care for you|affection|soul|destiny)\b/i.test(lastIncomingText) || /\b(embrace|heart|bond|journey|care)\b/i.test(combinedCorpus);
-        const hasPhotoTopic = /photo|pic|picture|foto|selfie|portrait/i.test(lastIncomingText) || /photo|picture|foto/i.test(combinedCorpus);
-        const hasWorkOrBusyTopic = /work|job|busy|tired|trabalho|trabajo|cansad|ocupad|shift/i.test(lastIncomingText);
-        const hasSicknessOrRestTopic = /headache|sick|ill|flu|rain|cold|fever|resting|dolor|cabeza|enferm|remedio|pastilla/i.test(lastIncomingText);
-        const hasDeepAffectionTopic = /love|amor|miss|saudade|extrañ|cora[çc][aã]o|querid|special|precious/i.test(lastIncomingText);
-
-        const myProfile = sessionData.profileName || 'Eu';
-        const clientDisplayName = clientName || 'friend';
-
-        let options = [];
-
-        if (detectedLang.code === 'pt') {
-          // PORTUGUÊS (~250-350 caracteres)
-          let intro1 = 'Li cada detalhe da sua carta com uma emoção imensa e um sorriso no rosto.';
-          if (hasEmbraceOrHeart) intro1 = 'Suas palavras sobre caminhar juntos e cuidar um do outro tocaram o fundo do meu coração.';
-          else if (hasPhotoTopic) intro1 = 'Adorei a foto que você me enviou! Ver seu olhar me fez sentir você tão pertinho.';
-
-          options = [
-            {
-              title: '🪝 Opção 1: Resposta Emocional Profunda (280+ car.)',
-              rationale: 'Validação afetuosa das palavras dele, retribuição de carinho e pergunta intimista.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\n${intro1}\n\nSaber que valoras nuestra conexión me llena de una paz maravillosa. Compartir este camino contigo es algo que atesoro profundamente.\n\nDime algo, ¿cuál es ese sueño o detalle especial que hoy te hizo sonreír pensando en nosotros?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
-              target: `Meu querido ${clientDisplayName},\n\n${intro1}\n\nSaber que você valoriza a nossa sintonia e sonha com esse carinho me enche de uma paz maravilhosa. Cada linha que você me escreve se tornou o meu momento favorito do dia.\n\nMe conta, qual foi o pensamento mais bonito que te fez sorrir hoje?\n\nCom todo o meu afeto,\n${myProfile} ❤️`
-            },
-            {
-              title: '💬 Opção 2: Conexão & Troca de Fotos (260+ car.)',
-              rationale: 'Vínculo cotidiano e incentivo magnético a envio de fotos recíprocas.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba pensando en ti mientras descansaba un momento. Me encanta imaginar tu día a día.\n\nEnvíame una foto tuya de hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
-              target: `Meu querido ${clientDisplayName},\n\nEstava aqui pensando em você e em tudo o que compartilhamos. Adoro imaginar como é a sua rotina e sentir essa cumplicidade crescendo a cada carta.\n\nMe envia uma foto sua de hoje para eu sentir seu olhar mais perto, e na próxima carta te mando uma foto exclusiva 😉\n\nCom um abraço bem carinhoso,\n${myProfile} ✨`
-            },
-            {
-              title: '✨ Opção 3: Fascinação & Pergunta Íntima (270+ car.)',
-              rationale: 'Pergunta aberta de alta curiosidade que convida a uma carta longa e envolvente.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNossas cartas se transformaram no refúgio mais doce dos meus dias.\n\nConta-me um segredo ou sonho seu que poucas pessoas conhecem... o que é aquilo que mais enche seu coração de paixão?\n\nSempre pensando em você,\n${myProfile} ❤️`,
-              target: `Meu querido ${clientDisplayName},\n\nNossas cartas se tornaram o refúgio mais doce e autêntico dos meus dias. Adoro o jeito carinhoso e verdadeiro como você se abre comigo.\n\nMe conta um segredo ou um sonho seu que poucas pessoas conhecem... o que mais enche seu coração de paixão na vida?\n\nCom todo o meu carinho,\n${myProfile} ❤️`
-            }
-          ];
-        } else if (detectedLang.code === 'es') {
-          // ESPAÑOL (~250-380 caracteres)
-          let intro1 = 'Leí tu hermosa carta con muchísima atención y no pude evitar sonreír al sentir tu ternura.';
-          if (hasEmbraceOrHeart) intro1 = 'Tus palabras sobre abrazar este camino juntos y cuidarnos mutuamente me llegaron directo al corazón.';
-          else if (hasPhotoTopic) intro1 = '¡Me fascinó la foto que me compartiste! Ver tu mirada y tu sonrisa me hizo sentirte muy cerca.';
-
-          options = [
-            {
-              title: '🪝 Opción 1: Respuesta Emocional Profunda (280+ car.)',
-              rationale: 'Validación afectuosa directa a sus palabras, complicidad y reciprocidad emocional.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\n${intro1}\n\nSaber que valoras lo que estamos construyendo me da una paz inmensa. En medio de la rutina diaria, recibir tus pensamientos se ha convertido en mi momento favorito.\n\nDime, ¿cuál fue el detalle o pensamiento más lindo que te alegró el día de hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
-              target: `Mi queridísimo ${clientDisplayName},\n\n${intro1}\n\nSaber que valoras lo que estamos construyendo me da una paz inmensa. En medio de la rutina diaria, recibir tus pensamientos se ha convertido en mi momento favorito.\n\nDime, ¿cuál fue el detalle o pensamiento más lindo que te alegró el día de hoy?\n\nCon todo mi cariño,\n${myProfile} ❤️`
-            },
-            {
-              title: '💬 Opción 2: Conexión Cotidiana & Fotos (270+ car.)',
-              rationale: 'Vínculo con su rutina diaria y propuesta magnética de intercambio de fotos.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar sonreír pensando en ti. Me encanta compartir estos pedacitos de vida contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`,
-              target: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar sonreír pensando en ti. Me encanta compartir estos pedacitos de vida contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva 😉 ¿Trato hecho?\n\nCon un beso muy dulce,\n${myProfile} ✨`
-            },
-            {
-              title: '✨ Opción 3: Fascinación & Pregunta Íntima (280+ car.)',
-              rationale: 'Pregunta reflexiva y romántica para incentivar una respuesta extensa.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en la parte más especial de mis días. Hay una autenticidad muy hermosa en la forma en que nos comunicamos.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
-              target: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en la parte más especial de mis días. Hay una autenticidad muy hermosa en la forma en que nos comunicamos.\n\nCuéntame un secreto o un sueño tuyo que pocas personas conozcan... ¿qué es aquello que más enciende tu pasión en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`
-            }
-          ];
-        } else {
-          // ENGLISH (DEFAULT) (~250-380 characters)
-          let intro1 = 'I read every single line of your beautiful letter with such deep warmth and a genuine smile.';
-          if (hasEmbraceOrHeart) intro1 = 'Your words about embracing this journey together and caring for each other touched my heart so deeply.';
-          else if (hasPhotoTopic) intro1 = 'I absolutely loved the picture you sent me! Seeing your warm gaze made me feel so close to you.';
-          else if (hasWorkOrBusyTopic) intro1 = 'I know how demanding your days can be, yet you always bring such calm and sweetness into my life.';
-
-          options = [
-            {
-              title: '🪝 Option 1: Deep Emotional Reply (280+ char)',
-              rationale: 'Deep validation of his letter, heartfelt appreciation and an intimate open question.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\n${intro1}\n\nSaber que valoras nuestra conexión y sueñas con este cariño me llena de una paz maravillosa. Leer tus cartas se ha convertido en el momento más dulce de mi día.\n\nDime algo... ¿cuál fue el pensamiento más lindo o lo que te hizo sonreír hoy pensando en nosotros?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
-              target: `My dearest ${clientDisplayName},\n\n${intro1}\n\nKnowing how much you cherish our connection brings such a wonderful sense of peace to my heart. Reading your letters has truly become the sweetest highlight of my day.\n\nTell me, what was the sweetest thought or little moment that made you smile today?\n\nWith all my affection,\n${myProfile} ❤️`
-            },
-            {
-              title: '💬 Option 2: Daily Life & Photo Exchange (270+ char)',
-              rationale: 'Daily lifestyle connection and magnetic proposal for reciprocal photo exchange.',
-              esPreview: `Mi querido ${clientDisplayName},\n\nEstaba tomando un pequeño descanso y no pude evitar sonreír pensando en ti. Me encanta compartir estos instantes contigo.\n\nEnvíame una foto tuya de lo que estás haciendo hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon un beso dulce,\n${myProfile} ✨`,
-              target: `My dear ${clientDisplayName},\n\nI was just taking a quiet little break and couldn't help but smile thinking of you. I love imagining what your day is like and sharing these sweet moments together.\n\nSend me a picture of what you're up to today so I can feel closer to you, and in my next letter I'll send an exclusive photo just for you 😉 Deal?\n\nWith a sweet hug,\n${myProfile} ✨`
-            },
-            {
-              title: '✨ Option 3: Romantic Curiosity & Intimate Question (280+ char)',
-              rationale: 'Fascinating open question that invites a long, thoughtful, romantic reply.',
-              esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestras cartas se han convertido en un espacio verdaderamente mágico y especial para mí. Adoro la sinceridad con la que nos hablamos.\n\nCuéntame un pequeño sueño o secreto tuyo que pocas personas conozcan... ¿qué es lo que más te apasiona en la vida?\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
-              target: `My dearest ${clientDisplayName},\n\nOur letters have truly become something so precious and special to me. I love how genuine and sweet our bond feels with every word.\n\nTell me a little dream or secret of yours that very few people know about... what is something that brings true passion and joy to your heart?\n\nAlways thinking of you,\n${myProfile} ❤️`
-            }
-          ];
-        }
-
-        return options;
-      };
-
-      const letterOptions = generateReasonedLetterOptions();
       const headerTitle = hasIncomingLetter 
         ? `🔄 RESPONDER CARTA A ${clientName.toUpperCase()} (${detectedLang.name}):` 
         : `🎯 REDACTAR CARTA PARA ${clientName.toUpperCase()} (${detectedLang.name}):`;
@@ -2333,7 +2939,10 @@
           <span style="cursor:pointer; color:#94a3b8; font-size:13px;" id="ryr-close-letter-dropdown">✕</span>
         </div>
         ${warningHtml}
-        <div id="ryr-letter-options-container" style="display:flex; flex-direction:column; gap:5px;"></div>
+        <div id="ryr-letter-loading" style="text-align:center; padding:18px 10px; color:#34d399; font-size:11px; font-weight:bold;">
+          🧠 Razonando cartas y contexto con IA...
+        </div>
+        <div id="ryr-letter-options-container" style="display:none; flex-direction:column; gap:5px;"></div>
       `;
 
       const closeBtn = dropdown.querySelector('#ryr-close-letter-dropdown');
@@ -2351,32 +2960,431 @@
       }
 
       const container = dropdown.querySelector('#ryr-letter-options-container');
+      const loadingEl = dropdown.querySelector('#ryr-letter-loading');
 
-      letterOptions.forEach((opt, idx) => {
-        const card = document.createElement('div');
-        card.className = 'ryr-letter-option-card';
-        card.innerHTML = `
-          <div class="ryr-letter-option-title">
-            <span>${opt.title}</span>
-            <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
-          </div>
-          <div class="ryr-letter-option-rationale">💡 <b>Razón Táctica:</b> ${opt.rationale}</div>
-          <div class="ryr-letter-option-preview"><b>📝 En Español (Vista Operador):</b><br/>${opt.esPreview}</div>
-          <div style="font-size:9.5px; color:#38bdf8; margin-top:2px; font-weight:bold;">⚡ Clic para insertar carta en ${detectedLang.name}</div>
-        `;
+      const renderLetterCards = (optionsToRender) => {
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (!container) return;
+        container.style.display = 'flex';
+        container.innerHTML = '';
 
-        card.onclick = () => {
-          const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
-          if (ta) {
-            setInputValueSafely(ta, opt.target);
-            showFirewallToast(`✨ Carta en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
-            ta.focus();
+        optionsToRender.forEach((opt, idx) => {
+          const card = document.createElement('div');
+          card.className = 'ryr-letter-option-card';
+          card.innerHTML = `
+            <div class="ryr-letter-option-title">
+              <span>${opt.title || `Opción ${idx + 1}`}</span>
+              <span class="ryr-letter-option-badge">Opción ${idx + 1}</span>
+            </div>
+            <div class="ryr-letter-option-rationale">💡 <b>Razón Táctica:</b> ${opt.rationale || 'Respuesta contextual razonada.'}</div>
+            <div class="ryr-letter-option-preview"><b>📝 En Español (Vista Operador):</b><br/>${opt.esPreview || opt.target}</div>
+            <div style="font-size:9.5px; color:#38bdf8; margin-top:2px; font-weight:bold;">⚡ Clic para insertar carta en ${detectedLang.name}</div>
+          `;
+
+          card.onclick = () => {
+            const ta = document.querySelector('textarea[placeholder*="letter" i], div[class*="letter"] textarea, textarea');
+            if (ta) {
+              setInputValueSafely(ta, opt.target);
+              showFirewallToast(`✨ Carta en ${detectedLang.name} insertada con éxito. ¡Lista para enviar!`);
+              ta.focus();
+            }
+            dropdown.remove();
+          };
+
+          container.appendChild(card);
+        });
+      };
+
+      const generateReasonedLetterOptions = () => {
+        const fullLetterCorpus = letters.map(l => l.preview).join(' ').toLowerCase();
+        const fullChatCorpus = messages.map(m => m.text).join(' ').toLowerCase();
+        const combinedCorpus = `${fullLetterCorpus} ${fullChatCorpus}`;
+        const lastIncomingText = (lastIncomingLetter ? (lastIncomingLetter.preview || lastIncomingLetter.text || '') : '').toLowerCase();
+
+        // Detección profunda de tópicos en cartas previas
+        const isConflictOrMoving = /\b(friend|pack|packing|storage|move|moving|limit|limits|toxic|betray|argument|drama|boxes|messing|lie|leaving|house|apartment|start over|nuevo comienzo|empacar|mudanza|amig)\b/i.test(lastIncomingText) || /\b(friend|pack|storage|limit|boxes|mudanza)\b/i.test(combinedCorpus);
+        const hasWorkOrBusyTopic = /\b(work|job|busy|tired|trabalho|trabajo|cansad|ocupad|shift|office|exhausted)\b/i.test(lastIncomingText) || /\b(work|job|shift|busy)\b/i.test(combinedCorpus);
+        const hasSicknessOrPain = /\b(headache|sick|ill|flu|rain|cold|fever|resting|dolor|cabeza|enferm|remedio|pastilla|hospital)\b/i.test(lastIncomingText);
+        const hasPhotoTopic = /photo|pic|picture|foto|selfie|portrait|look|mirada|eyes/i.test(lastIncomingText) || /photo|picture|foto/i.test(combinedCorpus);
+        const hasJourneyTogether = /\b(journey|emprender|viaje|together|juntos|path|camino|destiny|destino|future|futuro|bond|connection|respect|embrace|heart|soul)\b/i.test(lastIncomingText) || /\b(journey|destiny|bond)\b/i.test(combinedCorpus);
+
+        const myProfile = sessionData.profileName || (detectedLang.code === 'pt' ? 'Eu' : (detectedLang.code === 'es' ? 'Yo' : 'Me'));
+        const clientDisplayName = clientName || (detectedLang.code === 'pt' ? 'meu bem' : (detectedLang.code === 'es' ? 'corazón' : 'my dear'));
+
+        let options = [];
+
+        // CASO 1: CONFLICTO PERSONAL / MUDANZA / STORAGE / LÍMITES (Caso Blondebaby)
+        if (isConflictOrMoving) {
+          if (detectedLang.code === 'pt') {
+            options = [
+              {
+                title: '🛡️ Opção 1: Apoio Genuíno & Validação de Limites',
+                rationale: 'Valida a decisão difícil de se afastar de pessoas tóxicas e pergunta sobre a mudança.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nLi suas palavras com muita atenção e meu coração está com você. Tomar a decisão de se afastar de quem não te valoriza exige muita coragem, mas sua paz não tem preço.\n\nComo está o processo de empacotar e levar as coisas para o storage? Vá com calma, você é forte e uma nova fase linda está começando para você ❤️\n\nSempre aqui por você,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nLi suas palavras com muita atenção e meu coração está com você. Tomar a decisão de se afastar de quem não te valoriza exige muita coragem, mas sua paz não tem preço.\n\nComo está o processo de empacotar e levar as coisas para o storage? Vá com calma, você é forte e uma nova fase linda está começando para você ❤️\n\nSempre aqui por você,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opção 2: Refúgio de Paz & Alívio Futuro',
+                rationale: 'Oferece acolhimento emocional para diminuir a sobrecarga e foca no alívio de recomeçar.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nNinguém merece carregar tanto estresse por causa de falsidades alheias. Respira fundo... tudo o que você está enfrentando vai valer a pena quando sentir o alívio de ter seu espaço em paz.\n\nMe conta, qual é a primeira coisa que você vai querer fazer para relaxar assim que terminar tudo? 😉\n\nCom todo meu carinho,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nNinguém merece carregar tanto estresse por causa de falsidades alheias. Respira fundo... tudo o que você está enfrentando vai valer a pena quando sentir o alívio de ter seu espaço em paz.\n\nMe conta, qual é a primeira coisa que você vai querer fazer para relaxar assim que terminar tudo? 😉\n\nCom todo meu carinho,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Opção 3: Força Interior & Troca de Fotos',
+                rationale: 'Incentiva pausas na rotina pesada e convida a uma troca suave de fotos.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nAdmiro muito sua postura firme em não aceitar desrespeito. No meio de tanta correria, não esquece de respirar e se alimentar bem.\n\nQuando fizer um descanso, me manda uma foto sua para eu sentir seu olhar e te mandar um sorriso carinhoso de volta 😉 Combinado?\n\nUm abraço bem quentinho,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nAdmiro muito sua postura firme em não aceitar desrespeito. No meio de tanta correria, não esquece de respirar e se alimentar bem.\n\nQuando fizer um descanso, me manda uma foto sua para eu sentir seu olhar e te mandar um sorriso carinhoso de volta 😉 Combinado?\n\nUm abraço bem quentinho,\n${myProfile} ✨`
+              }
+            ];
+          } else if (detectedLang.code === 'es') {
+            options = [
+              {
+                title: '🛡️ Opción 1: Apoyo Genuino & Validación de Límites',
+                rationale: 'Valida la valentía de alejarse de falsas amistades y pregunta por la mudanza.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nLeí cada detalle de tu carta y de verdad mi corazón está contigo. Poner límites y alejarte de quien no te valora requiere un valor enorme, pero tu tranquilidad no tiene precio.\n\n¿Cómo vas empacando tus cosas hacia el storage? Ve paso a paso, eres muy fuerte y un nuevo comienzo mucho más libre te espera ❤️\n\nSiempre aquí para ti,\n${myProfile} ✨`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nLeí cada detalle de tu carta y de verdad mi corazón está contigo. Poner límites y alejarte de quien no te valora requiere un valor enorme, pero tu tranquilidad no tiene precio.\n\n¿Cómo vas empacando tus cosas hacia el storage? Ve paso a paso, eres muy fuerte y un nuevo comienzo mucho más libre te espera ❤️\n\nSiempre aquí para ti,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opción 2: Refugio de Paz & Alivio Futuro',
+                rationale: 'Ofrece contención ante el agobio y enfoca en la paz mental una vez termine de ordenar todo.',
+                esPreview: `Mi querido ${clientDisplayName},\n\nNadie merece cargar con tanto desgaste por actitudes egoístas de otros. Respira hondo... todo este esfuerzo valdrá la pena en cuanto veas tus cosas organizadas y sientas tu propia paz.\n\nCuéntame, ¿qué es lo primero que quieres hacer para consentirte una vez termines de acomodar todo? 😉\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+                target: `Mi querido ${clientDisplayName},\n\nNadie merece cargar con tanto desgaste por actitudes egoístas de otros. Respira hondo... todo este esfuerzo valdrá la pena en cuanto veas tus cosas organizadas y sientas tu propia paz.\n\nCuéntame, ¿qué es lo primero que quieres hacer para consentirte una vez termines de acomodar todo? 😉\n\nCon todo mi cariño,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Opción 3: Fortaleza Interior & Intercambio de Fotos',
+                rationale: 'Elogia su resiliencia y propone una foto de respiro para sacarlo del estrés.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nAdmiro muchísimo tu determinación para no tolerar faltas de respeto. En medio de tantas cajas y ajetreo, por favor date permiso de descansar y tomar un respiro.\n\nCuando tomes una pausa, mándame una foto tuya para sentirte cerca y enviarte una sonrisa exclusiva 😉 ¿Trato hecho?\n\nUn abrazo muy cálido,\n${myProfile} ✨`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nAdmiro muchísimo tu determinación para no tolerar faltas de respeto. En medio de tantas cajas y ajetreo, por favor date permiso de descansar y tomar un respiro.\n\nCuando tomes una pausa, mándame una foto tuya para sentirte cerca y enviarte una sonrisa exclusiva 😉 ¿Trato hecho?\n\nUn abrazo muy cálido,\n${myProfile} ✨`
+              }
+            ];
+          } else {
+            options = [
+              {
+                title: '🛡️ Option 1: Genuine Support & Healthy Boundaries',
+                rationale: 'Deeply validates the client walking away from toxic friends and asks about packing/storage progress.',
+                esPreview: `My dearest ${clientDisplayName},\n\nI read every line of your letter and my heart is truly with you right now. Standing up for yourself and walking away from people who don't respect your boundaries takes so much courage, but your peace is worth everything.\n\nHow is packing and getting your belongings to storage going? Take it one box at a time... you're so resilient and a fresh, peaceful chapter is waiting for you ❤️\n\nAlways here for you,\n${myProfile} ✨`,
+                target: `My dearest ${clientDisplayName},\n\nI read every line of your letter and my heart is truly with you right now. Standing up for yourself and walking away from people who don't respect your boundaries takes so much courage, but your peace is worth everything.\n\nHow is packing and getting your belongings to storage going? Take it one box at a time... you're so resilient and a fresh, peaceful chapter is waiting for you ❤️\n\nAlways here for you,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Option 2: Safe Sanctuary & Freedom Ahead',
+                rationale: 'Offers warm emotional refuge to alleviate moving stress and focuses on the relief of a clean start.',
+                esPreview: `My dear ${clientDisplayName},\n\nYou truly do not deserve to carry so much weight from someone else's drama. Take a deep, gentle breath... this exhausting storm will pass, and the relief you will feel having your things sorted and peaceful will be unmatched.\n\nTell me, what is the very first thing you want to do just for yourself once you get everything settled? 😉\n\nWith all my warmth,\n${myProfile} ❤️`,
+                target: `My dear ${clientDisplayName},\n\nYou truly do not deserve to carry so much weight from someone else's drama. Take a deep, gentle breath... this exhausting storm will pass, and the relief you will feel having your things sorted and peaceful will be unmatched.\n\nTell me, what is the very first thing you want to do just for yourself once you get everything settled? 😉\n\nWith all my warmth,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Option 3: Inner Strength & Sweet Photo Break',
+                rationale: 'Praises their inner strength and invites a quick restful photo exchange to bring comfort.',
+                esPreview: `My dearest ${clientDisplayName},\n\nI admire your inner strength so much for putting your foot down and prioritizing your sanity. Amidst all the packing and heavy lifting, please promise me you will take a quiet moment to drink some water and breathe.\n\nWhen you pause for a break, send me a quick picture of yourself so I can send you a warm smile right back 😉 Deal?\n\nHolding you close,\n${myProfile} ✨`,
+                target: `My dearest ${clientDisplayName},\n\nI admire your inner strength so much for putting your foot down and prioritizing your sanity. Amidst all the packing and heavy lifting, please promise me you will take a quiet moment to drink some water and breathe.\n\nWhen you pause for a break, send me a quick picture of yourself so I can send you a warm smile right back 😉 Deal?\n\nHolding you close,\n${myProfile} ✨`
+              }
+            ];
           }
-          dropdown.remove();
-        };
+        }
+        // CASO 2: AGOTAMIENTO LABORAL / ESTRÉS
+        else if (hasWorkOrBusyTopic) {
+          if (detectedLang.code === 'pt') {
+            options = [
+              {
+                title: '💼 Opção 1: Alívio & Reconhecimento do Esforço',
+                rationale: 'Reconhece o cansaço do trabalho e oferece conforto acolhedor.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nPercebo o quanto você se dedica e como seus dias têm sido exigentes. É admirável sua dedicação, mas você merece descansar a mente e o corpo.\n\nEspero que ler esta carta seja o seu cantinho de paz hoje. Me conta, qual é a sua maneira favorita de se desligar do mundo e relaxar? ❤️\n\nCom todo meu carinho,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nPercebo o quanto você se dedica e como seus dias têm sido exigentes. É admirável sua dedicação, mas você merece descansar a mente e o corpo.\n\nEspero que ler esta carta seja o seu cantinho de paz hoje. Me conta, qual é a sua maneira favorita de se desligar do mundo e relaxar? ❤️\n\nCom todo meu carinho,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opção 2: Pausa Afetuosa & Troca de Fotos',
+                rationale: 'Incentiva uma pausa saudável e propõe uma foto exclusiva.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nQueria tanto poder te preparar algo gostoso e te fazer massagem para tirar toda essa tensão do trabalho. Não se cobre tanto hoje!\n\nMe envia uma foto sua descansando agora para eu te mandar uma foto bem especial só para você 😉\n\nCom um beijo doce,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nQueria tanto poder te preparar algo gostoso e te fazer massagem para tirar toda essa tensão do trabalho. Não se cobre tanto hoje!\n\nMe envia uma foto sua descansando agora para eu te mandar uma foto bem especial só para você 😉\n\nCom um beijo doce,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Opção 3: Conexão Emocional Profunda',
+                rationale: 'Fortalece o vínculo íntimo em meio à rotina cansativa.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nMesmo na correria, saber que você tira um tempo para me escrever aquece demais o meu coração. Nossas cartas são a melhor parte do meu dia.\n\nQual é aquele sonho ou viagem que você mais quer realizar quando tiver férias? 😉\n\nSempre pensando em você,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nMesmo na correria, saber que você tira um tempo para me escrever aquece demais o meu coração. Nossas cartas são a melhor parte do meu dia.\n\nQual é aquele sonho ou viagem que você mais quer realizar quando tiver férias? 😉\n\nSempre pensando em você,\n${myProfile} ✨`
+              }
+            ];
+          } else if (detectedLang.code === 'es') {
+            options = [
+              {
+                title: '💼 Opción 1: Alivio & Reconocimiento de tu Esfuerzo',
+                rationale: 'Valida el cansancio por el trabajo y le brinda un remanso de paz.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nNoto cuánto te esfuerzas y lo demandantes que han sido tus jornadas. Admiro tu dedicación, pero también mereces consentirte y dejar las preocupaciones a un lado.\n\nDeseo que leer mis letras sea tu respiro de paz hoy. Dime, ¿cuál es tu plan ideal cuando por fin logras desconectar de todo? ❤️\n\nCon todo mi cariño,\n${myProfile} ✨`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nNoto cuánto te esfuerzas y lo demandantes que han sido tus jornadas. Admiro tu dedicación, pero también mereces consentirte y dejar las preocupaciones a un lado.\n\nDeseo que leer mis letras sea tu respiro de paz hoy. Dime, ¿cuál es tu plan ideal cuando por fin logras desconectar de todo? ❤️\n\nCon todo mi cariño,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opción 2: Pausa Afectuosa & Foto Exclusiva',
+                rationale: 'Propuesta relajante con intercambio recíproco de fotos.',
+                esPreview: `Mi querido ${clientDisplayName},\n\nOjalá pudiera estar contigo para prepararte algo rico y ayudarte a soltar toda la tensión del día. ¡Por favor no te exijas de más hoy!\n\nMándame una fotico tuya relajándote para devolverte una foto muy linda y exclusiva para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ❤️`,
+                target: `Mi querido ${clientDisplayName},\n\nOjalá pudiera estar contigo para prepararte algo rico y ayudarte a soltar toda la tensión del día. ¡Por favor no te exijas de más hoy!\n\nMándame una fotico tuya relajándote para devolverte una foto muy linda y exclusiva para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Opción 3: Conexión Emocional & Sueños',
+                rationale: 'Profundiza en metas y anhelos para escapar del estrés cotidiano.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nSaber que en medio de tus compromisos te tomas el tiempo de escribirme me hace sentir sumamente especial. Eres una persona admirable.\n\nCuéntame, ¿cuál es ese viaje o proyecto personal que más te ilusiona para cuando tengas unos días libres? 😉\n\nSiempre pensando en ti,\n${myProfile} ✨`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nSaber que en medio de tus compromisos te tomas el tiempo de escribirme me hace sentir sumamente especial. Eres una persona admirable.\n\nCuéntame, ¿cuál es ese viaje o proyecto personal que más te ilusiona para cuando tengas unos días libres? 😉\n\nSiempre pensando en ti,\n${myProfile} ✨`
+              }
+            ];
+          } else {
+            options = [
+              {
+                title: '💼 Option 1: Comfort & Work Fatigue Relief',
+                rationale: 'Validates demanding job schedule and offers a calm, soothing presence.',
+                esPreview: `My dearest ${clientDisplayName},\n\nI can tell just how hard you work and how demanding your daily schedule has been. I truly respect your dedication, but please remember your body and mind deserve rest too.\n\nI hope reading my words feels like a cozy sanctuary in your day. Tell me, what is your favorite way to unwind when you finally get quiet time for yourself? ❤️\n\nWith all my affection,\n${myProfile} ✨`,
+                target: `My dearest ${clientDisplayName},\n\nI can tell just how hard you work and how demanding your daily schedule has been. I truly respect your dedication, but please remember your body and mind deserve rest too.\n\nI hope reading my words feels like a cozy sanctuary in your day. Tell me, what is your favorite way to unwind when you finally get quiet time for yourself? ❤️\n\nWith all my affection,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Option 2: Sweet Break & Photo Trade',
+                rationale: 'Encourages a cozy break from work with magnetic reciprocal photo trade.',
+                esPreview: `My dear ${clientDisplayName},\n\nI honestly wish I could be right by your side to make you a warm drink and help you let go of all that work stress. Please take it easy on yourself today!\n\nSend me a quick photo of yourself relaxing now, and in my next letter I'll send an exclusive picture just for you 😉 Deal?\n\nWith a sweet kiss,\n${myProfile} ❤️`,
+                target: `My dear ${clientDisplayName},\n\nI honestly wish I could be right by your side to make you a warm drink and help you let go of all that work stress. Please take it easy on yourself today!\n\nSend me a quick photo of yourself relaxing now, and in my next letter I'll send an exclusive picture just for you 😉 Deal?\n\nWith a sweet kiss,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Option 3: Romantic Daydreaming & Future Plans',
+                rationale: 'Invites the client to escape everyday work grind by talking about passions and travels.',
+                esPreview: `My dearest ${clientDisplayName},\n\nKnowing that despite your busy schedule you always think to write to me truly touches my heart. Our letters have become such a meaningful part of my life.\n\nTell me, where is one dream destination you would love to travel to whenever you take your next long vacation? 😉\n\nAlways thinking of you,\n${myProfile} ✨`,
+                target: `My dearest ${clientDisplayName},\n\nKnowing that despite your busy schedule you always think to write to me truly touches my heart. Our letters have become such a meaningful part of my life.\n\nTell me, where is one dream destination you would love to travel to whenever you take your next long vacation? 😉\n\nAlways thinking of you,\n${myProfile} ✨`
+              }
+            ];
+          }
+        }
+        // CASO 3: SALUD / MALESTAR
+        else if (hasSicknessOrPain) {
+          if (detectedLang.code === 'pt') {
+            options = [
+              {
+                title: '🩹 Opção 1: Cuidado Afetuoso & Recuperação',
+                rationale: 'Cuidado carinhoso e incentivo a tomar remédios e descansar.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nFiquei com o coração apertado ao saber que você não está se sentindo bem. Por favor, tome seus remédios, beba bastante água e descanse tudo o que puder.\n\nQueria tanto poder cuidar de você pessoalmente agora... Me conta, como você está se sentindo hoje? ❤️\n\nCom todo meu afeto,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nFiquei com o coração apertado ao saber que você não está se sentindo bem. Por favor, tome seus remédios, beba bastante água e descanse tudo o que puder.\n\nQueria tanto poder cuidar de você pessoalmente agora... Me conta, como você está se sentindo hoje? ❤️\n\nCom todo meu afeto,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opção 2: Carinho Reconfortante & Companhia',
+                rationale: 'Companhia reconfortante e pergunta sobre suporte durante a recuperação.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nNão se esforce para fazer nada hoje! O mundo pode esperar enquanto você se recupera com calma. Estou daqui enviando as melhores energias para você melhorar logo.\n\nVocê tem alguém aí cuidando de você ou está sozinho? 😉\n\nCom um abraço bem quentinho,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nNão se esforce para fazer nada hoje! O mundo pode esperar enquanto você se recupera com calma. Estou daqui enviando as melhores energias para você melhorar logo.\n\nVocê tem alguém aí cuidando de você ou está sozinho? 😉\n\nCom um abraço bem quentinho,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Opção 3: Pensamento Doce & Sorriso',
+                rationale: 'Desejo carinhoso de tirar um sorriso durante o repouso.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nQuero que você feche os olhos e sinta meu carinho aí com você. Quando estiver um pouquinho melhor, me escreve só para eu saber que você está em paz.\n\nO que eu poderia fazer agora para arrancar um sorriso do seu rosto? 😉\n\nSempre pensando em você,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nQuero que você feche os olhos e sinta meu carinho aí com você. Quando estiver um pouquinho melhor, me escreve só para eu saber que você está em paz.\n\nO que eu poderia fazer agora para arrancar um sorriso do seu rosto? 😉\n\nSempre pensando em você,\n${myProfile} ✨`
+              }
+            ];
+          } else if (detectedLang.code === 'es') {
+            options = [
+              {
+                title: '🩹 Opción 1: Cuidado Afectuoso & Recuperación',
+                rationale: 'Cuidado cariñoso y consejo de guardar reposo y tomar medicina.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nSe me encogió el corazón al saber que no te has sentido bien. Por favor toma tus medicinas con calma, bebe suficiente líquido y guarda todo el reposo que puedas.\n\nOjalá pudiera estar ahí cuidándote en persona... ¿Cómo te vas sintiendo hoy? ❤️\n\nCon todo mi cariño,\n${myProfile} ✨`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nSe me encogió el corazón al saber que no te has sentido bien. Por favor toma tus medicinas con calma, bebe suficiente líquido y guarda todo el reposo que puedas.\n\nOjalá pudiera estar ahí cuidándote en persona... ¿Cómo te vas sintiendo hoy? ❤️\n\nCon todo mi cariño,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opción 2: Mimo Reconfortante & Compañía',
+                rationale: 'Compañía empática y pregunta cariñosa sobre si tiene quién lo cuide.',
+                esPreview: `Mi querido ${clientDisplayName},\n\n¡Por favor no hagas ningún esfuerzo hoy! Tus responsabilidades pueden esperar mientras recuperas tus fuerzas. Aquí estaré enviándote la energía más linda para tu pronta mejoría.\n\n¿Hay alguien consintiéndote en casa o estás solito descansando? 😉\n\nCon un abrazo muy cálido,\n${myProfile} ❤️`,
+                target: `Mi querido ${clientDisplayName},\n\n¡Por favor no hagas ningún esfuerzo hoy! Tus responsabilidades pueden esperar mientras recuperas tus fuerzas. Aquí estaré enviándote la energía más linda para tu pronta mejoría.\n\n¿Hay alguien consintiéndote en casa o estás solito descansando? 😉\n\nCon un abrazo muy cálido,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Opción 3: Pensamiento Dulce & Sonrisa',
+                rationale: 'Acompañamiento dulce para levantar su ánimo en la cama.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nCierra tus ojos un momento y siente que estoy ahí acompañándote con dulzura. En cuanto sientas un alivio, escríbeme unas palabras para saber que estás mejor.\n\n¿Qué detalle te alegraría el corazón en este momento? 😉\n\nSiempre pensando en ti,\n${myProfile} ✨`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nCierra tus ojos un momento y siente que estoy ahí acompañándote con dulzura. En cuanto sientas un alivio, escríbeme unas palabras para saber que estás mejor.\n\n¿Qué detalle te alegraría el corazón en este momento? 😉\n\nSiempre pensando en ti,\n${myProfile} ✨`
+              }
+            ];
+          } else {
+            options = [
+              {
+                title: '🩹 Option 1: Tender Health Care & Recovery',
+                rationale: 'Cuidado cariñoso y consejo de guardar reposo y tomar medicina.',
+                esPreview: `My dearest ${clientDisplayName},\n\nIt truly worried me to hear you haven't been feeling well. Please make sure you take your medication, drink plenty of warm fluids, and get all the restful sleep you need.\n\nI really wish I were there to look after you and bring you comfort... How are you feeling right now? ❤️\n\nWith all my love,\n${myProfile} ✨`,
+                target: `My dearest ${clientDisplayName},\n\nIt truly worried me to hear you haven't been feeling well. Please make sure you take your medication, drink plenty of warm fluids, and get all the restful sleep you need.\n\nI really wish I were there to look after you and bring you comfort... How are you feeling right now? ❤️\n\nWith all my love,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Option 2: Cozy Healing Sanctuary',
+                rationale: 'Compañía empática y pregunta cariñosa sobre si tiene quién lo cuide.',
+                esPreview: `My dear ${clientDisplayName},\n\nPlease do not push yourself to do anything heavy today! Everything else can wait while you focus on regaining your strength. I am sending you all my warmest thoughts for a quick recovery.\n\nIs there someone looking after you at home, or are you resting on your own? 😉\n\nWith a warm comforting hug,\n${myProfile} ❤️`,
+                target: `My dear ${clientDisplayName},\n\nPlease do not push yourself to do anything heavy today! Everything else can wait while you focus on regaining your strength. I am sending you all my warmest thoughts for a quick recovery.\n\nIs there someone looking after you at home, or are you resting on your own? 😉\n\nWith a warm comforting hug,\n${myProfile} ❤️`
+              },
+              {
+                title: '🌸 Option 3: Gentle Comfort & Sweet Smile',
+                rationale: 'Acompañamiento dulce para levantar su ánimo en la cama.',
+                esPreview: `My dearest ${clientDisplayName},\n\nClose your eyes and picture me keeping you company with a warm blanket. Whenever you feel a little stronger, send me a note just so I know you are feeling better.\n\nWhat is something sweet that always brings a smile to your face when you're resting? 😉\n\nAlways thinking of you,\n${myProfile} ✨`,
+                target: `My dearest ${clientDisplayName},\n\nClose your eyes and picture me keeping you company with a warm blanket. Whenever you feel a little stronger, send me a note just so I know you are feeling better.\n\nWhat is something sweet that always brings a smile to your face when you're resting? 😉\n\nAlways thinking of you,\n${myProfile} ✨`
+              }
+            ];
+          }
+        }
+        // CASO 4: INTERCAMBIO DE FOTOS O AFECTO PROFUNDO
+        else if (hasPhotoTopic || hasJourneyTogether) {
+          if (detectedLang.code === 'pt') {
+            options = [
+              {
+                title: '📸 Opção 1: Conexão Afetuosa & Troca de Fotos',
+                rationale: 'Valida a sintonia visual e sentimental com troca mútua de fotos.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nSuas palavras e seu jeito carinhoso me tocam de uma maneira única. Adoro olhar suas fotos e sentir a verdade e o calor que transmitem os seus olhos.\n\nMe envia uma foto sua de hoje para eu guardar com carinho, e na minha próxima carta te mando uma foto exclusiva só para você 😉\n\nCom todo meu afeto,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nSuas palavras e seu jeito carinhoso me tocam de uma maneira única. Adoro olhar suas fotos e sentir a verdade e o calor que transmitem os seus olhos.\n\nMe envia uma foto sua de hoje para eu guardar com carinho, e na minha próxima carta te mando uma foto exclusiva só para você 😉\n\nCom todo meu afeto,\n${myProfile} ❤️`
+              },
+              {
+                title: '✨ Opção 2: Caminhar Juntos & Cumplicidade',
+                rationale: 'Foca na cumplicidade mútua e pergunta sobre conexão ideal.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nÉ tão raro e especial encontrar alguém com quem a conversa flui com tanta sinceridade e respeito. Saber que compartilhamos desse mesmo sentimento me enche de alegria.\n\nMe conta, qual é o valor que você considera mais importante e inegociável em uma relação de verdade? 😉\n\nCom um abraço apertado,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nÉ tão raro e especial encontrar alguém com quem a conversa flui com tanta sinceridade e respeito. Saber que compartilhamos desse mesmo sentimento me enche de alegria.\n\nMe conta, qual é o valor que você considera mais importante e inegociável em uma relação de verdade? 😉\n\nCom um abraço apertado,\n${myProfile} ✨`
+              },
+              {
+                title: '🌸 Opção 3: Romantismo & Sonhos Partilhados',
+                rationale: 'Pergunta íntima e magnética sobre paixões profundas.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nCada carta sua se tornou um momento de luz nos meus dias. Adoro o jeito doce como você compartilha seus sentimentos comigo.\n\nSe você pudesse escolher um momento perfeito para nós dois vivermos juntos, como ele seria? 😉\n\nSempre pensando em você,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nCada carta sua se tornou um momento de luz nos meus dias. Adoro o jeito doce como você compartilha seus sentimentos comigo.\n\nSe você pudesse escolher um momento perfeito para nós dois vivermos juntos, como ele seria? 😉\n\nSempre pensando em você,\n${myProfile} ❤️`
+              }
+            ];
+          } else if (detectedLang.code === 'es') {
+            options = [
+              {
+                title: '📸 Opción 1: Conexión Afectuosa & Fotos Exclusivas',
+                rationale: 'Valida la atracción mutua y propone intercambio de fotos.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nTus palabras y tu ternura me llegan de una forma muy especial. Me encanta mirar tus fotos y sentir la autenticidad y calidez que transmiten tus ojos.\n\nEnvíame una foto tuya de hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nTus palabras y tu ternura me llegan de una forma muy especial. Me encanta mirar tus fotos y sentir la autenticidad y calidez que transmiten tus ojos.\n\nEnvíame una foto tuya de hoy para sentirte más cerca, y en mi próxima carta te enviaré una foto exclusiva solo para ti 😉 ¿Trato hecho?\n\nCon todo mi cariño,\n${myProfile} ❤️`
+              },
+              {
+                title: '✨ Opción 2: Caminar Juntos & Complicidad Real',
+                rationale: 'Fomenta la complicidad y valores en una relación auténtica.',
+                esPreview: `Mi querido ${clientDisplayName},\n\nEs tan difícil y hermoso encontrar a alguien con quien la comunicación fluya con tanta pureza y respeto. Saber que valoras este camino me da una alegría inmensa.\n\nCuéntame, ¿cuál es ese valor que consideras imprescindible en una conexión verdadera entre dos personas? 😉\n\nUn abrazo muy cálido,\n${myProfile} ✨`,
+                target: `Mi querido ${clientDisplayName},\n\nEs tan difícil y hermoso encontrar a alguien con quien la comunicación fluya con tanta pureza y respeto. Saber que valoras este camino me da una alegría inmensa.\n\nCuéntame, ¿cuál es ese valor que consideras imprescindible en una conexión verdadera entre dos personas? 😉\n\nUn abrazo muy cálido,\n${myProfile} ✨`
+              },
+              {
+                title: '🌸 Opción 3: Romanticismo & Sueños Compartidos',
+                rationale: 'Pregunta romántica que estimula la imaginación y cartas largas.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nRecibir tus cartas se ha convertido en mi momento favorito del día. Hay una dulzura tan natural en la forma en que nos conocemos.\n\nSi pudieras diseñar una cita perfecta para los dos, ¿cómo te gustaría que fuera? 😉\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nRecibir tus cartas se ha convertido en mi momento favorito del día. Hay una dulzura tan natural en la forma en que nos conocemos.\n\nSi pudieras diseñar una cita perfecta para los dos, ¿cómo te gustaría que fuera? 😉\n\nSiempre pensando en ti,\n${myProfile} ❤️`
+              }
+            ];
+          } else {
+            options = [
+              {
+                title: '📸 Option 1: Affectionate Connection & Photo Trade',
+                rationale: 'Highlights visual chemistry and proposes a reciprocal photo trade.',
+                esPreview: `My dearest ${clientDisplayName},\n\nYour words and sincerity touch my heart in such a special way. I love looking at your photos and feeling the warmth and kindness in your eyes.\n\nSend me a photo of yourself today so I can feel closer to you, and in my next letter I will send an exclusive picture just for you 😉 Deal?\n\nWith all my love,\n${myProfile} ❤️`,
+                target: `My dearest ${clientDisplayName},\n\nYour words and sincerity touch my heart in such a special way. I love looking at your photos and feeling the warmth and kindness in your eyes.\n\nSend me a photo of yourself today so I can feel closer to you, and in my next letter I will send an exclusive picture just for you 😉 Deal?\n\nWith all my love,\n${myProfile} ❤️`
+              },
+              {
+                title: '✨ Option 2: Walking Together & True Bond',
+                rationale: 'Encourages mutual connection and values in a genuine relationship.',
+                esPreview: `My dear ${clientDisplayName},\n\nIt is truly rare and wonderful to find someone you can communicate with so authentically and peacefully. Knowing how much you respect our bond brings so much happiness to my days.\n\nTell me, what is one quality that you value above everything else in a relationship? 😉\n\nWith a warm embrace,\n${myProfile} ✨`,
+                target: `My dear ${clientDisplayName},\n\nIt is truly rare and wonderful to find someone you can communicate with so authentically and peacefully. Knowing how much you respect our bond brings so much happiness to my days.\n\nTell me, what is one quality that you value above everything else in a relationship? 😉\n\nWith a warm embrace,\n${myProfile} ✨`
+              },
+              {
+                title: '🌸 Option 3: Romantic Imagination & Dream Date',
+                rationale: 'Stimulates romantic imagination and invites an engaging, heartfelt letter.',
+                esPreview: `My dearest ${clientDisplayName},\n\nReading your letters has truly become the sweetest highlight of my day. There is such an effortless warmth in the way we share our thoughts.\n\nIf you could plan an absolute dream date for the two of us, what would we be doing? 😉\n\nAlways thinking of you,\n${myProfile} ❤️`,
+                target: `My dearest ${clientDisplayName},\n\nReading your letters has truly become the sweetest highlight of my day. There is such an effortless warmth in the way we share our thoughts.\n\nIf you could plan an absolute dream date for the two of us, what would we be doing? 😉\n\nAlways thinking of you,\n${myProfile} ❤️`
+              }
+            ];
+          }
+        }
+        // CASO 5: CARTA GENERAL / DESCUBRIMIENTO
+        else {
+          if (detectedLang.code === 'pt') {
+            options = [
+              {
+                title: '🪝 Opção 1: Conexão Emocional & Curiosidade',
+                rationale: 'Validação sincera e pergunta relaxante sobre o que o fez sorrir.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nAdoro ler suas palavras e perceber a serenidade com que você se comunica. Conversar com você sempre me traz uma energia muito leve.\n\nMe conta, qual foi o momento ou detalhe que mais colocou um sorriso no seu rosto recentemente? 😉\n\nCom todo meu carinho,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nAdoro ler suas palavras e perceber a serenidade com que você se comunica. Conversar com você sempre me traz uma energia muito leve.\n\nMe conta, qual foi o momento ou detalhe que mais colocou um sorriso no seu rosto recentemente? 😉\n\nCom todo meu carinho,\n${myProfile} ❤️`
+              },
+              {
+                title: '💬 Opção 2: Cumplicidade Cotidiana & Foto',
+                rationale: 'Intercâmbio de fotos cotidiano para estreitar laços.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nEstava aqui refletindo sobre o nosso contato e em como é bom ter alguém com quem trocar pensamentos sinceros.\n\nMe manda uma foto sua de hoje para eu te sentir mais pertinho, e na próxima carta te mando uma foto especial 😉\n\nCom um beijo doce,\n${myProfile} ✨`,
+                target: `Meu querido ${clientDisplayName},\n\nEstava aqui refletindo sobre o nosso contato e em como é bom ter alguém com quem trocar pensamentos sinceros.\n\nMe manda uma foto sua de hoje para eu te sentir mais pertinho, e na próxima carta te mando uma foto especial 😉\n\nCom um beijo doce,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opção 3: Fascinação & Pergunta Íntima',
+                rationale: 'Pergunta reflexiva sobre sonhos para gerar carta longa.',
+                esPreview: `Meu querido ${clientDisplayName},\n\nNossas conversas estão se tornando cada vez mais especiais para mim. Adoro conhecer o homem por trás de cada mensagem.\n\nMe conta um sonho ou segredo seu que poucas pessoas conhecem... o que te move na vida? 😉\n\nSempre aqui,\n${myProfile} ❤️`,
+                target: `Meu querido ${clientDisplayName},\n\nNossas conversas estão se tornando cada vez mais especiais para mim. Adoro conhecer o homem por trás de cada mensagem.\n\nMe conta um sonho ou segredo seu que poucas pessoas conhecem... o que te move na vida? 😉\n\nSempre aqui,\n${myProfile} ❤️`
+              }
+            ];
+          } else if (detectedLang.code === 'es') {
+            options = [
+              {
+                title: '🪝 Opción 1: Conexión Emocional & Curiosidad',
+                rationale: 'Validación sincera y pregunta relajante sobre lo que le alegró el día.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nMe encanta leer tus palabras y sentir la serenidad con la que te comunicas. Saber de ti siempre me llena de una energía hermosa y ligera.\n\nCuéntame, ¿cuál fue ese detalle o momento que logró sacarte una sonrisa genuina recientemente? 😉\n\nCon todo mi cariño,\n${myProfile} ❤️`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nMe encanta leer tus palabras y sentir la serenidad con la que te comunicas. Saber de ti siempre me llena de una energía hermosa y ligera.\n\nCuéntame, ¿cuál fue ese detalle o momento que logró sacarte una sonrisa genuina recientemente? 😉\n\nCon todo mi cariño,\n${myProfile} ❤️`
+              },
+              {
+                title: '💬 Opción 2: Complicidad Cotidiana & Foto',
+                rationale: 'Intercambio de fotos cotidiano para estrechar lazos.',
+                esPreview: `Mi querido ${clientDisplayName},\n\nEstaba aquí pensando en ti y en lo lindo que es tener a alguien con quien compartir pensamientos auténticos en medio de la rutina.\n\nMándame una fotico tuya de hoy para sentirte cerca, y en mi próxima carta te enviaré una foto exclusiva para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`,
+                target: `Mi querido ${clientDisplayName},\n\nEstaba aquí pensando en ti y en lo lindo que es tener a alguien con quien compartir pensamientos auténticos en medio de la rutina.\n\nMándame una fotico tuya de hoy para sentirte cerca, y en mi próxima carta te enviaré una foto exclusiva para ti 😉 ¿Trato?\n\nCon un beso dulce,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Opción 3: Fascinación & Pregunta Íntima',
+                rationale: 'Pregunta íntima y reflexiva para propiciar una respuesta amplia.',
+                esPreview: `Mi queridísimo ${clientDisplayName},\n\nNuestra comunicación se está convirtiendo en algo verdaderamente valioso para mí. Me encanta ir descubriendo el hombre detrás de cada carta.\n\nCuéntame un sueño o anhelo tuyo que pocas personas conozcan... ¿qué es lo que más te apasiona en la vida? 😉\n\nSiempre pensando en ti,\n${myProfile} ❤️`,
+                target: `Mi queridísimo ${clientDisplayName},\n\nNuestra comunicación se está convirtiendo en algo verdaderamente valioso para mí. Me encanta ir descubriendo el hombre detrás de cada carta.\n\nCuéntame un sueño o anhelo tuyo que pocas personas conozcan... ¿qué es lo que más te apasiona en la vida? 😉\n\nSiempre pensando en ti,\n${myProfile} ❤️`
+              }
+            ];
+          } else {
+            options = [
+              {
+                title: '🪝 Option 1: Genuine Connection & Sweet Curiosity',
+                rationale: 'Validación sincera y pregunta relajante sobre lo que le alegró el día.',
+                esPreview: `My dearest ${clientDisplayName},\n\nI really love reading your thoughts and feeling the calm, authentic energy you share with me. Hearing from you always brings such a gentle warmth to my day.\n\nTell me, what was one little moment recently that brought a genuine smile to your face? 😉\n\nWith all my affection,\n${myProfile} ❤️`,
+                target: `My dearest ${clientDisplayName},\n\nI really love reading your thoughts and feeling the calm, authentic energy you share with me. Hearing from you always brings such a gentle warmth to my day.\n\nTell me, what was one little moment recently that brought a genuine smile to your face? 😉\n\nWith all my affection,\n${myProfile} ❤️`
+              },
+              {
+                title: '💬 Option 2: Daily Warmth & Photo Trade',
+                rationale: 'Intercambio de fotos cotidiano para estrechar lazos.',
+                esPreview: `My dear ${clientDisplayName},\n\nI was just sitting here thinking of you and how comforting it is to share such authentic conversations with you amidst daily life.\n\nSend me a photo of yourself today so I can feel closer to you, and in my next letter I'll send an exclusive picture just for you 😉 Deal?\n\nWith a sweet hug,\n${myProfile} ✨`,
+                target: `My dear ${clientDisplayName},\n\nI was just sitting here thinking of you and how comforting it is to share such authentic conversations with you amidst daily life.\n\nSend me a photo of yourself today so I can feel closer to you, and in my next letter I'll send an exclusive picture just for you 😉 Deal?\n\nWith a sweet hug,\n${myProfile} ✨`
+              },
+              {
+                title: '✨ Option 3: Romantic Curiosity & Passion Question',
+                rationale: 'Pregunta íntima y reflexiva para propiciar una respuesta amplia.',
+                esPreview: `My dearest ${clientDisplayName},\n\nOur letters are truly becoming something so special and meaningful to me. I love discovering more about who you are with each word you write.\n\nTell me a dream or secret desire of yours that very few people know about... what brings the purest joy to your soul? 😉\n\nAlways thinking of you,\n${myProfile} ❤️`,
+                target: `My dearest ${clientDisplayName},\n\nOur letters are truly becoming something so special and meaningful to me. I love discovering more about who you are with each word you write.\n\nTell me a dream or secret desire of yours that very few people know about... what brings the purest joy to your soul? 😉\n\nAlways thinking of you,\n${myProfile} ❤️`
+              }
+            ];
+          }
+        }
 
-        container.appendChild(card);
-      });
+        return options;
+      };
+
+      // 1. Intentar consultar endpoint inteligente con memoria 360° en backend
+      try {
+        const res = await fetch(`${API_URL}/api/intelligence/generate-letter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: clientName,
+            clientId: clientId,
+            profileName: sessionData.profileName,
+            targetLang: detectedLang.code,
+            bioData: bioData,
+            letters: letters,
+            recentMessages: messages
+          })
+        });
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.options) && data.options.length > 0) {
+          // Descartar si el backend de Render devuelve plantillas obsoletas/genéricas
+          const isObsoleteTemplate = data.options.some(o => 
+            (o.target && /I was just taking a quiet little break|Saber que valoras nuestra conexión me llena de una paz maravillosa|Saber que você valoriza a nossa sintonia/i.test(o.target))
+          );
+          if (!isObsoleteTemplate) {
+            renderLetterCards(data.options);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[AgenteRYR] Fallback local a razonamiento heurístico de cartas:', err);
+      }
+
+      // 2. Fallback heurístico local
+      const fallbackLetterOpts = generateReasonedLetterOptions();
+      renderLetterCards(fallbackLetterOpts);
     };
   }
 
@@ -2499,16 +3507,23 @@
         return;
       }
 
-      let existingTimestamp = activeSlaTimers[nameKey] || (idKey ? activeSlaTimers[idKey] : null);
-      if (!existingTimestamp) {
-        existingTimestamp = Date.now();
-        activeSlaTimers[nameKey] = existingTimestamp;
-        if (idKey) activeSlaTimers[idKey] = existingTimestamp;
+      let existingTimerData = activeSlaTimers[nameKey] || (idKey ? activeSlaTimers[idKey] : null);
+      if (!existingTimerData) {
+        existingTimerData = {
+          startedAt: Date.now(),
+          duration: configuredSlaDurationSeconds,
+          contact: contactName,
+          numericId: rowNumericId
+        };
+        activeSlaTimers[nameKey] = existingTimerData;
+        if (idKey) activeSlaTimers[idKey] = existingTimerData;
         persistTimersToStorage();
       }
 
-      const elapsedSeconds = Math.floor((Date.now() - existingTimestamp) / 1000);
-      const remainingSeconds = Math.max(0, 120 - elapsedSeconds);
+      const startedAt = (typeof existingTimerData === 'object' && existingTimerData?.startedAt) ? existingTimerData.startedAt : (typeof existingTimerData === 'number' ? existingTimerData : Date.now());
+      const totalDuration = (typeof existingTimerData === 'object' && existingTimerData?.duration) ? existingTimerData.duration : configuredSlaDurationSeconds;
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      const remainingSeconds = Math.max(0, totalDuration - elapsedSeconds);
 
       const min = Math.floor(remainingSeconds / 60);
       const sec = remainingSeconds % 60;
@@ -2538,50 +3553,57 @@
       }
     });
 
-    // RECONCILIACIÓN ESTRICTA ANTI-FANTASMAS: Si hay timers guardados que ya no corresponden a ningún chat pendiente visible, eliminarlos de inmediato
-    const activeRowKeys = new Set();
-    rootRows.forEach(row => {
-      const fullText = row.innerText || '';
-      if (fullText.length < 3) return;
-      const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
-      const contactName = sanitizeClientName(lines[0]);
-      const cleanSimpleName = contactName.split(',')[0].trim().toLowerCase();
-      const nameKey = `name_${cleanSimpleName.replace(/[^a-z0-9]/g, '')}`;
-      let rowNumericId = 'N/A';
-      const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
-      if (userLink) {
-        rowNumericId = getExactNumericClientId(userLink.getAttribute('href'));
-      }
-      const idKey = (rowNumericId && rowNumericId !== 'N/A') ? `id_${rowNumericId}` : null;
+    // RECONCILIACIÓN ESTRICTA ANTI-FANTASMAS PROTEGIDA (INMUNE A RECARGAS F5)
+    if (rootRows.length >= 3) {
+      const activeRowKeys = new Set();
+      rootRows.forEach(row => {
+        const fullText = row.innerText || '';
+        if (fullText.length < 3) return;
+        const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
+        const contactName = sanitizeClientName(lines[0]);
+        const cleanSimpleName = contactName.split(',')[0].trim().toLowerCase();
+        const nameKey = `name_${cleanSimpleName.replace(/[^a-z0-9]/g, '')}`;
+        let rowNumericId = 'N/A';
+        const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
+        if (userLink) {
+          rowNumericId = getExactNumericClientId(userLink.getAttribute('href'));
+        }
+        const idKey = (rowNumericId && rowNumericId !== 'N/A') ? `id_${rowNumericId}` : null;
 
-      const hasOperatorSent = /(?:you|tú|tu|você)\s*:/i.test(fullText) || 
-                              row.querySelector('svg[class*="check"]') !== null ||
-                              fullText.includes('✔');
-      const isTyping = fullText.toLowerCase().includes('typing') || row.querySelector('[class*="typing"]');
-      const isLiked = fullText.toLowerCase().includes('liked');
-      const isKnownZeroCredits = zeroCreditsClientsSet.has(cleanSimpleName) || 
-                                 (rowNumericId !== 'N/A' && zeroCreditsClientsSet.has(rowNumericId.toLowerCase())) ||
-                                 (openChatHasZeroCredits && (rowNumericId === openChatNumericId || cleanSimpleName === openChatCleanName)) ||
-                                 /\b0\s+0\b/.test(fullText) || 
-                                 /[💬✉]\s*0\b/i.test(fullText);
+        const hasOperatorSent = /(?:you|tú|tu|você)\s*:/i.test(fullText) || 
+                                row.querySelector('svg[class*="check"]') !== null ||
+                                fullText.includes('✔');
+        const isTyping = fullText.toLowerCase().includes('typing') || row.querySelector('[class*="typing"]');
+        const isLiked = fullText.toLowerCase().includes('liked');
+        const isKnownZeroCredits = zeroCreditsClientsSet.has(cleanSimpleName) || 
+                                   (rowNumericId !== 'N/A' && zeroCreditsClientsSet.has(rowNumericId.toLowerCase())) ||
+                                   (openChatHasZeroCredits && (rowNumericId === openChatNumericId || cleanSimpleName === openChatCleanName)) ||
+                                   /\b0\s+0\b/.test(fullText) || 
+                                   /[💬✉]\s*0\b/i.test(fullText);
 
-      const isPending = !isKnownZeroCredits && (!hasOperatorSent || isTyping || isLiked);
-      if (isPending) {
-        activeRowKeys.add(nameKey);
-        if (idKey) activeRowKeys.add(idKey);
-      }
-    });
+        const isPending = !isKnownZeroCredits && (!hasOperatorSent || isTyping || isLiked);
+        if (isPending) {
+          activeRowKeys.add(nameKey);
+          if (idKey) activeRowKeys.add(idKey);
+        }
+      });
 
-    let cleanedAny = false;
-    for (const key of Object.keys(activeSlaTimers)) {
-      if (!activeRowKeys.has(key)) {
-        delete activeSlaTimers[key];
-        cleanedAny = true;
+      let cleanedAny = false;
+      const now = Date.now();
+      for (const [key, timerVal] of Object.entries(activeSlaTimers)) {
+        if (!activeRowKeys.has(key)) {
+          const startTime = (typeof timerVal === 'object' && timerVal?.startedAt) ? timerVal.startedAt : (typeof timerVal === 'number' ? timerVal : now);
+          const elapsed = Math.floor((now - startTime) / 1000);
+          if (elapsed > 7200 || /deleted|search/i.test(key)) {
+            delete activeSlaTimers[key];
+            cleanedAny = true;
+          }
+        }
       }
-    }
-    if (cleanedAny) {
-      persistTimersToStorage();
-      sendTelemetry(true);
+      if (cleanedAny) {
+        persistTimersToStorage();
+        sendTelemetry(true);
+      }
     }
   }
 
@@ -3401,7 +4423,6 @@
           <span id="ryr-badge-profile" class="ryr-badge ryr-badge-profile ryr-hide-on-mobile">🎯 ${sessionData.profileName || 'HORACIO'}</span>
           <span id="ryr-badge-afk" class="ryr-badge ${afkClass} ryr-badge-afk ryr-hide-on-mobile">${afkText}</span>
           <span id="ryr-badge-traffic" class="ryr-badge ${prospectClass}">🎯 Tráfico: ${prospectTimeText} [${prospect.count}/${prospect.quota}]</span>
-          <span id="ryr-badge-lag" class="ryr-badge ryr-badge-speed ryr-hide-on-mobile" title="Latencia de procesamiento DOM">${PerformanceSentinel.lastLoopDurationMs}ms Lag</span>
         </div>
         <div class="ryr-section ryr-section-actions">
           <button id="ryr-btn-open-sup-chat" class="ryr-btn-sup-chat">💬 Chat Sup</button>
@@ -3477,9 +4498,6 @@
         bTraf.innerText = `🎯 Tráfico: ${prospectTimeText} [${prospect.count}/${prospect.quota}]`;
       }
 
-      const bLag = document.getElementById('ryr-badge-lag');
-      if (bLag) bLag.innerText = `${PerformanceSentinel.lastLoopDurationMs}ms Lag`;
-
       const bRead = document.getElementById('ryr-badge-read');
       if (bRead) bRead.innerText = `✉️ Read: ${totalGlobalReadLetters}`;
     }
@@ -3502,7 +4520,7 @@
     const activeTimersList = [];
     const processedKeys = new Set();
 
-    for (let [key, startTime] of Object.entries(activeSlaTimers)) {
+    for (let [key, timerVal] of Object.entries(activeSlaTimers)) {
       const cleanName = key.replace(/^id_/, '').replace(/^name_/, '');
       if (/deleted|eliminado|search|messages|cliente/i.test(cleanName)) {
         delete activeSlaTimers[key];
@@ -3510,8 +4528,10 @@
         continue;
       }
 
+      const startTime = (typeof timerVal === 'object' && timerVal?.startedAt) ? timerVal.startedAt : (typeof timerVal === 'number' ? timerVal : now);
+      const totalDuration = (typeof timerVal === 'object' && timerVal?.duration) ? timerVal.duration : configuredSlaDurationSeconds;
       const elapsed = Math.floor((now - startTime) / 1000);
-      if (elapsed > 300) {
+      if (elapsed > 7200) {
         delete activeSlaTimers[key];
         persistTimersToStorage();
         continue;
@@ -3520,12 +4540,13 @@
       if (processedKeys.has(cleanName)) continue;
       processedKeys.add(cleanName);
 
-      const remaining = Math.max(0, 120 - elapsed);
+      const remaining = Math.max(0, totalDuration - elapsed);
       activeTimersList.push({
         contact: cleanName,
         elapsed: elapsed,
         remaining: remaining,
-        isExpired: elapsed >= 120
+        duration: totalDuration,
+        isExpired: elapsed >= totalDuration
       });
     }
 
@@ -3537,15 +4558,20 @@
     const pendingClientsList = [];
     const syncedClientsList = [];
 
-    const sidebarRows = document.querySelectorAll('div[data-test-id*="dialog-item"], div[class*="dialog-item"], div[class*="item-wrap"]');
+    const sidebarRows = document.querySelectorAll('div[data-test-id="dialog-item"], div[class*="dialog-item"]:not([class*="wrap"]), a[href*="/chat/"], a[href*="/user/"]');
+    const seenContactKeys = new Set();
     sidebarRows.forEach(row => {
-      const text = (row.innerText || '').trim();
-      const firstLine = text.split('\n')[0].trim();
-      const name = sanitizeClientName(firstLine);
-      if (!name || name === 'Cliente') return;
+      const nameEl = row.querySelector('b, strong, [class*="name"], [class*="title"]') || row;
+      const rawText = nameEl.innerText || '';
+      const name = sanitizeClientName(rawText);
+      if (!name || name === 'Cliente' || name.length < 2) return;
+
+      const contactKey = name.toLowerCase();
+      if (seenContactKeys.has(contactKey)) return;
+      seenContactKeys.add(contactKey);
 
       let rowNumericId = 'N/A';
-      const userLink = row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
+      const userLink = row.matches('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]') ? row : row.querySelector('a[href*="/chat/"], a[href*="/user/"], a[href*="/mails/"]');
       if (userLink) {
         rowNumericId = getExactNumericClientId(userLink.getAttribute('href'));
       }
@@ -3589,6 +4615,7 @@
           isCompleted: prospect.isCompleted
         },
         firewallInfractionsCount: firewallInfractionsCount,
+        infractionsList: liveInfractionsLog.slice(0, 30),
         syncAudit: syncAudit,
         fidelizedCount: fidelizedClientsMap.size,
         fidelizedList: Array.from(fidelizedClientsMap.values()),
@@ -3603,8 +4630,23 @@
     })
     .then(r => r.json())
     .then(data => {
+      if (data && data.responseTimeSeconds) {
+        if (configuredSlaDurationSeconds !== data.responseTimeSeconds) {
+          configuredSlaDurationSeconds = data.responseTimeSeconds;
+          if (isContextValid()) {
+            chrome.storage.local.set({ configuredSlaDurationSeconds });
+          }
+        }
+      }
       if (data && data.triggerMassExtraction) {
         triggerLocalBatchHarvest();
+      }
+      if (data && data.latestTaskAlert) {
+        const alert = data.latestTaskAlert;
+        const alertTs = alert.timestamp || alert.ts || 0;
+        if (alertTs && (Date.now() - alertTs < 120000)) {
+          handleIncomingTaskAlert(alert);
+        }
       }
     })
     .catch(() => {});
@@ -3652,4 +4694,113 @@
       syncServerKnownChats();
     }
   }, 2500);
+
+  // 15. RECEPTOR DE NAVEGACIÓN DIRECTA & ALERTAS GLOBALES DE TAREAS/VOZ (BROADCASTCHANNEL)
+  try {
+    const ryrNavBC = new BroadcastChannel('RYR_HUD_CHANNEL');
+    ryrNavBC.onmessage = (event) => {
+      const data = event.data;
+      if (!data) return;
+
+      // A. Apertura directa de clientes desde el radar
+      if (data.type === 'RYR_HUD_NAVIGATE_TO_CLIENT' && data.id) {
+        const targetId = String(data.id).trim();
+        const targetName = data.name || '';
+
+        // Banner cyberpunk en la interfaz de Talkytimes
+        showSupervisorDirectBanner(`🎯 [RYR RADAR APEX] Apertura solicitada: ${targetName ? targetName + ' ' : ''}(ID: ${targetId}). Conectando...`, `nav_${Date.now()}`);
+
+        // Intentar buscar en el sidebar de Talkytimes si ya existe el diálogo abierto
+        const sidebarRows = document.querySelectorAll('div[data-test-id*="dialog-item"], div[class*="dialog-item"], a[href*="/chat/"], a[href*="/user/"]');
+        let foundRow = null;
+        for (const row of sidebarRows) {
+          const rowText = (row.innerText || '').toLowerCase();
+          const userLink = row.matches('a[href*="/chat/"], a[href*="/user/"]') ? row : row.querySelector('a[href*="/chat/"], a[href*="/user/"]');
+          const href = userLink?.getAttribute('href') || '';
+          if (href.includes(targetId) || (targetName && targetName.length > 2 && rowText.includes(targetName.toLowerCase()))) {
+            foundRow = row;
+            break;
+          }
+        }
+
+        if (foundRow) {
+          foundRow.click();
+        } else if (window.location.href.includes('talkytimes.com') && !window.location.href.includes(`/user/${targetId}`)) {
+          window.location.href = `https://talkytimes.com/user/${targetId}`;
+        }
+        return;
+      }
+
+      // B. Alertas Globales de Tareas y Voz en Tiempo Real (Admin / Monitor / TV)
+      if (data.type === 'GLOBAL_TASK_ALERT' || data.type === 'GLOBAL_VOICE_ALERT') {
+        handleIncomingTaskAlert(data.payload);
+        return;
+      }
+
+      // C. Sincronización remota de activación/desactivación de Alertas de Tareas
+      if (data.type === 'TASK_ALERTS_CONFIG') {
+        const enabled = data.enabled !== false;
+        playAlertChime();
+        try {
+          if (window.speechSynthesis) {
+            const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de tareas activadas por el supervisor" : "Alertas de tareas pausadas");
+            utter.lang = 'es-ES';
+            window.speechSynthesis.speak(utter);
+          }
+        } catch(e) {}
+        showFirewallToast(enabled ? "📋 Alertas de tareas activadas" : "⏸️ Alertas de tareas desactivadas", enabled ? "success" : "warning");
+      }
+    };
+  } catch(e) {}
+
+  // 16. GESTOR UNIFICADO DE ALERTAS GLOBALES DE TAREAS Y COMUNICACIÓN INTER-PROCESO
+  let lastHandledGlobalTaskAlertId = null;
+  function handleIncomingTaskAlert(payload) {
+    if (!payload || !payload.text) return;
+    const msgId = payload.id || `alert_${Date.now()}`;
+    if (lastHandledGlobalTaskAlertId === msgId) return;
+    lastHandledGlobalTaskAlertId = msgId;
+
+    // 1. Tono sonoro de campana de alerta
+    playAlertChime();
+    setTimeout(playAlertChime, 220);
+
+    // 2. Locución por voz TTS en el navegador del operador
+    try {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const utterText = payload.text.startsWith('⚠️') || payload.text.startsWith('Atención') ? payload.text : ("Atención equipo: " + payload.text);
+        const utter = new SpeechSynthesisUtterance(utterText);
+        utter.lang = 'es-ES';
+        utter.rate = 0.94;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch(e) {}
+
+    // 3. Banner invasivo prioritario del supervisor en pantalla
+    showSupervisorDirectBanner(payload.text, msgId);
+  }
+
+  // 17. RECEPTOR DE MENSAJES DE EXTENSIÓN (DESDE BACKGROUND / OTRAS PESTAÑAS)
+  if (isContextValid()) {
+    try {
+      chrome.runtime.onMessage.addListener((req) => {
+        if (!req) return;
+        if (req.type === 'GLOBAL_TASK_ALERT' || req.type === 'GLOBAL_VOICE_ALERT') {
+          handleIncomingTaskAlert(req.payload);
+        } else if (req.type === 'TASK_ALERTS_CONFIG') {
+          const enabled = req.enabled !== false;
+          playAlertChime();
+          try {
+            if (window.speechSynthesis) {
+              const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de tareas activadas por el supervisor" : "Alertas de tareas pausadas");
+              utter.lang = 'es-ES';
+              window.speechSynthesis.speak(utter);
+            }
+          } catch(e) {}
+          showFirewallToast(enabled ? "📋 Alertas de tareas activadas" : "⏸️ Alertas de tareas desactivadas", enabled ? "success" : "warning");
+        }
+      });
+    } catch(e) {}
+  }
 })();

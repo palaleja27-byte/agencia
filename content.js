@@ -1631,16 +1631,7 @@
 
     const { clientName, bioData } = getExactClientProfileData();
 
-    // AVISO DE RECARGA EN VIVO
-    if (liveCredits !== null) {
-      const prevCredit = knownClientCreditsMap.get(clientId);
-      if (prevCredit !== undefined && liveCredits > prevCredit) {
-        showFirewallToast(`⚡ ¡RECARGA EN VIVO DETECTADA! ${clientName} recargó (${prevCredit} cr ➔ ${liveCredits} cr).`);
-      }
-      knownClientCreditsMap.set(clientId, liveCredits);
-    }
-
-    // REGISTRO DE ESTADO INICIAL DEL CLIENTE EN EL TURNO (PARA EVALUAR FIDELIZACIÓN REAL)
+    // REGISTRO DE ESTADO INICIAL DEL CLIENTE EN EL TURNO (PARA EVALUAR FIDELIZACIÓN REAL Y ACTIVIDAD DE TURNO)
     const recentChat = parseCurrentChatMessagesBidirectional(clientName);
     const messagesCountNow = recentChat.length;
 
@@ -1648,24 +1639,37 @@
       const isColdAtStart = messagesCountNow === 0;
       shiftInitialClientPostStatus.set(clientId, {
         wasColdAtStart: isColdAtStart,
+        wasZeroCredits: isChatHeaderZeroMessages(),
         initialUnlocked: hasPostsUnlocked,
-        initialCredits: liveCredits || 0,
         messagesCountAtStart: messagesCountNow,
+        rechargeAlertFired: false,
         firstSeen: Date.now()
       });
     }
 
     const initialStatus = shiftInitialClientPostStatus.get(clientId);
-    const unlockedDuringShift = initialStatus && initialStatus.wasColdAtStart && !initialStatus.initialUnlocked && hasPostsUnlocked;
-    const rechargedDuringShift = initialStatus && initialStatus.wasColdAtStart && liveCredits !== null && liveCredits > (initialStatus.initialCredits || 0);
-    const enoughInteraction = initialStatus && initialStatus.wasColdAtStart && (messagesCountNow - initialStatus.messagesCountAtStart) >= 3;
+    const shiftMsgsCount = initialStatus ? Math.max(0, messagesCountNow - initialStatus.messagesCountAtStart) : 0;
+    const shiftPts = shiftMsgsCount * 1;
+    const shiftUSD = (shiftPts * 0.28).toFixed(2);
 
-    if ((unlockedDuringShift || rechargedDuringShift) && enoughInteraction) {
+    const unlockedDuringShift = initialStatus && initialStatus.wasColdAtStart && !initialStatus.initialUnlocked && hasPostsUnlocked;
+    const enoughInteraction = initialStatus && initialStatus.wasColdAtStart && shiftMsgsCount >= 3;
+
+    // DETECCIÓN DETERMINÍSTICA DE RECARGA EN VIVO (Cuando un cliente inactivo/sin saldo reanuda con mensajes pagados)
+    if (initialStatus && (initialStatus.wasColdAtStart || initialStatus.wasZeroCredits) && shiftMsgsCount > 0 && !initialStatus.rechargeAlertFired) {
+      initialStatus.rechargeAlertFired = true;
+      try {
+        playAlertChime();
+        showFirewallToast(`⚡ ¡RECARGA EN VIVO CONFIRMADA! ${clientName} inyectó saldo y reanudó el chat.`);
+      } catch(e){}
+    }
+
+    if ((unlockedDuringShift || initialStatus.rechargeAlertFired) && enoughInteraction) {
       if (!fidelizedClientsMap.has(String(clientId))) {
         fidelizedClientsMap.set(String(clientId), {
           clientId: String(clientId),
           name: clientName,
-          credits: liveCredits || 150,
+          credits: 150,
           profile: sessionData.profileName || 'HORACIO',
           operator: sessionData.operator || 'walther',
           shift: sessionData.shift || 'Mañana'
@@ -1674,7 +1678,7 @@
       }
     }
 
-    // A. Badge de Puntos / Saldo Disponible, Gasto Histórico y Botón de Información en Cabecera
+    // A. Badge de Saldo / Estado en Vivo, Gasto Histórico y Botón de Información en Cabecera
     const headerTitle = document.querySelector('div[data-test-id="dialog-header-title"], div[class*="dialog-header"], div[class*="chat-header"]');
     if (headerTitle) {
       try {
@@ -1685,7 +1689,7 @@
           headerTitle.appendChild(badge);
         }
 
-        // 1. Extraer contadores directos de la cabecera de Talkytimes (ej: 💬 9  ✉ 2 o iconos SVG)
+        // 1. Extraer contadores directos de la cabecera de Talkytimes (ej: 💬 6  ✉ 2)
         let headerLetters = null;
         let headerMessages = null;
         let headerLastSeen = '';
@@ -1740,20 +1744,17 @@
         }
 
         const totalMessages = headerMessages !== null ? headerMessages : messagesCountNow;
-        const realSpentCredits = (letterCount * 10) + (totalMessages * 1);
+        const totalChatCredits = totalMessages * 1;
+        const totalChatUSD = (totalChatCredits * 0.28).toFixed(2);
+        const totalLetterCredits = letterCount * 10;
+        const totalLetterUSD = (totalLetterCredits * 0.28).toFixed(2);
+
+        const realSpentCredits = totalChatCredits + totalLetterCredits;
         const realSpentUSD = (realSpentCredits * 0.28).toFixed(2);
 
         const isZeroCredits = isChatHeaderZeroMessages();
-        let dispPtsText = 'Activo';
-        let dispUSDText = '(Con Saldo)';
-
-        if (isZeroCredits) {
-          dispPtsText = '0 Pts';
-          dispUSDText = '($0.00)';
-        } else if (liveCredits !== null) {
-          dispPtsText = `${liveCredits} Pts`;
-          dispUSDText = `($${(liveCredits * 0.28).toFixed(2)})`;
-        }
+        let dispStatusBadgeText = isZeroCredits ? '🔴 Sin Saldo' : '🟢 Saldo Activo';
+        let dispStatusColor = isZeroCredits ? '#ef4444' : '#34d399';
 
         const isFidelized = fidelizedClientsMap.has(String(clientId)) || fidelizedClientsMap.has(clientName.toLowerCase());
         const isVipTier = realSpentCredits > 300 || letterCount > 25;
@@ -1769,21 +1770,21 @@
           const firstMsg = recentChat[0];
           firstMsgInfo = `${firstMsg.date || 'Hoy'} a las ${firstMsg.time || 'inicio'}`;
           const lastMsg = recentChat[recentChat.length - 1];
-          chatDurationStr = `${recentChat.length} mensajes intercambiados (Último: ${lastMsg.time || 'Reciente'})`;
+          chatDurationStr = `${recentChat.length} mensajes en hilo activo (Último: ${lastMsg.time || 'Reciente'})`;
         }
 
-        const badgeSig = `${fidelTag}_${dispPtsText}_${dispUSDText}_${realSpentUSD}_${realSpentCredits}`;
+        const badgeSig = `${fidelTag}_${dispStatusBadgeText}_${realSpentUSD}_${realSpentCredits}`;
         if (badge.dataset.sig !== badgeSig) {
           badge.dataset.sig = badgeSig;
           badge.innerHTML = `
             <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
               <div style="display:flex; align-items:center; gap:3px;">
-                ${fidelTag}🪙 <b>${dispPtsText}</b> <span style="color:#34d399;">${dispUSDText}</span>
+                ${fidelTag}🪙 <b style="color:${dispStatusColor};">${dispStatusBadgeText}</b>
               </div>
-              <button class="ryr-credit-info-btn" id="ryr-btn-credit-info" title="Ver auditoría de datos, desglose de gasto y tiempo chateando" type="button">ℹ️</button>
+              <button class="ryr-credit-info-btn" id="ryr-btn-credit-info" title="Ver auditoría comercial, desglose de gasto y tiempo chateando" type="button">ℹ️</button>
             </div>
             <div style="display:flex; align-items:center; gap:3px; color:#cbd5e1; font-size:9.5px;">
-              💎 <b>Gasto: $${realSpentUSD}</b> <span style="color:#94a3b8;">(${realSpentCredits} Pts)</span>
+              💎 <b>Gasto Total: $${realSpentUSD}</b> <span style="color:#94a3b8;">(${realSpentCredits} Pts)</span>
             </div>
           `;
         }
@@ -1805,51 +1806,58 @@
             pop.className = 'ryr-client-intel-popover';
             pop.innerHTML = `
               <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(56,189,248,0.3); padding-bottom:6px; margin-bottom:8px;">
-                <span style="font-weight:900; color:#38bdf8; font-size:11px; letter-spacing:0.5px;">📊 AUDITORÍA: ${clientName.toUpperCase()}</span>
+                <span style="font-weight:900; color:#38bdf8; font-size:11px; letter-spacing:0.5px;">📊 AUDITORÍA COMERCIAL: ${clientName.toUpperCase()}</span>
                 <span style="cursor:pointer; color:#94a3b8; font-size:15px; font-weight:bold; line-height:1; padding:2px 6px;" id="ryr-close-intel-popover" title="Cerrar ventana">✕</span>
               </div>
               
               <div style="margin-bottom:8px; background:rgba(56,189,248,0.08); padding:6px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.2);">
-                <div style="font-weight:bold; color:#7dd3fc; margin-bottom:2px; font-size:10px;">🔍 ¿CÓMO SE EXTRAEN ESTOS DATOS?</div>
+                <div style="font-weight:bold; color:#7dd3fc; margin-bottom:2px; font-size:10px;">🔍 ¿CÓMO SE CALCULAN ESTOS DATOS?</div>
                 <div style="color:#cbd5e1; font-size:9.5px; line-height:1.35;">
-                  El sistema extrae en vivo los contadores oficiales de la cabecera de Talkytimes (💬 <b>${totalMessages} chats</b> y ✉ <b>${letterCount} cartas</b>) y los valida con la memoria de auditoría Supabase. Aplica la tasa comercial oficial: <b>1 crédito ($0.28 USD) por chat</b> y <b>10 créditos ($2.80 USD) por carta</b>.
+                  Talkytimes registra en su cabecera el historial acumulado de interacción (💬 <b>${totalMessages} chats</b> y ✉ <b>${letterCount} cartas</b>) con este perfil. Aplicamos la tasa oficial de la plataforma: <b>1 crédito ($0.28 USD) por chat</b> y <b>10 créditos ($2.80 USD) por carta</b>.
                 </div>
               </div>
 
-              <div style="margin-bottom:8px;">
-                <div style="font-weight:bold; color:#facc15; margin-bottom:3px; font-size:10px;">💰 DESGLOSE DE GASTO CON ${sessionData.profileName || 'EL PERFIL'}:</div>
+              <!-- SECCIÓN 1: GASTO HISTÓRICO TOTAL CON ESTE PERFIL -->
+              <div style="margin-bottom:8px; background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:6px 8px;">
+                <div style="font-weight:bold; color:#facc15; margin-bottom:3px; font-size:10px;">💎 GASTO HISTÓRICO TOTAL CON ${sessionData.profileName || 'ESTE PERFIL'}:</div>
                 <div style="display:flex; justify-content:space-between; color:#e2e8f0; font-size:10px; margin-bottom:2px;">
-                  <span>• Mensajes de Chat (${totalMessages}):</span>
-                  <span style="font-weight:bold; color:#34d399;">${totalMessages} pts ($${(totalMessages * 0.28).toFixed(2)} USD)</span>
+                  <span>• Mensajes de Chat (${totalMessages} total):</span>
+                  <span style="font-weight:bold; color:#34d399;">${totalChatCredits} pts ($${totalChatUSD} USD)</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; color:#e2e8f0; font-size:10px; margin-bottom:2px;">
-                  <span>• Cartas Enviadas (${letterCount}):</span>
-                  <span style="font-weight:bold; color:#34d399;">${letterCount * 10} pts ($${(letterCount * 2.80).toFixed(2)} USD)</span>
+                  <span>• Cartas Enviadas (${letterCount} total):</span>
+                  <span style="font-weight:bold; color:#34d399;">${totalLetterCredits} pts ($${totalLetterUSD} USD)</span>
                 </div>
-                <div style="display:flex; justify-content:space-between; color:#fff; font-size:10.5px; font-weight:900; border-top:1px solid rgba(255,255,255,0.1); padding-top:3px; margin-top:3px;">
-                  <span>💎 Total Invertido:</span>
-                  <span style="color:#f59e0b;">${realSpentCredits} Pts ($${realSpentUSD} USD)</span>
+                <div style="display:flex; justify-content:space-between; color:#fff; font-size:10.5px; font-weight:900; border-top:1px solid rgba(255,255,255,0.12); padding-top:4px; margin-top:3px;">
+                  <span>💎 TOTAL COMPLETO INVERTIDO:</span>
+                  <span style="color:#f59e0b; font-size:11px;">${realSpentCredits} Pts ($${realSpentUSD} USD)</span>
                 </div>
               </div>
 
-              <div style="margin-bottom:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:6px;">
-                <div style="font-weight:bold; color:#a78bfa; margin-bottom:3px; font-size:10px;">⏱️ TIEMPO CHATEANDO CON EL PERFIL:</div>
+              <!-- SECCIÓN 2: ACTIVIDAD EN EL TURNO ACTUAL -->
+              <div style="margin-bottom:8px; background:rgba(15,23,42,0.4); border:1px solid rgba(167,139,250,0.25); border-radius:6px; padding:6px 8px;">
+                <div style="font-weight:bold; color:#a78bfa; margin-bottom:3px; font-size:10px;">⚡ ACTIVIDAD EN EL TURNO ACTUAL (HOY):</div>
+                <div style="display:flex; justify-content:space-between; color:#e2e8f0; font-size:9.5px; margin-bottom:2px;">
+                  <span>• Mensajes en tu turno:</span>
+                  <span style="font-weight:bold; color:#38bdf8;">${shiftMsgsCount} chats (${shiftPts} pts / $${shiftUSD} USD)</span>
+                </div>
                 <div style="color:#cbd5e1; font-size:9.5px; margin-bottom:2px;">• <b>Primer contacto:</b> ${firstMsgInfo}</div>
-                <div style="color:#cbd5e1; font-size:9.5px; margin-bottom:2px;">• <b>Mensajes analizados:</b> ${chatDurationStr}</div>
-                <div style="color:#cbd5e1; font-size:9.5px;">• <b>Última actividad:</b> ${headerLastSeen || 'Activo ahora'}</div>
+                <div style="color:#cbd5e1; font-size:9.5px;">• <b>Última actividad:</b> ${headerLastSeen || 'Activo ahora en chat'}</div>
               </div>
 
-              <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:6px;">
-                <div style="font-weight:bold; color:#34d399; margin-bottom:2px; font-size:10px;">⚡ SALDO & RECARGAS:</div>
-                <div style="color:#cbd5e1; font-size:9.5px;">
-                  Saldo actual: <b style="color:#38bdf8;">${dispPtsText}</b> ${dispUSDText}. Monitoreo activo: si el cliente recarga créditos en pantalla, el Agente emitirá un aviso auditivo y visual.
+              <!-- SECCIÓN 3: ESTADO DE SALDO & RECARGAS -->
+              <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25); border-radius:6px; padding:6px 8px;">
+                <div style="font-weight:bold; color:#34d399; margin-bottom:2px; font-size:10px;">🔋 ESTADO DE SALDO & RECARGAS:</div>
+                <div style="color:#cbd5e1; font-size:9.5px; line-height:1.35;">
+                  Estado: <b style="color:${dispStatusColor};">${isZeroCredits ? '🔴 Sin Saldo / Chat Pausado' : '🟢 Saldo Activo (Interactuando con fluidez)'}</b>.<br>
+                  <span style="font-size:9px; color:#94a3b8;">Monitoreo en vivo: Si el cliente agota sus créditos y vuelve a recargar, el Agente emitirá un aviso auditivo y visual en pantalla.</span>
                 </div>
               </div>
             `;
 
             // Posicionamiento fijo seguro y estable en pantalla
             const rect = infoBtn.getBoundingClientRect();
-            const topPos = Math.min(window.innerHeight - 420, Math.max(10, rect.bottom + 8));
+            const topPos = Math.min(window.innerHeight - 440, Math.max(10, rect.bottom + 8));
             const leftPos = Math.max(10, Math.min(window.innerWidth - 345, rect.right - 325));
             pop.style.top = `${topPos}px`;
             pop.style.left = `${leftPos}px`;
@@ -1868,14 +1876,14 @@
 
             // Click fuera para cerrar voluntariamente sin apresurar la lectura
             const handleOutsideClick = (ev) => {
-              if (pop && !pop.contains(ev.target) && !infoBtn.contains(ev.target)) {
+              if (pop && !pop.contains(ev.target) && ev.target !== infoBtn && !infoBtn.contains(ev.target)) {
                 pop.remove();
                 document.removeEventListener('click', handleOutsideClick);
               }
             };
             setTimeout(() => {
               document.addEventListener('click', handleOutsideClick);
-            }, 100);
+            }, 50);
           };
         }
 

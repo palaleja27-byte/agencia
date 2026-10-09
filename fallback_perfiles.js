@@ -56,54 +56,48 @@ const FALLBACK_PERFILES = [
   { id_datame: '120275229', modelo: 'GERMAN',       panel_id: 2, activo: true }
 ];
 
-// ── CORTE MANUAL 12:00 AM (Fuente Oficial) ──
+// ── CORTE MANUAL 12:00 PM (Fuente Oficial) ──
 const CORTE_MANUAL_BASELINES = {
-  // Tabla 1
-  '98540781':  { baseline: 157.69, total: 157.69, neto: 0.00,  modelo: 'LEANDRO' },
-  '95956014':  { baseline: 354.51, total: 358.25, neto: 3.74,  modelo: 'PABLO' },
-  '91360720':  { baseline: 175.50, total: 184.41, neto: 8.91,  modelo: 'SANDRA MARIA' },
-  '91733663':  { baseline: 3311.03, total: 3318.41, neto: 7.38, modelo: 'DANIEL 68' },
-  '79679899':  { baseline: 339.80, total: 340.45, neto: 0.65,  modelo: 'NORBERTO' },
-  '99766806':  { baseline: 621.31, total: 641.55, neto: 20.24, modelo: 'EDUARDO' },
-  '168486464': { baseline: 819.79, total: 835.30, neto: 15.51, modelo: 'GUSTAVO' },
-  '108018336': { baseline: 945.63, total: 956.51, neto: 10.88, modelo: 'LUCAS' },
-  '103289167': { baseline: 1062.36, total: 1079.85, neto: 17.49, modelo: 'LUIS DAROSA' },
-  '118179794': { baseline: 694.65, total: 694.65, neto: 0.00,  modelo: 'HORACIO' },
-  '98389135':  { baseline: 100.45, total: 100.45, neto: 0.00,  modelo: 'RAUL' },
-  '120720195': { baseline: 1720.03, total: 1726.46, neto: 6.43, modelo: 'MARCOS' },
-  '139247498': { baseline: 850.70, total: 855.75, neto: 5.05,  modelo: 'DAMIAN' },
-  '157112125': { baseline: 108.23, total: 108.23, neto: 0.00,  modelo: 'LUIZ' },
-  '130338853': { baseline: 359.85, total: 362.38, neto: 2.53,  modelo: 'IVALDO' },
-  '130431310': { baseline: 309.35, total: 314.63, neto: 5.28,  modelo: 'RAFAEL' },
-  '139245989': { baseline: 627.18, total: 633.56, neto: 6.38,  modelo: 'ALFREDO' },
-  '188143166': { baseline: 0.00,   total: 0.00,   neto: 0.00,  modelo: 'ALEX' },
-  '156881990': { baseline: 148.15, total: 148.92, neto: 0.77,  modelo: 'RALPH' },
-  '143017065': { baseline: 387.22, total: 387.22, neto: 0.00,  modelo: 'MARIO' },
-  '138130329': { baseline: 733.93, total: 740.87, neto: 6.94,  modelo: 'AGUSTIN' },
-  '120275229': { baseline: 52.14,  total: 52.14,  neto: 0.00,  modelo: 'GERMAN' },
-  '143014129': { baseline: 366.13, total: 371.95, neto: 5.82,  modelo: 'RENEE' },
-  '95955130':  { baseline: 406.50, total: 411.79, neto: 5.29,  modelo: 'HECTOR' },
-  '145844971': { baseline: 1626.53, total: 1627.19, neto: 0.66, modelo: 'RODRIGO' },
-  '170740935': { baseline: 1344.43, total: 1360.71, neto: 16.28, modelo: 'ROBERTO' },
-  '187684981': { baseline: 11.33,  total: 11.44,  neto: 0.11,  modelo: 'CARLOS' },
-  '130422416': { baseline: 1223.83, total: 1235.82, neto: 11.99, modelo: 'RAONI' },
-  '160352260': { baseline: 9.97,   total: 9.97,   neto: 0.00,  modelo: 'JUVENAL' },
-  '103291980': { baseline: 85.36,  total: 84.11,  neto: 0.00,  modelo: 'ARMANDO' },
-  '187538072': { baseline: 3.52,   total: 3.52,   neto: 0.00,  modelo: 'VALERIA' },
-  '187536756': { baseline: 0.00,   total: 0.00,   neto: 0.00,  modelo: 'MAY' },
-  '187536112': { baseline: 0.00,   total: 0.00,   neto: 0.00,  modelo: 'MARIELYS' },
+  // Tabla 1 (Agencia / Panel 1 y 2)
+  '91733663':  { baseline: 2295.59, total: 2331.34, neto: 35.75, modelo: 'DANIEL 68' },
+  '79679899':  { baseline: 370.59,  total: 377.63,  neto: 7.04,  modelo: 'NORBERTO' },
+  '99766806':  { baseline: 366.80,  total: 373.50,  neto: 6.70,  modelo: 'EDUARDO' },
+  '168486464': { baseline: 56.16,   total: 58.69,   neto: 2.53,  modelo: 'GUSTAVO' },
+  '108018336': { baseline: 1016.67, total: 1040.65, neto: 23.98, modelo: 'LUCAS' },
+  '103289167': { baseline: 763.62,  total: 798.43,  neto: 34.81, modelo: 'LUIS DAROSA' },
+  '118179794': { baseline: 462.11,  total: 554.51,  neto: 92.40, modelo: 'HORACIO' },
+  '98389135':  { baseline: 293.26,  total: 295.46,  neto: 2.20,  modelo: 'RAUL' },
+  '91360720':  { baseline: 470.58,  total: 482.57,  neto: 11.99, modelo: 'SANDRA MARIA' },
+  '120720195': { baseline: 4286.26, total: 4344.56, neto: 58.30, modelo: 'MARCOS' },
+  '139247498': { baseline: 1066.17, total: 1123.05, neto: 56.88, modelo: 'DAMIAN' },
+  '157112125': { baseline: 55.72,   total: 55.94,   neto: 0.22,  modelo: 'LUIZ' },
+  '130338853': { baseline: 357.72,  total: 369.16,  neto: 11.44, modelo: 'IVALDO' },
+  '130431310': { baseline: 572.88,  total: 635.58,  neto: 62.70, modelo: 'RAFAEL' },
+  '139245989': { baseline: 328.46,  total: 329.23,  neto: 0.77,  modelo: 'ALFREDO' },
+  '188143166': { baseline: 9.24,    total: 9.24,    neto: 0.00,  modelo: 'ALEX' },
+  '156881990': { baseline: 62.76,   total: 62.87,   neto: 0.11,  modelo: 'RALPH' },
+  '143017065': { baseline: 217.53,  total: 227.21,  neto: 9.68,  modelo: 'MARIO' },
+  '138130329': { baseline: 1028.66, total: 1114.90, neto: 86.24, modelo: 'AGUSTIN' },
+  '95956014':  { baseline: 252.28,  total: 258.56,  neto: 6.28,  modelo: 'PABLO' },
+  '98540781':  { baseline: 83.00,   total: 86.41,   neto: 3.41,  modelo: 'LEANDRO' },
+  '143014129': { baseline: 36.52,   total: 39.49,   neto: 2.97,  modelo: 'RENEE' },
+  '95955130':  { baseline: 188.38,  total: 198.06,  neto: 9.68,  modelo: 'HECTOR' },
+  '145844971': { baseline: 1433.08, total: 1479.72, neto: 46.64, modelo: 'RODRIGO' },
+  '170740935': { baseline: 989.17,  total: 1030.76, neto: 41.59, modelo: 'ROBERTO' },
+  '187684981': { baseline: 133.21,  total: 133.98,  neto: 0.77,  modelo: 'CARLOS' },
+  '130422416': { baseline: 1108.53, total: 1123.82, neto: 15.29, modelo: 'RAONI' },
+  '120275229': { baseline: 40.70,   total: 42.13,   neto: 1.43,  modelo: 'GERMAN' },
+  '88243516':  { baseline: 85.53,   total: 87.53,   neto: 2.00,  modelo: 'RICARDO' },
 
-  // Tabla 2
-  '158644203': { baseline: 70.13,  total: 70.13,  neto: 0.00,  modelo: 'SERGIO' },
-  '128062998': { baseline: 1124.35, total: 1127.43, neto: 3.08, modelo: 'MARCO' },
-  '174069335': { baseline: 330.10, total: 330.10, neto: 0.00,  modelo: 'FEDERICO' },
-  '101245945': { baseline: 839.39, total: 839.95, neto: 0.56,  modelo: 'PABLO' },
-  '167493871': { baseline: 153.18, total: 153.62, neto: 0.44,  modelo: 'HUMBERTO' },
-  '113579174': { baseline: 17.11,  total: 17.11,  neto: 0.00,  modelo: 'RONALDO' },
-  '145839775': { baseline: 501.00, total: 508.26, neto: 7.26,  modelo: 'BRUNO' },
-  '113752797': { baseline: 84.86,  total: 85.52,  neto: 0.66,  modelo: 'ROMARIO' },
-  '153037229': { baseline: 217.56, total: 225.16, neto: 7.60,  modelo: 'HORACIO' },
-  '93461947':  { baseline: 110.26, total: 110.26, neto: 0.00,  modelo: 'MARIANO' }
+  // Tabla 2 (Directos / Panel 4)
+  '158644203': { baseline: 89.32,   total: 89.76,   neto: 0.44,  modelo: 'SERGIO' },
+  '128062998': { baseline: 161.48,  total: 174.57,  neto: 13.09, modelo: 'MARCO' },
+  '190725336': { baseline: 136.01,  total: 136.46,  neto: 0.45,  modelo: 'GABRIEL' },
+  '190731277': { baseline: 1.76,    total: 1.87,    neto: 0.11,  modelo: 'LUCAS' },
+  '174069335': { baseline: 131.28,  total: 132.50,  neto: 1.22,  modelo: 'FEDERICO' },
+  '145839775': { baseline: 489.44,  total: 496.54,  neto: 7.10,  modelo: 'BRUNO' },
+  '167493871': { baseline: 45.59,   total: 46.03,   neto: 0.44,  modelo: 'HUMBERTO' },
+  '153037229': { baseline: 622.82,  total: 649.88,  neto: 27.06, modelo: 'HORACIO' }
 };
 
 module.exports = {
@@ -111,3 +105,4 @@ module.exports = {
   FALLBACK_PERFILES,
   CORTE_MANUAL_BASELINES
 };
+

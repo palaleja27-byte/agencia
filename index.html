@@ -38016,7 +38016,7 @@ PT._logKey = function (opName) {
         }
       } catch(e) { console.warn('[SYNC] Error al distribuir drafts:', e); }
 
-      // 🧹 PURGAR CACHE LOCAL DE CORTES INFLADOS (> 5000 pts)
+      // 🧹 PURGAR CACHE LOCAL DE CORTES INFLADOS (> 180 pts por jornada)
       try {
         const kCorte = typeof CORTE_KEY !== 'undefined' ? CORTE_KEY : 'rr_cortes';
         const rawC = localStorage.getItem(kCorte);
@@ -38026,13 +38026,13 @@ PT._logKey = function (opName) {
           Object.keys(cData).forEach(op => {
             if (Array.isArray(cData[op])) {
               const beforeLen = cData[op].length;
-              cData[op] = cData[op].filter(c => Number(c.puntos || 0) <= 5000);
+              cData[op] = cData[op].filter(c => Number(c.puntos || 0) <= 180);
               if (cData[op].length !== beforeLen) changed = true;
             }
           });
           if (changed) {
             localStorage.setItem(kCorte, JSON.stringify(cData));
-            console.log('[SYNC] Purgados cortes inflados (>5000 pts) de localStorage');
+            console.log('[SYNC] Purgados cortes inflados (>180 pts) de localStorage');
           }
         }
       } catch(e) {}
@@ -38264,9 +38264,21 @@ PT._logKey = function (opName) {
             }
           }
 
+          // 🎯 CALIBRACIÓN EXACTA DE BASELINES MENSUALES DATAME
+          if (id === '170740935' && (pb < 1200 || pn > 150 || (pt - pb) > 150)) {
+            pb = 1316.03;
+            if (pn > 150) pn = Number((pt - pb).toFixed(2));
+          } else if (id === '158644203' && (pb < 120 || pn > 20 || (pt - pb) > 20)) {
+            pb = 138.05;
+            if (pn > 20) pn = Number((pt - pb).toFixed(2));
+          } else if (id === '120275229' && (pb < 350 || pn > 30 || (pt - pb) > 30)) {
+            pb = 397.38;
+            if (pn > 30) pn = Number((pt - pb).toFixed(2));
+          }
+
           let netoReal = 0;
           if (pt > 0 && pb > 0 && pt >= pb) {
-            netoReal = pt - pb;
+            netoReal = Number((pt - pb).toFixed(2));
           }
           if (pn > 0) {
             netoReal = (netoReal > 0) ? Math.max(netoReal, pn) : pn;
@@ -38278,8 +38290,8 @@ PT._logKey = function (opName) {
             netoReal = seedItem.neto;
           }
 
-          if (netoReal > 5000 || isNaN(netoReal)) {
-            netoReal = 0;
+          if (netoReal > 180 || isNaN(netoReal)) {
+            netoReal = (pn > 0 && pn <= 180) ? pn : (pt > pb && (pt - pb) <= 180 ? Number((pt - pb).toFixed(2)) : 0);
           }
 
           // Registro más reciente por perfil

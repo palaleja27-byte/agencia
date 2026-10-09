@@ -43227,7 +43227,6 @@ CONFIGURACIÓN DE CONTEXTO:
     // ══════════════════════════════════════════════════════════════
     window.reproducirAlertaTareaGlobal = function(val) {
       if (!val) return;
-      if (localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
 
       let task = null;
       try {
@@ -43235,12 +43234,15 @@ CONFIGURACIÓN DE CONTEXTO:
       } catch(e) { task = { text: String(val) }; }
       if (!task || !task.text) return;
 
+      const isForced = !!task.isForced;
+      if (!isForced && localStorage.getItem('rr_task_alerts_enabled') === 'false') return;
+
       const taskId = task.id || ('task_' + (task.ts || Date.now()) + '_' + String(task.text).substring(0, 15));
       window._playedTaskAlerts = window._playedTaskAlerts || new Set();
-      if (window._playedTaskAlerts.has(taskId)) return;
+      if (!isForced && window._playedTaskAlerts.has(taskId)) return;
 
       const isFresh = task.ts ? (Math.abs(Date.now() - task.ts) < 180000) : true;
-      if (!isFresh) return;
+      if (!isForced && !isFresh) return;
 
       window._playedTaskAlerts.add(taskId);
 
@@ -43897,8 +43899,12 @@ CONFIGURACIÓN DE CONTEXTO:
     window.forzarVerificacionSeguimientoMediaHora = async function() {
       // Desbloquear audio y voz de inmediato con el gesto de usuario
       try {
-        if (window.speechSynthesis && window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
+        const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+        if (window.speechSynthesis) {
+          if (window.speechSynthesis.paused) window.speechSynthesis.resume();
         }
         if (typeof playBeep === 'function') playBeep('task');
       } catch (_) {}
@@ -43911,11 +43917,15 @@ CONFIGURACIÓN DE CONTEXTO:
       try {
         window._lastHalfHourAlertTs = 0; // Reset para disparar inmediatamente
         await window.verificarSeguimientoMediaHora(true);
+      } catch (err) {
+        console.error('[SEGUIMIENTO-30MIN] Error ejecutando chequeo forzado:', err);
       } finally {
-        if (btn) {
-          btn.textContent = '⚠️ Chequeo Media Hora';
-          btn.style.opacity = '1';
-        }
+        setTimeout(() => {
+          if (btn) {
+            btn.textContent = '⚠️ Chequeo Media Hora';
+            btn.style.opacity = '1';
+          }
+        }, 1200);
       }
     };
 

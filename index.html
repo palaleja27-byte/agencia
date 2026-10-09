@@ -43777,10 +43777,10 @@ CONFIGURACIÓN DE CONTEXTO:
       if (!isForced && !isSupervisorSession) return;
 
       try {
-        // Obtener telemetría en vivo de operadores conectados
+        // Obtener telemetría en vivo de operadores conectados (sin bloquear si es forzado)
         let liveOps = window.cachedLiveOperators || [];
-        if (!liveOps || liveOps.length === 0) {
-          const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live-grid', { signal: AbortSignal.timeout(6000) }).catch(() => null);
+        if (!isForced && (!liveOps || liveOps.length === 0)) {
+          const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live-grid', { signal: AbortSignal.timeout(1500) }).catch(() => null);
           if (telemetryRes && telemetryRes.ok) {
             const telemetryData = await telemetryRes.json();
             liveOps = telemetryData.operators || [];
@@ -43895,6 +43895,14 @@ CONFIGURACIÓN DE CONTEXTO:
     };
 
     window.forzarVerificacionSeguimientoMediaHora = async function() {
+      // Desbloquear audio y voz de inmediato con el gesto de usuario
+      try {
+        if (window.speechSynthesis && window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+        if (typeof playBeep === 'function') playBeep('task');
+      } catch (_) {}
+
       const btn = document.getElementById('btn-test-task-halfhour');
       if (btn) {
         btn.textContent = '⏳ Evaluando...';

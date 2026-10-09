@@ -248,8 +248,8 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   const ts       = new Date().toISOString();
   const key      = bKey(idPerfil, fechaDia, jornada);
 
-  // 🎯 PRIORIDAD 1: Corte manual configurado (4:00 PM Tarde)
-  if (fechaDia === '2026-09-11' && CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil] && jornada === 'Tarde') {
+    // 🎯 PRIORIDAD 1: Corte manual configurado oficial (Turno Mañana)
+  if (CORTE_MANUAL_BASELINES && CORTE_MANUAL_BASELINES[idPerfil] && jornada === 'Mañana') {
     const cm = CORTE_MANUAL_BASELINES[idPerfil];
     shiftBaselines[key] = cm.baseline;
   }

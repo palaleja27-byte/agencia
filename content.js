@@ -401,6 +401,20 @@
 
     document.body.appendChild(banner);
 
+    // Reproducir alerta sonora y locución de voz para el operador
+    playAlertChime();
+    setTimeout(playAlertChime, 220);
+    try {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const utterText = text.startsWith('⚠️') || text.startsWith('Atención') ? text : ("Atención: " + text);
+        const utter = new SpeechSynthesisUtterance(utterText);
+        utter.lang = 'es-ES';
+        utter.rate = 0.94;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch(e) {}
+
     const replyInput = document.getElementById('input-reply-sup');
     const sendReplyBtn = document.getElementById('btn-reply-sup');
 
@@ -5053,6 +5067,20 @@
         } catch(e) {}
         showFirewallToast(enabled ? "📋 Alertas de tareas activadas" : "⏸️ Alertas de tareas desactivadas", enabled ? "success" : "warning");
       }
+
+      // D. Sincronización remota de Alertas de Voz
+      if (data.type === 'VOICE_ALERTS_CONFIG') {
+        const enabled = data.enabled !== false;
+        playAlertChime();
+        try {
+          if (window.speechSynthesis) {
+            const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de voz activadas por el supervisor" : "Alertas de voz desactivadas");
+            utter.lang = 'es-ES';
+            window.speechSynthesis.speak(utter);
+          }
+        } catch(e) {}
+        showFirewallToast(enabled ? "🔊 Alertas de voz activadas" : "🔇 Alertas de voz desactivadas", enabled ? "success" : "warning");
+      }
     };
   } catch(e) {}
 
@@ -5102,6 +5130,17 @@
             }
           } catch(e) {}
           showFirewallToast(enabled ? "📋 Alertas de tareas activadas" : "⏸️ Alertas de tareas desactivadas", enabled ? "success" : "warning");
+        } else if (req.type === 'VOICE_ALERTS_CONFIG') {
+          const enabled = req.enabled !== false;
+          playAlertChime();
+          try {
+            if (window.speechSynthesis) {
+              const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de voz activadas por el supervisor" : "Alertas de voz desactivadas");
+              utter.lang = 'es-ES';
+              window.speechSynthesis.speak(utter);
+            }
+          } catch(e) {}
+          showFirewallToast(enabled ? "🔊 Alertas de voz activadas" : "🔇 Alertas de voz desactivadas", enabled ? "success" : "warning");
         }
       });
     } catch(e) {}

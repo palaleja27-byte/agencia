@@ -42997,6 +42997,22 @@ CONFIGURACIÓN DE CONTEXTO:
           console.log('[ALERT-SYNC] ☁️ Persistido en Supabase: rr_voice_alerts_enabled =', next);
         }).catch(e => console.warn('[ALERT-SYNC] Error persistiendo en Supabase:', e));
       }
+
+      // 5. Emitir por BroadcastChannel a pestañas de extensión (Talkytimes) y monitores
+      try {
+        const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+        bc.postMessage({ type: 'VOICE_ALERTS_CONFIG', enabled: next, sender: (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') });
+        setTimeout(() => bc.close(), 1000);
+      } catch(e) {}
+
+      // 6. Sincronizar con backend Node.js
+      try {
+        fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isBroadcast: true, text: next ? "🔊 Alertas de voz activadas por el supervisor" : "🔇 Alertas de voz pausadas" })
+        }).catch(() => {});
+      } catch(e) {}
     };
 
     window.setTaskAlertsEnabled = function(next, sender) {
@@ -43062,6 +43078,11 @@ CONFIGURACIÓN DE CONTEXTO:
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled: bNext })
+        }).catch(() => {});
+        fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isBroadcast: true, text: bNext ? "📋 Alertas de tareas activadas por el supervisor" : "⏸️ Alertas de tareas pausadas" })
         }).catch(() => {});
       } catch(e) {}
     };

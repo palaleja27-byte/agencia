@@ -41875,6 +41875,26 @@ PT._logKey = function (opName) {
             window.reproducirAlertaTareaGlobal(taskData.value);
           }
         }
+
+        // Sincronizar estado remoto de botones Alertas Tareas y Alertas Voz (TV, operadores y monitores)
+        const { data: cfgRows } = await _sb.from('kv_store').select('key, value').in('key', ['rr_task_alerts_enabled', 'rr_voice_alerts_enabled']);
+        if (cfgRows && Array.isArray(cfgRows)) {
+          cfgRows.forEach(r => {
+            if (r.key === 'rr_task_alerts_enabled') {
+              const remoteVal = String(r.value) !== 'false';
+              const localVal = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
+              if (remoteVal !== localVal && typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                window.aplicarConfiguracionAlertasRemotas('task', remoteVal, 'Sync Remoto', false);
+              }
+            } else if (r.key === 'rr_voice_alerts_enabled') {
+              const remoteVal = String(r.value) !== 'false';
+              const localVal = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
+              if (remoteVal !== localVal && typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                window.aplicarConfiguracionAlertasRemotas('voice', remoteVal, 'Sync Remoto', false);
+              }
+            }
+          });
+        }
       } catch(e) {}
 
       if (!role) return;

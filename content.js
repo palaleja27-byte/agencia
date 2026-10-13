@@ -659,6 +659,109 @@
     };
   }
 
+  // 7b. RECORDATORIO VISUAL DE SEGUIMIENTO (FALTANDO 10 MINUTOS DE LA MEDIA HORA)
+  let lastProspectingReminderCycleStart = 0;
+  function checkAndShowProspectingReminder() {
+    // Si la alerta visual ya existe en pantalla, no hacer nada
+    if (document.getElementById('ryr-prospecting-reminder-banner')) return;
+
+    const cycle = evaluateProspectingCycle();
+    // Si ya completó la cuota de 10 usuarios nuevos, no molestar
+    if (cycle.isCompleted || cycle.count >= cycle.quota) return;
+
+    // Faltando 10 minutos (<= 600 segundos restantes) y más de 10 segundos
+    if (cycle.remainingSeconds <= 600 && cycle.remainingSeconds > 10) {
+      // Disparar solo una vez por ciclo de 30 minutos
+      if (lastProspectingReminderCycleStart === prospectingCycleStartTime) return;
+      lastProspectingReminderCycleStart = prospectingCycleStartTime;
+
+      showProspectingVisualAlert(cycle.count, cycle.quota, cycle.formattedTime);
+    }
+  }
+
+  function showProspectingVisualAlert(currentCount, quota, formattedTime) {
+    const existing = document.getElementById('ryr-prospecting-reminder-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'ryr-prospecting-reminder-banner';
+    banner.style.cssText = `
+      position: fixed;
+      top: 52px;
+      right: 24px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 27, 75, 0.98) 100%);
+      border: 2px solid #f59e0b;
+      box-shadow: 0 10px 35px rgba(245, 158, 11, 0.45), 0 0 20px rgba(245, 158, 11, 0.25);
+      border-radius: 12px;
+      padding: 14px 18px;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      z-index: 2147483646;
+      width: 360px;
+      max-width: 90vw;
+      backdrop-filter: blur(12px);
+      animation: ryrToastSlide 0.3s ease-out;
+      box-sizing: border-box;
+    `;
+
+    banner.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(245,158,11,0.25); padding-bottom:6px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:18px;">⚠️</span>
+          <span style="font-size:12px; font-weight:900; color:#fbbf24; letter-spacing:0.5px; text-transform:uppercase;">
+            Recordatorio de Tarea
+          </span>
+        </div>
+        <button id="btn-close-prospect-banner" style="background:none; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:0 4px; line-height:1;">✕</button>
+      </div>
+
+      <div style="font-size:12px; line-height:1.45; color:#f1f5f9; margin-bottom:10px;">
+        Faltan <b>10 minutos</b> para cerrar la media hora. Recuerda que el barrido es de <b style="color:#fbbf24;">10 usuarios nuevos</b> cada 30 minutos.
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.35); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:6px 12px;">
+        <span style="font-size:11px; color:#cbd5e1;">Progreso actual:</span>
+        <span style="font-size:13px; font-weight:900; color:#f59e0b;">
+          ${currentCount} / ${quota} usuarios
+        </span>
+      </div>
+
+      <div style="font-size:10px; color:#94a3b8; text-align:right; margin-top:8px; font-style:italic;">
+        ⏱️ Tiempo restante en bloque: ${formattedTime}
+      </div>
+    `;
+
+    document.body.appendChild(banner);
+
+    // Audio sutil de aviso
+    playAlertChime();
+
+    // Locución sutil
+    try {
+      if (window.speechSynthesis) {
+        const utter = new SpeechSynthesisUtterance("Atención: faltan diez minutos para completar el barrido de usuarios nuevos.");
+        utter.lang = 'es-ES';
+        utter.rate = 0.95;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch(e) {}
+
+    // Botón de cierre
+    const closeBtn = document.getElementById('btn-close-prospect-banner');
+    if (closeBtn) {
+      closeBtn.onclick = () => banner.remove();
+    }
+
+    // Auto-cierre a los 45 segundos para no estorbar
+    setTimeout(() => {
+      if (banner && banner.parentNode) {
+        banner.style.opacity = '0';
+        banner.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => banner.remove(), 500);
+      }
+    }, 45000);
+  }
+
   // 8. SINCRONIZACIÓN CON SERVIDOR
   async function syncServerKnownChats() {
     if (!sessionData.profileName) return;
@@ -4878,6 +4981,7 @@
         renderFloatingBar();
         handleInboxTimersAndExtractionButtons();
         runBackgroundPaginationCrawler();
+        checkAndShowProspectingReminder();
       }
     });
   }, 400);

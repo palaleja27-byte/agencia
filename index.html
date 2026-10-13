@@ -43810,66 +43810,76 @@ CONFIGURACIÓN DE CONTEXTO:
       if (!isForced && !isSupervisorSession) return;
 
       try {
-        // Obtener telemetría en vivo de operadores conectados (sin bloquear si es forzado)
-        let liveOps = window.cachedLiveOperators || [];
-        if (!isForced && (!liveOps || liveOps.length === 0)) {
-          const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live-grid', { signal: AbortSignal.timeout(1500) }).catch(() => null);
+        // ═══ SIEMPRE obtener telemetría en vivo del backend (tanto automático como forzado) ═══
+        let liveOps = [];
+        try {
+          const telemetryRes = await fetch('https://ryr-titan-backend.onrender.com/api/telemetry/live-grid', { signal: AbortSignal.timeout(4000) });
           if (telemetryRes && telemetryRes.ok) {
             const telemetryData = await telemetryRes.json();
             liveOps = telemetryData.operators || [];
+            window.cachedLiveOperators = liveOps; // cachear para otras funciones
+            console.log(`[SEGUIMIENTO-30MIN] ✓ Telemetría recibida: ${liveOps.length} nodos de extensión conectados.`);
           }
+        } catch (fetchErr) {
+          console.warn('[SEGUIMIENTO-30MIN] ⚠️ No se pudo obtener telemetría del backend:', fetchErr.message);
+          // Usar caché previo si existe
+          liveOps = window.cachedLiveOperators || [];
         }
 
-        const activeOpsInShift = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : new Set();
         const connectedOpsMap = new Map();
 
+        // Agrupar nodos por operador — tolerancia de 10 minutos para lastSeen
         (liveOps || []).forEach(op => {
-          const isRecent = op.lastSeen ? (nowTs - op.lastSeen < 240000) : false;
           const opName = (op.operator || op.operatorName || '').trim();
-          if (opName && isRecent && op.status !== 'OFFLINE') {
-            const opKey = opName.toUpperCase();
-            if (!connectedOpsMap.has(opKey)) {
-              connectedOpsMap.set(opKey, { name: opName, nodes: [] });
-            }
-            connectedOpsMap.get(opKey).nodes.push(op);
+          if (!opName || op.status === 'OFFLINE') return;
+          // Aceptar operadores vistos en los últimos 10 minutos (600.000 ms)
+          const isRecent = op.lastSeen ? (nowTs - op.lastSeen < 600000) : true;
+          if (!isRecent) return;
+
+          const opKey = opName.toUpperCase();
+          if (!connectedOpsMap.has(opKey)) {
+            connectedOpsMap.set(opKey, { name: opName, nodes: [] });
           }
+          connectedOpsMap.get(opKey).nodes.push(op);
         });
 
+        console.log(`[SEGUIMIENTO-30MIN] Operadores conectados a extensión: ${connectedOpsMap.size} → [${Array.from(connectedOpsMap.keys()).join(', ')}]`);
+
         const opsFaltantesSet = new Set();
+        const opsCumplidosSet = new Set();
 
         if (connectedOpsMap.size > 0) {
           connectedOpsMap.forEach((data, opKey) => {
-            let tieneBarridoPendiente = false;
+            // Evaluar SOLO seguimiento de perfiles nuevos (tráfico)
             let tieneSeguimientoCumplido = false;
 
             data.nodes.forEach(node => {
-              // 1. Barrido de cartas por enviar:
-              if ((Number(node.pendingReadLetters) || 0) > 0) {
-                tieneBarridoPendiente = true;
-              }
-
-              // 2. Seguimiento / prospección de perfiles nuevos esta media hora:
               const prog = node.prospectingProgress;
-              if (prog && (prog.isCompleted || (Number(prog.count) || 0) >= 10)) {
+              if (prog && (prog.isCompleted === true || (Number(prog.count) || 0) >= 10)) {
                 tieneSeguimientoCumplido = true;
               }
             });
 
-            // Falta si tiene cartas pendientes de enviar O no ha cumplido el seguimiento de perfiles nuevos
-            if (tieneBarridoPendiente || !tieneSeguimientoCumplido) {
-              opsFaltantesSet.add(data.name.split(' ')[0]);
+            const firstName = data.name.split(' ')[0];
+            if (!tieneSeguimientoCumplido) {
+              // Obtener el conteo máximo para el log
+              const maxCount = Math.max(0, ...data.nodes.map(n => Number(n.prospectingProgress?.count) || 0));
+              console.log(`[SEGUIMIENTO-30MIN] ❌ ${firstName}: ${maxCount}/10 perfiles nuevos`);
+              opsFaltantesSet.add(firstName);
+            } else {
+              opsCumplidosSet.add(firstName);
             }
           });
+          console.log(`[SEGUIMIENTO-30MIN] Cumplidos: [${Array.from(opsCumplidosSet).join(', ')}] | Faltantes: [${Array.from(opsFaltantesSet).join(', ')}]`);
         } else {
-          // Si no hay telemetría activa en este instante, tomar los operadores registrados en turno o conectados
-          const shiftOps = (typeof _getOpsEnTurnoHoy === 'function') ? _getOpsEnTurnoHoy('') : (activeOpsInShift || new Set());
-          if (shiftOps && shiftOps.size > 0) {
-            shiftOps.forEach(opName => {
-              opsFaltantesSet.add(opName.split(' ')[0]);
-            });
-          } else if (typeof operatorsData !== 'undefined' && Array.isArray(operatorsData)) {
-            operatorsData.filter(o => o.group !== 'SP' && o.group !== 'N/A').slice(0, 5).forEach(o => {
-              opsFaltantesSet.add(o.name.split(' ')[0]);
+          // Sin telemetría = no hay extensiones conectadas. NO asumir que todos faltan.
+          console.warn('[SEGUIMIENTO-30MIN] ⚠️ No se detectaron operadores conectados a la extensión. No se puede evaluar seguimiento.');
+          if (isForced && typeof Swal !== 'undefined') {
+            Swal.fire({
+              toast: true, position: 'top-end', icon: 'info',
+              title: 'ℹ️ Sin datos de extensión',
+              text: 'No se detectaron operadores con la extensión conectada. Verifica que tengan la extensión activa.',
+              showConfirmButton: false, timer: 5000, background: '#0f172a', color: '#fff'
             });
           }
         }
@@ -43910,14 +43920,15 @@ CONFIGURACIÓN DE CONTEXTO:
         window.emitirAlertaTareaGlobal(payload);
 
         if (isForced && typeof Swal !== 'undefined') {
+          const totalEvaluados = opsFaltantesSet.size + opsCumplidosSet.size;
           Swal.fire({
             toast: true,
             position: 'top-end',
-            icon: 'warning',
-            title: '⚠️ Chequeo de Media Hora Emitido',
-            text: `Alerta transmitida a todas las sesiones y al TV (${count} operadores evaluados).`,
+            icon: count > 0 ? 'warning' : 'success',
+            title: count > 0 ? '⚠️ Chequeo de Media Hora Emitido' : '✅ Todos al día',
+            text: `${totalEvaluados} operadores evaluados vía extensión. ${count > 0 ? count + ' pendientes: ' + opsFaltantes.join(', ') : '¡Todos completaron el seguimiento!'}`,
             showConfirmButton: false,
-            timer: 4000,
+            timer: 5000,
             background: '#0f172a',
             color: '#fff'
           });

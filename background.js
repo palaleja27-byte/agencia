@@ -26,7 +26,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   // Enrutar alertas globales y configuraciones a todas las pestañas abiertas de Talkytimes
-  if (request && (request.type === 'GLOBAL_TASK_ALERT' || request.type === 'GLOBAL_VOICE_ALERT' || request.type === 'TASK_ALERTS_CONFIG')) {
+  if (request && (request.type === 'GLOBAL_TASK_ALERT' || request.type === 'GLOBAL_VOICE_ALERT' || request.type === 'TASK_ALERTS_CONFIG' || request.type === 'VOICE_ALERTS_CONFIG')) {
     chrome.tabs.query({ url: "*://*.talkytimes.com/*" }, (tabs) => {
       if (tabs && tabs.length) {
         tabs.forEach(tab => {

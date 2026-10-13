@@ -5046,6 +5046,7 @@
         playAlertChime();
         try {
           if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de tareas activadas por el supervisor" : "Alertas de tareas pausadas");
             utter.lang = 'es-ES';
             window.speechSynthesis.speak(utter);
@@ -5060,6 +5061,7 @@
         playAlertChime();
         try {
           if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de voz activadas por el supervisor" : "Alertas de voz desactivadas");
             utter.lang = 'es-ES';
             window.speechSynthesis.speak(utter);
@@ -5110,6 +5112,7 @@
           playAlertChime();
           try {
             if (window.speechSynthesis) {
+              window.speechSynthesis.cancel();
               const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de tareas activadas por el supervisor" : "Alertas de tareas pausadas");
               utter.lang = 'es-ES';
               window.speechSynthesis.speak(utter);
@@ -5121,6 +5124,7 @@
           playAlertChime();
           try {
             if (window.speechSynthesis) {
+              window.speechSynthesis.cancel();
               const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de voz activadas por el supervisor" : "Alertas de voz desactivadas");
               utter.lang = 'es-ES';
               window.speechSynthesis.speak(utter);

@@ -15811,6 +15811,20 @@
                 if (typeof window.reproducirAnuncioVozGlobal === 'function') {
                   window.reproducirAnuncioVozGlobal(finalVal);
                 }
+              } else if (row.key === 'rr_voice_alerts_meta' && row.value) {
+                try {
+                  const meta = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+                  if (meta && meta.sessionId !== window._mySessionId && typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                    window.aplicarConfiguracionAlertasRemotas('voice', meta.enabled, meta.sender || 'Supabase Realtime', false, meta.ts);
+                  }
+                } catch(e) {}
+              } else if (row.key === 'rr_task_alerts_meta' && row.value) {
+                try {
+                  const meta = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+                  if (meta && meta.sessionId !== window._mySessionId && typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                    window.aplicarConfiguracionAlertasRemotas('task', meta.enabled, meta.sender || 'Supabase Realtime', false, meta.ts);
+                  }
+                } catch(e) {}
               } else if (row.key === 'rr_voice_alerts_enabled') {
                 const isEnabled = String(row.value) !== 'false';
                 if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
@@ -15891,9 +15905,12 @@
         const payload = e.detail;
         const p = (payload && payload.payload) ? payload.payload : payload;
         if (!p || !p.alertType) return;
+        if (p.sessionId && p.sessionId === window._mySessionId) {
+          return; // Eco de la propia sesión local (ya reprodujo sonido localmente)
+        }
         console.log("📡 [ALERT-SYNC] Configuración remota de alertas recibida vía broadcast:", p);
         if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
-          window.aplicarConfiguracionAlertasRemotas(p.alertType, p.enabled, p.sender || 'Admin Remoto', false);
+          window.aplicarConfiguracionAlertasRemotas(p.alertType, p.enabled, p.sender || 'Admin Remoto', false, p.ts);
         }
       });
     }
@@ -41395,6 +41412,31 @@ PT._logKey = function (opName) {
           gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
           osc.start(now);
           osc.stop(now + 0.8);
+        } else if (type === 'off' || type === 'mute' || type === 'pulse') {
+          // Melodía descendente armónica nítida para indicar apagado / desactivación remota
+          const osc1 = ctx.createOscillator();
+          const gain1 = ctx.createGain();
+          osc1.connect(gain1);
+          gain1.connect(ctx.destination);
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(784, now); // G5
+          gain1.gain.setValueAtTime(0.001, now);
+          gain1.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
+          gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+          osc1.start(now);
+          osc1.stop(now + 0.16);
+
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
+          osc2.connect(gain2);
+          gain2.connect(ctx.destination);
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(523.25, now + 0.13); // C5
+          gain2.gain.setValueAtTime(0.001, now + 0.13);
+          gain2.gain.exponentialRampToValueAtTime(0.25, now + 0.15);
+          gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+          osc2.start(now + 0.13);
+          osc2.stop(now + 0.42);
         } else {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -41877,10 +41919,28 @@ PT._logKey = function (opName) {
         }
 
         // Sincronizar estado remoto de botones Alertas Tareas y Alertas Voz (TV, operadores y monitores)
-        const { data: cfgRows } = await _sb.from('kv_store').select('key, value').in('key', ['rr_task_alerts_enabled', 'rr_voice_alerts_enabled']);
+        const { data: cfgRows } = await _sb.from('kv_store').select('key, value').in('key', ['rr_task_alerts_enabled', 'rr_voice_alerts_enabled', 'rr_task_alerts_meta', 'rr_voice_alerts_meta']);
         if (cfgRows && Array.isArray(cfgRows)) {
           cfgRows.forEach(r => {
-            if (r.key === 'rr_task_alerts_enabled') {
+            if (r.key === 'rr_voice_alerts_meta' && r.value) {
+              try {
+                const meta = typeof r.value === 'string' ? JSON.parse(r.value) : r.value;
+                if (meta && meta.sessionId !== window._mySessionId && (Date.now() - (meta.ts || 0) < 180000)) {
+                  if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                    window.aplicarConfiguracionAlertasRemotas('voice', meta.enabled, meta.sender || 'Sync Remoto', false, meta.ts);
+                  }
+                }
+              } catch(e) {}
+            } else if (r.key === 'rr_task_alerts_meta' && r.value) {
+              try {
+                const meta = typeof r.value === 'string' ? JSON.parse(r.value) : r.value;
+                if (meta && meta.sessionId !== window._mySessionId && (Date.now() - (meta.ts || 0) < 180000)) {
+                  if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                    window.aplicarConfiguracionAlertasRemotas('task', meta.enabled, meta.sender || 'Sync Remoto', false, meta.ts);
+                  }
+                }
+              } catch(e) {}
+            } else if (r.key === 'rr_task_alerts_enabled') {
               const remoteVal = String(r.value) !== 'false';
               const localVal = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
               if (remoteVal !== localVal && typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
@@ -42721,12 +42781,17 @@ CONFIGURACIÓN DE CONTEXTO:
 
     // 1. Capturar Clicks, Puntero, Teclado y Movimiento de mouse en la interfaz del usuario
     const _unlockUserAudio = () => {
-      if (typeof audioCtx !== 'undefined' && audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(()=>{});
-      }
-      if (window.speechSynthesis && window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
+      try {
+        const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : (window.audioCtx || null);
+        if (ctx && ctx.state === 'suspended') {
+          ctx.resume().catch(()=>{});
+        }
+      } catch(e) {}
+      try {
+        if (window.speechSynthesis && window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+      } catch(e) {}
     };
     window.addEventListener('click', () => { registrarActividadOperadorGlobal('click_ui'); _unlockUserAudio(); }, { passive: true });
     window.addEventListener('pointerdown', () => { registrarActividadOperadorGlobal('pointerdown'); _unlockUserAudio(); }, { passive: true });
@@ -42786,26 +42851,52 @@ CONFIGURACIÓN DE CONTEXTO:
     // SINCRONIZACIÓN REMOTA UNIFICADA DE ALERTAS (VOZ Y TAREAS)
     // Permite activar/desactivar en tiempo real (<50ms) entre todas las sesiones Admin / TV
     // ═══════════════════════════════════════════════════════════════
-    window.aplicarConfiguracionAlertasRemotas = function(alertType, enabled, sender, isLocal) {
+    window._mySessionId = window._mySessionId || ('sess_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now());
+    window._alertSyncTracker = window._alertSyncTracker || {
+      voice: { lastState: null, lastTs: 0, lastSoundTs: 0 },
+      task:  { lastState: null, lastTs: 0, lastSoundTs: 0 }
+    };
+
+    window.aplicarConfiguracionAlertasRemotas = function(alertType, enabled, sender, isLocal, actionTs) {
       const bEnabled = (enabled === true || enabled === 'true');
-      
-      if (alertType === 'voice') {
-        const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
-        
-        // 🛡️ DEDUPLICACIÓN ESTRICTA: Si ya estamos en ese estado y no es click local, no hacer nada para evitar loops
-        if (current === bEnabled && !isLocal) return;
+      const now = Date.now();
+      const ts = Number(actionTs) || now;
+      const tracker = window._alertSyncTracker[alertType] || (window._alertSyncTracker[alertType] = { lastState: null, lastTs: 0, lastSoundTs: 0 });
 
-        if (typeof _origSetItem === 'function') {
-          _origSetItem('rr_voice_alerts_enabled', bEnabled ? 'true' : 'false');
-        } else {
-          localStorage.setItem('rr_voice_alerts_enabled', bEnabled ? 'true' : 'false');
+      // Si es remoto y la señal proviene de esta misma sesión, omitir eco
+      if (typeof sender === 'object' && sender && sender.sessionId === window._mySessionId) {
+        return;
+      }
+
+      // Si es remoto, deduplicar únicamente si el mismo timestamp exacto ya se procesó
+      // O si el mismo estado ya sonó en los últimos 2.5 segundos (evitar rebotes entre Realtime y Postgres)
+      if (!isLocal) {
+        if (actionTs && tracker.lastTs === ts) {
+          return; // Mismo paquete exacto ya procesado
         }
-        if (typeof _sbMemCache !== 'undefined') _sbMemCache['rr_voice_alerts_enabled'] = bEnabled ? 'true' : 'false';
-        if (typeof _localSaveTs !== 'undefined') _localSaveTs['rr_voice_alerts_enabled'] = Date.now();
+        if (tracker.lastState === bEnabled && (now - tracker.lastSoundTs < 2500)) {
+          return; // Ya sonó este mismo estado hace menos de 2.5s
+        }
+      }
 
+      tracker.lastState = bEnabled;
+      tracker.lastTs = ts;
+      if (!isLocal) {
+        tracker.lastSoundTs = now;
+      }
+
+      const storageKey = alertType === 'voice' ? 'rr_voice_alerts_enabled' : 'rr_task_alerts_enabled';
+      if (typeof _origSetItem === 'function') {
+        _origSetItem(storageKey, bEnabled ? 'true' : 'false');
+      } else {
+        localStorage.setItem(storageKey, bEnabled ? 'true' : 'false');
+      }
+      if (typeof _sbMemCache !== 'undefined') _sbMemCache[storageKey] = bEnabled ? 'true' : 'false';
+      if (typeof _localSaveTs !== 'undefined') _localSaveTs[storageKey] = now;
+
+      if (alertType === 'voice') {
         window._enableVoiceAlerts = bEnabled;
         window.voiceAlertsEnabled = bEnabled;
-
         if (typeof window.updateVoiceAlertBtnUI === 'function') {
           window.updateVoiceAlertBtnUI();
         }
@@ -42819,47 +42910,44 @@ CONFIGURACIÓN DE CONTEXTO:
           } catch(e) {}
         }
 
+        // DESBLOQUEAR AUDIO si estaba suspendido en el TV o navegador
+        try {
+          const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+          if (ctx && ctx.state === 'suspended') ctx.resume().catch(()=>{});
+        } catch(e){}
+
         if (!bEnabled) {
           if (window.speechSynthesis) {
             try { window.speechSynthesis.cancel(); } catch(e){}
           }
           if (!isLocal) {
+            if (typeof playBeep === 'function') playBeep('off');
             if (typeof _toastSync === 'function') {
               _toastSync('🔇 Alertas de Voz apagadas remotamente (' + (sender || 'Admin') + ')', false);
             }
-            if (typeof window.speakText === 'function') {
-              window.speakText("Alertas de voz desactivadas remotamente");
-            }
+            setTimeout(() => {
+              if (typeof window.speakText === 'function') {
+                window.speakText("Alertas de voz desactivadas remotamente", { force: true });
+              }
+            }, 120);
           }
         } else {
-          window._taskAlertsActivatedTs = Date.now();
-          window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000);
+          window._taskAlertsActivatedTs = now;
+          window._lastHourlyConvCheckTs = now - (5400000 - 3600000);
           if (!isLocal) {
+            if (typeof playBeep === 'function') playBeep('coin');
             if (typeof _toastSync === 'function') {
               _toastSync('🔊 Alertas de Voz activadas remotamente (' + (sender || 'Admin') + ')', false);
             }
-            if (typeof window.speakText === 'function') {
-              window.speakText("Alertas de voz activadas remotamente");
-            }
+            setTimeout(() => {
+              if (typeof window.speakText === 'function') {
+                window.speakText("Alertas de voz activadas remotamente", { force: true });
+              }
+            }, 120);
           }
         }
       } else if (alertType === 'task') {
-        const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
-        
-        // 🛡️ DEDUPLICACIÓN ESTRICTA: Si ya estamos en ese estado y no es click local, no hacer nada para evitar loops
-        if (current === bEnabled && !isLocal) return;
-
-        if (typeof _origSetItem === 'function') {
-          _origSetItem('rr_task_alerts_enabled', bEnabled ? 'true' : 'false');
-        } else {
-          localStorage.setItem('rr_task_alerts_enabled', bEnabled ? 'true' : 'false');
-        }
-        if (typeof _sbMemCache !== 'undefined') _sbMemCache['rr_task_alerts_enabled'] = bEnabled ? 'true' : 'false';
-        if (typeof _localSaveTs !== 'undefined') _localSaveTs['rr_task_alerts_enabled'] = Date.now();
-
         window._enableTaskAlerts = bEnabled;
-
-        // Actualizar visualmente TODOS los botones de tareas en la interfaz
         if (typeof window.updateTaskAlertBtnUI === 'function') {
           window.updateTaskAlertBtnUI();
         }
@@ -42873,28 +42961,37 @@ CONFIGURACIÓN DE CONTEXTO:
           } catch(e) {}
         }
 
+        // DESBLOQUEAR AUDIO si estaba suspendido en el TV o navegador
+        try {
+          const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+          if (ctx && ctx.state === 'suspended') ctx.resume().catch(()=>{});
+        } catch(e){}
+
         if (!bEnabled) {
           if (!isLocal) {
+            if (typeof playBeep === 'function') playBeep('off');
             if (typeof _toastSync === 'function') {
               _toastSync('⏸️ Alertas de Tareas pausadas remotamente (' + (sender || 'Admin') + ')', false);
             }
-            if (typeof window.speakText === 'function') {
-              window.speakText("Alertas de tareas desactivadas remotamente", { isTaskAlert: true });
-            }
+            setTimeout(() => {
+              if (typeof window.speakText === 'function') {
+                window.speakText("Alertas de tareas desactivadas remotamente", { isTaskAlert: true, force: true });
+              }
+            }, 120);
           }
         } else {
-          window._taskAlertsActivatedTs = Date.now();
-          window._lastHourlyConvCheckTs = Date.now() - (5400000 - 3600000);
+          window._taskAlertsActivatedTs = now;
+          window._lastHourlyConvCheckTs = now - (5400000 - 3600000);
           if (!isLocal) {
-            if (typeof playBeep === 'function') {
-              playBeep('task');
-            }
+            if (typeof playBeep === 'function') playBeep('task');
             if (typeof _toastSync === 'function') {
               _toastSync('📋 Alertas de Tareas activadas remotamente (' + (sender || 'Admin') + ')', false);
             }
-            if (typeof window.speakText === 'function') {
-              window.speakText("Alertas de tareas activadas remotamente", { isTaskAlert: true });
-            }
+            setTimeout(() => {
+              if (typeof window.speakText === 'function') {
+                window.speakText("Alertas de tareas activadas remotamente", { isTaskAlert: true, force: true });
+              }
+            }, 120);
           }
         }
       }
@@ -42952,9 +43049,11 @@ CONFIGURACIÓN DE CONTEXTO:
     window.toggleVoiceAlerts = function() {
       const current = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
       const next = !current;
+      const nowTs = Date.now();
+      const senderName = (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') + (typeof currentOpName !== 'undefined' && currentOpName ? ' (' + currentOpName + ')' : '');
       
       // 1. Aplicar localmente de inmediato (isLocal = true)
-      window.aplicarConfiguracionAlertasRemotas('voice', next, 'Admin Local', true);
+      window.aplicarConfiguracionAlertasRemotas('voice', next, senderName, true, nowTs);
       
       // 2. Audio de confirmación local garantizado y limpio
       if (next) {
@@ -42966,7 +43065,7 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       } else {
         if (typeof playBeep === 'function') {
-          playBeep('pulse');
+          playBeep('off');
         }
         if (typeof window.speakText === 'function') {
           window.speakText("Alertas de voz desactivadas", { force: true });
@@ -42983,8 +43082,9 @@ CONFIGURACIÓN DE CONTEXTO:
             payload: {
               alertType: 'voice',
               enabled: next,
-              ts: Date.now(),
-              sender: (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') + (typeof currentOpName !== 'undefined' && currentOpName ? ' (' + currentOpName + ')' : '')
+              ts: nowTs,
+              sender: senderName,
+              sessionId: window._mySessionId
             }
           });
           console.log('[ALERT-SYNC] 🚀 Broadcast enviado: Alertas de voz ->', next ? 'ON' : 'OFF');
@@ -43001,25 +43101,28 @@ CONFIGURACIÓN DE CONTEXTO:
         }, { onConflict: 'key' }).then(() => {
           console.log('[ALERT-SYNC] ☁️ Persistido en Supabase: rr_voice_alerts_enabled =', next);
         }).catch(e => console.warn('[ALERT-SYNC] Error persistiendo en Supabase:', e));
+
+        _sb.from('kv_store').upsert({
+          key: 'rr_voice_alerts_meta',
+          value: JSON.stringify({ enabled: next, ts: nowTs, sender: senderName, sessionId: window._mySessionId })
+        }, { onConflict: 'key' }).catch(() => {});
       }
 
       // 5. Emitir por BroadcastChannel a pestañas de extensión (Talkytimes) y monitores
       try {
         const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
-        bc.postMessage({ type: 'VOICE_ALERTS_CONFIG', enabled: next, sender: (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') });
+        bc.postMessage({ type: 'VOICE_ALERTS_CONFIG', enabled: next, sender: senderName });
         setTimeout(() => bc.close(), 1000);
       } catch(e) {}
     };
 
     window.setTaskAlertsEnabled = function(next, sender) {
       const bNext = (next === true || next === 'true');
-      const current = localStorage.getItem('rr_task_alerts_enabled') !== 'false';
-
-      // Si ya está en ese estado exacto, no repetir para evitar dobles llamadas
-      if (current === bNext) return;
+      const nowTs = Date.now();
+      const senderName = sender || ((typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') + (typeof currentOpName !== 'undefined' && currentOpName ? ' (' + currentOpName + ')' : ''));
 
       // 1. Aplicar localmente de inmediato (isLocal = true)
-      window.aplicarConfiguracionAlertasRemotas('task', bNext, sender || 'Admin Local', true);
+      window.aplicarConfiguracionAlertasRemotas('task', bNext, senderName, true, nowTs);
 
       // 2. Audio de confirmación local garantizado y limpio
       if (bNext) {
@@ -43031,7 +43134,7 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       } else {
         if (typeof playBeep === 'function') {
-          playBeep('pulse');
+          playBeep('off');
         }
         if (typeof window.speakText === 'function') {
           window.speakText("Alertas de tareas desactivadas", { isTaskAlert: true, force: true });
@@ -43048,8 +43151,9 @@ CONFIGURACIÓN DE CONTEXTO:
             payload: {
               alertType: 'task',
               enabled: bNext,
-              ts: Date.now(),
-              sender: (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') + (typeof currentOpName !== 'undefined' && currentOpName ? ' (' + currentOpName + ')' : '')
+              ts: nowTs,
+              sender: senderName,
+              sessionId: window._mySessionId
             }
           });
           console.log('[ALERT-SYNC] 🚀 Broadcast enviado: Alertas de tareas ->', bNext ? 'ON' : 'OFF');
@@ -43066,15 +43170,18 @@ CONFIGURACIÓN DE CONTEXTO:
         }, { onConflict: 'key' }).then(() => {
           console.log('[ALERT-SYNC] ☁️ Persistido en Supabase: rr_task_alerts_enabled =', bNext);
         }).catch(e => console.warn('[ALERT-SYNC] Error persistiendo en Supabase:', e));
+
+        _sb.from('kv_store').upsert({
+          key: 'rr_task_alerts_meta',
+          value: JSON.stringify({ enabled: bNext, ts: nowTs, sender: senderName, sessionId: window._mySessionId })
+        }, { onConflict: 'key' }).catch(() => {});
       }
 
-      // 5. Sincronizar con backend Node.js
+      // 5. Emitir por BroadcastChannel a pestañas de extensión (Talkytimes) y monitores
       try {
-        fetch('https://ryr-titan-backend.onrender.com/api/tasks/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: bNext })
-        }).catch(() => {});
+        const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
+        bc.postMessage({ type: 'TASK_ALERTS_CONFIG', enabled: bNext, sender: senderName });
+        setTimeout(() => bc.close(), 1000);
       } catch(e) {}
     };
 

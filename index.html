@@ -42823,8 +42823,13 @@ CONFIGURACIÓN DE CONTEXTO:
           if (window.speechSynthesis) {
             try { window.speechSynthesis.cancel(); } catch(e){}
           }
-          if (!isLocal && typeof _toastSync === 'function') {
-            _toastSync('🔇 Alertas de Voz apagadas remotamente (' + (sender || 'Admin') + ')', false);
+          if (!isLocal) {
+            if (typeof _toastSync === 'function') {
+              _toastSync('🔇 Alertas de Voz apagadas remotamente (' + (sender || 'Admin') + ')', false);
+            }
+            if (typeof window.speakText === 'function') {
+              window.speakText("Alertas de voz desactivadas remotamente");
+            }
           }
         } else {
           window._taskAlertsActivatedTs = Date.now();
@@ -43004,15 +43009,6 @@ CONFIGURACIÓN DE CONTEXTO:
         bc.postMessage({ type: 'VOICE_ALERTS_CONFIG', enabled: next, sender: (typeof currentRole !== 'undefined' ? currentRole.toUpperCase() : 'ADMIN') });
         setTimeout(() => bc.close(), 1000);
       } catch(e) {}
-
-      // 6. Sincronizar con backend Node.js
-      try {
-        fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isBroadcast: true, text: next ? "🔊 Alertas de voz activadas por el supervisor" : "🔇 Alertas de voz pausadas" })
-        }).catch(() => {});
-      } catch(e) {}
     };
 
     window.setTaskAlertsEnabled = function(next, sender) {
@@ -43078,11 +43074,6 @@ CONFIGURACIÓN DE CONTEXTO:
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled: bNext })
-        }).catch(() => {});
-        fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isBroadcast: true, text: bNext ? "📋 Alertas de tareas activadas por el supervisor" : "⏸️ Alertas de tareas pausadas" })
         }).catch(() => {});
       } catch(e) {}
     };

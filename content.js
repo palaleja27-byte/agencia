@@ -401,20 +401,6 @@
 
     document.body.appendChild(banner);
 
-    // Reproducir alerta sonora y locución de voz para el operador
-    playAlertChime();
-    setTimeout(playAlertChime, 220);
-    try {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        const utterText = text.startsWith('⚠️') || text.startsWith('Atención') ? text : ("Atención: " + text);
-        const utter = new SpeechSynthesisUtterance(utterText);
-        utter.lang = 'es-ES';
-        utter.rate = 0.94;
-        window.speechSynthesis.speak(utter);
-      }
-    } catch(e) {}
-
     const replyInput = document.getElementById('input-reply-sup');
     const sendReplyBtn = document.getElementById('btn-reply-sup');
 

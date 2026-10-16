@@ -42801,6 +42801,8 @@ CONFIGURACIÓN DE CONTEXTO:
     window.addEventListener('input', () => registrarActividadOperadorGlobal('input'), { passive: true });
     window.addEventListener('change', () => registrarActividadOperadorGlobal('change'), { passive: true });
     window.addEventListener('mousemove', () => registrarActividadOperadorGlobal('mousemove'), { passive: true });
+    window.addEventListener('focus', () => _unlockUserAudio(), { passive: true });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') _unlockUserAudio(); }, { passive: true });
 
     // 2. Escuchar actividad telemétrica y clicks desde extensiones o iframes de la plataforma
     window._opLastActivityMap = window._opLastActivityMap || {};
@@ -43358,15 +43360,6 @@ CONFIGURACIÓN DE CONTEXTO:
           setTimeout(() => bc.close(), 1000);
         } catch(e) {}
 
-        // 3.2 Enviar a backend Node.js para entrega garantizada a todas las extensiones activas
-        try {
-          fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isBroadcast: true, text: annPayload.text })
-          }).catch(() => {});
-        } catch(e) {}
-
         // 4. Feedback visual
         if (inputEl) {
           inputEl.value = '';
@@ -43527,20 +43520,6 @@ CONFIGURACIÓN DE CONTEXTO:
         const bc = new BroadcastChannel('RYR_HUD_CHANNEL');
         bc.postMessage({ type: 'GLOBAL_TASK_ALERT', payload: taskPayload });
         setTimeout(() => bc.close(), 1000);
-      } catch(e) {}
-
-      // 5. Enviar a backend Node.js para entrega garantizada a todas las extensiones activas
-      try {
-        fetch('https://ryr-titan-backend.onrender.com/api/tasks/alert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(taskPayload)
-        }).catch(() => {});
-        fetch('https://ryr-titan-backend.onrender.com/api/supervisor/send-message', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isBroadcast: true, text: taskPayload.text })
-        }).catch(() => {});
       } catch(e) {}
     };
 

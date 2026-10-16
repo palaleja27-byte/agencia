@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <!-- build:20261006_1611 -->
-  <title>AGENCIA RR — Enterprise Big Data Analytics v19.2 [FIX-ASISTENCIA-ADD-OPS]</title>
+  <!-- build:20261016_1750 -->
+  <title>AGENCIA RR — Enterprise Big Data Analytics v20.0 [REMOTE-AUDIO-TITAN]</title>
   <meta name="description" content="Dashboard de Analítica en Tiempo Real v16.4 — 09-Agosto-2026">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42896,6 +42896,9 @@ CONFIGURACIÓN DE CONTEXTO:
       if (typeof _sbMemCache !== 'undefined') _sbMemCache[storageKey] = bEnabled ? 'true' : 'false';
       if (typeof _localSaveTs !== 'undefined') _localSaveTs[storageKey] = now;
 
+      // Evaluar si es una acción reciente (< 35s) para reproducir audio y locución hablada
+      const shouldPlaySound = !isLocal && (Math.abs(now - ts) < 35000);
+
       if (alertType === 'voice') {
         window._enableVoiceAlerts = bEnabled;
         window.voiceAlertsEnabled = bEnabled;
@@ -42922,7 +42925,7 @@ CONFIGURACIÓN DE CONTEXTO:
           if (window.speechSynthesis) {
             try { window.speechSynthesis.cancel(); } catch(e){}
           }
-          if (!isLocal) {
+          if (shouldPlaySound) {
             if (typeof playBeep === 'function') playBeep('off');
             if (typeof _toastSync === 'function') {
               _toastSync('🔇 Alertas de Voz apagadas remotamente (' + (sender || 'Admin') + ')', false);
@@ -42936,7 +42939,7 @@ CONFIGURACIÓN DE CONTEXTO:
         } else {
           window._taskAlertsActivatedTs = now;
           window._lastHourlyConvCheckTs = now - (5400000 - 3600000);
-          if (!isLocal) {
+          if (shouldPlaySound) {
             if (typeof playBeep === 'function') playBeep('coin');
             if (typeof _toastSync === 'function') {
               _toastSync('🔊 Alertas de Voz activadas remotamente (' + (sender || 'Admin') + ')', false);
@@ -42970,7 +42973,7 @@ CONFIGURACIÓN DE CONTEXTO:
         } catch(e){}
 
         if (!bEnabled) {
-          if (!isLocal) {
+          if (shouldPlaySound) {
             if (typeof playBeep === 'function') playBeep('off');
             if (typeof _toastSync === 'function') {
               _toastSync('⏸️ Alertas de Tareas pausadas remotamente (' + (sender || 'Admin') + ')', false);
@@ -42984,7 +42987,7 @@ CONFIGURACIÓN DE CONTEXTO:
         } else {
           window._taskAlertsActivatedTs = now;
           window._lastHourlyConvCheckTs = now - (5400000 - 3600000);
-          if (!isLocal) {
+          if (shouldPlaySound) {
             if (typeof playBeep === 'function') playBeep('task');
             if (typeof _toastSync === 'function') {
               _toastSync('📋 Alertas de Tareas activadas remotamente (' + (sender || 'Admin') + ')', false);
@@ -42998,6 +43001,109 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       }
     };
+
+    // ── Render Backend High-Availability Relay para Sincronización Remota Móvil ↔ TV ──
+    window._broadcastAlertConfigViaRender = function(alertType, enabled, senderName, nowTs) {
+      try {
+        fetch('https://ryr-titan-backend.onrender.com/api/operator/reply-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operatorName: 'GLOBAL_CONFIG',
+            text: JSON.stringify({
+              type: 'admin_alert_config',
+              alertType: alertType,
+              enabled: enabled,
+              ts: nowTs,
+              sender: senderName,
+              sessionId: window._mySessionId
+            })
+          })
+        }).catch(() => {});
+      } catch(e) {}
+    };
+
+    window._broadcastAlertEventViaRender = function(eventType, payloadData) {
+      try {
+        fetch('https://ryr-titan-backend.onrender.com/api/operator/reply-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            operatorName: 'GLOBAL_CONFIG',
+            text: JSON.stringify({
+              type: eventType,
+              payload: payloadData,
+              ts: Date.now(),
+              sessionId: window._mySessionId
+            })
+          })
+        }).catch(() => {});
+      } catch(e) {}
+    };
+
+    window._processedRenderRelayMsgIds = window._processedRenderRelayMsgIds || new Set();
+
+    window._syncGlobalConfigViaRender = async function() {
+      try {
+        const res = await fetch('https://ryr-titan-backend.onrender.com/api/supervisor/messages/GLOBAL_CONFIG?limit=15', {
+          signal: AbortSignal.timeout(4000)
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const messages = (data && Array.isArray(data.messages)) ? data.messages : [];
+        if (!messages.length) return;
+
+        messages.forEach(msg => {
+          if (!msg || !msg.id) return;
+          if (window._processedRenderRelayMsgIds.has(msg.id)) return;
+          window._processedRenderRelayMsgIds.add(msg.id);
+          if (window._processedRenderRelayMsgIds.size > 200) {
+            const arr = Array.from(window._processedRenderRelayMsgIds);
+            window._processedRenderRelayMsgIds = new Set(arr.slice(arr.length - 100));
+          }
+
+          let payload = null;
+          try {
+            payload = typeof msg.text === 'string' ? JSON.parse(msg.text) : msg.text;
+            if (typeof payload === 'string') payload = JSON.parse(payload);
+          } catch(e) { return; }
+
+          if (!payload) return;
+          // Evitar eco si el paquete fue emitido por esta misma pestaña/sesión
+          if (payload.sessionId && payload.sessionId === window._mySessionId) return;
+
+          const msgTs = payload.ts || msg.timestamp || Date.now();
+
+          // 1. Configuración remota de alertas (Voz o Tareas)
+          if (payload.type === 'admin_alert_config' || payload.alertType) {
+            const aType = payload.alertType;
+            if (aType === 'voice' || aType === 'task') {
+              if (typeof window.aplicarConfiguracionAlertasRemotas === 'function') {
+                window.aplicarConfiguracionAlertasRemotas(aType, payload.enabled, payload.sender || 'Admin Remoto', false, msgTs);
+              }
+            }
+          }
+          // 2. Alerta de voz general / TTS
+          else if (payload.type === 'voice_alert' || payload.event === 'voice_alert') {
+            const ann = payload.payload || payload;
+            if (typeof window.reproducirAnuncioVozGlobal === 'function') {
+              window.reproducirAnuncioVozGlobal(ann);
+            }
+          }
+          // 3. Alerta de tarea operativa
+          else if (payload.type === 'task_alert' || payload.event === 'task_alert') {
+            const task = payload.payload || payload;
+            if (typeof window.reproducirAlertaTareaGlobal === 'function') {
+              window.reproducirAlertaTareaGlobal(task);
+            }
+          }
+        });
+      } catch (err) {}
+    };
+
+    // Polling rápido cada 1500ms para garantizar sincro remota inmediata entre móvil y TV
+    setInterval(window._syncGlobalConfigViaRender, 1500);
+    setTimeout(window._syncGlobalConfigViaRender, 500);
 
     window.updateVoiceAlertBtnUI = function() {
       const enabled = localStorage.getItem('rr_voice_alerts_enabled') !== 'false';
@@ -43095,6 +43201,11 @@ CONFIGURACIÓN DE CONTEXTO:
         console.warn('[ALERT-SYNC] Error en broadcast:', e);
       }
 
+      // 3.1 Emitir vía Render HA Relay (independiente de Supabase para TV y móvil)
+      if (typeof window._broadcastAlertConfigViaRender === 'function') {
+        window._broadcastAlertConfigViaRender('voice', next, senderName, nowTs);
+      }
+
       // 4. Persistir en Supabase Cloud kv_store
       if (typeof _sb !== 'undefined' && _sb) {
         _sb.from('kv_store').upsert({
@@ -43162,6 +43273,11 @@ CONFIGURACIÓN DE CONTEXTO:
         }
       } catch(e) {
         console.warn('[ALERT-SYNC] Error en broadcast:', e);
+      }
+
+      // 3.1 Emitir vía Render HA Relay (independiente de Supabase para TV y móvil)
+      if (typeof window._broadcastAlertConfigViaRender === 'function') {
+        window._broadcastAlertConfigViaRender('task', bNext, senderName, nowTs);
       }
 
       // 4. Persistir en Supabase Cloud kv_store
@@ -43360,6 +43476,11 @@ CONFIGURACIÓN DE CONTEXTO:
           setTimeout(() => bc.close(), 1000);
         } catch(e) {}
 
+        // 3.2 Emitir vía Render HA Relay (independiente de Supabase para TV y móvil)
+        if (typeof window._broadcastAlertEventViaRender === 'function') {
+          window._broadcastAlertEventViaRender('voice_alert', annPayload);
+        }
+
         // 4. Feedback visual
         if (inputEl) {
           inputEl.value = '';
@@ -43521,6 +43642,11 @@ CONFIGURACIÓN DE CONTEXTO:
         bc.postMessage({ type: 'GLOBAL_TASK_ALERT', payload: taskPayload });
         setTimeout(() => bc.close(), 1000);
       } catch(e) {}
+
+      // 4.1 Emitir vía Render HA Relay (independiente de Supabase para TV y móvil)
+      if (typeof window._broadcastAlertEventViaRender === 'function') {
+        window._broadcastAlertEventViaRender('task_alert', taskPayload);
+      }
     };
 
     // ══════════════════════════════════════════════════════════════

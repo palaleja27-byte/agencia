@@ -659,109 +659,6 @@
     };
   }
 
-  // 7b. RECORDATORIO VISUAL DE SEGUIMIENTO (FALTANDO 10 MINUTOS DE LA MEDIA HORA)
-  let lastProspectingReminderCycleStart = 0;
-  function checkAndShowProspectingReminder() {
-    // Si la alerta visual ya existe en pantalla, no hacer nada
-    if (document.getElementById('ryr-prospecting-reminder-banner')) return;
-
-    const cycle = evaluateProspectingCycle();
-    // Si ya completó la cuota de 10 usuarios nuevos, no molestar
-    if (cycle.isCompleted || cycle.count >= cycle.quota) return;
-
-    // Faltando 10 minutos (<= 600 segundos restantes) y más de 10 segundos
-    if (cycle.remainingSeconds <= 600 && cycle.remainingSeconds > 10) {
-      // Disparar solo una vez por ciclo de 30 minutos
-      if (lastProspectingReminderCycleStart === prospectingCycleStartTime) return;
-      lastProspectingReminderCycleStart = prospectingCycleStartTime;
-
-      showProspectingVisualAlert(cycle.count, cycle.quota, cycle.formattedTime);
-    }
-  }
-
-  function showProspectingVisualAlert(currentCount, quota, formattedTime) {
-    const existing = document.getElementById('ryr-prospecting-reminder-banner');
-    if (existing) existing.remove();
-
-    const banner = document.createElement('div');
-    banner.id = 'ryr-prospecting-reminder-banner';
-    banner.style.cssText = `
-      position: fixed;
-      top: 52px;
-      right: 24px;
-      background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 27, 75, 0.98) 100%);
-      border: 2px solid #f59e0b;
-      box-shadow: 0 10px 35px rgba(245, 158, 11, 0.45), 0 0 20px rgba(245, 158, 11, 0.25);
-      border-radius: 12px;
-      padding: 14px 18px;
-      color: #fff;
-      font-family: system-ui, -apple-system, sans-serif;
-      z-index: 2147483646;
-      width: 360px;
-      max-width: 90vw;
-      backdrop-filter: blur(12px);
-      animation: ryrToastSlide 0.3s ease-out;
-      box-sizing: border-box;
-    `;
-
-    banner.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(245,158,11,0.25); padding-bottom:6px;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:18px;">⚠️</span>
-          <span style="font-size:12px; font-weight:900; color:#fbbf24; letter-spacing:0.5px; text-transform:uppercase;">
-            Recordatorio de Tarea
-          </span>
-        </div>
-        <button id="btn-close-prospect-banner" style="background:none; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:0 4px; line-height:1;">✕</button>
-      </div>
-
-      <div style="font-size:12px; line-height:1.45; color:#f1f5f9; margin-bottom:10px;">
-        Faltan <b>10 minutos</b> para cerrar la media hora. Recuerda que el barrido es de <b style="color:#fbbf24;">10 usuarios nuevos</b> cada 30 minutos.
-      </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.35); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:6px 12px;">
-        <span style="font-size:11px; color:#cbd5e1;">Progreso actual:</span>
-        <span style="font-size:13px; font-weight:900; color:#f59e0b;">
-          ${currentCount} / ${quota} usuarios
-        </span>
-      </div>
-
-      <div style="font-size:10px; color:#94a3b8; text-align:right; margin-top:8px; font-style:italic;">
-        ⏱️ Tiempo restante en bloque: ${formattedTime}
-      </div>
-    `;
-
-    document.body.appendChild(banner);
-
-    // Audio sutil de aviso
-    playAlertChime();
-
-    // Locución sutil
-    try {
-      if (window.speechSynthesis) {
-        const utter = new SpeechSynthesisUtterance("Atención: faltan diez minutos para completar el barrido de usuarios nuevos.");
-        utter.lang = 'es-ES';
-        utter.rate = 0.95;
-        window.speechSynthesis.speak(utter);
-      }
-    } catch(e) {}
-
-    // Botón de cierre
-    const closeBtn = document.getElementById('btn-close-prospect-banner');
-    if (closeBtn) {
-      closeBtn.onclick = () => banner.remove();
-    }
-
-    // Auto-cierre a los 45 segundos para no estorbar
-    setTimeout(() => {
-      if (banner && banner.parentNode) {
-        banner.style.opacity = '0';
-        banner.style.transition = 'opacity 0.5s ease';
-        setTimeout(() => banner.remove(), 500);
-      }
-    }, 45000);
-  }
-
   // 8. SINCRONIZACIÓN CON SERVIDOR
   async function syncServerKnownChats() {
     if (!sessionData.profileName) return;
@@ -2258,463 +2155,775 @@
 
       // 2. Motor Neuronal Contextual de Respuestas Humanizadas Ultra-Naturales
       const synthesizeDynamicChatOptions = (clientText, langCode, clientNameStr, msgsHistory = [], lettersHistory = [], prevOpText = '') => {
-        const textLower = (clientText || '').toLowerCase().trim();
-        const clientShort = (clientNameStr || 'friend').split(' ')[0];
-        const allClientText = msgsHistory.filter(m => !m.isOperator).slice(-3).map(m => m.text).join(' ').toLowerCase();
-        const lettersSnippet = (lettersHistory || []).map(l => l.body || l.preview || '').join(' ').toLowerCase();
-        const combinedScope = `${textLower} ${allClientText} ${lettersSnippet}`.trim();
-        const hasHistory = msgsHistory.length >= 2 || (lettersHistory && lettersHistory.length > 0) || (msgsHistory.length === 1 && textLower.length > 0);
+        // --- 1. HELPERS & VARIETY SYSTEM ---
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        
+        // Formato seguro del nombre del cliente
+        const rawName = (clientNameStr || '').trim();
+        const clientShort = rawName ? rawName.split(' ')[0].replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑàèìòùãõçÀÈÌÒÙÃÕÇ]/g, '') : (langCode === 'pt' ? 'amigo' : (langCode === 'es' ? 'amigo' : 'friend'));
+        const lang = (langCode || 'en').toLowerCase().trim();
 
-        // Intenciones Semánticas
-        const isFamilyOrKids = /\b(hijo|hija|hijos|filho|filha|filhos|crian[çc]a|ni[ñn]o|ni[ñn]a|ni[ñn]os|kid|kids|child|children|son|daughter|baby|beb[eé]|educaci[oó]n|educa[çc][aã]o|colegio|escola|school|madre|m[aã]e|padre|pai|mam[aá]|pap[aá]|maternidad|paternidad|sobrin|nephew|niece|familia|fam[ií]lia)\b/i.test(textLower) || /\b(hijo|hija|filho|filha|crian[çc]a|kid|educaci|educa[çc])\b/i.test(allClientText);
-        const isConflictOrMoving = /\b(friend|pack|packing|storage|move on|moving|limit|limits|messing|drama|toxic|betray|fight|argument|lie|leaving|bag|boxes|house|apartment|move|mudanz|mudan[çc]a|cajas|maletas|falsa|falso)\b/i.test(allClientText) || /\b(pack|packing|storage|mudanz|falsa|amiga|limit)\b/i.test(textLower);
-        const isExhaustedOrStressed = /\b(tired|exhausted|burnout|burned out|overwhelmed|too much|stress|stressful|pressure|heavy|can't take|drained|cansad|estres|agobi|sobrecarg)\b/i.test(allClientText) || /\b(cansad|tired|estres|exhausted)\b/i.test(textLower);
-        const isBedtime = /\b(bed|going to bed|sleep|sleeping|goodnight|good night|nighty|night|rest|resting|dormir|cama|sue[ñn]o|descanso|boas noites|dormindo|deitar|buenas noches|descansar)\b/i.test(textLower) || /\b(bed|dormir|sleep|cama|descans)\b/i.test(allClientText);
-        const isWorkOrCareer = /\b(work|working|job|office|boss|shift|busy|meeting|deadline|coworker|client|project|trabaj|trabalh|oficina|jefe|turno|reuni[oó]n|reuni[aã]o|negocio|empresa|projeto|proyecto)\b/i.test(textLower) || /\b(work|trabaj|trabalh|office|oficina)\b/i.test(allClientText);
-        const isFoodOrDrink = /\b(coffee|tea|drink|cup|breakfast|lunch|dinner|wine|beer|cooking|food|eat|eating|cafe|café|comida|vino|cerveza|cerveja|jantar|almoço|almuerzo|cena|desayuno|restaurante|pizza)\b/i.test(textLower) || /\b(coffee|caf[eé]|comida|cook|almo[çc]o|cena)\b/i.test(allClientText);
-        const isPetsOrAnimals = /\b(dog|puppy|cat|kitten|pet|pets|animal|perr|cachorr|gat|mascota)\b/i.test(textLower) || /\b(perr|cachorr|gat|dog|cat|mascota)\b/i.test(allClientText);
-        const isMovieOrCinema = /\b(movie|film|cinema|series|episode|watch|watching|pelicula|película|filme|cine|netflix|actor|influencer)\b/i.test(textLower) || /\b(movie|film|cinema|pelicula|filme|netflix)\b/i.test(allClientText);
-        const isSickOrPain = /\b(headache|fever|flu|sick|ill|medicine|pill|cold|pain|hospital|doctor|dolor|enfermo|cabeza|remedio|doente|dor|malestar|febre|fiebre|gripe)\b/i.test(textLower) || /\b(sick|dolor|doente|dor|headache|enferm)\b/i.test(allClientText);
-        const isSadOrLonely = /\b(sad|crying|cry|tears|lonely|alone|miss|depressed|heartbroken|empty|down|hurt|broken|triste|soled|solid[aã]o|chora|llor|desanim)\b/i.test(textLower) || /\b(triste|sad|lonely|soled|chora)\b/i.test(allClientText);
-        const isRomanceOrCompliment = /\b(beautiful|gorgeous|sexy|pretty|cute|sweet|handsome|love|kiss|angel|honey|darling|linda|lindo|hermosa|hermoso|guapa|guapo|bella|bello|amor|princesa|querida|doce|gostosa|gostoso|ojos|olhos|sonrisa|sorriso|beijo|beso)\b/i.test(textLower);
-        const isClientQuestion = /\?|what\s+(are|do|about)|how\s+(are|do)|where|when|why|who|are you|do you|can you|c[oó]mo|qu[eé]|d[oó]nde|cu[aá]ndo|por qu[eé]|vc|voc[eê]|tienes|voc[eê] tem/i.test(textLower);
-        const isGreeting = /\b(hola|holaa|holaaa|ola|olá|oi|oii|hello|hi|hey|buen d[ií]a|bom dia|buenas tardes|boa tarde)\b/i.test(textLower);
-        const isWeekendOrWeather = /\b(fin de semana|fim de semana|weekend|rain|rainy|lluvia|chuva|cold|fr[ií]o|frio|hot|calor|sun|sol|playa|praia|beach|travel|viagem|viaje|vacacion|f[eé]rias)\b/i.test(textLower);
+        // --- 2. LISTAS DE STOPWORDS EN, ES, PT ---
+        const STOPWORDS_EN = new Set([
+          'a','about','above','after','again','against','all','am','an','and','any','are','aren\'t','as','at','be','because',
+          'been','before','being','below','between','both','but','by','can','can\'t','cannot','could','couldn\'t','did','didn\'t',
+          'do','does','doesn\'t','doing','don\'t','down','during','each','few','for','from','further','had','hadn\'t','has','hasn\'t',
+          'have','haven\'t','having','he','he\'d','he\'ll','he\'s','her','here','here\'s','hers','herself','him','himself','his',
+          'how','how\'s','i','i\'d','i\'ll','i\'m','i\'ve','if','in','into','is','isn\'t','it','it\'s','its','itself','let\'s','me',
+          'more','most','mustn\'t','my','myself','no','nor','not','of','off','on','once','only','or','other','ought','our','ours',
+          'ourselves','out','over','own','same','shan\'t','she','she\'d','she\'ll','she\'s','should','shouldn\'t','so','some','such',
+          'than','that','that\'s','the','their','theirs','them','themselves','then','there','there\'s','these','they','they\'d',
+          'they\'ll','they\'re','they\'ve','this','those','through','to','too','under','until','up','very','was','wasn\'t','we',
+          'we\'d','we\'ll','we\'re','we\'ve','were','weren\'t','what','what\'s','when','when\'s','where','where\'s','which','while',
+          'who','who\'s','whom','why','why\'s','with','won\'t','would','wouldn\'t','you','you\'d','you\'ll','you\'re','you\'ve',
+          'your','yours','yourself','yourselves','just','really','also','like','get','got','yeah','yes','ok','okay','oh','ah','hey',
+          'hello','hi','well','gonna','wanna','kinda','actually','basically','already','though','still','much','lot','lots','way'
+        ]);
 
-        // A. FAMILIA, HIJOS, MATERNIDAD/PATERNIDAD Y EDUCACIÓN
-        if (isFamilyOrKids) {
-          if (langCode === 'pt') {
+        const STOPWORDS_ES = new Set([
+          'a','al','algo','algunas','algunos','ante','antes','aquel','aquella','aquellas','aquellos','aqui','aquí','arriba','asi','así',
+          'atras','atrás','aun','aún','aunque','bajo','bastante','bien','cabe','cada','casi','como','cómo','con','conmigo','consigo',
+          'contigo','contra','cual','cuál','cuales','cuáles','cuando','cuándo','cuanta','cuánta','cuantas','cuántas','cuanto','cuánto',
+          'cuantos','cuántos','de','del','demás','demas','desde','donde','dónde','dos','durante','e','el','ella','ellas','ello','ellos',
+          'en','encima','entonces','entre','era','eras','éramos','eran','es','esa','esas','ese','eso','esos','esta','estás','está',
+          'estamos','están','estar','estas','este','esto','estos','estoy','fue','fuera','fueron','fui','fuimos','ha','habia','había',
+          'habian','habían','han','has','hasta','hay','haya','he','hemos','hube','hubo','la','las','le','les','lo','los','mas','más',
+          'me','menos','mi','mí','mia','mía','mias','mías','mientras','mio','mío','mios','míos','mis','mucha','muchas','mucho','muchos',
+          'muy','nada','ni','no','nos','nosotras','nosotros','nuestra','nuestras','nuestro','nuestros','nunca','o','otra','otras','otro',
+          'otros','para','pero','poca','pocas','poco','pocos','por','porque','por qué','pronto','pues','que','qué','quien','quién',
+          'quienes','quiénes','quiza','quizás','se','según','segun','ser','si','sí','siempre','siendo','sin','sino','so','sobre',
+          'solo','sólo','somos','son','soy','su','sus','suya','suyas','suyo','suyos','tal','tales','tambien','también','tampoco','tan',
+          'tanta','tantas','tanto','tantos','te','tenemos','tener','tengo','ti','tiene','tienen','toda','todas','todavia','todavía',
+          'todo','todos','tras','tu','tú','tus','tuya','tuyas','tuyo','tuyos','un','una','unas','uno','unos','usted','ustedes','va',
+          'vamos','van','vaya','verdad','voy','y','ya','yo','hola','oye','bueno','vale','jaja','jajaja'
+        ]);
+
+        const STOPWORDS_PT = new Set([
+          'a','à','às','agora','ainda','além','algo','algum','alguma','algumas','alguns','ante','antes','ao','aos','após','aquela',
+          'aquelas','aquele','aqueles','aquilo','as','até','através','bem','boa','boas','bom','bons','cá','cada','quase','com','como',
+          'contra','contudo','da','das','de','dela','delas','dele','deles','demais','depois','desde','dessa','dessas','desse','desses',
+          'desta','destas','deste','destes','deve','devem','dever','deveria','diz','dizem','do','dos','e','é','ela','elas','ele','eles',
+          'em','enquanto','entre','era','eram','éramos','essa','essas','esse','esses','esta','estás','está','estamos','estão','estar',
+          'estas','estava','estavam','este','estes','estou','eu','fazendo','fazer','foi','fomos','for','foram','fosse','fossem','grande',
+          'grandes','há','isso','isto','já','la','lá','lhe','lhes','lo','logo','mais','mas','me','mesmo','mesma','mesmas','mesmos','meu',
+          'meus','minha','minhas','muita','muitas','muito','muitos','na','não','nas','nem','no','nos','nós','nossa','nossas','nosso',
+          'nossos','num','numa','numas','nuns','o','os','ou','outra','outras','outro','outros','para','pela','pelas','pelo','pelos',
+          'perto','pode','podem','poder','poderia','pois','por','porém','porque','por que','portanto','posso','pouca','poucas','pouco',
+          'poucos','quais','qual','qualquer','quando','quanto','quantos','quase','que','quem','são','se','seja','sejam','sem','sempre',
+          'sendo','ser','será','serão','seria','seu','seus','si','sido','só','sob','sobre','sua','suas','talvez','também','tampoco',
+          'tanta','tantas','tanto','tantos','te','tem','temos','tendo','tenha','tenham','tenho','ter','terá','terão','teria','teu','teus',
+          'teve','ti','tinha','tinham','tive','tiveram','toda','todas','todavia','todo','todos','tu','tua','tuas','tudo','um','uma',
+          'umas','uns','vendo','ver','vez','você','vocês','olá','oi','opa','kkk','kkkk'
+        ]);
+
+        // Inversor gramatical de persona (1ra persona del cliente -> 2da persona para el operador)
+        const invertPronouns = (phrase, targetLang) => {
+          if (!phrase) return '';
+          const mapEn = {
+            'my': 'your', 'My': 'your', 'me': 'you', 'Me': 'you',
+            'mine': 'yours', 'Mine': 'yours', 'myself': 'yourself', 'Myself': 'yourself',
+            'i': 'you', 'I': 'you', "i'm": "you're", "I'm": "you're",
+            'am': 'are', 'was': 'were', 'we': 'you', 'our': 'your', 'ours': 'yours'
+          };
+          const mapEs = {
+            'mi': 'tu', 'Mi': 'tu', 'mis': 'tus', 'Mis': 'tus',
+            'conmigo': 'contigo', 'Conmigo': 'contigo', 'me': 'te', 'Me': 'te',
+            'mio': 'tuyo', 'mío': 'tuyo', 'mia': 'tuya', 'mía': 'tuya',
+            'yo': 'tú', 'Yo': 'tú', 'estoy': 'estás', 'estaba': 'estabas',
+            'fui': 'fuiste', 'tuve': 'tuviste'
+          };
+          const mapPt = {
+            'meu': 'seu', 'Meu': 'seu', 'meus': 'seus', 'Meus': 'seus',
+            'minha': 'sua', 'Minha': 'sua', 'minhas': 'suas', 'Minhas': 'suas',
+            'comigo': 'com você', 'Comigo': 'com você', 'me': 'te', 'Me': 'te',
+            'eu': 'você', 'Eu': 'você', 'estou': 'está', 'estava': 'estava', 'tive': 'teve'
+          };
+          const selMap = targetLang === 'pt' ? mapPt : (targetLang === 'es' ? mapEs : mapEn);
+          return phrase.split(/(\s+|[.,!?;:])/).map(tok => {
+            const lower = tok.toLowerCase();
+            if (selMap[tok]) return selMap[tok];
+            if (selMap[lower]) return selMap[lower];
+            return tok;
+          }).join('');
+        };
+
+        // --- 3. CONVERSATION CONTEXT BUILDER ---
+        const rawInput = (clientText || '').trim();
+        const clientHistory = (msgsHistory || []).filter(m => !m.isOperator && m.text).map(m => m.text.trim());
+        const letterCount = (lettersHistory || []).length;
+
+        let effectiveText = rawInput;
+        const wordCount = rawInput ? rawInput.split(/\s+/).length : 0;
+        if (wordCount < 3 && clientHistory.length > 0) {
+          const fallbackMsg = [...clientHistory].reverse().find(t => t.split(/\s+/).length >= 3) || clientHistory[clientHistory.length - 1];
+          if (fallbackMsg) {
+            effectiveText = fallbackMsg;
+          }
+        }
+
+        const isColdStart = !effectiveText && clientHistory.length === 0 && letterCount === 0;
+        const textLower = (effectiveText || '').toLowerCase().trim();
+
+        // --- 4. KEYWORD & INTENT EXTRACTION ENGINE ---
+        // Preguntas del cliente
+        const isQuestion = /\?|^(what|how|where|when|why|who|are you|do you|can you|did you|have you|c[oó]mo|qu[eé]|d[oó]nde|cu[aá]ndo|por qu[eé]|vc|voc[eê]|tá|est[aá]s|onde|quem|qual)\b/i.test(effectiveText);
+        let questionType = null;
+        if (isQuestion) {
+          if (/\b(what are you doing|what('re| are) you up to|what you up to|qu[eé] haces|qu[eé] est[aá]s haciendo|que est[aá]s haciendo|o que est[aá] fazendo|o que voc[eê] est[aá] fazendo|t[aá] fazendo o que|fazendo o q)\b/i.test(textLower)) {
+            questionType = 'doing_now';
+          } else if (/\b(how are you|how('s| is) your day|how was your day|how you doing|c[oó]mo est[aá]s|c[oó]mo te va|c[oó]mo va tu d[ií]a|como foi seu dia|como voc[eê] est[aá]|tudo bem|tudo bom)\b/i.test(textLower)) {
+            questionType = 'how_are_you';
+          } else if (/\b(where are you from|where do you live|where are you located|de d[oó]nde eres|d[oó]nde vives|de d[oó]nde sos|de onde voc[eê] [eé]|onde voc[eê] mora|de qual cidade)\b/i.test(textLower)) {
+            questionType = 'where_from';
+          } else if (/\b(do you like|are you|have you ever|what do you think|te gusta|eres|has estado|qu[eé] opinas|voc[eê] gosta|voc[eê] [eé]|j[aá] foi|o que voc[eê] acha)\b/i.test(textLower)) {
+            questionType = 'about_me';
+          } else {
+            questionType = 'general_question';
+          }
+        }
+
+        // Intenciones temáticas
+        const isBedtime = /\b(bed|bedtime|goodnight|good night|nighty|sleep|sleeping|sleepy|going to bed|head to bed|turn in|cama|dormir|sue[ñn]o|descanso|a la cama|buenas noches|descansar|dormindo|deitar|boas noites|boa noite)\b/i.test(textLower);
+        const isExhausted = /\b(tired|exhausted|burnout|burned out|overwhelmed|drained|hectic|long day|rough day|heavy day|hard day|cansad[oa]|agotad[oa]|estresad[oa]|drenad[oa]|pesad[oa]|agobiad[oa]|reventad[oa]|exaust[oa]|esgotad[oa]|morto de sono|puxad[oa])\b/i.test(textLower);
+        const isWork = /\b(work|working|job|office|boss|shift|meeting|deadline|coworker|colleague|client|project|interview|trabaj[oa]|chamba|oficina|jefe|jefa|turno|reuni[oó]n|proyecto|trabalh[oa]|trampo|escrit[oó]rio|chefe|plant[aã]o)\b/i.test(textLower);
+        const isFood = /\b(cook|cooking|dinner|lunch|breakfast|coffee|tea|wine|beer|pizza|pasta|food|eat|eating|meal|kitchen|recipe|cena|cenar|almuerzo|almorzar|desayuno|cocina|cocinar|comida|vino|cerveza|jantar|almoço|café|chá|cerveja|churrasco)\b/i.test(textLower);
+        const isPets = /\b(dog|puppy|puppies|cat|kitten|pet|pets|perr[oa]|perrit[oa]|gat[oa]|gatit[oa]|mascota|mascotas|cachorr[oa]|cachorrinh[oa]|c[aã]o|bichinho)\b/i.test(textLower);
+        const isFamily = /\b(kid|kids|child|children|son|daughter|baby|babies|mom|dad|family|hijo|hija|hijos|niñ[oa]|niñ[oa]s|beb[eé]|familia|filho|filha|filhos|criança|crianças|família|mãe|pai)\b/i.test(textLower);
+        const isSick = /\b(sick|ill|headache|migraine|fever|flu|pain|medicine|pill|hospital|doctor|dolor|cabeza|migraña|fiebre|gripe|enferm[oa]|remedio|medicina|m[eé]dico|doente|dor|febre|rem[eé]dio)\b/i.test(textLower);
+
+        // Extracción de frases clave de estrés o actividad
+        let specificStress = '';
+        let specificActivity = '';
+        let topicNoun = '';
+
+        if (isExhausted || isWork) {
+          const bossMatch = effectiveText.match(/(?:my\s+|mi\s+|meu\s+)?(?:boss|jefe|jefa|chefe)\s+(?:was|is|estuvo|está|pegou|foi)\s+([^,.!?]+)/i);
+          if (bossMatch && bossMatch[1]) {
+            specificStress = invertPronouns(bossMatch[0].trim(), lang);
+          } else {
+            const tiredFromMatch = effectiveText.match(/(?:tired|exhausted|drained|cansad[oa]|agotad[oa]|exaust[oa])\s+(?:from|after|of|de|por|com)\s+([^,.!?]+)/i);
+            if (tiredFromMatch && tiredFromMatch[1]) {
+              specificStress = invertPronouns(tiredFromMatch[1].trim(), lang);
+            }
+          }
+        }
+
+        const actionMatch = effectiveText.match(/(?:finished|just\s+finished|am|was|been|acabo\s+de|terminé\s+de|estuve|estoy|acabei\s+de|terminei\s+de|estive|passei\s+o\s+dia|passei\s+a\s+tarde)\s+([^,.!?]{4,40})/i);
+        if (actionMatch && actionMatch[1]) {
+          specificActivity = invertPronouns(actionMatch[1].trim(), lang);
+        }
+
+        // Extracción de sustantivos salientes
+        const activeStopwords = lang === 'pt' ? STOPWORDS_PT : (lang === 'es' ? STOPWORDS_ES : STOPWORDS_EN);
+        const rawWords = (effectiveText || '').toLowerCase().replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑàèìòùãõçÀÈÌÒÙÃÕÇ\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !activeStopwords.has(w));
+        if (rawWords.length > 0) {
+          topicNoun = rawWords[rawWords.length - 1];
+        }
+
+        let dynamicTopicRef = '';
+        if (specificStress) {
+          dynamicTopicRef = specificStress;
+        } else if (specificActivity) {
+          dynamicTopicRef = specificActivity;
+        } else if (topicNoun) {
+          dynamicTopicRef = lang === 'en' ? `your ${topicNoun}` : `${topicNoun}`;
+        } else {
+          dynamicTopicRef = lang === 'pt' ? 'o seu dia' : (lang === 'es' ? 'tu día' : 'your day');
+        }
+
+        // --- 5. DYNAMIC RESPONSE COMPOSITOR ---
+        // CASO A: COLD START
+        if (isColdStart) {
+          if (lang === 'pt') {
             return [
               {
-                title: '❤️ Opção 1: Conexão Maternal & Empatia Doce',
-                target: `Ai que amor! Cuidar da educação e do crescimento de um filho é a missão mais linda do mundo, mas sei que dá um trabalho danado ❤️ Quantos aninhos ele tem? Me imagino que seja o seu maior orgulho!`,
-                es: `Valida con carinho sincero a dedicação à educação do filho e pergunta a idade dele.`
+                title: '💬 Contextual & Empatia',
+                target: `Olá ${clientShort}! Estava vendo seu perfil e quis passar para te dar um oi com muito carinho ✨ Como está sendo a sua semana até agora?`,
+                es: `Abertura calorosa mencionando seu nome e convidando a contar como está a semana.`
               },
               {
-                title: '✨ Opção 2: Descontraída & Sorrisos do Dia a Dia',
-                target: `Que fofura! Certeza de que ele é super esperto e te faz dar muitas risadas no dia a dia jaja 😉 O que vocês dois andaram aprontando de divertido hoje?`,
-                es: `Comentário alegre sobre a energia da criança convidando a compartilhar a rotina.`
+                title: '✨ Descontraído & Curioso',
+                target: `Oi ${clientShort}! Espero que seu dia esteja sendo bem leve 😉 Me deu curiosidade: o que você mais gosta de fazer quando tem um tempinho livre só seu?`,
+                es: `Tom leve e descontraído que desperta interesse sobre seus hobbies favoritos.`
               },
               {
-                title: '🌸 Opção 3: Admiração Genuína & Personalidade',
-                target: `Admiro demais quem se dedica assim de corpo e alma à família, isso mostra o tamanho do seu coração ✨ Me deu curiosidade: ele puxou mais a sua personalidade ou seu jeitinho carinhoso?`,
-                es: `Elogio profundo aos valores familiares e pergunta envolvente sobre quem a criança se parece.`
+                title: '❤️ Conexão & Proximidade',
+                target: `Olá ${clientShort}... Muito bom poder trocar uma ideia com você por aqui ❤️ Me conta, qual foi a coisa mais legal ou divertida que te aconteceu hoje?`,
+                es: `Abordagem mais doce e conectiva focada em pensamentos positivos do dia.`
               }
             ];
-          } else if (langCode === 'es') {
+          } else if (lang === 'es') {
             return [
               {
-                title: '❤️ Opción 1: Conexión Maternal & Empatía Cálida',
-                target: `¡Qué labor tan hermosa! Cuidar y educar a un hijo es un trabajo de tiempo completo pero el más gratificante de todos ❤️ ¿Cuántos añitos tiene el consentido? ¡Seguro es tu mayor orgullo!`,
-                es: `Valida con calidez genuina su dedicación a su hijo y le pregunta cuántos años tiene.`
+                title: '💬 Contextual & Empatía',
+                target: `¡Hola ${clientShort}! Estuve viendo tu perfil y no quise dejar pasar el día sin pasar a darte un saludo sincero ✨ ¿Cómo te ha estado tratando la semana?`,
+                es: `Apertura cálida y humana que nombra al cliente y le pregunta por su semana.`
               },
               {
-                title: '✨ Opción 2: Espontánea & Alegría Cotidiana',
-                target: `¡Qué belleza! Seguro tiene toda tu energía y te saca mil sonrisas al día jaja 😉 Cuéntame, ¿qué hicieron hoy de entretenido juntos?`,
-                es: `Tono fresco y espontáneo que despierta una sonrisa e invita a contar su día.`
+                title: '✨ Chispa & Curiosidad',
+                target: `¡Hola ${clientShort}! Espero que tu día venga con buena vibra 😉 Me dio curiosidad saber de ti: ¿qué es lo que más disfrutas hacer cuando tienes un ratito libre?`,
+                es: `Pregunta fresca de estilo de vida sin sonar a plantilla ni presionar.`
               },
               {
-                title: '🌸 Opción 3: Admiración Genuina & Vínculo Familiar',
-                target: `Admiro muchísimo a las personas tan entregadas a su familia, dice mucho de tu nobleza y tu corazón ✨ Me da curiosidad: ¿se parece más a ti en personalidad o en sus ocurrencias?`,
-                es: `Elogio afectuoso a su rol familiar con pregunta atractiva sobre la personalidad del pequeño.`
+                title: '❤️ Conexión & Cercanía',
+                target: `Hola ${clientShort}... Qué lindo coincidir contigo por aquí ❤️ Cuéntame, ¿qué fue lo mejor o más entretenido que te pasó en el día de hoy?`,
+                es: `Aproximación dulce y personal que invita a compartir momentos alegres.`
               }
             ];
           } else {
             return [
               {
-                title: '❤️ Option 1: Warm Parental Connection & Pride',
-                target: `That is honestly so beautiful! Raising and caring for your child is a full-time job, but easily the most rewarding thing in the world ❤️ How old is your little one? I bet they are your absolute pride and joy!`,
-                es: `Valida con calidez genuina su dedicación familiar y pregunta la edad del pequeño.`
+                title: '💬 Contextual & Empathetic',
+                target: `Hello ${clientShort}! I came across your profile and thought I'd stop by to say a genuine hello ✨ How has your week been treating you so far?`,
+                es: `Apertura cálida y natural mencionando su nombre y preguntando por su semana.`
               },
               {
-                title: '✨ Option 2: Playful Smiles & Daily Routine',
-                target: `Aw that's so sweet! I'm sure they keep you super busy and full of laughs every single day haha 😉 What did you two get up to today that made you smile?`,
-                es: `Tono fresco y espontáneo sobre la rutina con su hijo.`
+                title: '✨ Playful & Curious',
+                target: `Hey ${clientShort}! Hope your day is going great 😉 Tell me, what's your absolute favorite way to unwind when you have some time just for yourself?`,
+                es: `Tono fresco y espontáneo sobre sus pasatiempos favoritos sin sonar a bot.`
               },
               {
-                title: '🌸 Option 3: Deep Admiration & Personality Question',
-                target: `I truly admire how dedicated you are to your family, it shows what a wonderful heart you have ✨ I'm curious: do they take after your personality or your warm smile?`,
-                es: `Elogio genuino y pregunta magnética sobre a quién se parece el niño.`
+                title: '❤️ Personal & Intimate',
+                target: `Hi ${clientShort}... It's really lovely to cross paths with you on here ❤️ Tell me, what was one fun highlight from your day today?`,
+                es: `Mensaje dulce y personal invitando a compartir momentos agradables del día.`
               }
             ];
           }
         }
 
-        // B. CONFLICTO PERSONAL / LÍMITES / MUDANZA / STORAGE / TOXICIDAD
-        if (isConflictOrMoving) {
-          if (langCode === 'pt') {
-            return [
-              { title: '🛡️ Opção 1: Apoio & Elogio à Coragem', target: `Lidar com pessoas falsas cansa muito, mas fico orgulhosa de você se afastar. Como está a mudança? ❤️`, es: `Valida a decisão difícil e apoia a mudança.` },
-              { title: '✨ Opção 2: Paz Mental & Acolhimento', target: `Você não precisa carregar todo esse estresse sozinha. Respira fundo... você escolheu sua paz ✨`, es: `Oferece refúgio emocional acolhedor.` },
-              { title: '💪 Opção 3: Força & Alívio Futuro', target: `Você é muito forte por dar esse basta. Assim que guardar tudo no storage, vai sentir um alívio enorme 😉`, es: `Projeta leveza futura ao terminar de empacotar.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '🛡️ Opción 1: Apoyo & Elogio a tu Valor', target: `Lidiar con gente falsa agota mucho, pero me alegra que te alejes. ¿Cómo vas empacando tus cosas? ❤️`, es: `Valida la traición y apoya su decisión de empacar.` },
-              { title: '✨ Opción 2: Paz Mental & Contención', target: `No tienes que cargar con todo este estrés sola. Respira... estás eligiendo tu paz mental ✨`, es: `Ofrece contención emocional para aliviar el agobio.` },
-              { title: '💪 Opción 3: Fuerza & Alivio Inmediato', target: `Eres muy valiente por poner límites. En cuanto guardes todo en el storage sentirás un gran alivio 😉`, es: `Proyecta alivio futuro y le da ánimos para terminar.` }
-            ];
-          } else {
-            return [
-              { title: '🛡️ Option 1: Support & Proud of Boundaries', target: `Dealing with fake friends is so draining, but I'm proud of you for walking away. How is packing going? ❤️`, es: `Valida la decisión de alejarse y pregunta por la mudanza.` },
-              { title: '✨ Option 2: Safe Space & Inner Peace', target: `You don't have to carry all this stress alone. Take a deep breath... you're doing what's best for your peace ✨`, es: `Ofrece contención emocional.` },
-              { title: '💪 Option 3: Inner Strength & Fresh Start', target: `You are so strong for putting your foot down. Once everything is in storage, you'll feel so much lighter 😉`, es: `Proyecta alivio futuro.` }
-            ];
-          }
-        }
-
-        // C. TRABAJO, OFICINA, TURNO Y RUTINA LABORAL
-        if (isWorkOrCareer) {
-          if (langCode === 'pt') {
-            return [
-              { title: '💼 Opção 1: Empatia com a Jornada & Fôlego', target: `Imagino que o trabalho esteja puxado hoje! 😉 Não esquece de fazer uma pausa, respirar e tomar água. Falta muito para você sair?`, es: `Reconhece o cansaço do trabalho e pergunta quando encerra.` },
-              { title: '☕ Opção 2: Respiro Doce & Desconexão', target: `Espero que a minha mensagem seja um respiro gostoso no meio dos seus compromissos ✨ O que você mais quer fazer assim que largar o expediente?`, es: `Pausa agradável no expediente e pergunta sobre planos.` },
-              { title: '✨ Opção 3: Força & Companhia Virtual', target: `Força aí nessa correria! Queria estar aí para te levar um café quentinho ❤️ Segura firme, logo você está livre para relaxar!`, es: `Apoio afetivo com café virtual e alívio do turno.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '💼 Opción 1: Empatía Laboral & Ánimo', target: `¡Imagino que el trabajo está intenso hoy! 😉 Recuerda tomarte una pausa y respirar hondo. ¿Te falta mucho para terminar tu jornada?`, es: `Reconoce el esfuerzo laboral con empatía y pregunta a qué hora sale.` },
-              { title: '☕ Opción 2: Respiro Dulce & Desconexión', target: `Espero que leer mi mensaje te dé un respiro agradable en medio de tantos pendientes ✨ ¿Qué es lo primero que tienes ganas de hacer al salir?`, es: `Momento de frescura en el trabajo y pregunta sobre planes.` },
-              { title: '✨ Opción 3: Apoyo Cálido & Café Virtual', target: `¡Mucho ánimo con esa jornada! Ojalá pudiera estar ahí para invitarte un cafecito y que te desconectes un ratito ❤️ ¿Cómo va tu día?`, es: `Complicidad dulce para aligerar la carga de trabajo.` }
-            ];
-          } else {
-            return [
-              { title: '💼 Option 1: Workday Breath & Check-in', target: `I can imagine how hectic work is today! 😉 Don't forget to take a breather and grab some water. Do you have much left of your shift?`, es: `Reconoce el esfuerzo laboral con empatía.` },
-              { title: '☕ Option 2: Pleasant Breather & Evening Plans', target: `I hope seeing my message gives you a nice little breather amidst all the tasks ✨ What are you looking forward to doing most once you're off the clock?`, es: `Pausa agradable en el trabajo.` },
-              { title: '✨ Option 3: Coffee Break Thought', target: `Hang in there! I honestly wish I could hand you a warm cup of coffee right now to brighten your day ❤️ How is it going so far?`, es: `Complicidad dulce para aligerar la jornada.` }
-            ];
-          }
-        }
-
-        // D. COMIDA, COCINAR, CAFÉ, VINO & RESTAURANTES
-        if (isFoodOrDrink) {
-          if (langCode === 'pt') {
-            return [
-              { title: '🍽️ Opção 1: Curiosidade Culinária & Antojo', target: `Hummm que delícia! 😉 Já me deu água na boca aqui... Você mesmo que preparou com carinho ou foi comer fora?`, es: `Reação espontânea ao prato/café e pergunta se cozinhou.` },
-              { title: '🍷 Opção 2: Companhia à Mesa & Charme', target: `Adoraria estar aí dividindo essa refeição com você e brindando... Qual é o seu prato ou comida favorita na vida? ❤️`, es: `Cria imagem de comer juntos e pergunta preferências.` },
-              { title: '📸 Opção 3: Troca de Foto do Momento', target: `Que momento gostoso! Me manda uma foto do seu prato ou café para eu ficar babando aqui? 😉 Eu te mando uma minha também!`, es: `Pedido natural de foto da refeição/café.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '🍽️ Opción 1: Curiosidad Gastronómica & Antojo', target: `¡Mmm qué delicia! 😉 Ya me dio hambre a mí también jaja... ¿Lo preparaste tú mismo o saliste a consentirte en algún lugar rico?`, es: `Reacción espontánea a la comida y pregunta si cocinó.` },
-              { title: '🍷 Opción 2: Compartir la Mesa & Conexión', target: `Me encantaría estar ahí compartiendo ese momento y brindando contigo... ¿Cuál es tu comida o bebida favorita de todas? ❤️`, es: `Fantasía cálida de compartir la mesa.` },
-              { title: '📸 Opción 3: Foto del Momento Cotidiano', target: `¡Qué buen plan! ¿Me mandas una foto de tu café o tu comida para antojarme un poquito? 😉 ¡Trato hecho si te mando una mía!`, es: `Gancho irresistible para foto del plato/café.` }
-            ];
-          } else {
-            return [
-              { title: '🍽️ Option 1: Food Curiosity & Home Cooking', target: `Mmm that sounds delicious! 😉 You're making me hungry over here haha... Did you cook it yourself or did you treat yourself out?`, es: `Reacción espontánea a la comida.` },
-              { title: '🍷 Option 2: Dining Together Thought', target: `I would love to be right there sharing that meal with you and having a toast ❤️ What's your absolute favorite food in the world?`, es: `Fantasía de compartir una cena juntos.` },
-              { title: '📸 Option 3: Casual Food Photo Trade', target: `Sounds like a treat! Send me a picture of what you're having right now to tempt me a little? 😉 I'll send one right back!`, es: `Pedido natural de foto de la comida.` }
-            ];
-          }
-        }
-
-        // E. DESCANSO, CAMA, NOCHE & SUEÑO (BEDTIME)
+        // CASO B: BEDTIME / GOODNIGHT
         if (isBedtime) {
-          if (langCode === 'pt') {
+          if (lang === 'pt') {
             return [
-              { title: '🌙 Opção 1: Boa Noite Doce & Carinho', target: `Descansa bem e tenha os sonhos mais lindos, meu bem! ❤️ Dorme bem quentinho e aconchegado 🤗💋`, es: `Despedida carinhosa e doce para fechar o dia.` },
-              { title: '💬 Opção 2: Compromisso Doce pela Manhã', target: `Vai recarregar suas energias ✨ Vou ficar pensando em você... Me manda um bom dia amanhã assim que acordar? 😉`, es: `Fechamento carinhoso deixando compromisso para retomar pela manhã.` },
-              { title: '✨ Opção 3: Conexão Íntima & Abraço', target: `Adoro conversar com você antes de dormir, você me acalma ✨ Uma noite linda e maravilhosa para você, meu amor!`, es: `Gera aconchego e reforça o afeto mútuo antes de dormir.` }
+              {
+                title: '💬 Contextual & Empatia',
+                target: `Durma muito bem, ${clientShort}! Você teve um dia cheio com ${dynamicTopicRef}, então merece um descanso daqueles bem restauradores ❤️ Me dá um bom dia amanhã quando acordar?`,
+                es: `Valida seu dia cansativo, deseja bom descanso e deixa gancho para amanhã.`
+              },
+              {
+                title: '✨ Descontraído & Curioso',
+                target: `Indo para a cama já, ${clientShort}? 😉 Tratando de desligar a cabeça e recarregar a bateria! Promete que vai sonhar com coisas boas hoje?`,
+                es: `Tom brincalhão sobre a hora de dormir com gancho leve e carinhoso.`
+              },
+              {
+                title: '❤️ Conexão & Proximidade',
+                target: `Boa noite, ${clientShort}... Espero que você tenha uma noite deliciosa e acorde com as energias renovadas ✨ Vou ficar pensando em você. Descanse muito bem!`,
+                es: `Mensagem doce e íntima de despedida noturna para fortalecer o vínculo.`
+              }
             ];
-          } else if (langCode === 'es') {
+          } else if (lang === 'es') {
             return [
-              { title: '🌙 Opción 1: Dulces Sueños & Descanso Reparador', target: `¡Descansa mucho y que tengas los sueños más lindos del mundo! ❤️ Duerme calientito 🤗💋`, es: `Despedida tierna deseándole dulces sueños.` },
-              { title: '💬 Opción 2: Cita Matutina & Continuidad', target: `Ve a recargar energías ✨ Me quedo pensando en ti. ¿Me escribes mañana en cuanto abras los ojos? 😉`, es: `Cierre cariñoso dejando la puerta abierta para la mañana.` },
-              { title: '✨ Opción 3: Ternura Íntima Nocturna', target: `Me encanta hablar contigo antes de dormir, me da tanta paz ✨ ¡Que descanses riquísimo, cariño!`, es: `Respuesta cómplice para ir a dormir en paz.` }
+              {
+                title: '💬 Contextual & Empatía',
+                target: `¡Que descanses delicioso, ${clientShort}! Tuviste un día largo con ${dynamicTopicRef}, así que te mereces el sueño más reparador de todos ❤️ ¿Me avisas mañana cuando despiertes?`,
+                es: `Reconoce su cansancio, le desea un descanso reparador y pide saludo matutino.`
+              },
+              {
+                title: '✨ Chispa & Curiosidad',
+                target: `¿A dormir tan temprano, ${clientShort}? 😉 Es broma, ¡a recargar pilas al 100%! Prométeme que vas a soñar algo lindo esta noche ✨`,
+                es: `Broma simpática sobre ir a la cama con deseo positivo y chispa.`
+              },
+              {
+                title: '❤️ Conexión & Cercanía',
+                target: `Buenas noches, ${clientShort}... Deseo de corazón que duermas tranquilo y descanses como te lo mereces ❤️ Me voy a quedar pensando en ti. ¡Dulces sueños!`,
+                es: `Despedida íntima y afectuosa para ir a dormir dejando una huella emocional.`
+              }
             ];
           } else {
             return [
-              { title: '🌙 Option 1: Sweet Dreams & Cozy Rest', target: `Rest well and have the sweetest dreams, my dear! ❤️ Sleep warm and peaceful 🤗💋`, es: `Despedida cariñosa y tierna.` },
-              { title: '💬 Option 2: Morning Hello Promise', target: `Go get your rest, sweetheart ✨ I'll be thinking of you. Will you text me tomorrow morning when you wake up? 😉`, es: `Compromiso para retomar la charla al despertar.` },
-              { title: '✨ Option 3: Warm Nightly Affection', target: `I love talking with you before bed, it brings me such peace ✨ Have a truly wonderful night, my love!`, es: `Crea cercanía íntima antes de dormir.` }
+              {
+                title: '💬 Contextual & Empathetic',
+                target: `Rest up so well, ${clientShort}! After everything with ${dynamicTopicRef}, you definitely earned the deepest sleep tonight ❤️ Let me know how you slept when you wake up tomorrow!`,
+                es: `Valida su día y cansancio, deseando sueño reparador y saludo mañana.`
+              },
+              {
+                title: '✨ Playful & Curious',
+                target: `Heading off to dreamland already, ${clientShort}? 😉 Go recharge those batteries! Promise you'll say hi tomorrow when you're back on your feet?`,
+                es: `Broma ligera sobre recargar baterías y gancho para retomar mañana.`
+              },
+              {
+                title: '❤️ Personal & Intimate',
+                target: `Sweet dreams, ${clientShort}... I hope you drift off comfortably and wake up feeling wonderful ✨ I'll be thinking about you tonight. Sleep gently!`,
+                es: `Cierre íntimo y dulce para dejar una sensación de abrigo y ternura.`
+              }
             ];
           }
         }
 
-        // F. MASCOTAS Y ANIMALES
-        if (isPetsOrAnimals) {
-          if (langCode === 'pt') {
-            return [
-              { title: '🐾 Opção 1: Paixão por Bichinhos', target: `Ai que amor! Eu sou completamente apaixonada por bichinhos ❤️ Como ele se chama? Me conta alguma travessura dele!`, es: `Amor genuíno por pets e pergunta o nome e travessuras.` },
-              { title: '📸 Opção 2: Foto Fofa do Pet', target: `Bichinhos têm o poder de encher nossa vida de alegria pura ✨ Me manda uma foto dele para me derreter aqui? 😉`, es: `Pedido irresistível de foto do cachorrinho/gatinho.` },
-              { title: '✨ Opção 3: Cumplicidade Divertida', target: `Certeza de que ele manda na casa toda e é o mais mimado jaja 😉 Ele é mais calminho ou super agitado?`, es: `Brincadeira afetuosa sobre quem manda na casa.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '🐾 Opción 1: Ternura por las Mascotas', target: `¡Ay qué ternura! Soy una enamorada total de los animalitos ❤️ ¿Cómo se llama tu consentido? ¿Qué raza o tamaño es?`, es: `Amor genuino por las mascotas y pregunta por el nombre.` },
-              { title: '📸 Opción 2: Foto Adorable del Consentido', target: `¡Las mascotas tienen la magia de alegrarnos cualquier día! ✨ ¿Me mandas una foto suya para derretirme de amor? 😉`, es: `Pedido dulce de foto del perrito/gatito.` },
-              { title: '✨ Opción 3: Broma Cómplice del Hogar', target: `Seguro es el rey de la casa y te tiene a su merced jaja 😉 ¿Es de los que son tranquilos o de los que hacen mil travesuras?`, es: `Broma cariñosa invitando a contar anécdotas del animal.` }
-            ];
-          } else {
-            return [
-              { title: '🐾 Option 1: Pet Love & Name Curiosity', target: `Aw that is so precious! I am an absolute animal lover ❤️ What is your fur baby's name? Tell me their cutest habit!`, es: `Amor genuino por las mascotas.` },
-              { title: '📸 Option 2: Cute Pet Photo Request', target: `Pets honestly have that special magic to brighten up any day ✨ Send me a picture of them so I can melt over here? 😉`, es: `Pedido de foto del consentido.` },
-              { title: '✨ Option 3: Playful Pet Humor', target: `I bet they completely run the household and have you wrapped around their paw haha 😉 Are they super calm or full of energy?`, es: `Broma cómplice sobre el animal.` }
-            ];
-          }
-        }
-
-        // G. ENTRETENIMIENTO, PELÍCULAS, SERIES, GYM, MÚSICA
-        if (isMovieOrCinema) {
-          if (langCode === 'pt') {
-            return [
-              { title: '🎬 Opção 1: Conexão com o Filme & Sofá', target: `Adoro saber que você vai assistir! 😉 Depois me conta tudo sobre as suas partes favoritas... Queria estar aí no sofá dividindo a pipoca com você ❤️`, es: `Valida o interesse e cria imagem mental aconchegante.` },
-              { title: '🍿 Opção 2: Curiosidade de Gostos', target: `Parece uma ótima pedida para hoje! Me diz uma coisa: você costuma se apegar fácil aos personagens ou é mais analítico? 😉`, es: `Pergunta aberta sobre a personalidade dele.` },
-              { title: '✨ Opção 3: Foto Relax no Cantinho', target: `Nada melhor do que um bom filme para desacelerar da rotina ✨ Me manda uma foto de onde você está assistindo para eu te acompanhar? 😉`, es: `Pedido de foto descontraída do momento de relax.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '🎬 Opción 1: Conexión Cinéfila & Sofá', target: `¡Me encanta que la estés viendo! 😉 Luego me tienes que contar cuál fue tu escena favorita... Me encantaría estar ahí en el sofá compartiendo palomitas contigo ❤️`, es: `Valida la película y plantea una escena íntima compartiendo el descanso.` },
-              { title: '🍿 Opción 2: Curiosidad Emocional', target: `¡Se ve genial para desconectar de todo! Dime una cosa, ¿eres de los que se meten de lleno en la trama o eres más observador? 😉`, es: `Pregunta atractiva sobre sus gustos y personalidad.` },
-              { title: '✨ Opción 3: Foto en el Momento de Relax', target: `¡Qué buen plan para hoy! Mándame una foto tuya bien cómodo disfrutando de tu descanso y yo te mando una para acompañarte 😉 ¿Trato?`, es: `Propuesta de intercambio de fotos vinculada al descanso.` }
-            ];
-          } else {
-            return [
-              { title: '🎬 Option 1: Movie Validation & Cozy Thought', target: `I love that you're watching that! 😉 You definitely have to tell me your favorite scene once you finish... I wish I were right there sharing the snacks with you ❤️`, es: `Valida la película y fantasea con verla juntos.` },
-              { title: '🍿 Option 2: Character & Taste Curiosity', target: `Sounds like a great pick for today! Tell me, do you usually get deeply attached to the story or are you more of an analytical viewer? 😉`, es: `Pregunta interesante sobre sus gustos.` },
-              { title: '✨ Option 3: Cozy Evening Photo Ask', target: `Nothing beats a good movie for unwinding ✨ Send me a picture of you getting cozy for your watch, and I'll send one right back? 😉`, es: `Intercambio de fotos relajadas de noche de peli.` }
-            ];
-          }
-        }
-
-        // H. SALUD, DOLOR O MALESTAR FÍSICO
-        if (isSickOrPain) {
-          if (langCode === 'pt') {
-            return [
-              { title: '🩹 Opção 1: Cuidado Protetor & Descanso', target: `Poxa, sinto tanto que você não esteja bem! ❤️ Por favor, toma seu remédio, fica bem quentinho e não se esforça hoje. Quero te ver bem logo!`, es: `Aconselhamento cuidadoso de saúde e carinho.` },
-              { title: '❤️ Opção 2: Desejo Doce de Cuidar', target: `Queria tanto estar perto para cuidar de você, te fazer um chá e te dar um abraço bem quentinho ❤️ Como você está se sentindo agora?`, es: `Expressão íntima de afeto e cuidado protetor.` },
-              { title: '✨ Opção 3: Companhia Tranquila', target: `Estou aqui torcendo muito pela sua melhora. Não gasta energia à toa, tá? Se precisar desabafar ou só de companhia, estou aqui 😉`, es: `Presença carinhosa sem demandar esforço dele.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '🩹 Opción 1: Cuidado Protector & Descanso', target: `¡Ay no, lamento tanto que te sientas mal! ❤️ Por favor tómate tu medicina, abrígate mucho y descansa. ¡Lo más importante hoy eres tú!`, es: `Aconseja descanso, medicina y cuidado empático.` },
-              { title: '❤️ Opción 2: Ganas de Cuidarte & Mimos', target: `Ojalá pudiera estar ahí para consentirte, prepararte un tecito caliente y cuidarte un ratito ❤️ ¿Cómo te vas sintiendo en este momento?`, es: `Expresión íntima de cariño y atención.` },
-              { title: '✨ Opción 3: Acompañamiento Dulce', target: `Aquí estaré pendiente de ti para lo que necesites 😉 Cierra los ojos y descansa un ratito, me quedo mandándote toda mi buena energía ✨`, es: `Acompañamiento dulce durante el reposo.` }
-            ];
-          } else {
-            return [
-              { title: '🩹 Option 1: Gentle Recovery & Care', target: `Oh no, I'm so sorry you're not feeling well! ❤️ Please take your medicine, stay cozy warm, and get plenty of rest. You come first today!`, es: `Empatía con su salud y consejo de reposo.` },
-              { title: '❤️ Option 2: Pampering & Warm Thoughts', target: `I honestly wish I could be there to make you some warm tea and look after you a little ❤️ How are you feeling right now?`, es: `Expresión íntima de afecto y cuidado.` },
-              { title: '✨ Option 3: Healing Presence', target: `Don't push yourself at all today. I'm right here sending you the warmest healing thoughts 😉 Rest up, sweetheart!`, es: `Presencia empática sin exigir esfuerzo.` }
-            ];
-          }
-        }
-
-        // I. TRISTEZA, SOLEDAD O AGOBIO EMOCIONAL
-        if (isSadOrLonely || isExhaustedOrStressed) {
-          if (langCode === 'pt') {
-            return [
-              { title: '❤️ Opção 1: Abraço Genuíno & Acolhimento', target: `Dói no peito te ver assim... Quero que você saiba que não está sozinho, eu estou bem aqui com você ❤️ Respira fundo...`, es: `Conexão empática imediata contra a solidão.` },
-              { title: '✨ Opção 2: Refúgio Seguro & Desabafo', target: `Pode desabafar comigo tudo o que estiver pesando no seu coração. Você é muito importante para mim ✨`, es: `Convite aberto e acolhedor para desabafar.` },
-              { title: '🌸 Opção 3: Carinho & Conforto', target: `Queria poder segurar sua mão agora e te fazer sorrir... Me conta, o que você mais precisa para ter um pouquinho de paz hoje? 😉`, es: `Presença carinhosa para aliviar a tristeza.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '❤️ Opción 1: Abrazo Genuino & Contención', target: `Me duele en el alma saber que te sientes así... Recuerda que no estás solo, aquí me tienes para ti ❤️ Respira hondo...`, es: `Conexión empática inmediata y contención amorosa.` },
-              { title: '✨ Opción 2: Espacio Seguro para Desahogo', target: `Puedes desahogarte conmigo con toda confianza, suelta todo lo que te pese hoy. Tu bienestar me importa de verdad ✨`, es: `Invitación sincera a desahogar sus emociones.` },
-              { title: '🌸 Opción 3: Cariño & Paz Mental', target: `Ojalá pudiera darte un abrazo bien apretado ahora mismo... Dime, ¿qué es algo pequeñito que te daría un respiro de paz hoy? 😉`, es: `Presencia cariñosa para acompañarlo en la tristeza.` }
-            ];
-          } else {
-            return [
-              { title: '❤️ Option 1: Warm Comfort & Safety', target: `It breaks my heart to hear you feeling this way... Please remember you are not alone, I am right here with you ❤️ Take a deep breath...`, es: `Conexión empática inmediata.` },
-              { title: '✨ Option 2: Safe Haven to Vent', target: `You can vent to me anytime with zero judgment. Your heart and peace matter so much to me ✨`, es: `Espacio seguro para desahogarse.` },
-              { title: '🌸 Option 3: Tender Affection & Peace', target: `I wish I could wrap my arms around you right now and bring a smile to your face... What is something that would bring you a little comfort today? 😉`, es: `Presencia cariñosa para reconfortar.` }
-            ];
-          }
-        }
-
-        // J. PIROPOS, HALAGOS & COQUETEO ROMÁNTICO
-        if (isRomanceOrCompliment) {
-          if (langCode === 'pt') {
-            return [
-              { title: '🥰 Opção 1: Doçura & Agradecimento Charmoso', target: `Você tem um jeito tão doce de falar que me deixa toda sem jeito ❤️ Obrigada pelo carinho! Você sempre é assim atencioso? 😉`, es: `Agradecimento tímido e encantador ao elogio.` },
-              { title: '✨ Opção 2: Charme & Reciprocidade', target: `Cada palavra sua me faz sentir um friozinho na barriga ✨ Adoro sua energia! O que você mais gosta no nosso papo?`, es: `Devolve o romantismo com pergunta sedutora.` },
-              { title: '📸 Opção 3: Troca Exclusiva de Fotos', target: `Você me faz sorrir de verdade ✨ Me manda uma foto sua agora e eu te preparo uma exclusiva de volta para os seus olhos? 😉`, es: `Gera reciprocidade com troca de fotos.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '🥰 Opción 1: Dulzura & Agradecimiento Pícaro', target: `Tienes una forma tan dulce de hablarme que me haces sonreír como boba frente a la pantalla ❤️ ¡Gracias por ser tan lindo! ¿Siempre eres así de detallista? 😉`, es: `Agradecimiento tierno y seductor al halago.` },
-              { title: '✨ Opción 2: Romanticismo & Chispa', target: `Cada mensaje tuyo me alegra el día por completo ✨ Tienes una chispa increíble... Dime, ¿qué fue lo que más te llamó la atención de mí?`, es: `Devuelve el galanteo con curiosidad y picardía.` },
-              { title: '📸 Opción 3: Intercambio Cómplice de Fotos', target: `De verdad me sacaste una sonrisa hermosa ✨ ¿Me mandas una foto de esa sonrisa hoy y te mando una exclusiva solo para ti? 😉`, es: `Gancho de alta conversión para fotos recíprocas.` }
-            ];
-          } else {
-            return [
-              { title: '🥰 Option 1: Heartfelt Gratitude & Playful Charm', target: `You have such a sweet way of talking that genuinely makes me blush over here ❤️ Thank you! Have you always been this much of a charmer? 😉`, es: `Agradecimiento tierno y seductor.` },
-              { title: '✨ Option 2: Chemistry & Return Spark', target: `Your messages always bring the biggest smile to my face ✨ Tell me the truth, what caught your eye the most when we started talking?`, es: `Devuelve el galanteo con picardía.` },
-              { title: '📸 Option 3: Reciprocal Photo Trade', target: `You truly made my day a whole lot brighter ✨ Send me a picture of that handsome smile and I'll send an exclusive one right back? 😉`, es: `Gancho de alta conversión para fotos.` }
-            ];
-          }
-        }
-
-        // K. PREGUNTAS DIRECTAS DEL CLIENTE SOBRE EL OPERADOR / PERFIL
-        if (isClientQuestion) {
-          if (langCode === 'pt') {
-            return [
-              { title: '💬 Opção 1: Resposta Espontânea & Reciprocidade', target: `Adoro quando você me pergunta essas coisas 😉 Eu estava aqui descansando um pouquinho e pensando em você ❤️ E você, o que está aprontando agora?`, es: `Responde com ternura e devolve a atenção.` },
-              { title: '✨ Opção 2: Entusiasmo Natural & Charme', target: `Estou ótima, especialmente agora conversando com você ✨ É tão gostoso quando você me puxa assunto... O que te deu essa curiosidade? 😉`, es: `Validação positiva da pergunta dele.` },
-              { title: '😉 Opção 3: Jogo Gostoso de Conversa', target: `Você sempre sabe como me arrancar um sorriso 😉 Vou te responder tudo, mas com uma condição: você também me conta um segredo seu hoje! Trato? ❤️`, es: `Charme suave incentivando continuidade.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '💬 Opción 1: Respuesta Cálida & Devolución Natural', target: `Me encanta cuando me preguntas esas cosas 😉 Estaba justo aquí descansando un poquito y pensando en ti ❤️ Y tú, ¿qué estás haciendo en este instante?`, es: `Responde con dulzura y devuelve la atención.` },
-              { title: '✨ Opción 2: Entusiasmo Genuino & Complicidad', target: `Estoy súper bien, y más ahora que leo tu mensaje ✨ Es tan lindo cuando tienes iniciativa para charlar... ¿Qué te dio esa curiosidad hoy? 😉`, es: `Validación positiva de su interés.` },
-              { title: '😉 Opción 3: Coqueteo & Reto Juguetón', target: `Siempre sabes cómo sacarme una sonrisa 😉 Te lo cuento todo, pero con una condición: ¡tú también me cuentas un secretito tuyo hoy! ¿Trato? ❤️`, es: `Coqueteo sutil incentivando continuidad.` }
-            ];
-          } else {
-            return [
-              { title: '💬 Option 1: Sweet Direct Answer & Return', target: `I love when you ask me things like that 😉 I was just right here relaxing and thinking of you ❤️ What are you up to at this exact moment?`, es: `Responde con ternura y devuelve la atención.` },
-              { title: '✨ Option 2: Warm Return & Curiosity', target: `I'm doing great, especially now that I see your message ✨ Tell me, what brought that sweet thought to your mind? 😉`, es: `Validación positiva de su curiosidad.` },
-              { title: '😉 Option 3: Playful Bargain', target: `You always know how to make me smile 😉 I'll tell you all about it, but only if you promise to share a little secret of yours today too! Deal? ❤️`, es: `Coqueteo sutil incentivando continuidad.` }
-            ];
-          }
-        }
-
-        // L. SALUDO SIMPLE O RETOMA DE CHAT (HOLA / OI / HELLO)
-        if (isGreeting) {
-          if (hasHistory) {
-            if (langCode === 'pt') {
+        // CASO C: CLIENTE PREGUNTA
+        if (isQuestion && questionType) {
+          if (questionType === 'doing_now') {
+            if (lang === 'pt') {
               return [
-                { title: '❤️ Opção 1: Retoma Calorosa & Alegria', target: `Oii meu bem! Que alegria ver sua mensagem ❤️ Estava com saudades do nosso papo... Como está sendo o seu dia?`, es: `Saudação calorosa e carinhosa com continuidade.` },
-                { title: '😉 Opção 2: Charme & Sintonia', target: `Oii! Estava justamente pensando em você agorinha 😉 Que coincidência boa! O que você tem feito de bom?`, es: `Sintonia espontânea com pergunta aberta.` },
-                { title: '✨ Opção 3: Conexão & Sorriso', target: `Oii amor! Você sempre me arranca um sorriso quando aparece por aqui ✨ Me conta, como estão as coisas por aí?`, es: `Abertura doce incentivando conversa fluida.` }
+                {
+                  title: '💬 Contextual & Empatia',
+                  target: `Eu estava aqui tirando um tempinho calmo para relaxar e adorei ver sua mensagem, ${clientShort} ❤️ Meu dia foi tranquilo. E você, finalmente conseguindo descansar agora?`,
+                  es: `Responde que estaba relajándose y le pregunta si él ya puede descansar.`
+                },
+                {
+                  title: '✨ Descontraído & Curioso',
+                  target: `Me pegou no flagra! Eu estava justamente pensando no que você estaria aprontando agora, ${clientShort} 😉 Minha noite ficou bem mais animada agora. O que você está fazendo de bom por aí?`,
+                  es: `Tono juguetón diciendo que pensaba en él y pregunta qué hace él.`
+                },
+                {
+                  title: '❤️ Conexão & Proximidade',
+                  target: `Estou aqui deitadinha, curtindo o silêncio e agora com um sorriso bobo conversando com você, ${clientShort} ✨ Como está o seu cantinho e o seu clima por aí agora?`,
+                  es: `Respuesta íntima y acogedora describiendo su momento y preguntando por su ambiente.`
+                }
               ];
-            } else if (langCode === 'es') {
+            } else if (lang === 'es') {
               return [
-                { title: '❤️ Opción 1: Retoma Cariñosa & Alegría', target: `¡Holaaa cariño! Qué alegría ver tu mensajito ❤️ Te juro que estaba pensando en ti hace un ratito... ¿Cómo ha estado tu día?`, es: `Saludo cálido y natural con continuidad de la relación.` },
-                { title: '😉 Opción 2: Coincidencia & Encanto', target: `¡Hola! Qué linda coincidencia que me escribas justo ahora 😉 Me sacaste una sonrisa... ¿Qué tal va todo en tu día?`, es: `Sintonía fresca y abierta.` },
-                { title: '✨ Opción 3: Chispa & Conexión', target: `¡Hola corazón! Siempre me alegra el día encontrarte por aquí ✨ Cuéntame, ¿qué estás haciendo en este momento?`, es: `Apertura espontánea sin sonar cliché.` }
+                {
+                  title: '💬 Contextual & Empatía',
+                  target: `Estaba tomándome un momento tranquilo para relajarme y me dio mucha alegría ver tu mensaje, ${clientShort} ❤️ Mi día estuvo tranquilo. ¿Y tú, ya lograste poner los pies en alto para descansar?`,
+                  es: `Responde con calidez sobre su momento de descanso y le pregunta si ya descansa.`
+                },
+                {
+                  title: '✨ Chispa & Curiosidad',
+                  target: `¡Me atrapaste justo pensando en qué estarías haciendo tú, ${clientShort}! 😉 Estaba aquí con mi teléfono, pero ahora se puso mucho mejor la noche. ¿Qué travesuras andas haciendo tú?`,
+                  es: `Respuesta traviesa y espontánea devolviendo la pregunta con picardía.`
+                },
+                {
+                  title: '❤️ Conexión & Cercanía',
+                  target: `Aquí descansando en casa, poniéndome cómoda y sintiéndome mucho más acompañada ahora que me escribes, ${clientShort} ✨ ¿Cómo se siente tu noche en este momento?`,
+                  es: `Respuesta íntima que genera complicidad y calidez en el chat.`
+                }
               ];
             } else {
               return [
-                { title: '❤️ Option 1: Warm Reunion & Affection', target: `Hey sweetheart! It honestly makes me so happy to see your message ❤️ I was just thinking of you... How has your day been going?`, es: `Saludo cariñoso retomando el chat previo.` },
-                { title: '😉 Option 2: Charming Coincidence', target: `Hey there! What a lovely coincidence, you popped into my mind right before you texted 😉 How are things going with you today?`, es: `Sintonía fresca y abierta.` },
-                { title: '✨ Option 3: Sparkling Smile & Catch-up', target: `Hey love! You always bring the brightest smile to my day ✨ Tell me, what are you up to right now?`, es: `Apertura espontánea e informal.` }
+                {
+                  title: '💬 Contextual & Empathetic',
+                  target: `I was just taking a quiet moment to unwind, and seeing your message pop up brought a big smile, ${clientShort} ❤️ My day has been calm. Are you finally getting some downtime for yourself too?`,
+                  es: `Responde con naturalidad que estaba descansando y pregunta por su noche.`
+                },
+                {
+                  title: '✨ Playful & Curious',
+                  target: `Busted! Right now I was actually wondering what you were getting up to, ${clientShort} 😉 Just lounging here, but chatting with you makes everything way more fun! What are you doing at this exact moment?`,
+                  es: `Respuesta traviesa y juguetona diciendo que pensaba en él.`
+                },
+                {
+                  title: '❤️ Personal & Intimate',
+                  target: `Just getting cozy at home and enjoying having you here with me right now, ${clientShort} ✨ There's something so peaceful about our chats. What does your evening look like right now?`,
+                  es: `Respuesta cercana e íntima compartiendo un momento acogedor.`
+                }
               ];
             }
-          } else {
-            if (langCode === 'pt') {
+          } else if (questionType === 'how_are_you') {
+            if (lang === 'pt') {
               return [
-                { title: '👋 Opção 1: Saudação Espontânea & Leve', target: `Olá! Que gostoso te ver por aqui 😉 Como você está hoje?`, es: `Saudação natural sem afetação.` },
-                { title: '✨ Opção 2: Curiosidade Doce', target: `Oii! Seu perfil me passou uma energia tão boa ✨ Me conta, como está sendo a sua semana?`, es: `Abertura amigável e descontraída.` },
-                { title: '😉 Opção 3: Convite a Conversar', target: `Oi! Estava passeando por aqui e adorei seu estilo 😉 O que você mais gosta de fazer no seu tempo livre?`, es: `Pergunta aberta de estilo de vida.` }
+                {
+                  title: '💬 Contextual & Empatia',
+                  target: `Estou super bem, muito obrigada pelo carinho de perguntar, ${clientShort}! ❤️ Meu dia foi tranquilo, mas falar com você sempre deixa as coisas mais leves. E para você, como foi o resto do seu dia?`,
+                  es: `Agradece a pergunta com carinho e devolve o interesse sobre o dia dele.`
+                },
+                {
+                  title: '✨ Descontraído & Curioso',
+                  target: `Agora estou muito melhor com a sua mensagem, ${clientShort}! 😉 Meu dia teve de tudo um pouco, mas agora estou 100% relaxada. O que de mais interessante aconteceu no seu dia?`,
+                  es: `Elogio divertido dizendo que ficou melhor com a mensagem dele.`
+                },
+                {
+                  title: '❤️ Conexão & Proximidade',
+                  target: `Estou ótima, e é tão bom sentir essa sua atenção comigo, ${clientShort} ✨ Estava aqui refletindo sobre as coisas boas da vida e você apareceu. Me conta, como está o seu coração hoje?`,
+                  es: `Tom profundo e afetuoso valorizando o cuidado mútuo.`
+                }
               ];
-            } else if (langCode === 'es') {
+            } else if (lang === 'es') {
               return [
-                { title: '👋 Opción 1: Saludo Fresco & Espontáneo', target: `¡Hola! Qué gusto saludarte por aquí 😉 ¿Cómo estás pasando tu día hoy?`, es: `Saludo natural de vida real.` },
-                { title: '✨ Opción 2: Vibra Positiva & Cercanía', target: `¡Hola! Tu perfil me transmitió una vibra súper linda y tranquila ✨ Cuéntame, ¿cómo te trata tu semana?`, es: `Apertura amigable y espontánea.` },
-                { title: '😉 Opción 3: Curiosidad & Estilo de Vida', target: `¡Hola! Pasaba por aquí y me llamó mucho la atención tu estilo 😉 Dime, ¿qué es lo que más disfrutas hacer en tu tiempo libre?`, es: `Pregunta de baja presión para iniciar charla.` }
+                {
+                  title: '💬 Contextual & Empatía',
+                  target: `¡Muy bien, muchas gracias por preguntar tan lindo, ${clientShort}! ❤️ Mi día estuvo tranquilo, pero tenerte por aquí siempre me alegra la tarde. ¿Cómo terminó de irte a ti hoy?`,
+                  es: `Agradece con afecto su pregunta y se interesa por cómo terminó su día.`
+                },
+                {
+                  title: '✨ Chispa & Curiosidad',
+                  target: `¡Pues ahora que me escribiste estoy muchísimo mejor, ${clientShort}! 😉 Mi día estuvo entretenido, pero platicar contigo es la mejor parte. ¿Qué fue lo más loco o divertido que te pasó hoy?`,
+                  es: `Respuesta coqueta y alegre que dinamiza la charla.`
+                },
+                {
+                  title: '❤️ Conexión & Cercanía',
+                  target: `Estoy con el corazón contento y muy en paz, ${clientShort} ✨ Me encanta que siempre tengas ese detalle de estar pendiente de mí. Cuéntame, ¿cómo te sientes por dentro hoy?`,
+                  es: `Apertura emocional profunda y agradecida sobre el estado interior.`
+                }
               ];
             } else {
               return [
-                { title: '👋 Option 1: Natural & Friendly Hello', target: `Hello there! It's so nice to say hi to you 😉 How is your day going so far?`, es: `Saludo natural y abierto.` },
-                { title: '✨ Option 2: Warm & Relaxed Greeting', target: `Hey! Your profile gave me such a genuinely nice vibe ✨ How has your week been treating you?`, es: `Apertura amigable y relajada.` },
-                { title: '😉 Option 3: Casual Curiosity', target: `Hey there! Your pictures caught my eye and I wanted to say hello 😉 What's your favorite way to unwind when you have time for yourself?`, es: `Pregunta relajada de estilo de vida.` }
+                {
+                  title: '💬 Contextual & Empathetic',
+                  target: `I'm doing really well, thank you so much for asking, ${clientShort}! ❤️ My day was pretty smooth, but hearing from you always brightens it up. How has everything been treating you today?`,
+                  es: `Agradece con afecto y pregunta por cómo le ha ido a él hoy.`
+                },
+                {
+                  title: '✨ Playful & Curious',
+                  target: `Honestly, way better now that I see you popping into my notifications, ${clientShort}! 😉 My day was good, but this is the fun part. What was the wildest or best moment of your day?`,
+                  es: `Halago alegre diciendo que hablar con él es la mejor parte de su día.`
+                },
+                {
+                  title: '❤️ Personal & Intimate',
+                  target: `I'm feeling very peaceful tonight, ${clientShort} ✨ There's such a gentle warmth whenever we connect like this. Tell me, how are you really feeling deep down today?`,
+                  es: `Conexión íntima y sincera preguntando por cómo se siente en el fondo.`
+                }
               ];
             }
           }
         }
 
-        // M. FIN DE SEMANA, CLIMA, VIAJES O PLANES
-        if (isWeekendOrWeather) {
-          if (langCode === 'pt') {
-            return [
-              { title: '☀️ Opção 1: Sintonia com o Clima & Planos', target: `Clima perfeito para relaxar e esquecer do mundo! 😉 O que você está planejando de bom para curtir hoje?`, es: `Empatia com o clima ou fim de semana.` },
-              { title: '❤️ Opção 2: Vontade de Estar Juntinho', target: `Adoro dias assim... me dá uma vontade enorme de estar juntinho com você no quentinho ❤️ Você é mais de ficar em casa ou sair?`, es: `Insinuação romântica e pergunta sobre estilo.` },
-              { title: '📸 Opção 3: Foto do Seu Cantinho', target: `Que delícia de momento ✨ Me manda uma foto de onde você está para eu ver como está seu dia? 😉 Eu te mando uma de volta!`, es: `Gancho de foto do momento.` }
-            ];
-          } else if (langCode === 'es') {
-            return [
-              { title: '☀️ Opción 1: Sintonía con el Día & Planes', target: `¡Día perfecto para desconectar y pasarla rico! 😉 ¿Qué tienes planeado de bueno para disfrutar hoy?`, es: `Empatía con el clima o descanso.` },
-              { title: '❤️ Opción 2: Compañía Acogedora', target: `Me encantan estos días... Me dan unas ganas enormes de estar compartiendo ese ratito contigo ❤️ ¿Eres más de quedarte en casa tranquilo o de salir a pasear?`, es: `Insinuación tierna y pregunta de preferencias.` },
-              { title: '📸 Opción 3: Foto de tu Vista o Momento', target: `¡Qué buen momento! ✨ ¿Me mandas una fotito de cómo está tu día hoy para acompañarte? 😉 ¡Yo te mando una mía para no quedarme atrás!`, es: `Petición atractiva de foto de su día.` }
-            ];
-          } else {
-            return [
-              { title: '☀️ Option 1: Weekend / Weather Flow', target: `Such a great day to unwind and leave all the stress behind! 😉 What nice plans do you have going on today?`, es: `Empatía con el clima o descanso.` },
-              { title: '❤️ Option 2: Cozy Thought Together', target: `I love days like this... honestly makes me wish I were right there keeping you company ❤️ Are you more of a homebody or an explorer?`, es: `Insinuación tierna de estar juntos.` },
-              { title: '📸 Option 3: Quick Snapshot Ask', target: `Sounds like a great moment ✨ Send me a quick photo of what your day looks like right now so I can picture it? 😉 I'll send one right back!`, es: `Intercambio de fotos cotidianas.` }
-            ];
-          }
-        }
-
-        // N. CONVERSACIÓN CONTINUA NORMAL (FLUJO NATURAL SIN PLANTILLAS ROBÓTICAS)
-        if (hasHistory) {
-          if (langCode === 'pt') {
+        // CASO D: CANSANCIO / AGOBIO / TRABAJO / JEFE (Mental test scenario)
+        if (isExhausted || (isWork && (textLower.includes('hard') || textLower.includes('tired') || textLower.includes('stress') || textLower.includes('pesad') || textLower.includes('cansad') || textLower.includes('puxad')))) {
+          if (lang === 'pt') {
+            const workRef = specificStress || 'o trabalho e essa correria toda';
             return [
               {
-                title: '❤️ Opção 1: Validação Afetuosa & Curiosidade',
-                target: `Adoro quando a gente conversa sobre essas coisas, me sinto tão pertinho de você ❤️ Me conta mais sobre como foi isso para você!`,
-                es: `Valida con afecto o que ele acabou de dizer e convida a aprofundar naturalmente.`
+                title: '💬 Contextual & Empatia',
+                target: `Nossa, isso parece ter sido tão desgastante, ${clientShort}... Encarar ${workRef} quando a gente já está no limite suga qualquer energia ❤️ Você realmente merece colocar os pés para cima agora. O que te ajudaria a relaxar a cabeça neste momento?`,
+                es: `Valida seu cansaço com o trabalho/chefe com muita empatia e pergunta como relaxar.`
               },
               {
-                title: '✨ Opção 2: Charme Descontraído & Sorriso',
-                target: `Você sempre tem um jeito tão único de ver as coisas jaja 😉 Me fez sorrir de verdade! E o que mais passou pela sua cabeça hoje?`,
-                es: `Comentário caloroso e espontâneo que alimenta a cumplicidade do chat.`
+                title: '✨ Descontraído & Curioso',
+                target: `Assunto de trabalho e estresse está oficialmente censurado por hoje, ${clientShort}! 😉 Sobreviver a ${workRef} já te dá direito a uma medalha de honra. Se você pudesse sumir para qualquer lugar relaxante agora, para onde a gente iria?`,
+                es: `Broma divertida sobre proibir o estresse e pergunta imaginativa sobre fugir da rotina.`
               },
               {
-                title: '📸 Opção 3: Cumplicidade do Momento & Foto',
-                target: `É tão gostoso ter esse tempinho para falar com você ✨ Me manda uma fotinho sua de agora para alegrar o meu dia? 😉 Eu te mando uma exclusiva também!`,
-                es: `Gancho irresistível de troca de fotos motivado pela boa química da conversa.`
+                title: '❤️ Conexão & Proximidade',
+                target: `Não gosto nada de saber que ${workRef} te deixou tão acabado hoje, ${clientShort}... Se eu estivesse aí do seu lado, cuidaria de você para não ter que se preocupar com nada ✨ Me conta, qual é o seu refúgio favorito quando precisa de paz?`,
+                es: `Afeto profundo querendo cuidar dele e pergunta íntima sobre o que traz paz.`
               }
             ];
-          } else if (langCode === 'es') {
+          } else if (lang === 'es') {
+            const workRef = specificStress || 'el trabajo y toda esa presión';
             return [
               {
-                title: '❤️ Opción 1: Validación Cálida & Continuidad',
-                target: `Me encanta cuando platicamos de estas cosas, me hace sentirte súper cerquita ❤️ Cuéntame más sobre cómo viviste eso tú...`,
-                es: `Valida con afecto lo que el cliente acaba de compartir y pide profundizar con naturalidad.`
+                title: '💬 Contextual & Empatía',
+                target: `Uff, eso suena súper desgastante, ${clientShort}... Lidiar con ${workRef} cuando ya vienes agotado de verdad cansa el cuerpo y la mente ❤️ Te mereces soltar todo y darte un gran respiro. ¿Qué es lo que más te ayudaría a desconectar en este momento?`,
+                es: `Valida con empatía profunda su día difícil en el trabajo y pregunta cómo desconectar.`
               },
               {
-                title: '✨ Opción 2: Chispa Espontánea & Sonrisa',
-                target: `Tienes una manera tan especial y divertida de contar las cosas jaja 😉 De verdad me sacaste una sonrisa... ¿Y qué más ha pasado por tu mente hoy?`,
-                es: `Juego de atracción fresco y cercano que dinamiza la conversación.`
+                title: '✨ Chispa & Curiosidad',
+                target: `¡Queda oficialmente prohibido hablar de trabajo y estrés por el resto de la noche, ${clientShort}! 😉 Sobrevivir a ${workRef} hoy te hace merecedor de un premio. Si tuvieras un botón mágico para teletransportarte lejos de todo, ¿a dónde nos iríamos?`,
+                es: `Tono juguetón bromeando sobre sobrevivir al día pesado para despejar su mente.`
               },
               {
-                title: '📸 Opción 3: Complicidad & Foto del Momento',
-                target: `Es tan lindo tener este ratito para conectar contigo ✨ ¿Me mandas una fotito tuya de ahora para alegrarme el día? 😉 ¡Yo te mando una especial para ti también!`,
-                es: `Gancho de alta conversión para fotos recíprocas nacido de la química real.`
+                title: '❤️ Conexión & Cercanía',
+                target: `Me da mucha tristeza saber que ${workRef} te drenó tanto la energía hoy, ${clientShort}... Si estuviera ahí contigo, te prepararía algo caliente y no dejaría que muevas un solo dedo ✨ Dime, ¿qué es lo que más tranquilidad te da cuando el día estuvo tan pesado?`,
+                es: `Muestra calidez y deseo de consentirlo, preguntando qué le da paz.`
               }
             ];
           } else {
+            const workRef = specificStress || 'work and all that pressure';
             return [
               {
-                title: '❤️ Option 1: Warm Resonance & Natural Flow',
-                target: `I really love when we get to chat about these things, it honestly makes me feel so close to you ❤️ Tell me more about how that was for you!`,
-                es: `Valida con afecto lo compartido y pide continuidad.`
+                title: '💬 Contextual & Empathetic',
+                target: `Ugh, that sounds so rough, ${clientShort}... Dealing with ${workRef} when you're already exhausted really takes a heavy toll ❤️ You honestly deserve to put everything on pause and just breathe. What would help you relax the most right now?`,
+                es: `Valida su cansancio por la presión laboral con empatía sincera y pregunta cómo relajarse.`
               },
               {
-                title: '✨ Option 2: Playful Chemistry & Smile',
-                target: `You have such a genuine way with words haha 😉 You definitely put a smile on my face! What else has been on your mind today?`,
-                es: `Coqueteo sutil y halago que estimula el interés.`
+                title: '✨ Playful & Curious',
+                target: `Work drama is officially cancelled for the rest of the night, ${clientShort}! 😉 Surviving ${workRef} today definitely qualifies you for an award. If you could hit a giant snooze button on reality right now, where would we disappear to?`,
+                es: `Broma fresca sobre cancelar el estrés laboral y pregunta lúdica para cambiar el ánimo.`
               },
               {
-                title: '📸 Option 3: Sweet Check-in & Photo Trade',
-                target: `It's always so comforting having this time to talk with you ✨ Send me a quick little picture of yourself right now to brighten my day? 😉 I'll send one right back!`,
-                es: `Intercambio de fotos 1-a-1 impulsado por la química.`
+                title: '❤️ Personal & Intimate',
+                target: `I hate hearing that ${workRef} drained you so much today, ${clientShort}... If I were there with you, I'd make you a cozy drink and make sure nobody bothered you ✨ Tell me, what's your go-to comfort when you've had a tough day?`,
+                es: `Conexión íntima y protectora deseando cuidarlo tras un día pesado.`
               }
             ];
           }
         }
 
-        // O. PRIMER CONTACTO / APERTURA DE CHAT (Sin mensajes ni cartas previas)
-        if (langCode === 'pt') {
+        // CASO E: COMIDA / COCINAR / CENAR
+        if (isFood) {
+          const foodRef = specificActivity || dynamicTopicRef || (lang === 'pt' ? 'a comida' : (lang === 'es' ? 'la comida' : 'dinner'));
+          if (lang === 'pt') {
+            return [
+              {
+                title: '💬 Contextual & Empatia',
+                target: `Que delícia, ${clientShort}! Tirar um tempo para curtir ${foodRef} é uma das melhores coisas para fechar bem o dia ❤️ Como ficou tudo? O que você preparou de especial?`,
+                es: `Valida o prazer da comida/jantar e pergunta detalhes do que cozinhou.`
+              },
+              {
+                title: '✨ Descontraído & Curioso',
+                target: `Opa, agora você me deu uma fome daquelas falando de ${foodRef}, ${clientShort}! 😉 Espero que tenha guardado um prato para mim... Você é do tipo masterchef ou cozinha no improviso gostoso?`,
+                es: `Brincadeira simpática dizendo que ficou com fome e perguntando seus talentos culinários.`
+              },
+              {
+                title: '❤️ Conexão & Proximidade',
+                target: `Acho tão atraente quem valoriza esses momentos com ${foodRef}, ${clientShort}... Fiquei aqui imaginando como seria gostoso cozinhar e rir juntos na cozinha ✨ Qual é a sua refeição favorita para uma noite tranquila?`,
+                es: `Comentário doce e envolvente imaginando momentos a dois na cozinha.`
+              }
+            ];
+          } else if (lang === 'es') {
+            return [
+              {
+                title: '💬 Contextual & Empatía',
+                target: `¡Qué delicia, ${clientShort}! Dedicarle tiempo a ${foodRef} es de las cosas más reconfortantes que hay después de un día ocupado ❤️ ¿Cómo te quedó todo? ¿Qué preparaste de rico esta noche?`,
+                es: `Valida el gusto de cocinar o cenar rico y pregunta por su receta.`
+              },
+              {
+                title: '✨ Chispa & Curiosidad',
+                target: `¡Oye, ya me dio un antojo tremendo al leer sobre ${foodRef}, ${clientShort}! 😉 Espero que me hayas guardado una buena porción... ¿Te consideras todo un chef o improvisas con estilo?`,
+                es: `Tono juguetón bromeando con que le dio antojo y preguntando si es buen cocinero.`
+              },
+              {
+                title: '❤️ Conexión & Cercanía',
+                target: `Me encanta alguien que disfruta tanto de ${foodRef}, ${clientShort}... Me quedé imaginando lo lindo que sería compartir esa mesa y una charla larga contigo ✨ ¿Cuál es tu plato favorito para una noche especial?`,
+                es: `Mensaje dulce y seductor imaginando una velada juntos en la mesa.`
+              }
+            ];
+          } else {
+            return [
+              {
+                title: '💬 Contextual & Empathetic',
+                target: `That sounds so lovely, ${clientShort}! Taking the time for ${foodRef} is honestly the best way to treat yourself after a long day ❤️ How did it turn out? What was on the menu tonight?`,
+                es: `Valida el momento culinario y pregunta amablemente qué preparó.`
+              },
+              {
+                title: '✨ Playful & Curious',
+                target: `Now you're seriously making me hungry talking about ${foodRef}, ${clientShort}! 😉 I hope you made enough to share, because I might just invite myself over! Tell me—are you secretly a master chef or just winging it with style?`,
+                es: `Broma divertida diciendo que se le antojó y preguntando si es buen chef.`
+              },
+              {
+                title: '❤️ Personal & Intimate',
+                target: `I have such a sweet spot for someone who appreciates ${foodRef}, ${clientShort}... It made me picture how cozy it would be to cook and laugh in the kitchen together ✨ What's your absolute favorite meal to share on a quiet evening?`,
+                es: `Muestra intimidad y encanto proyectando un momento compartido en la cocina.`
+              }
+            ];
+          }
+        }
+
+        // CASO F: MASCOTAS / ANIMALES
+        if (isPets) {
+          const petRef = specificActivity || dynamicTopicRef || (lang === 'pt' ? 'seu bichinho' : (lang === 'es' ? 'tu mascota' : 'your pet'));
+          if (lang === 'pt') {
+            return [
+              {
+                title: '💬 Contextual & Empatia',
+                target: `Que fofura sem tamanho, ${clientShort}! Passar esse tempo com ${petRef} renova qualquer energia ❤️ Os bichinhos têm um amor tão puro... Qual é o nome do seu parceirinho de quatro patas?`,
+                es: `Comenta com carinho sobre o animal de estimação e pergunta o nome dele.`
+              },
+              {
+                title: '✨ Descontraído & Curioso',
+                target: `Aposto que ${petRef} te fez correr o dia todo, ${clientShort}! 😉 Quem cansou primeiro: você ou ele? Me diz a verdade: ele é comportadinho ou apronta todas?`,
+                es: `Broma simpática sobre a energia do bichinho e pergunta se é comportado.`
+              },
+              {
+                title: '❤️ Conexão & Proximidade',
+                target: `Amo pessoas que têm esse carinho todo com ${petRef}, ${clientShort}... Isso mostra a nobreza e a doçura do seu coração ✨ Adoraria fazer companhia para vocês dois num passeio desses! Ele é muito apegado a você?`,
+                es: `Elogio sincero aos seus sentimentos pelos animais com toque carinhoso.`
+              }
+            ];
+          } else if (lang === 'es') {
+            return [
+              {
+                title: '💬 Contextual & Empatía',
+                target: `¡Qué ternura más linda, ${clientShort}! Dedicarle tiempo a ${petRef} siempre le reinicia el ánimo a cualquiera ❤️ Los animalitos transmiten una paz increíble... ¿Cómo se llama tu consentido?`,
+                es: `Valida con calidez su amor por su mascota y le pregunta su nombre.`
+              },
+              {
+                title: '✨ Chispa & Curiosidad',
+                target: `¡Seguro que ${petRef} te tiene corriendo de un lado a otro todo el día, ${clientShort}! 😉 ¿Quién es el verdadero consentido de la casa? Dime la verdad: ¿es un ángel o un torbellino travieso?`,
+                es: `Tono fresco y espontáneo sobre las travesuras de la mascota.`
+              },
+              {
+                title: '❤️ Conexión & Cercanía',
+                target: `Tengo una debilidad hermosa por las personas que aman tanto a ${petRef}, ${clientShort}... Dice mucho de la nobleza de tu corazón ✨ Me encantaría acompañarlos a dar una vuelta algún día. ¿Es muy celoso o es sociable contigo?`,
+                es: `Elogio afectuoso que valora su buen corazón y abre espacio a una charla dulce.`
+              }
+            ];
+          } else {
+            return [
+              {
+                title: '💬 Contextual & Empathetic',
+                target: `That is the sweetest thing, ${clientShort}! Spending time with ${petRef} is honestly the best therapy in the world ❤️ Animals just know how to bring so much pure joy. What adventures did you two get up to today?`,
+                es: `Valida con afecto el tiempo con su mascota y pregunta por su día juntos.`
+              },
+              {
+                title: '✨ Playful & Curious',
+                target: `I'm pretty sure ${petRef} has you completely wrapped around their little paws, ${clientShort}! 😉 Who actually runs the house over there? Tell me the truth—are they an angel or a little mischief-maker?`,
+                es: `Broma divertida sobre quién manda en casa con la mascota.`
+              },
+              {
+                title: '❤️ Personal & Intimate',
+                target: `I have such a soft spot for people who show so much love to ${petRef}, ${clientShort}... It tells me so much about the warmth in your soul ✨ I'd love to tag along on a walk with you two sometime! Are you two basically inseparable?`,
+                es: `Elogio íntimo a su gran corazón y deseo sutil de compartir ese momento.`
+              }
+            ];
+          }
+        }
+
+        // CASO G: FAMILIA / HIJOS
+        if (isFamily) {
+          const famRef = specificActivity || dynamicTopicRef || (lang === 'pt' ? 'a família' : (lang === 'es' ? 'la familia' : 'your family'));
+          if (lang === 'pt') {
+            return [
+              {
+                title: '💬 Contextual & Empatia',
+                target: `Que dedicação mais linda, ${clientShort}! Estar presente e cuidar de ${famRef} é a missão mais nobre do mundo ❤️ Sei que exige muito, mas dá para ver seu amor em cada detalhe. Quantos aninhos eles têm?`,
+                es: `Valida com respeito e carinho a dedicação à família e pergunta a idade.`
+              },
+              {
+                title: '✨ Descontraído & Curioso',
+                target: `Aposto que ${famRef} te mantém a mil por hora o dia inteirinho, ${clientShort}! 😉 Não sobra um segundo de tédio, né? Qual foi a história ou pérola mais engraçada de hoje?`,
+                es: `Comentário alegre sobre a energia das crianças/família e pergunta momentos divertidos.`
+              },
+              {
+                title: '❤️ Conexão & Proximidade',
+                target: `Admiro profundamente quem se entrega de coração a ${famRef}, ${clientShort}... Mostra o tamanho do seu caráter e do seu amor ✨ Eles puxaram mais o seu jeitinho carinhoso ou a sua personalidade?`,
+                es: `Elogio sincero aos valores familiares e pergunta envolvente sobre semelhanças.`
+              }
+            ];
+          } else if (lang === 'es') {
+            return [
+              {
+                title: '💬 Contextual & Empatía',
+                target: `¡Qué labor tan hermosa y llena de amor, ${clientShort}! Cuidar y estar para ${famRef} es lo más valioso de la vida ❤️ Aunque canse, seguro te llena el alma por completo. ¿Cuántos añitos tienen tus pequeños?`,
+                es: `Valida con profunda admiración su rol familiar y le pregunta la edad de sus hijos.`
+              },
+              {
+                title: '✨ Chispa & Curiosidad',
+                target: `¡Seguro que ${famRef} te hace dar mil vueltas al día sin parar, ${clientShort}! 😉 ¡No hay tiempo para aburrirse con ellos! Cuéntame, ¿qué ocurrencia divertida te sacó una risa hoy?`,
+                es: `Tono amigable y chispeante sobre la energía de los niños pidiendo una anécdota.`
+              },
+              {
+                title: '❤️ Conexión & Cercanía',
+                target: `Admiro muchísimo a las personas tan entregadas y cariñosas con ${famRef}, ${clientShort}... Habla de la nobleza tan bonita que tienes dentro ✨ ¿Sientes que se parecen más a ti en tu forma de ser o en tu energía?`,
+                es: `Elogio cálido a sus valores familiares y pregunta sobre a quién se parecen.`
+              }
+            ];
+          } else {
+            return [
+              {
+                title: '💬 Contextual & Empathetic',
+                target: `That is so heartwarming, ${clientShort}! Being so devoted to ${famRef} is truly the most selfless and beautiful thing in the world ❤️ It takes so much energy, but your love shines through. How old are they now?`,
+                es: `Valida con calidez su entrega a sus hijos/familia y pregunta la edad.`
+              },
+              {
+                title: '✨ Playful & Curious',
+                target: `I bet they keep you running circles all day long, ${clientShort}! 😉 Never a dull moment in that house, right? What was the funniest thing they said or did today?`,
+                es: `Tono lúdico sobre la energía de los niños y pide una anécdota divertida.`
+              },
+              {
+                title: '❤️ Personal & Intimate',
+                target: `Seeing how devoted you are to ${famRef} is honestly one of the most attractive things about you, ${clientShort}... Having a caring heart like yours is so rare ✨ Do you feel like they took after your personality?`,
+                es: `Elogio profundo a sus valores y sensibilidad familiar con pregunta íntima.`
+              }
+            ];
+          }
+        }
+
+        // CASO H: SALUD / MALESTAR
+        if (isSick) {
+          const sickRef = dynamicTopicRef || (lang === 'pt' ? 'esse mal-estar' : (lang === 'es' ? 'ese malestar' : 'not feeling well'));
+          if (lang === 'pt') {
+            return [
+              {
+                title: '💬 Contextual & Empatia',
+                target: `Poxa, sinto muito que você esteja passando por ${sickRef}, ${clientShort}... Ficar assim derruba qualquer um ❤️ Por favor, tire o pé do acelerador e descanse. Está conseguindo tomar algum remédio e se cuidar direitinho?`,
+                es: `Valida com carinho seu mal-estar ou dor e pergunta se está se medicando.`
+              },
+              {
+                title: '✨ Descontraído & Curioso',
+                target: `Nada de bancar o herói hoje, ${clientShort}! 😉 Quando o corpo pede pausa por conta de ${sickRef}, a gente obedece. Tem alguém aí por perto te mimando com sopa ou chazinho?`,
+                es: `Tom descontraído aconselhando a descansar e perguntando se tem alguém cuidando dele.`
+              },
+              {
+                title: '❤️ Conexão & Proximidade',
+                target: `Queria tanto estar aí pertinho para cuidar de você e te preparar algo quentinho, ${clientShort}... Odeio te ver mal com ${sickRef} ✨ Promete que vai fechar os olhos e descansar um pouquinho agora?`,
+                es: `Mensagem doce e protetora desejando cuidar dele e pedindo para descansar.`
+              }
+            ];
+          } else if (lang === 'es') {
+            return [
+              {
+                title: '💬 Contextual & Empatía',
+                target: `Ay no, me da mucha pena que estés pasando por ${sickRef}, ${clientShort}... Sentirse así le quita el ánimo a cualquiera ❤️ Por favor no te sobreexijas y guarda reposo. ¿Ya tomaste alguna medicina para calmarlo?`,
+                es: `Muestra preocupación sincera por su salud y le pregunta si tomó medicina.`
+              },
+              {
+                title: '✨ Chispa & Curiosidad',
+                target: `¡Nada de querer hacerte el fuerte hoy, ${clientShort}! 😉 Con ${sickRef} lo único permitido es acostarse y dejarse consentir. ¿Tienes a alguien que te prepare un té caliente o te toca cuidarte solo?`,
+                es: `Tono simpático recordándole guardar reposo y preguntando quién lo cuida.`
+              },
+              {
+                title: '❤️ Conexión & Cercanía',
+                target: `Cómo me gustaría estar ahí contigo para cuidarte y llevarte algo rico para que te recuperes, ${clientShort}... No me gusta nada saberte enfermito ❤️ ¿Qué es lo que más te alivia cuando te sientes así?`,
+                es: `Afecto tierno y protector ofreciendo compañía emocional mientras se recupera.`
+              }
+            ];
+          } else {
+            return [
+              {
+                title: '💬 Contextual & Empathetic',
+                target: `Oh no, I'm so sorry you're dealing with ${sickRef}, ${clientShort}... Being unwell completely drains you ❤️ Please put everything on hold and get some real rest. Have you been able to take any medicine for it?`,
+                es: `Valida con afecto su dolor o enfermedad y pregunta si ya tomó algo.`
+              },
+              {
+                title: '✨ Playful & Curious',
+                target: `No being a hero today, ${clientShort}! 😉 When your body is dealing with ${sickRef}, rest is non-negotiable. Do you have someone looking after you with warm soup, or are you flying solo?`,
+                es: `Broma cariñosa sobre no hacerse el fuerte y descansar.`
+              },
+              {
+                title: '❤️ Personal & Intimate',
+                target: `I really wish I could be there right now to take care of you and make you comfortable, ${clientShort}... I hate seeing you under the weather ✨ What's your favorite comfort when you're resting like this?`,
+                es: `Mensaje tierno y protector deseando cuidar de él personalmente.`
+              }
+            ];
+          }
+        }
+
+        // CASO I: COMPOSICIÓN DINÁMICA GENERAL CON TEMA EXTRAÍDO
+        const topicContext = specificActivity || dynamicTopicRef;
+        if (lang === 'pt') {
           return [
-            { title: '👋 Opção 1: Abertura Doce & Espontânea', target: `Olá! Seu perfil me passou uma energia tão serena e gostosa que não resisti em vir te dar um oi 😉 Como está sendo a sua semana?`, es: `Abertura calorosa e humana sem jargões ensaiados.` },
-            { title: '✨ Opção 2: Charme & Curiosidade Leve', target: `Oii! Adorei o seu estilo nas fotos ✨ Me deu curiosidade: o que você mais gosta de fazer quando tem um tempinho livre só para você?`, es: `Pergunta relaxante sobre paixões e estilo de vida.` },
-            { title: '🌸 Opção 3: Saudação com Sorriso', target: `Oi! Tive uma sensação tão boa ao ver suas fotos que quis vir te conhecer 😉 O que de melhor aconteceu no seu dia até agora?`, es: `Pergunta positiva que convida a compartilhar momentos alegres.` }
+            {
+              title: '💬 Contextual & Empatia',
+              target: `Que bom você compartilhar sobre ${topicContext} comigo, ${clientShort}! Dá para ver o quanto esses momentos são importantes para você ❤️ Como foi o desfecho de tudo isso? Me conta mais!`,
+              es: `Valida o tema compartilhado com atenção genuína e convida a detalhar mais.`
+            },
+            {
+              title: '✨ Descontraído & Curioso',
+              target: `Adorei saber sobre ${topicContext}, ${clientShort}! 😉 Você sempre traz uma energia tão leve para as nossas conversas... O que mais de divertido passou pela sua cabeça hoje?`,
+              es: `Comentário alegre conectando com o assunto e puxando papo descontraído.`
+            },
+            {
+              title: '❤️ Conexão & Proximidade',
+              target: `É tão gostoso quando você me conta sobre ${topicContext}, ${clientShort}... Me sinto muito mais próxima e conectada a você ✨ O que você mais gosta de sentir quando está vivendo momentos assim?`,
+              es: `Abordagem íntima que aprofunda o sentimento em torno do tema vivido.`
+            }
           ];
-        } else if (langCode === 'es') {
+        } else if (lang === 'es') {
           return [
-            { title: '👋 Opción 1: Saludo Cálido & Espontáneo', target: `¡Hola! Tu perfil me transmitió una vibra tan linda y serena que me dieron muchas ganas de pasar a saludarte 😉 ¿Cómo te ha estado tratando tu semana?`, es: `Apertura cálida y espontánea como una persona real.` },
-            { title: '✨ Opción 2: Curiosidad Amigable & Estilo', target: `¡Hola! Qué lindo coincidir por aquí ✨ Me dio curiosidad saber de ti: ¿qué es lo que más disfrutas hacer cuando tienes tiempo libre para consentirte?`, es: `Pregunta atractiva de baja presión sobre su estilo de vida.` },
-            { title: '🌸 Opción 3: Chispa Inicial Positiva', target: `¡Hola! Me sacaste una sonrisa sincera con tus fotos y quise pasar a desearte un lindo día 😉 Cuéntame, ¿qué es lo mejor que te ha pasado hoy?`, es: `Apertura magnética que despierta una respuesta alegre.` }
+            {
+              title: '💬 Contextual & Empatía',
+              target: `¡Qué bueno que me compartas sobre ${topicContext}, ${clientShort}! Se nota lo mucho que disfrutas esos momentos ❤️ ¿Cómo terminó saliendo todo al final? ¡Cuéntame los detalles!`,
+              es: `Valida con entusiasmo lo que compartió y pide continuar la conversación.`
+            },
+            {
+              title: '✨ Chispa & Curiosidad',
+              target: `¡Me encantó enterarme de lo de ${topicContext}, ${clientShort}! 😉 Siempre tienes una forma muy fresca y amena de contar las cosas... ¿Qué otra sorpresa o plan divertido tienes en mente?`,
+              es: `Tono alegre y curioso que dinamiza la charla basándose en lo dicho.`
+            },
+            {
+              title: '❤️ Conexión & Cercanía',
+              target: `Es tan lindo cuando me platicas sobre ${topicContext}, ${clientShort}... De verdad me hace sentirte mucho más cerquita ✨ ¿Qué es lo que más paz o emoción te hace sentir cuando estás en eso?`,
+              es: `Conexión íntima y cálida que profundiza en las emociones del cliente.`
+            }
           ];
         } else {
           return [
-            { title: '👋 Option 1: Warm & Spontaneous Hello', target: `Hello there! Your profile gave off such a warm and lovely energy that I just had to come say hello 😉 How has your week been treating you so far?`, es: `Apertura cálida y humana sin sonar a bot.` },
-            { title: '✨ Option 2: Casual Lifestyle Curiosity', target: `Hey! Your style really caught my eye ✨ Tell me, what's your absolute favorite way to unwind when you have time just for yourself?`, es: `Pregunta de estilo de vida relajante.` },
-            { title: '🌸 Option 3: Bright & Positive Spark', target: `Hey there! Your photos genuinely brought a smile to my face and I wanted to see how you're doing 😉 What was one nice highlight from your day today?`, es: `Apertura optimista que invita a responder.` }
+            {
+              title: '💬 Contextual & Empathetic',
+              target: `I'm so glad you shared about ${topicContext} with me, ${clientShort}! It sounds like such a genuine part of your day ❤️ How did everything turn out in the end? Tell me all about it!`,
+              es: `Valida lo compartido sobre su actividad y pide conocer más detalles con calidez.`
+            },
+            {
+              title: '✨ Playful & Curious',
+              target: `I love hearing about ${topicContext}, ${clientShort}! 😉 You always bring such a great energy into our chats... What else fun or unexpected has been on your radar today?`,
+              es: `Tono ameno y juguetón reforzando la química y preguntando qué más pasó.`
+            },
+            {
+              title: '❤️ Personal & Intimate',
+              target: `There's something so sweet about you talking about ${topicContext}, ${clientShort}... It makes me feel so much closer to your world ✨ What brings you the greatest sense of happiness in moments like that?`,
+              es: `Comentario dulce y reflexivo que profundiza el vínculo emocional.`
+            }
           ];
         }
       };
@@ -2738,10 +2947,10 @@
         });
         const data = await res.json();
         if (data && data.success && Array.isArray(data.options) && data.options.length > 0) {
-          // Descartar respuestas si son plantillas obsoletas descontextualizadas
+          // Descartar respuestas si son plantillas obsoletas/genéricas del backend viejo
           const isObsoleteTemplate = data.options.some(o => 
-            (o.title && /Engaging Curiosity Hook|Warm & Direct Reply|Intimate Mystery Spark/i.test(o.title)) ||
-            (o.target && /I was just taking a little breather|tell me what was one fun or unexpected thing/i.test(o.target))
+            (o.title && /Engaging Curiosity Hook|Warm & Direct Reply|Intimate Mystery Spark|GANCHO DE ATRACCIÓN|SALUDO INICIAL ESPONTÁNEO|SALUDO ESPONTÁNEO|Curiosidad & Encanto|Curiosidad y Encanto|Intimate Mystery/i.test(o.title)) ||
+            (o.target && /I was just taking a little breather|tell me what was one fun or unexpected thing|Tuve una hermosa corazonada|corazonada de saludarte|Tienes una energía muy dulce|energía muy dulce y una mirada|una energía tan especial|que no pude resistir|vibra muy especial que me llamó/i.test(o.target))
           );
           if (!isObsoleteTemplate) {
             chosenOptions = data.options;
@@ -4981,7 +5190,6 @@
         renderFloatingBar();
         handleInboxTimersAndExtractionButtons();
         runBackgroundPaginationCrawler();
-        checkAndShowProspectingReminder();
       }
     });
   }, 400);
@@ -5046,28 +5254,12 @@
         playAlertChime();
         try {
           if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
             const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de tareas activadas por el supervisor" : "Alertas de tareas pausadas");
             utter.lang = 'es-ES';
             window.speechSynthesis.speak(utter);
           }
         } catch(e) {}
         showFirewallToast(enabled ? "📋 Alertas de tareas activadas" : "⏸️ Alertas de tareas desactivadas", enabled ? "success" : "warning");
-      }
-
-      // D. Sincronización remota de Alertas de Voz
-      if (data.type === 'VOICE_ALERTS_CONFIG') {
-        const enabled = data.enabled !== false;
-        playAlertChime();
-        try {
-          if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
-            const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de voz activadas por el supervisor" : "Alertas de voz desactivadas");
-            utter.lang = 'es-ES';
-            window.speechSynthesis.speak(utter);
-          }
-        } catch(e) {}
-        showFirewallToast(enabled ? "🔊 Alertas de voz activadas" : "🔇 Alertas de voz desactivadas", enabled ? "success" : "warning");
       }
     };
   } catch(e) {}
@@ -5112,25 +5304,12 @@
           playAlertChime();
           try {
             if (window.speechSynthesis) {
-              window.speechSynthesis.cancel();
               const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de tareas activadas por el supervisor" : "Alertas de tareas pausadas");
               utter.lang = 'es-ES';
               window.speechSynthesis.speak(utter);
             }
           } catch(e) {}
           showFirewallToast(enabled ? "📋 Alertas de tareas activadas" : "⏸️ Alertas de tareas desactivadas", enabled ? "success" : "warning");
-        } else if (req.type === 'VOICE_ALERTS_CONFIG') {
-          const enabled = req.enabled !== false;
-          playAlertChime();
-          try {
-            if (window.speechSynthesis) {
-              window.speechSynthesis.cancel();
-              const utter = new SpeechSynthesisUtterance(enabled ? "Alertas de voz activadas por el supervisor" : "Alertas de voz desactivadas");
-              utter.lang = 'es-ES';
-              window.speechSynthesis.speak(utter);
-            }
-          } catch(e) {}
-          showFirewallToast(enabled ? "🔊 Alertas de voz activadas" : "🔇 Alertas de voz desactivadas", enabled ? "success" : "warning");
         }
       });
     } catch(e) {}

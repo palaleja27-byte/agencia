@@ -15222,6 +15222,23 @@
          window.dispatchEvent(new CustomEvent('rr_admin_alert_config', { detail: payload }));
       });
 
+      // ── CHEQUEO MEDIA HORA REMOTO (vía Supabase Realtime) ──
+      globalChannel.on('broadcast', { event: 'media_hora_check' }, (payload) => {
+         const p = payload?.payload || payload;
+         // Evitar eco de la propia sesión
+         if (p && p.triggeredBy && p.triggeredBy === window._mySessionId) return;
+         console.log('[MEDIA-HORA] 📡 Chequeo Media Hora recibido vía Supabase Realtime. Ejecutando...');
+         try {
+           const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+           if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+           if (window.speechSynthesis && window.speechSynthesis.paused) window.speechSynthesis.resume();
+           if (typeof playBeep === 'function') playBeep('task');
+         } catch(_) {}
+         if (typeof window.forzarVerificacionSeguimientoMediaHora === 'function') {
+           window.forzarVerificacionSeguimientoMediaHora(true);
+         }
+      });
+
       globalChannel.on('broadcast', { event: 'op_activity' }, (payload) => {
          const p = payload?.payload;
          if (p && p.opName) {
@@ -43097,6 +43114,23 @@ CONFIGURACIÓN DE CONTEXTO:
               window.reproducirAlertaTareaGlobal(task);
             }
           }
+          // 4. ── CHEQUEO MEDIA HORA REMOTO ──
+          // Cuando cualquier dispositivo presiona el botón "Chequeo Media Hora",
+          // todos los demás dispositivos abiertos reciben este evento y ejecutan el chequeo localmente.
+          else if (payload.type === 'media_hora_check' || payload.event === 'media_hora_check') {
+            console.log('[MEDIA-HORA] 📡 Chequeo Media Hora recibido vía relay remoto. Ejecutando en esta sesión...');
+            // Desbloquear audio antes de reproducir
+            try {
+              const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
+              if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+              if (window.speechSynthesis && window.speechSynthesis.paused) window.speechSynthesis.resume();
+              if (typeof playBeep === 'function') playBeep('task');
+            } catch(_) {}
+            // Ejecutar el chequeo con flag fromRemote=true para no re-emitir el broadcast
+            if (typeof window.forzarVerificacionSeguimientoMediaHora === 'function') {
+              window.forzarVerificacionSeguimientoMediaHora(true);
+            }
+          }
         });
       } catch (err) {}
     };
@@ -44182,7 +44216,7 @@ CONFIGURACIÓN DE CONTEXTO:
       }
     };
 
-    window.forzarVerificacionSeguimientoMediaHora = async function() {
+    window.forzarVerificacionSeguimientoMediaHora = async function(fromRemote) {
       // Desbloquear audio y voz de inmediato con el gesto de usuario
       try {
         const ctx = (typeof getAudioCtx === 'function') ? getAudioCtx() : null;
@@ -44194,6 +44228,25 @@ CONFIGURACIÓN DE CONTEXTO:
         }
         if (typeof playBeep === 'function') playBeep('task');
       } catch (_) {}
+
+      // ── BROADCAST REMOTO: avisar a todos los dispositivos que ejecuten el chequeo ──
+      // Solo lo hacemos cuando el comando viene de un clic local (no de un relay remoto)
+      // para evitar bucles infinitos de eco.
+      if (!fromRemote) {
+        try {
+          if (typeof window._broadcastAlertEventViaRender === 'function') {
+            window._broadcastAlertEventViaRender('media_hora_check', {
+              triggeredBy: window._mySessionId || 'monitor',
+              ts: Date.now()
+            });
+          }
+          // También via Supabase Realtime para cobertura inmediata
+          const rtChan = window._masterGlobalChannel || (typeof _sb !== 'undefined' && _sb ? _sb.channel('agencia_global_rt') : null);
+          if (rtChan && typeof rtChan.send === 'function') {
+            rtChan.send({ type: 'broadcast', event: 'media_hora_check', payload: { triggeredBy: window._mySessionId || 'monitor', ts: Date.now() } }).catch(() => {});
+          }
+        } catch (_bErr) {}
+      }
 
       const btn = document.getElementById('btn-test-task-halfhour');
       if (btn) {

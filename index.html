@@ -11766,8 +11766,8 @@
                   font-size:.72rem; font-weight:700; cursor:pointer; outline:none; border:1px solid ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'};
                   background:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};
                   color:${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '#34d399' : '#ef4444'}; transition: all 0.3s ease; white-space:nowrap;
-                ">
-                  ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF'}
+                " title="Enciende o apaga la detección por voz de inactividad en perfiles de operadores">
+                  ${localStorage.getItem('rr_voice_alerts_enabled') !== 'false' ? '⏱️ Alertas Inactividad: ON' : '🔇 Alertas Inactividad: OFF'}
                 </button>
                 <button id="toggle-task-alerts-btn" class="rr-task-toggle-btn" onclick="window.toggleTaskAlerts()" style="
                   display:inline-flex; align-items:center; gap:5px; padding:4px 12px; border-radius:20px;
@@ -41087,8 +41087,8 @@ PT._logKey = function (opName) {
         <span style="color:white; font-weight:800; font-size:0.85rem; letter-spacing:0.5px;" id="rr-chat-header-title">MONITOR CENTRAL</span>
       </div>
       <div style="display:flex; align-items:center; gap:6px;" onclick="event.stopPropagation()">
-        <!-- Botón para Activar/Desactivar Alertas de Voz -->
-        <button class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#34d399; font-size:0.65rem; padding:3px 8px; border-radius:8px; font-weight:800; cursor:pointer; transition:0.2s;" title="Permite apagar o encender la voz de las alertas">🔊 Alertas Voz: ON</button>
+        <!-- Botón para Activar/Desactivar Alertas de Inactividad -->
+        <button class="rr-voice-toggle-btn" onclick="window.toggleVoiceAlerts()" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#34d399; font-size:0.65rem; padding:3px 8px; border-radius:8px; font-weight:800; cursor:pointer; transition:0.2s;" title="Permite apagar o encender las alertas de voz por inactividad">⏱️ Inactividad: ON</button>
         <button class="rr-task-toggle-btn" onclick="window.toggleTaskAlerts()" style="background:rgba(56,189,248,0.2); border:1px solid #38bdf8; color:#38bdf8; font-size:0.65rem; padding:3px 8px; border-radius:8px; font-weight:800; cursor:pointer; transition:0.2s;" title="Permite apagar o encender las alertas de voz con tareas">📋 Tareas: ON</button>
         <button onclick="document.getElementById('rr-urgent-chat').classList.remove('open'); event.stopPropagation();" style="background:transparent; border:none; color:#94a3b8; font-size:1.2rem; cursor:pointer; transition:0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#94a3b8'">✖</button>
       </div>
@@ -43144,10 +43144,10 @@ CONFIGURACIÓN DE CONTEXTO:
       window._enableVoiceAlerts = enabled;
       window.voiceAlertsEnabled = enabled;
 
-      // 1. Botón principal de voz (Banner superior)
+      // 1. Botón principal de voz/inactividad (Banner superior)
       const mainBtn = document.getElementById('toggle-voice-alerts-btn');
       if (mainBtn) {
-        mainBtn.innerHTML = enabled ? '🔊 Alertas de Voz: ON' : '🔇 Alertas de Voz: OFF';
+        mainBtn.innerHTML = enabled ? '⏱️ Alertas Inactividad: ON' : '🔇 Alertas Inactividad: OFF';
         mainBtn.style.border = enabled ? '1px solid rgba(52,211,153,.3)' : '1px solid rgba(239,68,68,.3)';
         mainBtn.style.background = enabled ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)';
         mainBtn.style.color = enabled ? '#34d399' : '#ef4444';
@@ -43157,7 +43157,7 @@ CONFIGURACIÓN DE CONTEXTO:
       const btns = document.querySelectorAll('.rr-voice-toggle-btn');
       btns.forEach(btn => {
         if (btn !== mainBtn) {
-          btn.innerHTML = enabled ? '🔊 Alertas Voz: ON' : '🔇 Alertas Voz: OFF';
+          btn.innerHTML = enabled ? '⏱️ Inactividad: ON' : '🔇 Inactividad: OFF';
           btn.style.background = enabled ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
           btn.style.borderColor = enabled ? '#10b981' : '#ef4444';
           btn.style.color = enabled ? '#34d399' : '#f87171';
@@ -44290,6 +44290,33 @@ CONFIGURACIÓN DE CONTEXTO:
         if (!activeOps || activeOps.size === 0) return;
 
         const now = Date.now();
+
+        // ═══ ACTUALIZAR ACTIVIDAD DE PERFILES DESDE TELEMETRÍA EN VIVO (EXTENSIÓN AGENTE RYR) ═══
+        if (Array.isArray(window.cachedLiveOperators) && window.cachedLiveOperators.length > 0) {
+          window._profileLastActivityMap = window._profileLastActivityMap || {};
+          window._opLastActivityMap = window._opLastActivityMap || {};
+
+          window.cachedLiveOperators.forEach(liveNode => {
+            const opNameKey = (liveNode.operator || liveNode.operatorName || '').trim().toUpperCase();
+            const profNameKey = (liveNode.profile || liveNode.profileName || '').trim();
+            const profIdKey = String(liveNode.profileId || '').trim();
+            const idleSecs = Number(liveNode.idleSeconds || 0);
+            const nodeLastSeen = Number(liveNode.lastSeen || now);
+            
+            // Si el nodo de la extensión fue visto recientemente y la interacción ocurrió hace poco:
+            const computedActivityTs = nodeLastSeen - (idleSecs * 1000);
+            
+            if (opNameKey && computedActivityTs > 0) {
+              window._opLastActivityMap[opNameKey] = Math.max(window._opLastActivityMap[opNameKey] || 0, computedActivityTs);
+            }
+            if (profNameKey && computedActivityTs > 0) {
+              window._profileLastActivityMap[profNameKey] = Math.max(window._profileLastActivityMap[profNameKey] || 0, computedActivityTs);
+            }
+            if (profIdKey && computedActivityTs > 0) {
+              window._profileLastActivityMap[profIdKey] = Math.max(window._profileLastActivityMap[profIdKey] || 0, computedActivityTs);
+            }
+          });
+        }
 
         activeOps.forEach(opName => {
           const cuts = (typeof getCortesOp === 'function') ? getCortesOp(opName) : [];

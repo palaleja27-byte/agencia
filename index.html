@@ -15246,6 +15246,27 @@
            window._opLastActivityMap[p.opName.toUpperCase()] = p.ts || Date.now();
          }
       });
+
+      // ── PRESENCIA EN TIEMPO REAL: Operador logueado ──
+      globalChannel.on('broadcast', { event: 'op_presence' }, (payload) => {
+         const p = payload?.payload || payload;
+         if (p && p.draftKey && p.draft) {
+           try {
+             const strVal = typeof p.draft === 'object' ? JSON.stringify(p.draft) : p.draft;
+             if (typeof _origSetItem === 'function') _origSetItem(p.draftKey, strVal);
+             if (typeof _sbMemCache !== 'undefined') _sbMemCache[p.draftKey] = strVal;
+             console.log('[MASTER-RT] 👤 Operador conectado recibido por Realtime:', p.opName);
+             if (typeof _debouncedRenderConnectedOps === 'function') {
+               _debouncedRenderConnectedOps();
+             } else {
+               if (typeof renderConnectedOps === 'function') renderConnectedOps();
+               if (typeof renderRanking === 'function') renderRanking();
+             }
+           } catch(e) {
+             console.warn('[MASTER-RT] Error procesando op_presence:', e);
+           }
+         }
+      });
       
       // Nueva integración de rr_media al canal global unificado
       globalChannel.on('postgres_changes', { event: '*', schema: 'public', table: 'rr_media' }, (payload) => {
@@ -25872,6 +25893,28 @@ Sé directo, cálido, energético. En español latino. Sin comillas extra.`;
         _sb.from('kv_store').upsert({ key: draftKey, value: JSON.stringify(draft) }, { onConflict: 'key' }).then(() => {
           console.info('[AutoAsi] Presencia/Perfiles sincronizados:', opName, draft[k].estado);
         }).catch(err => console.warn('[AutoAsi] Error sincronizando', err));
+
+        // 3. 🚀 Broadcast instantáneo para que admin/monitor vea al operador conectado en tiempo real
+        //    (postgres_changes tiene ~1-2s de delay; el broadcast llega en <100ms)
+        const rtChan = window._masterGlobalChannel;
+        if (rtChan) {
+          rtChan.send({
+            type: 'broadcast',
+            event: 'op_presence',
+            payload: { draftKey, draft: JSON.stringify(draft), opName, ts: Date.now(), sessionId: window._mySessionId }
+          }).catch(() => {});
+        }
+      }
+
+      // 4. 🛰️ Broadcast dual via Render relay (redundancia inmediata entre dispositivos)
+      if (typeof window._broadcastAlertEventViaRender === 'function') {
+        window._broadcastAlertEventViaRender('op_presence', {
+          draftKey,
+          draft: JSON.stringify(draft),
+          opName,
+          ts: Date.now(),
+          sessionId: window._mySessionId
+        });
       }
     }
 
@@ -43129,6 +43172,24 @@ CONFIGURACIÓN DE CONTEXTO:
             // Ejecutar el chequeo con flag fromRemote=true para no re-emitir el broadcast
             if (typeof window.forzarVerificacionSeguimientoMediaHora === 'function') {
               window.forzarVerificacionSeguimientoMediaHora(true);
+            }
+          }
+          // 5. ── PRESENCIA DE OPERADOR CONECTADO EN TIEMPO REAL ──
+          else if (payload.type === 'op_presence' || payload.event === 'op_presence') {
+            const p = payload.payload || payload;
+            if (p && p.draftKey && p.draft) {
+              try {
+                const strVal = typeof p.draft === 'object' ? JSON.stringify(p.draft) : p.draft;
+                if (typeof _origSetItem === 'function') _origSetItem(p.draftKey, strVal);
+                if (typeof _sbMemCache !== 'undefined') _sbMemCache[p.draftKey] = strVal;
+                console.log('[RENDER-RELAY] 👤 Operador conectado recibido:', p.opName);
+                if (typeof _debouncedRenderConnectedOps === 'function') {
+                  _debouncedRenderConnectedOps();
+                } else {
+                  if (typeof renderConnectedOps === 'function') renderConnectedOps();
+                  if (typeof renderRanking === 'function') renderRanking();
+                }
+              } catch(e) {}
             }
           }
         });

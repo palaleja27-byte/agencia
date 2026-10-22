@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { getFallbackPanels, FALLBACK_PERFILES } = require('./fallback_perfiles');
+const { runGrowthAggregation } = require('./scripts/aggregate_growth');
 
 function sbQueryWithTimeout(queryPromise, timeoutMs = 10000) {
   return Promise.race([
@@ -413,6 +414,23 @@ async function upsertTurno(idPerfil, monthlyTotal, modelo, panelNombre) {
   } else {
     lastUpsertTotals[key] = monthlyTotal;
     log(`  ✅ ${modelo} [${jornada}] mes:${monthlyTotal.toFixed(1)} baseline:${baseline.toFixed(1)} turno:+${netoTurno.toFixed(2)} pts`);
+    // 📈 Registrar instantánea en growth_metrics (hora a hora)
+    try {
+      const horaActual = parseInt(new Date().toLocaleString('en-US', {
+        timeZone: 'America/Bogota', hour12: false, hour: 'numeric'
+      }));
+      await supabase.from('growth_metrics').upsert({
+        fecha_dia: fechaDia,
+        hora: horaActual,
+        id_perfil: idPerfil,
+        modelo: modelo,
+        jornada: jornada,
+        agencia: panelNombre,
+        puntos_total: monthlyTotal,
+        puntos_neto_turno: netoTurno,
+        puntos_delta_hora: netoTurno
+      }, { onConflict: 'id_perfil,fecha_dia,hora' });
+    } catch (_) {}
   }
 }
 
@@ -785,6 +803,12 @@ async function watchPanel(panel, perfiles) {
         }
         log(`📋 PANEL-${panel.id}: Escaneando ${perfiles.length} perfiles activos`);
         await watchPanel(panel, perfiles);
+      }
+      try {
+        log('📊 Ejecutando motor de agregación de métricas de crecimiento...');
+        await runGrowthAggregation();
+      } catch (e) {
+        log('⚠️ Error en agregación de crecimiento: ' + e.message);
       }
 
     } else {

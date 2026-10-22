@@ -1,0 +1,34 @@
+name: Motor de Crecimiento Horario y Métricas
+
+on:
+  schedule:
+    # Corre cada hora en punto (00:00, 01:00, 02:00, ..., 23:00)
+    - cron: '0 * * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/aggregate_growth.js'
+      - '.github/workflows/growth_hourly.yml'
+
+jobs:
+  aggregate-growth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Descargar Código
+        uses: actions/checkout@v3
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Instalar Dependencias
+        run: npm install
+
+      - name: Ejecutar Agregador de Métricas de Crecimiento
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: node scripts/aggregate_growth.js

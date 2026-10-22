@@ -22364,6 +22364,27 @@ function exportarDatos() {
         }
       });
 
+      // ⚡ MOTOR DE CRECIMIENTO: CONSULTA ULTRA-RÁPIDA DE CACHÉ HISTÓRICO (KV_STORE)
+      if (typeof _sb !== 'undefined' && _sb) {
+        try {
+          if (!window._growthHourlyCache || !window._growthSummaryCache) {
+            const { data: cacheRows } = await _sb.from('kv_store')
+              .select('key, value')
+              .in('key', ['rr_growth_hourly_today', 'rr_growth_summary_cache']);
+            if (cacheRows && cacheRows.length > 0) {
+              cacheRows.forEach(row => {
+                try {
+                  if (row.key === 'rr_growth_hourly_today') window._growthHourlyCache = JSON.parse(row.value);
+                  if (row.key === 'rr_growth_summary_cache') window._growthSummaryCache = JSON.parse(row.value);
+                } catch (_) {}
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[GROWTH-CACHE] Error consultando cache rápido:', e);
+        }
+      }
+
       if (typeof _sb !== 'undefined' && _sb) {
         try {
           if (window._opsSupabaseCache && window._opsSupabaseCache.length > 0) {
@@ -22670,6 +22691,18 @@ function exportarDatos() {
               else match.jornadas['Manana'] += net;
             }
           });
+        });
+      }
+
+      // ⚡ FUSIONAR CON DATOS AUDITADOS DEL MOTOR DE CRECIMIENTO
+      if (window._growthSummaryCache && Array.isArray(window._growthSummaryCache.ultimos14Dias)) {
+        window._growthSummaryCache.ultimos14Dias.forEach(cachedDay => {
+          const mDay = ultimos14Dias.find(d => d.fecha === cachedDay.fecha);
+          if (mDay && (cachedDay.puntos > mDay.puntos || mDay.puntos === 0)) {
+            mDay.puntos = cachedDay.puntos;
+            mDay.jornadas = cachedDay.jornadas || mDay.jornadas;
+            mDay.topJornada = cachedDay.topJornada || mDay.topJornada;
+          }
         });
       }
 
@@ -23980,24 +24013,36 @@ function exportarDatos() {
             }
           };
 
-          // 1. Gráfico Hora: Ritmo horario acumulado y proyección
+          // 1. Gráfico Hora: Ritmo horario acumulado y proyección (DATOS REALES MOTOR DE CRECIMIENTO)
           const cHora = document.getElementById('chart-hora');
           if (cHora) {
             const currentHour = new Date().getHours();
-            const realCurve = [];
-            const projCurve = [];
-            for (let h = 0; h < 24; h++) {
-              if (h <= currentHour) {
-                const fraction = (h + 1) / Math.max(1, currentHour + 1);
-                realCurve.push(Number((ptsHoy * fraction).toFixed(1)));
-                projCurve.push(null);
-              } else {
-                realCurve.push(null);
-                const extraHours = h - currentHour;
-                projCurve.push(Number((ptsHoy + extraHours * paceHourly).toFixed(1)));
-              }
+            let realCurve = [];
+            let projCurve = [];
+
+            // Leer instantánea horaria real desde cache/Supabase si está disponible
+            let ghData = window._growthHourlyCache;
+            if (!ghData && typeof _sbMemCache !== 'undefined' && _sbMemCache['rr_growth_hourly_today']) {
+              try { ghData = JSON.parse(_sbMemCache['rr_growth_hourly_today']); } catch (_) {}
             }
-            projCurve[currentHour] = realCurve[currentHour];
+
+            if (ghData && Array.isArray(ghData.curva_real) && ghData.curva_real.length > 0) {
+              realCurve = ghData.curva_real.slice();
+              projCurve = ghData.curva_proyectada ? ghData.curva_proyectada.slice() : [];
+            } else {
+              for (let h = 0; h < 24; h++) {
+                if (h <= currentHour) {
+                  const fraction = (h + 1) / Math.max(1, currentHour + 1);
+                  realCurve.push(Number((ptsHoy * fraction).toFixed(1)));
+                  projCurve.push(null);
+                } else {
+                  realCurve.push(null);
+                  const extraHours = h - currentHour;
+                  projCurve.push(Number((ptsHoy + extraHours * paceHourly).toFixed(1)));
+                }
+              }
+              projCurve[currentHour] = realCurve[currentHour];
+            }
 
             window._execCharts['chart-hora'] = new Chart(cHora, {
               type: 'line',

@@ -181,24 +181,36 @@ async function runGrowthAggregation() {
 
   // 4. Guardar snapshot horario actual en growth_metrics (si la tabla existe)
   try {
-    const snapshotsToInsert = [];
+    // Deduplicar por id_perfil para garantizar que solo haya 1 registro por (id_perfil, fecha_dia, hora)
+    const perfilesSnapshotMap = {};
     for (const op of hoyOps) {
       const pid = String(op.id_perfil).trim();
       const modelo = perfilesMap[pid] || ('Perfil ' + pid);
       const division = romeroProfileIds.has(pid) ? 'Romero' : (camiloProfileIds.has(pid) ? 'Camilo' : (op.agencia || 'General'));
       
-      snapshotsToInsert.push({
-        fecha_dia: hoyStr,
-        hora: horaActual,
-        id_perfil: pid,
-        modelo: modelo,
-        jornada: op.jornada || jornadaActual,
-        agencia: division,
-        puntos_total: Number(op.puntos_total) || 0,
-        puntos_neto_turno: Number(op.puntos_neto) || 0,
-        puntos_delta_hora: Number((Number(op.puntos_neto) / Math.max(1, horaActual)).toFixed(2))
-      });
+      if (!perfilesSnapshotMap[pid]) {
+        perfilesSnapshotMap[pid] = {
+          fecha_dia: hoyStr,
+          hora: horaActual,
+          id_perfil: pid,
+          modelo: modelo,
+          jornada: op.jornada || jornadaActual,
+          agencia: division,
+          puntos_total: Number(op.puntos_total) || 0,
+          puntos_neto_turno: Number(op.puntos_neto) || 0,
+          puntos_delta_hora: Number((Number(op.puntos_neto) / Math.max(1, horaActual)).toFixed(2))
+        };
+      } else {
+        perfilesSnapshotMap[pid].puntos_neto_turno = parseFloat((perfilesSnapshotMap[pid].puntos_neto_turno + (Number(op.puntos_neto) || 0)).toFixed(2));
+        perfilesSnapshotMap[pid].puntos_delta_hora = parseFloat((perfilesSnapshotMap[pid].puntos_delta_hora + (Number(op.puntos_neto) / Math.max(1, horaActual))).toFixed(2));
+        if (Number(op.puntos_total) > perfilesSnapshotMap[pid].puntos_total) {
+          perfilesSnapshotMap[pid].puntos_total = Number(op.puntos_total);
+          perfilesSnapshotMap[pid].jornada = op.jornada || perfilesSnapshotMap[pid].jornada;
+        }
+      }
     }
+
+    const snapshotsToInsert = Object.values(perfilesSnapshotMap);
 
     if (snapshotsToInsert.length > 0) {
       const { error: insErr } = await supabase
@@ -207,8 +219,25 @@ async function runGrowthAggregation() {
       if (!insErr) {
         console.log(`✅ [GROWTH-METRICS] Insertadas ${snapshotsToInsert.length} métricas horarias en 'growth_metrics'.`);
       } else {
-        console.log(`ℹ️ [GROWTH-METRICS] Tabla 'growth_metrics' pendiente de creación en Supabase SQL Editor: ${insErr.message}`);
+        console.log(`ℹ️ [GROWTH-METRICS] Error al insertar en 'growth_metrics': ${insErr.message}`);
       }
+
+      // Guardar también en growth_daily_summary
+      try {
+        const turnosDet = {};
+        hoyOps.forEach(r => {
+          turnosDet[r.jornada] = parseFloat(((turnosDet[r.jornada] || 0) + (Number(r.puntos_neto) || 0)).toFixed(2));
+        });
+        await supabase.from('growth_daily_summary').upsert({
+          fecha_dia: hoyStr,
+          agencia: 'Global',
+          puntos_total_dia: parseFloat(totalNetoHoy.toFixed(2)),
+          puntos_neto_dia: parseFloat(totalNetoHoy.toFixed(2)),
+          turnos_detalle: turnosDet,
+          perfiles_detalle: perfilesSnapshotMap
+        }, { onConflict: 'fecha_dia,agencia' });
+        console.log(`✅ [GROWTH-DAILY] Resumen diario guardado en 'growth_daily_summary'.`);
+      } catch (_) {}
     }
   } catch (err) {
     console.log(`ℹ️ [GROWTH-METRICS] Nota de compatibilidad:`, err.message);

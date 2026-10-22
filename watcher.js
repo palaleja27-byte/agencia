@@ -5,7 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 
 // ═══════════════════════════════════════════════════════════════
-// ⚡ WATCHER MODE — Agencia RR 2026
+// ⚡ WATCHER MODE — Agencia RR 2026 (Nuevo Supabase)
 // ─ Usa rango MENSUAL en Datame (para total_mes preciso)
 // ─ Rastrea baseline por turno (reset cada vez que cambia jornada)
 // ─ Almacena: puntos_total (acumulado mes), puntos_neto (solo el turno)

@@ -7,8 +7,8 @@ const WebSocket = require('ws');
 // AGENCIA RR — SISTEMA AUDITADO DE EXTRACCIÓN Y MÉTRICAS (2026)
 // ═══════════════════════════════════════════════════════════════
 
-const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://hgdymxklyrwjzlwomncm.supabase.co').trim();
-const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhnZHlteGtseXJ3anpsd29tbmNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTM0MTksImV4cCI6MjEwODE2OTQxOX0.nYQQi-5eTTd5Gc2hPSF8M1sPEHTmyGalwqvSkUuxHW0').trim();
+const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://kgemlmwamowjwcskcpcu.supabase.co').trim();
+const SUPABASE_KEY = (process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnZW1sbXdhbW93andjc2tjcGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NTk4OTAsImV4cCI6MjEwODMzNTg5MH0.49O3J6UlH7HcqdiqQoZJv08KH5TLlsiMgrN82E8tU0Y').trim();
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   global: { headers: {} },

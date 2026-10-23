@@ -35360,6 +35360,8 @@ PT._logKey = function (opName) {
     let _laserSyncRunning = false;
     async function sincronizarDatameRelacional() {
       if (typeof _sb === 'undefined' || !_sb || !operatorsData) return;
+      // 🛡️ ZERO-EGRESS SHIELD: Operadores no ejecutan Laser Sync relacional
+      if (typeof currentRole !== 'undefined' && currentRole === 'operador') return;
       // Esperar a que el boot de Supabase termine antes de disparar
       if (!_sbBootReady) { console.log('[Bridge] Boot no listo, posponiendo Laser Sync...'); return; }
       // Mutex: evitar ejecuciones concurrentes
@@ -35374,13 +35376,13 @@ PT._logKey = function (opName) {
 
       try {
         // FIX CUOTA: Limitar a los últimos 45 días (1 mes y medio) para no descargar todo el histórico
-        const START_DATE = localDateStr(45) + 'T00:00:00';
+        const START_DATE = localDateStr(1) + 'T00:00:00';
         const fetchOps = _sb.from('operaciones')
           .select('id_perfil, puntos, fecha_corte')
           .filter('fecha_corte', 'gte', START_DATE)
           .in('id_perfil', perfiles_activos)
           .order('fecha_corte', { ascending: true }) // ASC para capturar base primero
-          .range(0, 5000);
+          .limit(150);
           
         const { data: operaciones, error } = await Promise.race([
           fetchOps, 
@@ -38292,7 +38294,7 @@ PT._logKey = function (opName) {
                 .select('id_perfil, puntos, fecha_corte, fecha_dia, agencia')
                 .gte('fecha_dia', FECHA_INICIO)
                 .order('id', { ascending: false })
-                .range(from, to);
+                .limit(120);
               
               const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout operaciones fallback (8s)')), 8000)
@@ -38310,7 +38312,7 @@ PT._logKey = function (opName) {
                 if (data.length < pageSize) {
                   hasMore = false;
                 } else {
-                  page++;
+                  hasMore = false;
                 }
               }
             }

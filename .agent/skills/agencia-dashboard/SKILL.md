@@ -12,12 +12,30 @@ Esta Skill es la documentación técnica viva del proyecto AgenciaRR. Contiene e
 
 ## 📋 1. Reglas de Modificación Quirúrgica
 
-- **PROHIBIDO LEER EL ARCHIVO COMPLETO.** El `index.html` tiene +14,700 líneas.
-- **REGLA MANDATORIA SUPABASE (FREE TIER COMPLIANCE):** 
-  - **SIEMPRE SE TRABAJARÁ SIN PASARSE DE LA CAPA GRATUITA DE SUPABASE.**
-  - **Prohibido mantener múltiples canales de Realtime independientes**: Toda la aplicación DEBE reutilizar el *MASTER REALTIME ENGINE* central con eventos `CustomEvent` (`rr_op_change`, `rr_voice_alert`, etc.) para no agotar la cuota de conexiones ni sobrepasar límites de ancho de banda (Egress/API requests).
-  - **Consultas quirúrgicas**: Usar `.select('columnas_especificas')`, `.limit()`, paginación inteligente y debouncing para evitar lecturas masivas innecesarias.
-- **Flujo obligatorio**:
+- **PROHIBIDO LEER EL ARCHIVO COMPLETO.** El `index.html` tiene +46,000 líneas.
+- **🛡️ REGLA MANDATORIA SUPABASE (BLINDAJE TOTAL CAPA GRATUITA):** 
+  - **LÍMITES SAGRADOS DEL FREE TIER (SUPABASE):**
+    - Egress (Ancho de Banda de Salida): **5 GB/mes** (máximo ~160 MB/día). Si se supera, Supabase bloquea el proyecto.
+    - Conexiones Realtime simultáneas: **200 usuarios**.
+    - Mensajes Realtime: **2,000,000/mes**.
+    - Tamaño DB: **500 MB**.
+  - **LAS 5 LEYES DEL BLINDAJE ZERO-EGRESS™:**
+    1. **PROHIBIDO CONSULTAR HISTÓRICOS YTD EN CLIENTES:** Jamás ejecutar consultas a `operaciones` que descarguen registros de meses anteriores. Toda consulta desde el navegador debe usar estrictamente `.gte('fecha_dia', hoy)` o `.gte('fecha_dia', ayer)` y `.limit(100)`.
+    2. **MÉTRICAS Y REPORTES PRE-CALCULADOS EN CACHÉ (`kv_store`):**
+       - El motor `scripts/aggregate_growth.js` se ejecuta en GitHub Actions cada hora.
+       - Consolida hora por hora y día por día en `growth_metrics` y `growth_daily_summary`.
+       - Guarda el JSON listo para pintar en `kv_store` (`rr_growth_hourly_today` y `rr_growth_summary_cache`).
+       - Los navegadores de directivos y operadores leen **1 sola clave ligera de caché (<5 KB)** en vez de descargar miles de filas.
+    3. **OPERADORES CON ACCESO QUIRÚRGICO MÍNIMO:**
+       - Los operadores **NUNCA** ejecutan sincronizaciones globales ni escaneos relacionales (`sincronizarDatameRelacional` está bloqueado para rol `'operador'`).
+       - Su función `_opRtSync` solo consulta con `.in('id_perfil', ids)` exclusivamente para los 1 a 3 perfiles propios asignados en la jornada actual.
+    4. **PROHIBIDO BUCLES DE PAGINACIÓN `while(hasMore)` EN EL FRONTEND:**
+       - Prohibido hacer bucles que acumulen miles de filas con `.range(from, to)`.
+       - Todas las funciones de sync o fallback deben tener `.limit(120)` estricto.
+    5. **CANAL REALTIME CENTRALIZADO Y DESCONEXIÓN DE OPERADORES:**
+       - Reutilizar el *MASTER REALTIME ENGINE* central con eventos `CustomEvent`.
+       - Los operadores no mantienen listeners abiertos a tablas completas de Supabase.
+- **Flujo obligatorio de trabajo**:
   1. Usar `grep_search` o `Select-String` para localizar identificadores clave.
   2. Usar `view_file` con `StartLine`/`EndLine` precisos (radio de ±50 líneas).
   3. Editar con `replace_file_content` o `multi_replace_file_content`.
